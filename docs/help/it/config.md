@@ -497,6 +497,32 @@ scambiare le fasce fra loro. Scrivere i blocchi le accende; `Shift+F11` — `Gru
 dei tasti — le spegne e le riaccende, un pannello per volta. Un blocco che non si legge viene
 nominato nella schermata di avvio e saltato, come un gruppo di evidenziazione.
 
+# Sincronizzazioni conservate per nome
+
+Un blocco `[[sync]]` in `fcmd.toml` è una coppia di cartelle e il modo di sincronizzarle, sotto
+un nome. Il dialogo della sincronizzazione ne scrive uno quando dai un nome alla coppia, e
+`Ctrl+Alt+Y` li elenca per rieseguirli; si possono anche scrivere a mano.
+
+```toml
+[[sync]]
+name = "Backup della sera"
+left = "~/lavoro"
+right = "/media/chiavetta/lavoro"
+recursive = true
+both_ways = false
+delete_extra = true
+by_content = false
+filter = "*.rs,*.md"
+report = "~/resoconto-backup.txt"
+```
+
+`left` è l'origine quando si va in un verso solo. `recursive` scende nelle sottocartelle ed è
+attivo se manca; `both_ways`, `delete_extra` (offri di togliere quello che l'altro lato non ha)
+e `by_content` (confronta i byte invece di dimensione e data) sono spenti. `filter` è una
+maschera e `report` il file in cui un'esecuzione scrive quello che ha fatto; entrambi si possono
+omettere. Un blocco è una domanda, non un ordine: eseguirlo mostra la tabella, ed è `F2` lì a
+far partire qualcosa.
+
 # L'editor della tavolozza
 
 `F9 → Opzioni → Colori…` elenca ogni colore che l'interfaccia usa, con il valore come lo

@@ -21,6 +21,7 @@ mod proccard;
 mod prompt;
 mod queue;
 mod render;
+mod syncrun;
 mod tabs;
 mod termkeys;
 mod tools;
@@ -1168,6 +1169,13 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                                 git: fcmd_core::git::describe(&local).map(Box::new),
                             });
                         }
+                    });
+                }
+                Request::WriteReport { path, text } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let error = write_report(&path, &text);
+                        let _ = tx.send(Event::ReportWritten { path, error });
                     });
                 }
                 Request::DiscardJournal { path, journal } => {
@@ -3052,6 +3060,16 @@ fn run_sync_plan(
         },
     };
     let _ = tx.send(event);
+}
+
+/// Write the report of a synchronisation where the dialog said (SPEC 03 §10a). Says why
+/// when it cannot.
+///
+/// The folder is not made when it is not there: a report meant for `~/backups/log.txt` that
+/// lands in a `backups` nobody created is a typing mistake carried out, and the status line
+/// saying "no such directory" is the better answer.
+fn write_report(path: &VPath, text: &str) -> Option<String> {
+    std::fs::write(path.os(), text).err().map(|e| e.to_string())
 }
 
 /// Hash what was chosen and write the list (SPEC 03 §9).
@@ -6446,6 +6464,10 @@ dir_attr = "D"
                         fcmd_arc::Cache::new(Default::default()),
                     )),
                 ),
+                Request::WriteReport { path, text } => {
+                    let error = write_report(&path, &text);
+                    app.handle_event(Event::ReportWritten { path, error });
+                }
                 Request::DiscardJournal { path, journal } => match journal {
                     Some(journal) => {
                         fcmd_jobs::journal::discard(&fcmd_jobs::LocalFs, &path, &journal)
@@ -7369,6 +7391,69 @@ dir_attr = "D"
             !folder.exists(),
             "a job that ended left something in {}",
             folder.display()
+        );
+    }
+
+    /// A saved synchronisation through the whole program (SPEC 03 §10a): the block in the
+    /// file, the list, the table, the jobs — and a report on disk that says what went where,
+    /// with the status line saying where the report is.
+    #[test]
+    fn a_saved_synchronisation_runs_from_its_list_and_writes_its_report() {
+        let root = tempfile::tempdir().unwrap();
+        let panels = root.path().join("panels");
+        let work = root.path().join("work");
+        let backup = root.path().join("backup");
+        for dir in [&panels, &work, &backup] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        std::fs::write(work.join("new.txt"), b"brand new").unwrap();
+        std::fs::write(backup.join("extra.txt"), b"only in the backup").unwrap();
+        let report = root.path().join("report.txt");
+
+        // The panels are somewhere else altogether: a saved pair names its own directories.
+        let mut app = app_on(&panels, &panels);
+        app.cfg.syncs = vec![fcmd_config::SyncCfg {
+            name: "Evening backup".to_string(),
+            left: work.display().to_string(),
+            right: backup.display().to_string(),
+            delete_extra: true,
+            report: report.display().to_string(),
+            ..fcmd_config::SyncCfg::default()
+        }];
+        serve(&mut app);
+        key(&mut app, "Ctrl+Alt+Y");
+        key(&mut app, "Enter");
+        serve(&mut app);
+        let app::Mode::Sync(view) = &app.mode else {
+            panic!("the table is on screen, not {:?}", app.mode)
+        };
+        assert!(view.done);
+        assert!(!backup.join("new.txt").exists(), "the table is a question");
+        key(&mut app, "F2");
+        for _ in 0..6 {
+            serve(&mut app);
+        }
+
+        assert_eq!(std::fs::read(backup.join("new.txt")).unwrap(), b"brand new");
+        assert!(
+            !backup.join("extra.txt").exists(),
+            "the extra file was taken out"
+        );
+        let text = std::fs::read_to_string(&report).expect("the report was written");
+        for expected in [
+            "Name: Evening backup",
+            "Copied left → right: 1",
+            "  new.txt",
+            "Taken out on the right: 1",
+            "  extra.txt",
+            "Failed: 0",
+        ] {
+            assert!(text.contains(expected), "no `{expected}` in:\n{text}");
+        }
+        assert!(
+            app.status.contains(&VPath::local(&report).to_string()),
+            "the status line does not say where the report went: {}",
+            app.status
         );
     }
 

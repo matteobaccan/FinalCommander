@@ -26,7 +26,7 @@ Discovery, in order:
 the effective configuration (including the themes it carries) with provenance
 (`default` / `fcmd.toml` / `--set`), which is what a bug report should include.
 Sections inside `fcmd.toml`: `[general]`, `[panel]`, `[operations]`, `[viewer]`, `[editor]`,
-`[ui]`, `[terminal]`, `[[theme]]`, `[[keymap]]`, `[[filter]]`, `[[highlight]]`, `[[assoc]]`,
+`[ui]`, `[terminal]`, `[[theme]]`, `[[keymap]]`, `[[filter]]`, `[[sync]]`, `[[highlight]]`, `[[assoc]]`,
 `[[menu]]`, `[[site]]`, `[keys.local]`.
 
 ## 2. fcmd.toml (shape, with defaults)
@@ -250,6 +250,31 @@ age = ">=30"
 name = "Folders only"
 kind = "dir"
 ```
+
+## 2b-septies. `[[sync]]` blocks
+
+The saved synchronisations `Ctrl+Alt+Y` lists (SPEC 03 §10a): a pair of directories, the four
+boxes of the synchronisation dialog, its mask, and the file a run reports to. Read and written
+by `fcmd-config` as `Config::syncs` (`SyncCfg`), like every other block; the dialog writes one
+when the pair is given a name, replacing a block of the same name, and saves the file at once.
+
+```toml
+[[sync]]
+name = "Evening backup"
+left = "~/work"            # the source, when the run is one way
+right = "/media/stick/work"
+recursive = true           # the default when left out; the other three default to false
+both_ways = false
+delete_extra = true
+by_content = false
+filter = "*.rs,*.md"       # optional
+report = "~/backup.txt"    # optional: kept as typed, resolved when the run starts
+```
+
+The four booleans are always written, on or off, so that a block can be read and believed
+without knowing the defaults; `filter` and `report` are left out when empty. `left`, `right`
+and `report` take `~`, and a relative path is resolved against the active panel's directory
+at the moment of the run.
 
 ## 2b2. `[[ai]]`
 

@@ -1131,6 +1131,7 @@ fn draw_pick(
         crate::menu::PickKind::EditorConvert => "editor-convert-hint",
         crate::menu::PickKind::Jobs => "jobs-hint",
         crate::menu::PickKind::LeftJobs => "journal-hint",
+        crate::menu::PickKind::SavedSyncs => "sync-saved-hint",
         // A history has three keys of its own, and a footer that does not name them is a
         // footer that keeps them secret.
         crate::menu::PickKind::CommandHistory
@@ -6316,6 +6317,8 @@ Some **bold** text and a [link](https://example.com).
             action,
         };
         crate::app::SyncView {
+            name: String::new(),
+            report: None,
             id: 1,
             left: fcmd_core::VPath::local("/home/mb/src/final"),
             right: fcmd_core::VPath::local("/media/stick/final"),
@@ -6404,6 +6407,56 @@ Some **bold** text and a [link](https://example.com).
         );
         assert!(
             out.contains("Del discard"),
+            "the footer names its keys: {out}"
+        );
+    }
+
+    /// The dialog's two new rows and its middle button, and the list the button opens.
+    #[test]
+    fn the_sync_dialog_offers_a_name_a_report_and_what_was_saved() {
+        let mut app = app("far", "en");
+        app.run(fcmd_cmd::Command::ToolSyncDirs);
+        let out = frame(&mut app, 100, 30);
+        assert!(out.contains("Write a report of the run to"), "{out}");
+        assert!(out.contains("Save this pair as"), "{out}");
+        let buttons = out
+            .lines()
+            .find(|l| l.contains("Saved…"))
+            .expect("the row of buttons");
+        assert!(
+            buttons.contains("OK") && buttons.contains("Cancel"),
+            "{out}"
+        );
+        press(&mut app, "Esc");
+
+        app.cfg.syncs = vec![
+            fcmd_config::SyncCfg {
+                name: "Evening backup".to_string(),
+                left: "work".to_string(),
+                right: "stick".to_string(),
+                ..fcmd_config::SyncCfg::default()
+            },
+            fcmd_config::SyncCfg {
+                name: "Photos".to_string(),
+                left: "photos".to_string(),
+                right: "nas".to_string(),
+                both_ways: true,
+                ..fcmd_config::SyncCfg::default()
+            },
+        ];
+        app.run(fcmd_cmd::Command::ToolSyncSaved);
+        let out = frame(&mut app, 100, 20);
+        assert!(out.contains("Saved synchronisations"), "{out}");
+        assert!(
+            out.contains("Evening backup: work \u{2192} stick"),
+            "one way is one arrow: {out}"
+        );
+        assert!(
+            out.contains("Photos: photos \u{2194} nas"),
+            "both ways is the double one: {out}"
+        );
+        assert!(
+            out.contains("F4 change"),
             "the footer names its keys: {out}"
         );
     }

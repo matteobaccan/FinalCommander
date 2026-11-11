@@ -1636,6 +1636,49 @@ fn is_zero_u32(n: &u32) -> bool {
     *n == 0
 }
 
+/// One `[[sync]]` block: a pair of directories and how to synchronise them, under a name
+/// (SPEC 03 §10a, SPEC 07 §2b-septies).
+///
+/// The four boxes of the dialog are written out even when they are off: a block that says
+/// `delete_extra = false` is a block somebody can read and be sure of, and this is the one
+/// place in the file where being sure matters.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SyncCfg {
+    /// What the list of saved synchronisations calls it.
+    pub name: String,
+    /// The two directories. The left one is the source when the run is one way.
+    pub left: String,
+    pub right: String,
+    pub recursive: bool,
+    pub both_ways: bool,
+    pub delete_extra: bool,
+    pub by_content: bool,
+    /// Only the names that match are paired up; empty is every name.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub filter: String,
+    /// The file the report of a run is written to; empty writes none.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub report: String,
+}
+
+impl Default for SyncCfg {
+    /// What the dialog starts as: into the subdirectories, one way, nothing taken out.
+    fn default() -> SyncCfg {
+        SyncCfg {
+            name: String::new(),
+            left: String::new(),
+            right: String::new(),
+            recursive: true,
+            both_ways: false,
+            delete_extra: false,
+            by_content: false,
+            filter: String::new(),
+            report: String::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct FilterCfg {
@@ -1835,6 +1878,10 @@ pub struct Config {
     /// `[[filter]]` blocks: the named panel filters the filters menu offers (SPEC 02 §5).
     #[serde(rename = "filter")]
     pub filters: Vec<FilterCfg>,
+    /// `[[sync]]` blocks: the saved synchronisations, each a pair of directories and its
+    /// rules under a name (SPEC 03 §10a).
+    #[serde(rename = "sync", skip_serializing_if = "Vec::is_empty")]
+    pub syncs: Vec<SyncCfg>,
     /// `[[ai]]` blocks: the language models `ai:` can ask (SPEC 06 §14). The first is the
     /// one `ai:` asks; `ai:name:` asks another by its name.
     #[serde(rename = "ai")]
@@ -2353,6 +2400,53 @@ attrs = "-h"
         // And back out, for Save setup.
         let written = toml::to_string(&cfg).expect("it writes");
         assert!(written.contains("[[filter]]"), "{written}");
+    }
+
+    /// A `[[sync]]` block is read with the dialog's own defaults for what it leaves out, and
+    /// written back with its four boxes spelled out and its empty rows left out.
+    #[test]
+    fn a_saved_synchronisation_is_a_block_of_the_file() {
+        let (cfg, warnings) = Config::parse(
+            "test",
+            r#"
+[[sync]]
+name = "Evening backup"
+left = "~/work"
+right = "/media/stick/work"
+delete_extra = true
+filter = "*.rs,*.md"
+report = "~/backup.txt"
+
+[[sync]]
+name = "Photos"
+left = "/photos"
+right = "/nas/photos"
+recursive = false
+both_ways = true
+"#,
+        )
+        .expect("it reads");
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(cfg.syncs.len(), 2);
+        let backup = &cfg.syncs[0];
+        assert_eq!(backup.name, "Evening backup");
+        assert!(backup.recursive, "left out, so as the dialog starts");
+        assert!(backup.delete_extra && !backup.both_ways && !backup.by_content);
+        assert_eq!(backup.report, "~/backup.txt");
+        assert!(!cfg.syncs[1].recursive && cfg.syncs[1].both_ways);
+
+        // And back out, for Save setup: the same two blocks, read again.
+        let written = cfg.dump();
+        assert!(written.contains("[[sync]]"), "{written}");
+        assert!(written.contains("by_content = false"), "{written}");
+        assert!(
+            !written.contains("report = \"\""),
+            "an empty row is not written: {written}"
+        );
+        let (again, _) = Config::parse("test", &written).expect("it reads back");
+        assert_eq!(again.syncs, cfg.syncs);
+        // A file with none has no block, not an empty list.
+        assert!(!Config::default().dump().contains("sync"));
     }
 
     /// The settings browser is generated from the file, so every row it shows has to be a row

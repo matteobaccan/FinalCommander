@@ -499,13 +499,44 @@ lands at `target/a/b/c.txt`, so one job carries a whole tree at the paths it had
 Both sides have to be on this machine for now: the walk reads both and one of them is written,
 and it is said before the dialog opens rather than halfway through a run.
 
-Still to come: saving a pair of directories as a named job, and the dry run as a *report*
-rather than as the table (the table is already the dry run, but it does not write one down).
+**Saved under a name (0.41).** The dialog has a row, *Save this pair as*. A name in it makes
+`OK` write the two directories and every answer of the dialog as a `[[sync]]` block of
+`fcmd.toml` (SPEC 07 §2b-septies) — in place of a block of the same name — save the file, and
+go on to the table as an unsaved run does. `tool.sync.saved` (`Ctrl+Alt+Y`, *Commands → Saved
+synchronisations*, and the dialog's own *Saved…* button) lists the blocks: `Enter` walks that
+block's two directories, whatever the panels show, and puts the table on screen; `F4` opens
+the dialog filled in from it; `Del` removes the block and saves. A saved pair is still
+reviewed before it runs. That is deliberate: the table is made from what the directories hold
+now, not from what they held when the block was written, and *take out what the other side
+does not have* is not an answer to carry out unseen because it was ticked once. So "a backup
+is one key" is one key to the table and `F2` — two.
+
+**The report (0.41).** The other new row, *Write a report of the run to*, names a file on this
+machine. A run that has one is followed as it goes (`crates/fcmd/src/syncrun.rs`): each of its
+jobs is a *step* that carries the table's rows, and `job_done` records how each ended. When
+the chain ends — its last job finished, or a step failed or was stopped and the rest were
+dropped (§5) — a worker writes the text and the status line says where it is, or why it could
+not be written. The text is plain, in the interface's language: a heading, the moment, the
+name if there is one, the two directories, and then counted lists of rows:
+
+- copied left → right, copied right → left, taken out on the right, taken out on the left;
+- **left alone though they differ** — rows answered `=`, and the clashes nobody resolved;
+  rows that are the same on both sides are not listed;
+- **failed** — each error with the path it names. A row counts as failed when an error names
+  it or anything under it, and is then in none of the lists above;
+- for a step stopped part of the way, its rows under a heading that says they *may or may
+  not* have been done — the engine's outcome counts files and does not name them, and the
+  report does not guess;
+- for the steps that never started, their rows as *not done*.
+
+Each run writes the file anew, and its directory has to exist. The table is still the dry
+run; what the report adds is a record of what the run then did.
 
 ### 10b. The rest
 
-- A named **job** that remembers a pair of directories and its rules, so a backup is one key
-  rather than a dialog each time, and the queue of §5 to run it in.
+- A saved synchronisation that runs **unattended** — from the command line or on a schedule,
+  with the table skipped under a rule that says when that is safe — and a report that is
+  appended to rather than replaced, for a history of runs.
 
 ## 11. What counts as the same file (`tool.compare`, shipped)
 

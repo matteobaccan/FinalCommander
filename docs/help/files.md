@@ -285,6 +285,32 @@ row. A row that takes a file out puts it in the wastebasket, the same as `F8` do
 
 Both folders have to be on this machine for now.
 
+## A synchronisation you run again
+
+The dialog has two more rows, both empty unless you fill them in.
+
+**Save this pair as** takes a name. With one in it, `OK` keeps the two folders and everything
+the dialog says — which way, how deep, the mask, the report — under that name, in `fcmd.toml`,
+and goes on to the table as usual. The same name again replaces what was saved under it.
+
+`Ctrl+Alt+Y` — *Commands → Saved synchronisations*, and the *Saved…* button of the dialog —
+lists what has been saved, each with its two folders and an arrow for one way or both.
+
+- `Enter` runs one: its own two folders, wherever the panels are, walked now. The table still
+  comes first and `F2` still starts it — what the folders hold today is not what they held
+  when the pair was saved, and taking files out is not something to do unseen.
+- `F4` opens its dialog, filled in, to change it and save it again.
+- `Del` forgets it.
+
+**Write a report of the run to** takes a file. When the last job of the synchronisation ends,
+a short text is written there and the status line says where it is: what was copied from left
+to right and from right to left, what was taken out on each side, the files that differ and
+were left alone, and what failed, each with its path. If the run was stopped or a step failed,
+the report is written at that point and says which rows were never reached — and, for a step
+stopped halfway, that its rows may or may not have been done, rather than guessing. A name
+with no folder in front of it is a file in the active panel's folder; the folder has to exist.
+Every run writes the file anew.
+
 # Where the space goes
 
 `Alt+Shift+F3` — *Commands → Disk usage* — lists what is in this folder by size, largest

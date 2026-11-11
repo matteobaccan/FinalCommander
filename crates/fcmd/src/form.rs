@@ -1316,6 +1316,8 @@ impl Form {
         left: String,
         right: String,
         options: &fcmd_jobs::sync::Options,
+        name: String,
+        report: String,
         i18n: &I18n,
     ) -> Form {
         let t = |id: &str| i18n.t(id);
@@ -1347,6 +1349,11 @@ impl Form {
                     .map(|f| f.source().to_string())
                     .unwrap_or_default(),
             ),
+            Field::Separator,
+            // Empty, both of them, for the run nobody will want again: a report is written
+            // only where one was asked for, and a pair is kept only under a name.
+            Field::text("sync.report", t("sync-report"), report),
+            Field::text("sync.name", t("sync-name"), name),
         ];
         Form {
             pages: Vec::new(),
@@ -1357,7 +1364,13 @@ impl Form {
             cursor: 1,
             site: None,
             button: None,
-            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+            // The middle one opens the list of what has been saved: the dialog is where one
+            // goes to synchronise, so it is where the saved ones should be on offer.
+            buttons: vec![
+                i18n.t("btn-ok"),
+                i18n.t("sync-saved-button"),
+                i18n.t("btn-cancel"),
+            ],
         }
     }
 

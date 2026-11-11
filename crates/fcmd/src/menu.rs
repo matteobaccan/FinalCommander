@@ -90,6 +90,9 @@ pub enum PickKind {
     /// The copies a crash left unfinished: `Enter` goes on with one, `Del` discards it
     /// (SPEC 03 §5a).
     LeftJobs,
+    /// The synchronisations saved under a name: `Enter` runs one, `F4` opens its dialog,
+    /// `Del` forgets it (SPEC 03 §10a).
+    SavedSyncs,
     /// The lines of the help that hold what `F7` looked for, every chapter at once.
     HelpHits,
     Languages,
@@ -574,6 +577,11 @@ pub fn menus() -> Vec<Menu> {
                     "menu-sync-folders",
                     "Ctrl+Shift+Y",
                     Action::Run(Command::ToolSyncDirs),
+                ),
+                item(
+                    "menu-sync-saved",
+                    "Ctrl+Alt+Y",
+                    Action::Run(Command::ToolSyncSaved),
                 ),
                 item("menu-tunnel", "", Action::Run(Command::NetTunnel)),
                 item("menu-tunnels", "", Action::Run(Command::NetTunnels)),

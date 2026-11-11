@@ -130,6 +130,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | jobs a crash left unfinished | — | — | — | **Alt+Shift+F6** lists the copies and moves whose journal outlived their session: `Enter` goes on with one, `Del` discards it |
 | compare directories | Commands menu, no default key (marks what is missing or newer in the other panel; names, sizes and times only, no subfolders) | — | Alt+Shift+C | Commands menu, no default key, as in FAR |
 | synchronise directories | — | — | Ctrl+Y | **Ctrl+Shift+Y** — Total Commander's `Ctrl+Y` is FAR's *clear the command line*, and `--check-keymap` is what said so |
+| saved synchronisations | — | — | a list inside the synchronise dialog | **Ctrl+Alt+Y** lists the pairs saved under a name: `Enter` runs one, `F4` changes it, `Del` forgets it |
 | pack / unpack | Shift+F1 / Shift+F2 | — | Alt+Shift+P / Alt+Shift+U | Shift+F1 / Shift+F2 |
 | test archive | — | — | Alt+Shift+E | Commands menu, no default key |
 | multi-rename | — | — | Ctrl+M | **Ctrl+Shift+F6** — Total Commander's `Ctrl+M` reaches a terminal as `Enter`, and FAR's own `Ctrl+M` restores the previous selection, which it does here too, on `Ctrl+Shift+M` |
@@ -381,7 +382,7 @@ file.delete(trash|permanent|wipe)  file.link(hard|sym|rel)  file.attrs
 file.multirename  file.checksum.create|verify  file.split  file.combine
 file.pack  file.unpack  file.archive.test  file.archive.commands
 tool.find  tool.grep  tool.diskusage  tool.compare.dirs  tool.compare.files
-tool.sync.dirs  tool.usermenu  tool.history(cmd|view|folder)  tool.macro.record|play
+tool.sync.dirs  tool.sync.saved  tool.usermenu  tool.history(cmd|view|folder)  tool.macro.record|play
 job.queue.show  job.journal.show  job.pause  job.resume  job.cancel
 shell.run  shell.output.show  shell.term.toggle  shell.insert(name|path|other)
 app.menu  app.help  app.settings  app.palette  app.theme.next  app.keymap.profile(name)

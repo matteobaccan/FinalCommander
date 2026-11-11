@@ -391,6 +391,11 @@ pub enum Request {
         /// is a job resumed after a crash (SPEC 03 §5a). `None` for every other kind.
         journal: Option<Box<fcmd_jobs::Ticket>>,
     },
+    /// Write the report of a synchronisation to its file (SPEC 03 §10a).
+    WriteReport {
+        path: VPath,
+        text: String,
+    },
     /// Give an unfinished job up: remove its journal and the `.fcmd-part` files it names.
     /// A journal that could not be read names none, and only its own file goes.
     DiscardJournal {
@@ -815,6 +820,11 @@ pub enum Event {
         pairs: Vec<fcmd_jobs::sync::Pair>,
         cancelled: bool,
         problem: Option<String>,
+    },
+    /// The report of a synchronisation was written, or could not be and why.
+    ReportWritten {
+        path: VPath,
+        error: Option<String>,
     },
     /// One file of a checksum run is finished: `done` of `total`.
     SumProgress {
@@ -1948,6 +1958,10 @@ pub struct LeftJob {
 /// any of it going.
 #[derive(Debug)]
 pub struct SyncView {
+    /// The name this pair is saved under, or empty: it heads the report.
+    pub name: String,
+    /// Where the report of the run goes, when one was asked for.
+    pub report: Option<VPath>,
     pub id: u64,
     pub left: VPath,
     pub right: VPath,
@@ -2654,6 +2668,12 @@ pub struct App {
     /// The same for the synchronisation dialog: the rules somebody set once are the rules
     /// they want again.
     last_sync: fcmd_jobs::sync::Options,
+    /// The two directories the synchronisation dialog on screen is about: the panels', or a
+    /// saved pair's. Kept beside the dialog because the dialog shows them and does not edit
+    /// them, and by the time it is answered the panels may not be the ones it showed.
+    sync_ask: Option<(VPath, VPath)>,
+    /// The synchronisations that are running and will be written up (SPEC 03 §10a).
+    pub sync_runs: Vec<crate::syncrun::SyncRun>,
     /// Files with no counterpart on the other side, kept while the reading runs: they are
     /// differences too, and they are selected with the rest when it finishes.
     compare_alone: Vec<String>,
@@ -3032,6 +3052,8 @@ impl App {
                 recursive: true,
                 ..fcmd_jobs::sync::Options::default()
             },
+            sync_ask: None,
+            sync_runs: Vec::new(),
             compare_alone: Vec::new(),
             compare_pairs: 0,
             compare_trusted: 0,
@@ -3905,6 +3927,21 @@ impl App {
                 );
                 self.set_status(msg);
             }
+            Event::ReportWritten { path, error } => match error {
+                None => {
+                    let msg = self
+                        .i18n
+                        .t_args("sync-report-written", &[("path", path.to_string().into())]);
+                    self.set_status(msg);
+                }
+                Some(error) => {
+                    let msg = self.i18n.t_args(
+                        "sync-report-not-written",
+                        &[("path", path.to_string().into()), ("error", error.into())],
+                    );
+                    self.set_error(msg);
+                }
+            },
             Event::SumProgress {
                 id,
                 name,
@@ -7836,8 +7873,183 @@ impl App {
             left.to_string(),
             right.to_string(),
             &self.last_sync,
+            String::new(),
+            String::new(),
             &self.i18n,
         )));
+        self.sync_ask = Some((left, right));
+    }
+
+    /// A `[[sync]]` block as the engine takes it: the two directories and the rules. `Err`
+    /// is the sentence for the status line when the block cannot be run as it is written.
+    fn saved_sync(
+        &self,
+        saved: &fcmd_config::SyncCfg,
+    ) -> Result<(VPath, VPath, fcmd_jobs::sync::Options), String> {
+        let (left, right) = (
+            self.resolve_path(saved.left.trim()),
+            self.resolve_path(saved.right.trim()),
+        );
+        if [&left, &right]
+            .iter()
+            .any(|p| !p.is_local() || p.in_container())
+        {
+            return Err(self.i18n.t("sync-local-only"));
+        }
+        if left == right {
+            return Err(self.i18n.t("sync-same-directory"));
+        }
+        let filter = match saved.filter.trim() {
+            "" => None,
+            mask => Some(
+                fcmd_core::MaskSet::parse_with(mask, &self.cfg.mask_groups(), false).map_err(
+                    |e| {
+                        self.i18n
+                            .t_args("msg-mask-invalid", &[("error", e.to_string().into())])
+                    },
+                )?,
+            ),
+        };
+        Ok((
+            left,
+            right,
+            fcmd_jobs::sync::Options {
+                recursive: saved.recursive,
+                both_ways: saved.both_ways,
+                delete_extra: saved.delete_extra,
+                by_content: saved.by_content,
+                filter,
+            },
+        ))
+    }
+
+    /// `tool.sync.saved`: the list of what has been saved, or a line saying how to save one.
+    fn open_saved_syncs(&mut self) {
+        if self.cfg.syncs.is_empty() {
+            let m = self.i18n.t("sync-saved-none");
+            self.set_status(m);
+            return;
+        }
+        self.open_pick(PickKind::SavedSyncs, self.active);
+    }
+
+    fn saved_sync_rows(&self) -> Vec<PickRow> {
+        self.cfg
+            .syncs
+            .iter()
+            .enumerate()
+            .map(|(at, saved)| {
+                // The arrow the table itself draws for a copy: one way, or both.
+                let way = if saved.both_ways {
+                    "\u{2194}"
+                } else {
+                    "\u{2192}"
+                };
+                PickRow::plain(
+                    format!("{}: {} {way} {}", saved.name, saved.left, saved.right),
+                    at.to_string(),
+                    false,
+                )
+            })
+            .collect()
+    }
+
+    /// `Enter` on a saved synchronisation: walk its two directories and show the table.
+    ///
+    /// The table still comes first, saved or not. A pair saved a month ago is run against
+    /// what the two directories hold today, and "take out what the other side does not
+    /// have" is not something to do unseen because it was ticked once.
+    fn run_saved_sync(&mut self, at: usize) {
+        let Some(saved) = self.cfg.syncs.get(at).cloned() else {
+            return;
+        };
+        let (left, right, options) = match self.saved_sync(&saved) {
+            Ok(parts) => parts,
+            Err(why) => {
+                self.set_error(why);
+                return;
+            }
+        };
+        let report = match self.report_path(&saved.report) {
+            Ok(report) => report,
+            Err(why) => {
+                self.set_error(why);
+                return;
+            }
+        };
+        self.start_sync_walk(left, right, options, saved.name, report);
+    }
+
+    /// `F4` on a saved synchronisation: its dialog, filled in, to change and save again.
+    fn edit_saved_sync(&mut self, at: usize) {
+        let Some(saved) = self.cfg.syncs.get(at).cloned() else {
+            return;
+        };
+        let (left, right, options) = match self.saved_sync(&saved) {
+            Ok(parts) => parts,
+            Err(why) => {
+                self.set_error(why);
+                return;
+            }
+        };
+        self.mode = Mode::Form(Box::new(Form::sync(
+            left.to_string(),
+            right.to_string(),
+            &options,
+            saved.name,
+            saved.report,
+            &self.i18n,
+        )));
+        self.sync_ask = Some((left, right));
+    }
+
+    /// Where a report goes, from what was typed: nowhere for an empty row, and a file on
+    /// this machine otherwise — a relative name is in the active panel's directory.
+    fn report_path(&self, typed: &str) -> Result<Option<VPath>, String> {
+        let typed = typed.trim();
+        if typed.is_empty() {
+            return Ok(None);
+        }
+        let path = self.resolve_path(typed);
+        if !path.is_local() || path.in_container() {
+            return Err(self.i18n.t("sync-report-local"));
+        }
+        Ok(Some(path))
+    }
+
+    /// Walk both directories and put the table on screen.
+    fn start_sync_walk(
+        &mut self,
+        left: VPath,
+        right: VPath,
+        options: fcmd_jobs::sync::Options,
+        name: String,
+        report: Option<VPath>,
+    ) {
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        let cancel = CancelToken::new();
+        self.mode = Mode::Sync(Box::new(SyncView {
+            name,
+            report,
+            id,
+            left: left.clone(),
+            right: right.clone(),
+            pairs: Vec::new(),
+            cursor: 0,
+            top: 0,
+            scanning: None,
+            done: false,
+            stopped: false,
+            cancel: cancel.clone(),
+        }));
+        self.requests.push(Request::SyncPlan {
+            id,
+            left,
+            right,
+            options: Box::new(options),
+            cancel,
+        });
     }
 
     /// What the dialog asked for: walk both trees and decide.
@@ -7863,7 +8075,29 @@ impl App {
         self.requests.push(Request::Link { target, link, kind });
     }
 
-    fn apply_sync_form(&mut self, form: &Form) {
+    fn apply_sync_form(&mut self, form: &Form, button: usize) {
+        // The middle button: the saved ones, instead of this one.
+        if button == 1 {
+            if self.cfg.syncs.is_empty() {
+                // Nothing to list, and the dialog is where one is saved: it stays.
+                self.mode = Mode::Form(Box::new(form.clone()));
+                let m = self.i18n.t("sync-saved-none");
+                self.set_status(m);
+            } else {
+                self.sync_ask = None;
+                self.open_pick(PickKind::SavedSyncs, self.active);
+            }
+            return;
+        }
+        let report_typed = form.text_value("sync.report").trim().to_string();
+        let report = match self.report_path(&report_typed) {
+            Ok(report) => report,
+            Err(why) => {
+                self.mode = Mode::Form(Box::new(form.clone()));
+                self.set_error(why);
+                return;
+            }
+        };
         let filter = match form.text_value("sync.filter") {
             empty if empty.trim().is_empty() => None,
             mask => match fcmd_core::MaskSet::parse_with(&mask, &self.cfg.mask_groups(), false) {
@@ -7885,29 +8119,38 @@ impl App {
             filter,
         };
         self.last_sync = options.clone();
-        let (left, right) = (self.panels[0].cwd.clone(), self.panels[1].cwd.clone());
-        let id = self.next_job_id;
-        self.next_job_id += 1;
-        let cancel = CancelToken::new();
-        self.mode = Mode::Sync(Box::new(SyncView {
-            id,
-            left: left.clone(),
-            right: right.clone(),
-            pairs: Vec::new(),
-            cursor: 0,
-            top: 0,
-            scanning: None,
-            done: false,
-            stopped: false,
-            cancel: cancel.clone(),
-        }));
-        self.requests.push(Request::SyncPlan {
-            id,
-            left,
-            right,
-            options: Box::new(options),
-            cancel,
-        });
+        let (left, right) = self
+            .sync_ask
+            .take()
+            .unwrap_or_else(|| (self.panels[0].cwd.clone(), self.panels[1].cwd.clone()));
+        // A name in the last row keeps the pair: under that name, in place of whatever was
+        // there under it before, and in the file at once — a saved synchronisation that is
+        // gone after a crash was not saved.
+        let name = form.text_value("sync.name").trim().to_string();
+        if !name.is_empty() {
+            let saved = fcmd_config::SyncCfg {
+                name: name.clone(),
+                left: left.to_string(),
+                right: right.to_string(),
+                recursive: options.recursive,
+                both_ways: options.both_ways,
+                delete_extra: options.delete_extra,
+                by_content: options.by_content,
+                filter: options
+                    .filter
+                    .as_ref()
+                    .map(|f| f.source().to_string())
+                    .unwrap_or_default(),
+                // As it was typed, so that `~` still means whoever runs it.
+                report: report_typed,
+            };
+            match self.cfg.syncs.iter().position(|s| s.name == name) {
+                Some(at) => self.cfg.syncs[at] = saved,
+                None => self.cfg.syncs.push(saved),
+            }
+            self.save_setup();
+        }
+        self.start_sync_walk(left, right, options, name, report);
     }
 
     /// `F2` in the table: turn every row that says something into a job.
@@ -7934,6 +8177,49 @@ impl App {
         let cut_left = gather(Action::DeleteLeft, &view.left);
         let (left, right) = (view.left.clone(), view.right.clone());
         let to_wastebasket = self.cfg.general.use_trash;
+        // What the report will be made of, when one was asked for: the rows of each job, in
+        // the order the jobs run, and the rows that differ and were left as they are.
+        let rels = |want: Action| -> Vec<String> {
+            view.pairs
+                .iter()
+                .filter(|p| p.action == want)
+                .map(|p| p.rel.clone())
+                .collect()
+        };
+        let run = view.report.clone().map(|report| {
+            use crate::syncrun::{Step, StepKind};
+            let steps = [
+                (StepKind::ToRight, Action::Right),
+                (StepKind::ToLeft, Action::Left),
+                (StepKind::CutRight, Action::DeleteRight),
+                (StepKind::CutLeft, Action::DeleteLeft),
+            ]
+            .into_iter()
+            .map(|(kind, action)| Step {
+                kind,
+                rels: rels(action),
+                outcome: None,
+            })
+            .filter(|step| !step.rels.is_empty())
+            .collect();
+            crate::syncrun::SyncRun {
+                job: self.next_job_id,
+                name: view.name.clone(),
+                left: left.clone(),
+                right: right.clone(),
+                report,
+                steps,
+                at: 0,
+                left_alone: view
+                    .pairs
+                    .iter()
+                    .filter(|p| {
+                        p.action == Action::Skip && p.verdict != fcmd_jobs::sync::Verdict::Same
+                    })
+                    .map(|p| p.rel.clone())
+                    .collect(),
+            }
+        });
 
         let copy = |sources: Vec<VPath>, from: &VPath, to: &VPath| -> Option<JobSpec> {
             (!sources.is_empty()).then(|| {
@@ -7976,6 +8262,7 @@ impl App {
         self.mode = Mode::Normal;
         let first = jobs.remove(0);
         self.queued_jobs.extend(jobs);
+        self.sync_runs.extend(run);
         self.start_job(first);
     }
 
@@ -9400,9 +9687,27 @@ impl App {
         } else {
             then.pop_front()
         };
+        // A step of a synchronisation that is being written up: how it ended goes on
+        // record, and the run follows the chain to its next job — or, where the chain
+        // ends, by finishing or by breaking, is written down.
+        let run = self.sync_runs.iter().position(|r| r.job == id);
+        if let Some(at) = run {
+            self.sync_runs[at].ended(outcome.clone());
+        }
         if let Some(next) = next {
             self.queued_jobs = then;
+            if let Some(at) = run {
+                self.sync_runs[at].job = self.next_job_id;
+                self.sync_runs[at].at += 1;
+            }
             self.enqueue(next, shown);
+        } else if let Some(at) = run {
+            let run = self.sync_runs.remove(at);
+            let when = fcmd_ui::format_stamp(std::time::SystemTime::now());
+            self.requests.push(Request::WriteReport {
+                text: run.text(&when, &self.i18n),
+                path: run.report,
+            });
         }
         self.launch_ready();
         self.refresh_jobs_pick();
@@ -10902,6 +11207,7 @@ impl App {
             Command::ToolUserMenu => self.open_user_menu(),
             Command::ToolUserMenuLast => self.open_user_menu_on_last(),
             Command::ToolSyncDirs => self.open_sync_form(),
+            Command::ToolSyncSaved => self.open_saved_syncs(),
             Command::FileDescribe => self.open_describe(),
             Command::PanelTempAdd => self.add_to_temp_panel(),
             Command::FileChecksum => self.open_checksum_form(),
@@ -19010,7 +19316,7 @@ impl App {
             return;
         }
         if form.kind == FormKind::Sync {
-            self.apply_sync_form(&form);
+            self.apply_sync_form(&form, button);
             return;
         }
         if form.kind == FormKind::Link {
@@ -20968,6 +21274,12 @@ impl App {
                 self.left_job_rows(),
                 side,
             ),
+            PickKind::SavedSyncs => Pick::new(
+                kind,
+                self.i18n.t("sync-saved-title"),
+                self.saved_sync_rows(),
+                side,
+            ),
             PickKind::Jobs => {
                 let rows = self.job_rows();
                 let title = self.i18n.t_args(
@@ -21410,6 +21722,36 @@ impl App {
                 }
                 self.refresh_jobs_pick();
             }
+            // The saved synchronisations are changed and forgotten where they are listed.
+            KeyCode::F(4) if kind == PickKind::SavedSyncs => {
+                if let Some(at) = pick.chosen().and_then(|r| r.value.parse::<usize>().ok()) {
+                    self.edit_saved_sync(at);
+                }
+            }
+            KeyCode::Delete | KeyCode::F(8) if kind == PickKind::SavedSyncs => {
+                let (side, cursor) = (pick.side, pick.cursor);
+                let at = pick.chosen().and_then(|r| r.value.parse::<usize>().ok());
+                if let Some(at) = at.filter(|at| *at < self.cfg.syncs.len()) {
+                    let gone = self.cfg.syncs.remove(at).name;
+                    self.save_setup();
+                    if self.cfg.syncs.is_empty() {
+                        self.mode = Mode::Normal;
+                    } else {
+                        self.open_pick(PickKind::SavedSyncs, side);
+                        if let Mode::Pick(fresh) = &mut self.mode {
+                            fresh.cursor = cursor.min(fresh.rows.len().saturating_sub(1));
+                        }
+                    }
+                    // Only when the file was written: otherwise the line already says why
+                    // it was not, and that is the one to read.
+                    if !self.status_error {
+                        let msg = self
+                            .i18n
+                            .t_args("sync-saved-removed", &[("name", gone.into())]);
+                        self.set_status(msg);
+                    }
+                }
+            }
             // Giving an unfinished job up, from the list that offers it.
             KeyCode::Delete | KeyCode::F(8) if kind == PickKind::LeftJobs => {
                 let (side, cursor) = (pick.side, pick.cursor);
@@ -21806,6 +22148,11 @@ impl App {
             PickKind::LeftJobs => {
                 if let Ok(at) = row.value.parse::<usize>() {
                     self.resume_left_job(at, *pick);
+                }
+            }
+            PickKind::SavedSyncs => {
+                if let Ok(at) = row.value.parse::<usize>() {
+                    self.run_saved_sync(at);
                 }
             }
             PickKind::HelpHits => {
@@ -34263,6 +34610,371 @@ run = ["echo one", "echo two", "echo three"]
         app.run(Command::JobJournal);
         assert!(app.mode.is_normal());
         assert_eq!(app.status, app.i18n.t("journal-none"));
+    }
+
+    // ── saved synchronisations and their report (SPEC 03 §10a) ──────────────────────────
+
+    /// An application whose configuration file is in a folder of its own, because these
+    /// tests save the setup and the file has to land somewhere nobody else writes.
+    fn app_saving_in(dir: &std::path::Path) -> App {
+        let mut app = app();
+        app.paths = Paths::discover(Some(&dir.join("fcmd.toml")), None);
+        app
+    }
+
+    fn saved_pair(dir: &std::path::Path, name: &str) -> fcmd_config::SyncCfg {
+        fcmd_config::SyncCfg {
+            name: name.to_string(),
+            left: dir.join(name).join("here").display().to_string(),
+            right: dir.join(name).join("there").display().to_string(),
+            delete_extra: true,
+            ..fcmd_config::SyncCfg::default()
+        }
+    }
+
+    #[test]
+    fn a_name_in_the_sync_dialog_saves_the_pair_with_its_rules() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_saving_in(dir.path());
+        let (left, right) = (app.panels[0].cwd.clone(), app.panels[1].cwd.clone());
+        press(&mut app, "Ctrl+Shift+Y");
+        set_toggle(&mut app, "sync.both_ways", true);
+        {
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("the dialog is open")
+            };
+            assert_eq!(form.buttons.len(), 3, "OK, the saved ones, Cancel");
+            form.set_text("sync.name", "Evening backup".to_string());
+            form.set_text("sync.filter", "*.rs".to_string());
+            form.set_text("sync.report", "sync-report.txt".to_string());
+        }
+        press(&mut app, "F10");
+
+        assert_eq!(app.cfg.syncs.len(), 1);
+        let saved = &app.cfg.syncs[0];
+        assert_eq!(saved.name, "Evening backup");
+        assert_eq!(saved.left, left.to_string());
+        assert_eq!(saved.right, right.to_string());
+        assert!(saved.recursive && saved.both_ways && !saved.delete_extra);
+        assert_eq!(saved.filter, "*.rs");
+        assert_eq!(saved.report, "sync-report.txt", "kept as it was typed");
+        let written = std::fs::read_to_string(dir.path().join("fcmd.toml")).unwrap();
+        assert!(written.contains("[[sync]]"), "{written}");
+        assert!(written.contains("Evening backup"), "{written}");
+
+        // And it goes on to the table, as an unsaved one does, knowing where to report.
+        let Mode::Sync(view) = &app.mode else {
+            panic!("the walk did not start: {:?}", app.mode)
+        };
+        assert_eq!(view.name, "Evening backup");
+        assert_eq!(
+            view.report,
+            Some(app.panel().cwd.join("sync-report.txt")),
+            "a relative name is in the active panel's directory"
+        );
+        assert!(app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::SyncPlan { .. })));
+
+        // The same name again replaces the block rather than adding a second.
+        press(&mut app, "Esc");
+        press(&mut app, "Ctrl+Shift+Y");
+        {
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("the dialog is open")
+            };
+            form.set_text("sync.name", "Evening backup".to_string());
+        }
+        press(&mut app, "F10");
+        assert_eq!(app.cfg.syncs.len(), 1);
+        assert!(app.cfg.syncs[0].report.is_empty(), "the new answer won");
+    }
+
+    #[test]
+    fn the_list_of_saved_synchronisations_runs_changes_and_forgets() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_saving_in(dir.path());
+        app.cfg.syncs = vec![saved_pair(dir.path(), "one"), saved_pair(dir.path(), "two")];
+        app.cfg.syncs[1].report = dir.path().join("two.txt").display().to_string();
+
+        press(&mut app, "Ctrl+Alt+Y");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list did not open: {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::SavedSyncs);
+        assert_eq!(pick.rows.len(), 2);
+        assert!(pick.rows[0].label.starts_with("one: "), "{:?}", pick.rows);
+
+        // Enter runs the second: its own two directories, not the panels', and its rules.
+        press(&mut app, "Down");
+        press(&mut app, "Enter");
+        let Mode::Sync(view) = &app.mode else {
+            panic!("the walk did not start: {:?}", app.mode)
+        };
+        assert_eq!(view.left, VPath::local(dir.path().join("two").join("here")));
+        assert_eq!(view.report, Some(VPath::local(dir.path().join("two.txt"))));
+        let options = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::SyncPlan { options, .. } => Some(options),
+                _ => None,
+            })
+            .expect("the walk was asked for");
+        assert!(options.delete_extra && options.recursive && !options.both_ways);
+        press(&mut app, "Esc");
+
+        // F4 opens its dialog, filled in.
+        app.run(Command::ToolSyncSaved);
+        press(&mut app, "F4");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog did not open: {:?}", app.mode)
+        };
+        assert_eq!(form.kind, FormKind::Sync);
+        assert_eq!(form.text_value("sync.name"), "one");
+        assert_eq!(form.text_value("sync.delete_extra"), "true");
+        press(&mut app, "Esc");
+
+        // Del forgets one, in the file as well; the last one closes the list.
+        app.run(Command::ToolSyncSaved);
+        press(&mut app, "Delete");
+        assert_eq!(app.cfg.syncs.len(), 1);
+        assert_eq!(app.cfg.syncs[0].name, "two");
+        assert!(app.status.contains("one"), "{}", app.status);
+        let written = std::fs::read_to_string(dir.path().join("fcmd.toml")).unwrap();
+        assert!(!written.contains("name = \"one\""), "{written}");
+        press(&mut app, "Delete");
+        assert!(app.mode.is_normal(), "{:?}", app.mode);
+        assert!(app.cfg.syncs.is_empty());
+    }
+
+    #[test]
+    fn with_nothing_saved_the_list_says_how_to_save_and_the_dialog_stays() {
+        let mut app = app();
+        app.run(Command::ToolSyncSaved);
+        assert!(app.mode.is_normal(), "{:?}", app.mode);
+        assert_eq!(app.status, app.i18n.t("sync-saved-none"));
+
+        // The same from the dialog's own button, which leaves the dialog where it was.
+        app.set_status("");
+        press(&mut app, "Ctrl+Shift+Y");
+        {
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("the dialog is open")
+            };
+            form.button = Some(1);
+        }
+        press(&mut app, "Enter");
+        assert!(
+            matches!(&app.mode, Mode::Form(f) if f.kind == FormKind::Sync),
+            "{:?}",
+            app.mode
+        );
+        assert_eq!(app.status, app.i18n.t("sync-saved-none"));
+
+        // And with one saved, the button opens the list.
+        app.cfg.syncs = vec![saved_pair(std::path::Path::new("x"), "one")];
+        press(&mut app, "Enter");
+        assert!(
+            matches!(&app.mode, Mode::Pick(p) if p.kind == PickKind::SavedSyncs),
+            "{:?}",
+            app.mode
+        );
+    }
+
+    /// The table of a synchronisation, made by hand: one row each way, one to take out, and
+    /// one that differs and is left alone.
+    fn sync_table(report: Option<VPath>) -> SyncView {
+        use fcmd_jobs::sync::{Action, Pair, Verdict};
+        let file = || {
+            Some(fcmd_jobs::Facts {
+                kind: fcmd_core::EntryKind::File,
+                size: 10,
+                mtime: None,
+                mode: None,
+                readonly: false,
+            })
+        };
+        let pair = |rel: &str, left, right, verdict, action| Pair {
+            rel: rel.to_string(),
+            left,
+            right,
+            verdict,
+            action,
+        };
+        SyncView {
+            name: "Evening backup".to_string(),
+            report,
+            id: 1,
+            left: VPath::local("/home/mb/work"),
+            right: VPath::local("/home/mb/backup"),
+            pairs: vec![
+                pair("new.txt", file(), None, Verdict::OnlyLeft, Action::Right),
+                pair("theirs.txt", None, file(), Verdict::OnlyRight, Action::Left),
+                pair(
+                    "old.txt",
+                    None,
+                    file(),
+                    Verdict::OnlyRight,
+                    Action::DeleteRight,
+                ),
+                pair("clash.txt", file(), file(), Verdict::Conflict, Action::Skip),
+                pair("same.txt", file(), file(), Verdict::Same, Action::Skip),
+            ],
+            cursor: 0,
+            top: 0,
+            scanning: None,
+            done: true,
+            stopped: false,
+            cancel: CancelToken::new(),
+        }
+    }
+
+    /// End the job that is running now, the way its worker would.
+    fn end_running_job(app: &mut App, outcome: fcmd_jobs::Outcome) {
+        let (id, kind) = app
+            .queue
+            .jobs
+            .iter()
+            .find(|j| j.state == crate::queue::JobState::Running)
+            .map(|j| (j.id, j.kind))
+            .expect("a job is running");
+        app.handle_event(Event::JobDone { id, kind, outcome });
+    }
+
+    #[test]
+    fn a_synchronisation_writes_its_report_when_its_last_job_ends() {
+        let mut app = app();
+        let report = app.panel().cwd.join("report.txt");
+        app.mode = Mode::Sync(Box::new(sync_table(Some(report.clone()))));
+        press(&mut app, "F2");
+        assert_eq!(app.sync_runs.len(), 1, "the run is being followed");
+        assert_eq!(app.sync_runs[0].steps.len(), 3, "two copies and a removal");
+
+        for _ in 0..2 {
+            end_running_job(
+                &mut app,
+                fcmd_jobs::Outcome {
+                    files: 1,
+                    ..Default::default()
+                },
+            );
+            assert!(
+                !app.take_requests()
+                    .iter()
+                    .any(|r| matches!(r, Request::WriteReport { .. })),
+                "nothing is written while a step is still to come"
+            );
+        }
+        end_running_job(
+            &mut app,
+            fcmd_jobs::Outcome {
+                files: 1,
+                ..Default::default()
+            },
+        );
+        let (path, text) = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::WriteReport { path, text } => Some((path, text)),
+                _ => None,
+            })
+            .expect("the report is written at the end");
+        assert_eq!(path, report);
+        assert!(app.sync_runs.is_empty(), "and the run is over");
+        for expected in [
+            "Name: Evening backup",
+            "Copied left → right: 1",
+            "Copied right → left: 1",
+            "Taken out on the right: 1",
+            "Left alone though they differ: 1",
+            "clash.txt",
+            "Failed: 0",
+        ] {
+            assert!(text.contains(expected), "no `{expected}` in:\n{text}");
+        }
+        assert!(
+            !text.contains("same.txt"),
+            "a row that is the same on both sides is not news:\n{text}"
+        );
+
+        // The worker's answer is the line that says where it went — or why it did not.
+        app.handle_event(Event::ReportWritten {
+            path: report.clone(),
+            error: None,
+        });
+        assert!(app.status.contains(&report.to_string()), "{}", app.status);
+        assert!(!app.status_error);
+        app.handle_event(Event::ReportWritten {
+            path: report.clone(),
+            error: Some("no such directory".to_string()),
+        });
+        assert!(app.status_error && app.status.contains("no such directory"));
+    }
+
+    #[test]
+    fn a_synchronisation_that_breaks_reports_what_never_ran() {
+        let mut app = app();
+        let report = app.panel().cwd.join("report.txt");
+        app.mode = Mode::Sync(Box::new(sync_table(Some(report))));
+        press(&mut app, "F2");
+        let broken = VPath::local("/home/mb/backup").join("new.txt");
+        end_running_job(
+            &mut app,
+            fcmd_jobs::Outcome {
+                errors: vec![(broken.clone(), "disk full".to_string())],
+                ..Default::default()
+            },
+        );
+        let text = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::WriteReport { text, .. } => Some(text),
+                _ => None,
+            })
+            .expect("a run that stops is written up there and then");
+        assert!(text.contains("Copied left → right: 0"), "{text}");
+        assert!(text.contains(&format!("{broken}: disk full")), "{text}");
+        assert!(text.contains("Not done"), "{text}");
+        assert!(text.contains("theirs.txt") && text.contains("old.txt"));
+    }
+
+    #[test]
+    fn a_synchronisation_with_no_report_asked_for_writes_none() {
+        let mut app = app();
+        app.mode = Mode::Sync(Box::new(sync_table(None)));
+        press(&mut app, "F2");
+        assert!(app.sync_runs.is_empty());
+        for _ in 0..3 {
+            end_running_job(&mut app, fcmd_jobs::Outcome::default());
+        }
+        assert!(!app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::WriteReport { .. })));
+    }
+
+    #[test]
+    fn a_report_somewhere_that_is_not_this_machine_keeps_the_dialog_open() {
+        let mut app = app();
+        press(&mut app, "Ctrl+Shift+Y");
+        {
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("the dialog is open")
+            };
+            form.set_text("sync.report", "sftp://mb@host/report.txt".to_string());
+        }
+        press(&mut app, "F10");
+        assert!(
+            matches!(&app.mode, Mode::Form(f) if f.kind == FormKind::Sync),
+            "{:?}",
+            app.mode
+        );
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.take_requests().is_empty(), "and nothing is walked");
     }
 
     /// With the queue off, both start at once.

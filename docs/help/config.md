@@ -481,6 +481,31 @@ over. Writing the blocks turns them on; `Shift+F11` — `Group` on the key bar �
 and on again, one panel at a time. A block that does not parse is named on the startup screen
 and skipped, as a highlighting group is.
 
+# Synchronisations kept by name
+
+A `[[sync]]` block in `fcmd.toml` is a pair of folders and how to synchronise them, under a
+name. The synchronisation dialog writes one when you give the pair a name, and `Ctrl+Alt+Y`
+lists them to run again; they can as well be written by hand.
+
+```toml
+[[sync]]
+name = "Evening backup"
+left = "~/work"
+right = "/media/stick/work"
+recursive = true
+both_ways = false
+delete_extra = true
+by_content = false
+filter = "*.rs,*.md"
+report = "~/backup-report.txt"
+```
+
+`left` is the source when the run is one way. `recursive` goes into the subfolders and is on
+when it is left out; `both_ways`, `delete_extra` (offer to take out what the other side does
+not have) and `by_content` (compare the bytes rather than size and date) are off. `filter` is
+a mask and `report` the file a run writes what it did to; both may be left out. A block is a
+question, not an order: running it shows the table, and `F2` there is what starts anything.
+
 # The palette editor
 
 `F9 → Options → Colours…` lists every colour the interface uses, with the value as a theme file

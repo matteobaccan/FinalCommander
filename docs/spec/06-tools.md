@@ -538,6 +538,17 @@ everything that is one line — the command line, a dialog row, a prompt — tak
 and says how many more there were, because a command copied from a web page arrives with its
 newline still attached and running it before it can be read is exactly the accident to avoid.
 
+## 11c. Saved synchronisations (`Ctrl+Alt+Y`)
+
+Synchronising is SPEC 03 §10a; what belongs here is the tool around it. `tool.sync.saved`
+opens a pick list of the `[[sync]]` blocks of `fcmd.toml` (SPEC 07 §2b-septies), one row per
+block: `name: left → right`, or `↔` for a pair that runs both ways. `Enter` runs the row —
+the walk, the table, and `F2` there — `F4` opens the synchronisation dialog filled in from
+it, `Del` or `F8` removes it and saves the file. With no block saved the command opens
+nothing and the status line says how to save one. The same list is the middle button,
+*Saved…*, of the dialog `Ctrl+Shift+Y` opens, which is also where a pair is given its name
+and where the file a run reports to is named.
+
 ## 12. Disk usage
 
 `Alt+Shift+F3` (`panel.usage`, *Commands → Disk usage*) answers the question a full disk asks:

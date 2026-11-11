@@ -253,6 +253,7 @@ impl Command {
             Command::ToolAi => "the AI services: add, change, remove, choose the one asked",
             Command::ToolGrab => "copy a piece of the screen as it stands",
             Command::ToolSyncDirs => "make the two directories hold the same thing",
+            Command::ToolSyncSaved => "the synchronisations saved under a name, to run again",
             Command::ToolCompareContents => "compare them by what is in the files",
             Command::ToolDiff => "the two files under the cursors, side by side",
             Command::ToolCalculator => "a calculator, in every base at once",

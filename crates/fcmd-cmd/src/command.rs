@@ -395,6 +395,8 @@ pub enum Command {
     /// Make the two panels' directories hold the same thing: decide about every pair, show
     /// the table, and only then copy and delete (SPEC 03 §10).
     ToolSyncDirs,
+    /// The synchronisations saved under a name, to run again (SPEC 03 §10a).
+    ToolSyncSaved,
     /// Compare the two panels by what is *in* the files: every pair with the same name is
     /// read on both sides and selected where the bytes differ. The slow, certain one.
     ToolCompareContents,
@@ -766,6 +768,7 @@ impl Command {
             Command::ToolAi,
             Command::ToolGrab,
             Command::ToolSyncDirs,
+            Command::ToolSyncSaved,
             Command::ToolCompareContents,
             Command::ToolDiff,
             Command::ToolCalculator,
@@ -1074,6 +1077,7 @@ impl Command {
             Command::ToolAi => "tool.ai".into(),
             Command::ToolGrab => "tool.grab".into(),
             Command::ToolSyncDirs => "tool.sync.dirs".into(),
+            Command::ToolSyncSaved => "tool.sync.saved".into(),
             Command::ToolCompareContents => "tool.compare.contents".into(),
             Command::ToolDiff => "tool.diff".into(),
             Command::ToolCalculator => "tool.calculator".into(),
@@ -1346,6 +1350,7 @@ impl Command {
             ("tool.ai", _) => Command::ToolAi,
             ("tool.grab", _) => Command::ToolGrab,
             ("tool.sync.dirs", _) => Command::ToolSyncDirs,
+            ("tool.sync.saved", _) => Command::ToolSyncSaved,
             ("tool.compare.contents", _) => Command::ToolCompareContents,
             ("tool.calculator", _) => Command::ToolCalculator,
             ("tool.terminal", _) => Command::ToolTerminal,

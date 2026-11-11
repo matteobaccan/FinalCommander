@@ -294,6 +294,34 @@ riga. Una riga che porta via un file lo mette nel cestino, come fa `F8`.
 
 Per ora le due cartelle devono essere entrambe su questa macchina.
 
+## Una sincronizzazione da rifare
+
+Il dialogo ha altre due righe, vuote finché non le riempi.
+
+**Salva questa coppia come** vuole un nome. Con un nome dentro, `OK` conserva le due cartelle e
+tutto quello che il dialogo dice — il verso, la profondità, la maschera, il resoconto — sotto
+quel nome, in `fcmd.toml`, e prosegue verso la tabella come sempre. Lo stesso nome un'altra
+volta sostituisce quello che c'era salvato.
+
+`Ctrl+Alt+Y` — *Comandi → Sincronizzazioni salvate*, e il pulsante *Salvate…* del dialogo —
+elenca quelle salvate, ciascuna con le sue due cartelle e una freccia per un verso o per due.
+
+- `Enter` ne esegue una: le sue due cartelle, ovunque siano i pannelli, lette adesso. La
+  tabella viene comunque prima e `F2` la fa partire — quello che le cartelle contengono oggi
+  non è quello che contenevano quando la coppia è stata salvata, e togliere dei file non è una
+  cosa da fare senza guardare.
+- `F4` apre il suo dialogo, già compilato, per cambiarla e salvarla di nuovo.
+- `Canc` la dimentica.
+
+**Scrivi un resoconto in** vuole un file. Quando l'ultimo job della sincronizzazione finisce,
+lì viene scritto un breve testo e la riga di stato dice dov'è: cosa è stato copiato da sinistra
+a destra e da destra a sinistra, cosa è stato tolto da ciascun lato, i file diversi che sono
+stati lasciati stare, e cosa è fallito, ciascuno con il suo percorso. Se l'esecuzione è stata
+fermata o un passo è fallito, il resoconto viene scritto in quel momento e dice quali righe non
+sono mai state raggiunte — e, per un passo fermato a metà, che le sue righe possono essere
+state fatte oppure no, invece di tirare a indovinare. Un nome senza cartella davanti è un file
+nella cartella del pannello attivo; la cartella deve esistere. Ogni esecuzione riscrive il file.
+
 # Dove va lo spazio
 
 `Alt+Shift+F3` — *Comandi → Occupazione del disco* — elenca ciò che c'è in questa cartella per
