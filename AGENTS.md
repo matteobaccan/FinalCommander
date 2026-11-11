@@ -129,6 +129,10 @@ bug. The loop is input-driven and keeps no timer: anything that must happen on i
 
 ## Releases
 
+A release carries at least one feature or one fix. Dependency updates merged from Renovate or
+Dependabot never cut one on their own: they wait on `main` and ship with the next release that
+has something of its own in it.
+
 1. Write the section in `CHANGELOG.md` under a dated heading: `## [0.7.0] — 2026-10-28`.
    The release notes are read from that section.
 2. Bump `version` in the workspace `Cargo.toml` (one place — every crate inherits it) and run
