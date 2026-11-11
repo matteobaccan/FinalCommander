@@ -77,7 +77,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.24 | Panel history (back/forward), directory history, folder shortcuts/bookmarks (0..9 + named), hotlist | FAR/TC/MC | ✓ |
 | 1.25 | Auto-refresh via filesystem watch (inotify/FSEvents/ReadDirectoryChangesW), manual `Ctrl+R` | TC/MTN2 | ✓ |
 | 1.26 | Names and full paths to the system clipboard | FAR (`Ctrl+Ins`, `Alt+Shift+Ins`) | ✓ |
-| 1.27 | Columns whose values a plugin computes — Total Commander's content plugins (`.wdx`): a photo's EXIF date, a track's tags, a document's page count, sortable and searchable like any other column | TC | M3 — a plugin can say the same in a message (`examples/plugins/what-is-this`); a column API is SPEC 08's next tier |
+| 1.27 | Columns whose values a plugin computes — Total Commander's content plugins (`.wdx`): a photo's EXIF date, a track's tags, a document's page count, sortable and searchable like any other column | TC | ~ a `[[column]]` of a plugin, named in a `[[column_set]]`; not a sort key, not searched, and only for folders on this machine |
 
 ## 2. Navigation & selection
 

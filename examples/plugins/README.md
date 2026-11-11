@@ -147,18 +147,61 @@ do not read, `xdg-open` for the desktop, `xclip` or `pbcopy` for the clipboard, 
 has a file open, `identify` or `ffprobe` for what a media file is. Each says which program it
 wanted rather than failing quietly, because "nothing happened" is the worst possible answer.
 
+## A column of your own
+
+A plugin can also compute a **panel column** — what Total Commander calls a content plugin.
+A `[[column]]` names a program, and a `[[column_set]]` in `fcmd.toml` puts the column in a
+view by its full name, `plugin:<plugin>.<column>`:
+
+```toml
+# plugin.toml
+[[column]]
+id = "lines"            # lower-case letters, digits and `-`
+title = "Lines"         # the heading; the id when left out
+width = 7               # when the column set does not say
+align = "right"         # or left, the default
+run = "count.sh"        # in the plugin's folder; `run_windows` for the other system
+masks = "*.rs,*.toml"   # only these are asked about; left out, every file
+timeout = 60            # seconds for one run (default 10)
+batch = true            # one run for the whole directory instead of one per file
+folders = false         # directories are not asked about unless this says so
+```
+
+```toml
+# fcmd.toml
+[[column_set]]
+id = 3                  # Ctrl+3
+columns = [
+  { type = "name" },
+  { type = "plugin:line-count.lines" },
+  { type = "plugin:what-is-this.kind", width = 24 },
+]
+```
+
+Without `batch` the program is run once per file: the path is its first argument (and
+`FCMD_FILE`), it starts in the file's directory, and the **first line it prints is the cell**.
+Nothing printed, or a failing exit status, is an empty cell. With `batch = true` it is run
+once per directory: the paths arrive on standard input, one per line, and each line of the
+answer is `path<TAB>value`, the path exactly as it came. `FCMD_COLUMN` is the column's id, so
+one script can serve several columns, and `FCMD_DIR` the directory.
+
+The panel is drawn at once, with `…` in the cells still being asked about, and fills in as
+the answers arrive. An answer is remembered by path, date and size, so a file is asked about
+once and again only when it changes. Three runs that time out stop the column for that
+directory, and the status line says which program it was. `what-is-this` has a column that
+runs once per file (`kind.sh`) and `line-count` one that runs once per directory (`count.sh`).
+
 ## What is refused, and when
 
 At load, not at the first press: a command id outside the `user.` or `plugin.` name space, a
 program that leaves the plugin's own folder (by `..`, by an absolute path, or through a
-symbolic link), a `needs` nobody can give, a missing label, and a second plugin claiming an id
-another already provides. A plugin that would surprise somebody does not load at all, and
+symbolic link), a `needs` nobody can give, a missing label, a column whose id is not one or
+is declared twice, and a second plugin claiming an id another already provides. A plugin that would surprise somebody does not load at all, and
 `fcmd --list-plugins` says why.
 
-`docs/spec/08-plugins.md` §1b is the whole protocol, and §2 and §3 are the tiers above this
-one: a plugin that *adds* a panel column, a preview or a filesystem, and one that is asked a
-question rather than told to run. `what-is-this` is the clearest argument for the first of
-those — it says in a message what Total Commander puts in columns.
+`docs/spec/08-plugins.md` §1b is the whole protocol for commands and §1d the one for
+columns; §2 and §3 are the tiers above this one: a plugin that *adds* a preview or a
+filesystem, and one that is asked a question rather than told to run.
 
 ## One shell trap, written down because it cost a build
 

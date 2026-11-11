@@ -277,6 +277,196 @@ pub fn run_command(
     }
 }
 
+/// How long one run of a column's program may take when the column does not say. Shorter
+/// than a command's: a command is asked for once, a column for every file of a directory.
+pub const COLUMN_TIMEOUT: u64 = 10;
+
+/// The longest value a column keeps. A cell is a few characters wide; this only stops a
+/// program that printed a file's whole contents from being kept in memory row by row.
+const COLUMN_VALUE_MAX: usize = 200;
+
+/// What a program printed, as a cell: one line, nothing that would move the cursor.
+fn column_cell(text: &str) -> String {
+    text.trim()
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(COLUMN_VALUE_MAX)
+        .collect()
+}
+
+/// Run a program to its end with `input` on its standard input, and hand back what it
+/// printed. Both pipes are worked from threads of their own — unlike [`run_command`], whose
+/// outputs are small by the protocol — because a batch for a large directory writes more
+/// paths and prints more lines than a pipe holds, and a program that is waiting for its
+/// output to be read while we wait for it to finish is a timeout nobody could explain.
+fn run_to_end(
+    mut proc: std::process::Command,
+    name: String,
+    input: Vec<u8>,
+    seconds: u64,
+) -> Result<String, RunError> {
+    use std::io::{Read, Write};
+    use std::process::Stdio;
+
+    let seconds = seconds.clamp(1, 600);
+    proc.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    // A script that has only just been written can be refused as "busy" for an instant:
+    // Linux will not execute a file some process still holds open for writing, and a
+    // process forked at the wrong moment holds everything its parent had open until it
+    // becomes its own program. A column asks hundreds of times in a row, so the instant is
+    // waited out here rather than reported as a column that does not work.
+    let mut tries = 0;
+    let mut child = loop {
+        match proc.spawn() {
+            Ok(child) => break child,
+            Err(source)
+                if source.kind() == std::io::ErrorKind::ExecutableFileBusy && tries < 50 =>
+            {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            Err(source) => {
+                return Err(RunError::Spawn {
+                    program: name,
+                    source,
+                })
+            }
+        }
+    };
+    let stdin = child.stdin.take();
+    let writer = std::thread::spawn(move || {
+        if let Some(mut stdin) = stdin {
+            // A program that never reads its input closes the pipe by ending: not an error.
+            let _ = stdin.write_all(&input);
+        }
+    });
+    let stdout = child.stdout.take();
+    let reader = std::thread::spawn(move || {
+        let mut out = Vec::new();
+        if let Some(mut stdout) = stdout {
+            let _ = stdout.read_to_end(&mut out);
+        }
+        out
+    });
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(seconds);
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {
+                if std::time::Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    // The two threads end with the pipes, which the kill has just closed —
+                    // unless a grandchild still holds them, which is not worth waiting for.
+                    return Err(RunError::Timeout {
+                        program: name,
+                        seconds,
+                    });
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            Err(source) => {
+                return Err(RunError::Spawn {
+                    program: name,
+                    source,
+                })
+            }
+        }
+    };
+    let _ = writer.join();
+    let out = reader.join().unwrap_or_default();
+    if !status.success() {
+        return Err(RunError::Status {
+            program: name,
+            status: status.to_string(),
+        });
+    }
+    Ok(String::from_utf8_lossy(&out).into_owned())
+}
+
+/// The environment a column's program runs in: which column, and where.
+fn column_proc(
+    program: &std::path::Path,
+    dir: &std::path::Path,
+    column: &str,
+) -> std::process::Command {
+    let mut proc = std::process::Command::new(program);
+    proc.current_dir(dir)
+        .env("FCMD_API", API_VERSION.to_string())
+        .env("FCMD_COLUMN", column)
+        .env("FCMD_DIR", dir);
+    proc
+}
+
+/// Ask a column's program about one file (SPEC 08 §1d).
+///
+/// The path is the first argument — and `FCMD_FILE`, for a script that prefers the
+/// environment — the directory it is in is where the program runs, and the first line it
+/// prints is the value. Printing nothing is an answer too: an empty cell.
+pub fn column_value(
+    program: &std::path::Path,
+    dir: &std::path::Path,
+    file: &std::path::Path,
+    column: &str,
+    timeout: Option<u64>,
+) -> Result<String, RunError> {
+    let mut proc = column_proc(program, dir, column);
+    proc.arg(file).env("FCMD_FILE", file);
+    let out = run_to_end(
+        proc,
+        program.display().to_string(),
+        Vec::new(),
+        timeout.unwrap_or(COLUMN_TIMEOUT),
+    )?;
+    Ok(column_cell(out.lines().next().unwrap_or("")))
+}
+
+/// Ask a column's program about a whole directory in one run (`batch = true`).
+///
+/// The paths go in on standard input, one per line; the answers come back as
+/// `path<TAB>value`, the path spelled as it was given, and are handed back in the order of
+/// `files`. A file the program says nothing about has an empty cell; a line that names no
+/// file that was asked about is dropped rather than guessed at.
+pub fn column_batch(
+    program: &std::path::Path,
+    dir: &std::path::Path,
+    files: &[std::path::PathBuf],
+    column: &str,
+    timeout: Option<u64>,
+) -> Result<Vec<String>, RunError> {
+    let asked: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
+    let mut input = asked.join("\n").into_bytes();
+    input.push(b'\n');
+    let out = run_to_end(
+        column_proc(program, dir, column),
+        program.display().to_string(),
+        input,
+        timeout.unwrap_or(COLUMN_TIMEOUT),
+    )?;
+    let index: std::collections::HashMap<&str, usize> = asked
+        .iter()
+        .enumerate()
+        .map(|(i, path)| (path.as_str(), i))
+        .collect();
+    let mut values = vec![String::new(); asked.len()];
+    let mut seen = vec![false; asked.len()];
+    for line in out.lines() {
+        let Some((path, value)) = line.split_once('\t') else {
+            continue;
+        };
+        if let Some(&i) = index.get(path) {
+            if !seen[i] {
+                seen[i] = true;
+                values[i] = column_cell(value);
+            }
+        }
+    }
+    Ok(values)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -455,5 +645,92 @@ mod tests {
             vec!["just some prose", "{\"teleport\":\"mars\"}"]
         );
         assert_eq!(reply.complaints, vec!["a warning"]);
+    }
+    /// A script for a column, where there is a shell to run it: `None` on a machine without
+    /// `/bin/sh`, and the tests that need one say nothing there rather than fail.
+    #[cfg(unix)]
+    fn script(dir: &std::path::Path, name: &str, body: &str) -> Option<std::path::PathBuf> {
+        use std::os::unix::fs::PermissionsExt;
+        if !std::path::Path::new("/bin/sh").exists() {
+            return None;
+        }
+        let path = dir.join(name);
+        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        Some(path)
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn a_column_program_is_asked_about_one_file_and_its_first_line_is_the_cell() {
+        let dir = tempfile::tempdir().unwrap();
+        let Some(program) = script(
+            dir.path(),
+            "lines.sh",
+            "n=$(wc -l < \"$1\")\necho \"  $n $FCMD_COLUMN\"\necho ignored",
+        ) else {
+            return;
+        };
+        let file = dir.path().join("three.txt");
+        std::fs::write(&file, "a\nb\nc\n").unwrap();
+        let value = column_value(&program, dir.path(), &file, "lines", Some(10)).expect("it runs");
+        assert_eq!(value.split_whitespace().collect::<Vec<_>>(), ["3", "lines"]);
+
+        // Nothing printed is an empty cell; a failing status is an error with the program's
+        // name in it, and a program that never ends is stopped.
+        let quiet = script(dir.path(), "quiet.sh", "exit 0").unwrap();
+        assert_eq!(
+            column_value(&quiet, dir.path(), &file, "q", Some(10)).unwrap(),
+            ""
+        );
+        let failing = script(dir.path(), "fail.sh", "echo half; exit 3").unwrap();
+        let err = column_value(&failing, dir.path(), &file, "f", Some(10)).unwrap_err();
+        assert!(matches!(err, RunError::Status { .. }), "{err}");
+        assert!(err.to_string().contains("fail.sh"), "{err}");
+        let hanging = script(dir.path(), "hang.sh", "exec sleep 60").unwrap();
+        let err = column_value(&hanging, dir.path(), &file, "h", Some(1)).unwrap_err();
+        assert!(matches!(err, RunError::Timeout { .. }), "{err}");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn a_batch_answers_for_a_directory_in_one_run_by_path() {
+        let dir = tempfile::tempdir().unwrap();
+        // More files than a pipe holds the names of, so that a program reading while it
+        // writes is the case that is tested.
+        let Some(program) = script(
+            dir.path(),
+            "sizes.sh",
+            "while IFS= read -r f; do\n  case \"$f\" in *skip*) continue;; esac\n  \
+             printf '%s\\t%s\\n' \"$f\" \"${#f}\"\ndone\nprintf 'not a path\\t1\\nno tab here\\n'",
+        ) else {
+            return;
+        };
+        let files: Vec<std::path::PathBuf> = (0..3000)
+            .map(|i| {
+                dir.path().join(if i == 7 {
+                    "skip-me".to_string()
+                } else {
+                    format!("file-{i:05}-with-a-name-long-enough-to-fill-a-pipe.txt")
+                })
+            })
+            .collect();
+        let values =
+            column_batch(&program, dir.path(), &files, "sizes", Some(60)).expect("it runs");
+        assert_eq!(values.len(), files.len());
+        for (i, (file, value)) in files.iter().zip(&values).enumerate() {
+            if i == 7 {
+                assert_eq!(value, "", "what the program skipped is an empty cell");
+            } else {
+                assert_eq!(value, &file.display().to_string().len().to_string());
+            }
+        }
+    }
+
+    #[test]
+    fn a_cell_is_one_line_with_nothing_that_moves_the_cursor() {
+        assert_eq!(column_cell("  12 KiB\r"), "12 KiB");
+        assert_eq!(column_cell("a\x1b[31mb\x07"), "a[31mb");
+        assert_eq!(column_cell(&"x".repeat(1000)).len(), COLUMN_VALUE_MAX);
     }
 }

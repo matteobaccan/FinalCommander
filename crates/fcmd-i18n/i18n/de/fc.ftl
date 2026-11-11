@@ -1838,3 +1838,7 @@ ai-send-failure = Der gescheiterte Befehl und die letzten { $lines } Zeilen sein
 # archives and jobs
 arc-test-whole = { $name }: { $files } Einträge geprüft, { $bytes } — alle unversehrt
 arc-test-bad-title = { $name }: { $bad } von { $files } Einträgen sind beschädigt
+
+# extending it
+plugin-column-failed = { $column }: { $error } — die Spalte bleibt leer für die Dateien, zu denen keine Antwort kam
+plugins-card-columns = Spalten (wie ein [[column_set]] sie nennt):

@@ -17,7 +17,7 @@ says what the decision stands on.
 
 | Item | Where | What is left |
 | --- | --- | --- |
-| Columns from a plugin | `[[column_set]]` | Total Commander's content plugins: a column whose value a plugin computes (an EXIF date, a track's tags). The column grammar is there; a column API for plugins is SPEC 08's next tier. |
+| Columns from a plugin | `[[column_set]]` | A plugin's `[[column]]` is drawn (SPEC 08 §1d). Left: sorting by one — the sort keys are a closed list the commands, the keymaps and the sort menu each enumerate — searching by one in `Alt+F7`, a column for the rows of a list panel, an archive or a server, and answers that outlive the session. |
 | Panel filter | `Ctrl+Shift+I` | Locking a filter so a changed directory keeps it (feature 1.15). |
 | Mounting from the drive list | `Alt+F1` | Mounting, unmounting and ejecting a drive from the dialog, MountMan's job (feature 2.4). |
 

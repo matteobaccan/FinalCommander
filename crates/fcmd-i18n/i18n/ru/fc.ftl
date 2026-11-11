@@ -1824,3 +1824,7 @@ ai-send-failure = Неудавшаяся команда и последние { 
 # archives and jobs
 arc-test-whole = { $name }: проверено записей: { $files }, { $bytes } — все целы
 arc-test-bad-title = { $name }: повреждено записей: { $bad } из { $files }
+
+# extending it
+plugin-column-failed = { $column }: { $error } — столбец остаётся пустым для файлов, на которые не было ответа
+plugins-card-columns = Столбцы (как их называет [[column_set]]):

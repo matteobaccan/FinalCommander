@@ -1,9 +1,6 @@
 # Total Commander's content plugins (WDX) put this in panel columns — the ID3 tag, the EXIF
-# date, the dimensions of a picture. We have no column API yet, so this says the same things
-# in a message, from whatever is installed.
-#
-# When there is a column API this plugin becomes a column provider and the script barely
-# changes, which is the argument for keeping the vocabulary and not the plumbing in a plugin.
+# date, the dimensions of a picture. The command says all of it in a message, from whatever
+# is installed; the column at the bottom says the first line of it beside every file.
 [plugin]
 id = "what-is-this"
 name = "What is this"
@@ -19,3 +16,12 @@ timeout = 30
 [command.when]
 local = true
 files = true
+
+# `{ type = "plugin:what-is-this.kind", width = 24 }` in a `[[column_set]]` of fcmd.toml.
+# One file per run: the path is the first argument and the first line printed is the cell.
+[[column]]
+id = "kind"
+title = "Kind"
+width = 20
+run = "kind.sh"
+timeout = 5

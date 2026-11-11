@@ -96,18 +96,18 @@ worked examples, one per action, and the one that ships a program for each syste
 because the argument for this tier is what it can already replace: FAR's FileCase and ProcList,
 Total Commander's checksum tools, its packer plugins for the formats our archive stack does not
 read, its "Open with", its clipboard keys, FAR's line-ending converter and find-duplicates. The
-one thing they cannot do is the thing the tiers below are for — `what-is-this` says in a message
-what Total Commander's content plugins put in panel columns, and it will become a column
-provider with barely a change to the script the day there is a column API.
+`what-is-this` says in a message what Total Commander's content plugins put in panel columns,
+and since §1d it says the first line of it in a column as well.
 
 Refused at load, not at the first press: a command id outside the plugin space, a `run` that
 leaves the plugin's directory (by `..`, by an absolute path or through a symlink), a `needs`
 nobody can give, a missing label, and a second plugin claiming an id another already provides.
 
-Still to come, and what the tiers below are for: a plugin that *adds* a panel column, a
-preview, a sorter or a filesystem, and one that is asked a question rather than told to run.
-Those need the host to call into the plugin repeatedly, which is where an interpreter or a WASM
-instance earns its keep.
+Still to come, and what the tiers below are for: a plugin that *adds* a preview, a sorter or
+a filesystem, and one that is asked a question rather than told to run. Those need the host
+to call into the plugin repeatedly, which is where an interpreter or a WASM instance earns
+its keep. A panel column was on this list until §1d, which found that a process answers it
+well enough once the answers are remembered.
 
 ### 1c. Turning plugins on and off (0.36.0)
 
@@ -131,6 +131,72 @@ claim one command id, one that is on is preferred over one that is off.
 `F3` is the plugin's card — id, name, version, author, description, folder, state, what it
 declares, its commands and everything said while loading it. A plugin's *own* settings are
 not this dialog's business: they are files in its folder, which the card names.
+
+### 1d. Columns a plugin computes (0.46)
+
+Total Commander's content plugins, on the tier that already exists: a `[[column]]` in the
+manifest names a program, and a `[[column_set]]` (SPEC 02 §3a) draws the column like any
+other.
+
+```toml
+[[column]]
+id = "lines"              # lower-case letters, digits and `-`; unique within the plugin
+title = "Lines"           # the heading, in the plugin's own words; the id when absent
+width = 7                 # the width when the column set does not give one (default 10)
+align = "right"           # `left` (the default) or `right`
+run = "count.sh"          # inside the plugin's own directory, checked at load
+run_windows = "count.cmd" # optional, as for a command
+masks = "*.rs,*.toml"     # the files it answers for; absent means every file
+timeout = 10              # seconds one run may take (default 10)
+batch = false             # true: one run for a whole directory instead of one per file
+folders = false           # true: directories are asked about too
+```
+
+A column set names it in full, `{ type = "plugin:<plugin id>.<column id>" }`, because two
+plugins may each have a `lines` and neither may take the name of a built-in column. `width`
+and `align` written in the set win over the plugin's; `fmt` means nothing to it. A name no
+plugin that is on provides is a warning on the startup screen and the column is left out of
+the set. The `far_types` spelling has no letter for a plugin's column.
+
+**The protocol** is the smallest one a shell script can speak. One file per run: the path is
+the first argument and `FCMD_FILE`, the working directory is the file's own, and the first
+line of standard output is the cell — trimmed, control characters removed, at most 200
+characters. Printing nothing is an empty cell, and so is a failing exit status, which is how
+`grep` says "nothing here". With `batch = true` the program runs once for a directory: the
+paths go in on standard input, one per line, and the answers come back as `path<TAB>value`
+with the path spelled as it was given; a file it does not mention has an empty cell and a
+line that names no file that was asked about is dropped. Both ways the program also finds
+`FCMD_COLUMN` (the column's id — one script may serve several), `FCMD_DIR` and `FCMD_API`.
+
+**Off the interface's thread, and remembered.** The panel draws at once. For each plugin
+column of the view on screen, the rows that match the masks (files only, unless `folders`)
+are looked up in a cache keyed by column and path and holding the modification time and
+size the file had when it was asked about; a hit with the same two is the cell, with no
+program run. The misses are drawn as `…` and handed to a worker thread as one request per
+column and per listing; its answers arrive a few rows at a time (sixteen, or every 150 ms)
+and fill the cells in. A new listing of the panel raises a flag the worker reads between
+files, so it stops running the program for rows nobody is looking at — and what it had
+already learnt is kept, since it is still true of those files. The cache lives for the
+session and is emptied when it passes 50 000 answers.
+
+**When it goes wrong.** A run that exceeds its timeout is killed and its cell left empty,
+not remembered; after three of those for one directory the column stops asking, the rest of
+its cells go empty, and the status line names the column and the program. A program that
+cannot be started says so once, the same way. A plugin's columns exist only while the plugin
+is on, and — like its data blocks, unlike its commands — turning it on or off shows at the
+next start, because a column set is compiled at startup. *Plugins configuration* → `F3`
+lists a plugin's columns spelled as a column set names them.
+
+**Where it does not apply.** Only a directory on this machine's disks: a row of a list
+panel, of an archive or of a server has no path a program could open, and its cell stays
+empty. Refused at load: an id that is not `[a-z0-9-]+`, the same id twice in one plugin, and
+a program outside the plugin's directory or missing from it.
+
+**Not sortable, yet.** The sort keys are a closed list every part of the program
+enumerates — the commands, the keymaps, the sort menu, the per-folder memory — so a key
+whose name comes from a plugin is a change to each of them rather than an extra argument to
+the comparison. The side-table the description, owner and git keys already sort through
+(SPEC 02 §4) is the place it would go.
 
 ## 2. Lua (M3)
 

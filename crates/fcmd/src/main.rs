@@ -19,6 +19,7 @@ mod hit;
 mod menu;
 mod panel;
 mod pixels;
+mod plugcol;
 mod proccard;
 mod prompt;
 mod queue;
@@ -587,6 +588,7 @@ fn run(cli: Cli) -> Result<()> {
     let loaded = load_plugins(&paths, themes, &mut warnings, &cfg.plugins);
     let (themes, plugin_keymaps, plugin_commands) =
         (loaded.themes, loaded.keymaps, loaded.commands);
+    let plugin_columns = loaded.columns;
     let plugin_rows = loaded.rows;
     cfg.plugin_decompile = loaded.decompile;
     cfg.plugin_assocs = loaded.assocs;
@@ -704,7 +706,17 @@ fn run(cli: Cli) -> Result<()> {
     // And the `[[sort_group]]` bands, compiled the same way and from the same file.
     let sort_groups = std::sync::Arc::new(highlight::sort_groups(&cfg, &mut warnings));
     // And the `[[column_set]]` blocks: the user's own columns for a view mode (SPEC 02 §3a).
-    let column_sets = colset::sets(&cfg, &mut warnings);
+    // A plugin column's masks are in the panel's own mask language, groups and all, so
+    // they can only be read once the groups are known; one that does not read is said here
+    // and matches nothing afterwards.
+    for column in &plugin_columns {
+        if let Some(masks) = &column.masks {
+            if let Err(e) = fcmd_core::MaskSet::parse_with(masks, &cfg.mask_groups(), false) {
+                warnings.push(format!("{}: masks = `{masks}`: {e}", column.name()));
+            }
+        }
+    }
+    let column_sets = colset::sets(&cfg, &plugin_columns, &mut warnings);
 
     // The histories from the last session. A broken state file is a warning, never a stop.
     let (state, state_problem) = fcmd_config::State::load(&paths);
@@ -723,6 +735,7 @@ fn run(cli: Cli) -> Result<()> {
         right,
         sites,
         plugin_commands,
+        plugin_columns,
         highlight,
         sort_groups,
         column_sets,
@@ -988,6 +1001,7 @@ struct LoadedPlugins {
     themes: ThemeSet,
     keymaps: Vec<(String, toml::Table)>,
     commands: Vec<PluginCommand>,
+    columns: Vec<plugcol::PluginColumn>,
     rows: Vec<PluginRow>,
     decompile: Vec<fcmd_config::DecompileRule>,
     assocs: Vec<fcmd_config::AssocCfg>,
@@ -1011,6 +1025,7 @@ fn load_plugins(
         themes,
         keymaps: Vec::new(),
         commands: Vec::new(),
+        columns: Vec::new(),
         rows: Vec::new(),
         decompile: Vec::new(),
         assocs: Vec::new(),
@@ -1124,6 +1139,43 @@ fn load_plugins(
         }
         if commands > 0 {
             provides.push(("command", commands));
+        }
+        // The columns it computes (SPEC 08 §1d). Only for a plugin that is on: a column
+        // set is compiled at startup against this list, so — like the data blocks, and
+        // unlike the commands — a column turned on takes a restart to appear.
+        let declared = plugin.columns();
+        if !declared.is_empty() {
+            provides.push(("column", declared.len()));
+        }
+        if on {
+            for (column, program) in declared {
+                // The number a column is known by is one byte, which is two hundred and
+                // fifty-six of them; the one after that is said rather than wrapped round.
+                if out.columns.len() > usize::from(u8::MAX) {
+                    let note = format!(
+                        "{}: column `{}` is one more than the {} a session can hold, \
+                         and is ignored",
+                        plugin.id(),
+                        column.id,
+                        usize::from(u8::MAX) + 1
+                    );
+                    warnings.push(note.clone());
+                    notes.push(note);
+                    continue;
+                }
+                out.columns.push(plugcol::PluginColumn {
+                    plugin: plugin.id().to_string(),
+                    id: column.id.trim().to_string(),
+                    title: column.heading().to_string(),
+                    width: column.width.filter(|w| *w > 0),
+                    right: column.right_aligned(),
+                    program,
+                    masks: column.masks.clone().filter(|m| !m.trim().is_empty()),
+                    timeout: column.timeout,
+                    batch: column.batch,
+                    folders: column.folders,
+                });
+            }
         }
         let meta = &plugin.manifest.plugin;
         out.rows.push(PluginRow {
@@ -1665,6 +1717,27 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                             panel,
                             generation,
                             status,
+                        });
+                    });
+                }
+                Request::PluginColumn {
+                    panel,
+                    generation,
+                    column,
+                    job,
+                } => {
+                    // Somebody else's program, once per file: a thread of its own, which
+                    // answers a few rows at a time and stops when the panel has moved on.
+                    let tx = tx.clone();
+                    std::thread::spawn(move || {
+                        plugcol::run(&job, &mut |answer| {
+                            let _ = tx.send(Event::PluginColumn {
+                                panel,
+                                generation,
+                                column,
+                                dir: job.dir.clone(),
+                                answer,
+                            });
                         });
                     });
                 }
@@ -6021,6 +6094,7 @@ timeout = 10
             right: VPath::local(&right),
             sites: Vec::new(),
             plugin_commands: commands,
+            plugin_columns: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
             column_sets: Vec::new(),
@@ -6133,14 +6207,28 @@ timeout = 10
         assert!(root.is_dir(), "examples/plugins is missing");
         let paths = Paths::discover(Some(&root.join("fcmd.toml")), Some(&root));
         let mut warnings = Vec::new();
-        let commands = load_plugins(
+        let loaded = load_plugins(
             &paths,
             ThemeSet::builtin_only(),
             &mut warnings,
             &Default::default(),
-        )
-        .commands;
+        );
         assert!(warnings.is_empty(), "{warnings:?}");
+        // The columns two of them compute: each a program that is there, with masks that
+        // read, under the name a column set would write.
+        let names: Vec<String> = loaded.columns.iter().map(|c| c.name()).collect();
+        assert!(
+            names.contains(&"plugin:line-count.lines".to_string())
+                && names.contains(&"plugin:what-is-this.kind".to_string()),
+            "{names:?}"
+        );
+        for column in &loaded.columns {
+            assert!(column.program.is_file(), "{}", column.program.display());
+            if let Some(masks) = &column.masks {
+                assert!(fcmd_core::MaskSet::parse(masks).is_ok(), "{masks}");
+            }
+        }
+        let commands = loaded.commands;
 
         // Every folder under examples/plugins is a plugin, and every one of them has to have
         // produced at least one command: a folder nobody loads is an example nobody can use.
@@ -6734,6 +6822,7 @@ dir_attr = "D"
             right: VPath::local(right),
             sites: Vec::new(),
             plugin_commands: Vec::new(),
+            plugin_columns: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
             column_sets: Vec::new(),
@@ -6990,6 +7079,7 @@ dir_attr = "D"
                 | Request::Mouse { .. }
                 | Request::Clipboard { .. }
                 | Request::Owners { .. }
+                | Request::PluginColumn { .. }
                 | Request::GitColumn { .. } => {}
                 Request::SyncPlan {
                     id,

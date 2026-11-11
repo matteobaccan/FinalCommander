@@ -52,6 +52,12 @@ pub enum ColumnKind {
     /// `!!` as `git status --short` writes them — and, for a directory, whether anything
     /// under it is changed (SPEC 02 §3, 0.39.0).
     Git,
+    /// A column a plugin computes (SPEC 08 §1d): the number is its place in the list of
+    /// plugin columns the program loaded at startup, which is all this crate knows of it —
+    /// the title, the width and the program are the host's. Not in [`ColumnKind::ALL`] and
+    /// not something [`ColumnKind::parse`] answers: a set names one as
+    /// `plugin:<plugin>.<column>`, and only the host can say whether there is such a thing.
+    Plugin(u8),
 }
 
 impl ColumnKind {
@@ -87,6 +93,7 @@ impl ColumnKind {
             ColumnKind::Links => "links",
             ColumnKind::Descr => "descr",
             ColumnKind::Git => "git",
+            ColumnKind::Plugin(_) => "plugin",
         }
     }
 
@@ -123,6 +130,8 @@ impl ColumnKind {
             ColumnKind::Owner | ColumnKind::Group => 12,
             ColumnKind::Links => 4,
             ColumnKind::Git => 2,
+            // What a plugin's column takes when neither it nor the set says.
+            ColumnKind::Plugin(_) => 10,
         }
     }
 
@@ -144,6 +153,7 @@ impl ColumnKind {
                 | ColumnKind::Links
                 | ColumnKind::Descr
                 | ColumnKind::Git
+                | ColumnKind::Plugin(_)
         )
     }
 }
@@ -412,6 +422,19 @@ impl ColumnSet {
     /// choosing it put a worker to work?
     pub fn asks(&self, kind: ColumnKind) -> bool {
         self.columns.iter().any(|c| c.kind == kind)
+    }
+
+    /// The plugin columns the set draws, each once, in the order it names them.
+    pub fn plugin_columns(&self) -> Vec<u8> {
+        let mut out = Vec::new();
+        for column in &self.columns {
+            if let ColumnKind::Plugin(n) = column.kind {
+                if !out.contains(&n) {
+                    out.push(n);
+                }
+            }
+        }
+        out
     }
 
     /// Read FAR's own pair of strings — `Column types` and `Column widths` from its panel

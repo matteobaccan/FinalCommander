@@ -492,6 +492,13 @@ dettagliata segue già con le sue date in più. Una colonna che costa una interr
 worker che usa la vista che la mostra, quindi si riempie un momento dopo l'elenco; una vista il
 cui set non ne chiede nessuna non paga niente.
 
+Un plugin può aggiungere colonne sue — il numero di righe, che tipo di file è davvero, la
+data di una foto — e un set ne nomina una con il plugin e la colonna insieme:
+`{ type = "plugin:line-count.lines" }`. *Opzioni → Configurazione dei plugin*, `F3` su un
+plugin, elenca le colonne che ha, scritte così. Le sue celle mostrano `…` finché il programma
+del plugin non ha risposto e poi vengono ricordate, così di un file si chiede una volta sola e
+di nuovo solo quando cambia. Il capitolo *Plugin* più sotto dice come se ne scrive una.
+
 Venendo da FAR puoi scrivere invece la coppia di stringhe che scrive il suo dialogo delle
 modalità del pannello:
 
@@ -722,12 +729,42 @@ che rinomina o sovrascrive file lo dichiara nel manifest, e fcmd chiede prima di
 `examples/plugins/` ce ne sono ventuno di esempio, dai file duplicati alla conversione dei
 fine riga.
 
+Un plugin può anche calcolare una **colonna** per i pannelli. Un `[[column]]` nel suo
+`plugin.toml` nomina un programma:
+
+```toml
+[[column]]
+id = "lines"
+title = "Lines"
+width = 7
+align = "right"
+run = "count.sh"
+masks = "*.rs,*.toml"
+timeout = 10
+```
+
+e `{ type = "plugin:<plugin>.lines" }` in un `[[column_set]]` (vedi *Colonne tue*) la
+disegna. Il programma viene eseguito una volta per file, con il percorso come primo
+argomento, e la prima riga che stampa è la cella; niente in uscita, o uno stato di uscita di
+errore, è una cella vuota. `masks` dice di quali file gli si chiede (tutti se manca; le
+cartelle solo con `folders = true`), e `batch = true` lo esegue invece una volta per cartella
+— i percorsi sul suo input, uno per riga, e `percorso<TAB>valore` per ciascuno in uscita — per
+un programma lento a partire. Niente di questo ferma il pannello: l'elenco viene disegnato
+subito, con `…` nelle celle di cui si sta ancora chiedendo, e si riempie man mano che
+arrivano le risposte. Una risposta viene conservata per percorso, data e dimensione per il
+resto della sessione. Un'esecuzione che dura più di `timeout` secondi (dieci se manca) viene
+fermata; dopo tre di queste in una cartella la colonna lì rinuncia e la riga di stato lo
+dice. Si chiede solo per le cartelle sui dischi di questa macchina — dentro un archivio o su
+un server la colonna resta vuota — e il pannello non si può ordinare per una colonna così.
+Le colonne di un plugin compaiono, o spariscono, all'avvio successivo a quando lo si attiva o
+disattiva.
+
 *Opzioni → Configurazione dei plugin* elenca tutti i plugin trovati: `✓` per uno attivo, `·`
 per uno disattivato e `!` per uno che non si è caricato. `Invio` attiva o disattiva quello
 sotto il cursore e lo scrive subito (`[plugins] disabled` in `fcmd.toml`); i suoi comandi
 diventano grigi in `F11`, o tornano normali, immediatamente, mentre il resto di quello che porta — temi, tasti,
 associazioni, decompilatori, gruppi di maschere — si legge all'avvio e cambia al prossimo. `F3`
-è la sua scheda: chi l'ha scritto, dove sta, cosa porta, i suoi comandi e quello che è stato
+è la sua scheda: chi l'ha scritto, dove sta, cosa porta, i suoi comandi, le sue colonne e quello che è stato
 detto mentre si caricava — per uno che non si è caricato, il perché. Le sue impostazioni sono
 file suoi: `F3` dice la cartella, e il `plugin.toml` del plugin è quello da modificare. `fcmd
 --list-plugins` stampa cosa è stato trovato, e cosa non si è caricato, senza aprire l'interfaccia.

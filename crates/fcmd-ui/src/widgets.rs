@@ -86,6 +86,13 @@ pub struct PanelRender<'a> {
     /// Where each row stands in its git repository, by name — `M`, `??`, `!!` — read by a
     /// worker while a column set that shows it, or a sort that asks for it, is on screen.
     pub git: &'a std::collections::HashMap<String, String>,
+    /// The headings of the columns the plugins compute, by the number a
+    /// [`fcmd_core::ColumnKind::Plugin`] carries (SPEC 08 §1d).
+    pub plugin_titles: &'a [String],
+    /// What those columns say about this panel's rows, by column and name. `None` is a file
+    /// whose program has been asked and has not answered yet, which draws a placeholder; a
+    /// row that is not here at all is one the column has nothing to say about, and is blank.
+    pub plugin_cells: &'a std::collections::HashMap<(u8, String), Option<String>>,
     /// The user's own columns for this view, where they wrote a `[[column_set]]` for its
     /// digit (SPEC 02 §3a). Without one the built-in mode draws, which is what every panel
     /// did before the setting existed.
@@ -470,6 +477,11 @@ fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inne
                     Col::Descr => p.titles.descr,
                     Col::Links => p.titles.links,
                     Col::Git => p.titles.git,
+                    Col::Plugin(n) => p
+                        .plugin_titles
+                        .get(n as usize)
+                        .map(String::as_str)
+                        .unwrap_or(""),
                 };
                 centre(buf, x, y, cell.w, title, style);
                 x += cell.w + 1;
@@ -712,7 +724,13 @@ enum Col {
     Descr,
     Links,
     Git,
+    /// A column a plugin computes, by its number.
+    Plugin(u8),
 }
+
+/// What a plugin's column draws for a file it has been asked about and has not answered
+/// for yet.
+pub const PLUGIN_PENDING: &str = "…";
 
 impl Cols {
     /// The columns after the name, left to right, with the width of each. A width of zero is
@@ -815,6 +833,7 @@ fn col_of(kind: fcmd_core::ColumnKind) -> Col {
         K::Links => Col::Links,
         K::Descr => Col::Descr,
         K::Git => Col::Git,
+        K::Plugin(n) => Col::Plugin(n),
     }
 }
 
@@ -1047,6 +1066,18 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
                         .cloned()
                         .unwrap_or_default();
                     buf.put_str(x, y, &truncate_cols(&text, w as usize), style, w);
+                }
+                Col::Plugin(n) => {
+                    let text = match p.plugin_cells.get(&(n, e.name_str().into_owned())) {
+                        Some(Some(value)) => value.as_str(),
+                        Some(None) => PLUGIN_PENDING,
+                        None => "",
+                    };
+                    if cell.right {
+                        put_right(buf, x, y, w, &truncate_cols(text, w as usize), style);
+                    } else {
+                        buf.put_str(x, y, &truncate_cols(text, w as usize), style, w);
+                    }
                 }
                 Col::Descr => {
                     // `..` is the directory one came from, not a file of this one: whatever
@@ -2004,6 +2035,8 @@ mod tests {
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
             git: &std::collections::HashMap::new(),
+            plugin_titles: &[],
+            plugin_cells: &std::collections::HashMap::new(),
             columns: None,
             up_label: "Up",
             folder_label: "Folder",
@@ -2083,6 +2116,8 @@ mod tests {
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
             git: &std::collections::HashMap::new(),
+            plugin_titles: &[],
+            plugin_cells: &std::collections::HashMap::new(),
             columns: None,
             up_label: "Up",
             folder_label: "Folder",
@@ -2162,6 +2197,8 @@ mod tests {
                 descriptions: &Default::default(),
                 links: &links,
                 git: &std::collections::HashMap::new(),
+                plugin_titles: &[],
+                plugin_cells: &std::collections::HashMap::new(),
                 columns: None,
                 up_label: "Up",
                 folder_label: "Folder",
@@ -2244,6 +2281,8 @@ mod tests {
                 descriptions: &descriptions,
                 links: &std::collections::HashMap::new(),
                 git: &std::collections::HashMap::new(),
+                plugin_titles: &[],
+                plugin_cells: &std::collections::HashMap::new(),
                 columns: None,
                 up_label: "Up",
                 folder_label: "Folder",
@@ -2350,6 +2389,8 @@ mod tests {
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
             git: &std::collections::HashMap::new(),
+            plugin_titles: &[],
+            plugin_cells: &std::collections::HashMap::new(),
             columns: None,
             up_label: "Up",
             folder_label: "Folder",
@@ -2538,6 +2579,8 @@ mod tests {
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
             git: &std::collections::HashMap::new(),
+            plugin_titles: &[],
+            plugin_cells: &std::collections::HashMap::new(),
             columns: None,
             up_label: "Up",
             folder_label: "Folder",
@@ -2580,6 +2623,8 @@ mod tests {
                 descriptions: &Default::default(),
                 links: &std::collections::HashMap::new(),
                 git: &std::collections::HashMap::new(),
+                plugin_titles: &[],
+                plugin_cells: &std::collections::HashMap::new(),
                 columns: None,
                 up_label: "Up",
                 folder_label: "Folder",
@@ -2629,6 +2674,8 @@ mod tests {
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
             git: &std::collections::HashMap::new(),
+            plugin_titles: &[],
+            plugin_cells: &std::collections::HashMap::new(),
             columns: None,
             up_label: "Up",
             folder_label: "Folder",
@@ -2769,6 +2816,8 @@ mod tests {
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
             git: &std::collections::HashMap::new(),
+            plugin_titles: &[],
+            plugin_cells: &std::collections::HashMap::new(),
             columns: None,
             up_label: "Up",
             folder_label: "Folder",
@@ -2971,6 +3020,8 @@ mod tests {
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
             git: &std::collections::HashMap::new(),
+            plugin_titles: &[],
+            plugin_cells: &std::collections::HashMap::new(),
             columns: None,
             up_label: "Up",
             folder_label: "Folder",

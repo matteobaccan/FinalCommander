@@ -175,6 +175,10 @@ one of the four a listing does not carry (the owner, the group, the link count, 
 description) puts the same worker to work as the view that shows it, with a row the answer has
 not reached yet drawn blank.
 
+A type of the form `plugin:<plugin>.<column>` is a column one of the plugins computes
+(SPEC 08 §1d): drawn like the others, with `…` in a cell whose answer has not arrived, and
+taking the plugin's own width and alignment where the set gives none.
+
 Column widths: a number, a percentage of the panel, `*` to take what is left, or `0` for the
 column's own natural width — FAR's `0`, which for a name or a description means "what is left
 over" because neither has a width of its own. One blank column between each pair, as the

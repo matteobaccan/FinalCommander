@@ -9,7 +9,15 @@ use fcmd_config::{ColumnCfg, Config};
 use fcmd_core::columns::{Align, Column, ColumnFlags, ColumnKind, ColumnSet, Width};
 
 /// Every set that reads, in the order the file wrote them.
-pub fn sets(cfg: &Config, warnings: &mut Vec<String>) -> Vec<ColumnSet> {
+///
+/// `plugins` is what the plugins that are on compute (SPEC 08 §1d): a column whose type is
+/// `plugin:<plugin>.<column>` is one of those, and is known from here on by its place in
+/// that list.
+pub fn sets(
+    cfg: &Config,
+    plugins: &[crate::plugcol::PluginColumn],
+    warnings: &mut Vec<String>,
+) -> Vec<ColumnSet> {
     let mut out: Vec<ColumnSet> = Vec::new();
     for (n, block) in cfg.column_sets.iter().enumerate() {
         let name = if block.name.is_empty() {
@@ -58,7 +66,7 @@ pub fn sets(cfg: &Config, warnings: &mut Vec<String>) -> Vec<ColumnSet> {
         }
         let mut columns: Vec<Column> = Vec::new();
         for (i, col) in block.columns.iter().enumerate() {
-            match column(col) {
+            match column(col, plugins) {
                 Ok(column) => columns.push(column),
                 Err(problem) => warnings.push(format!("{name}: column {}: {problem}", i + 1)),
             }
@@ -100,11 +108,36 @@ pub fn for_slot(sets: &[ColumnSet], slot: u8) -> Option<&ColumnSet> {
     sets.iter().find(|set| set.id == slot)
 }
 
-fn column(cfg: &ColumnCfg) -> Result<Column, String> {
-    let kind = ColumnKind::parse(&cfg.kind)
-        .ok_or_else(|| format!("`{}` is not a column anything can draw", cfg.kind))?;
+fn column(cfg: &ColumnCfg, plugins: &[crate::plugcol::PluginColumn]) -> Result<Column, String> {
+    // A plugin's column is named in full, plugin and all: two plugins may each have a
+    // `lines`, and neither may take a name the program has a column for already.
+    let wanted = cfg.kind.trim();
+    let plugin = match wanted.strip_prefix("plugin:") {
+        Some(_) => {
+            let n = plugins
+                .iter()
+                .position(|c| c.name() == wanted)
+                .ok_or_else(|| {
+                    format!(
+                        "`{wanted}` is not a column of any plugin that is on \
+                         (Options → Plugins configuration, F3 lists what each one has)"
+                    )
+                })?;
+            Some((n as u8, &plugins[n]))
+        }
+        None => None,
+    };
+    let kind = match plugin {
+        Some((n, _)) => ColumnKind::Plugin(n),
+        None => ColumnKind::parse(&cfg.kind)
+            .ok_or_else(|| format!("`{}` is not a column anything can draw", cfg.kind))?,
+    };
     let width = match &cfg.width {
-        None => Width::Auto,
+        // What the plugin asks for, when the set leaves it to the column.
+        None => match plugin.and_then(|(_, c)| c.width) {
+            Some(w) => Width::Fixed(w),
+            None => Width::Auto,
+        },
         Some(toml::Value::Integer(n)) => match u16::try_from(*n) {
             Ok(0) => Width::Auto,
             Ok(n) => Width::Fixed(n),
@@ -117,6 +150,11 @@ fn column(cfg: &ColumnCfg) -> Result<Column, String> {
     };
     let align =
         Align::parse(&cfg.align).ok_or_else(|| format!("`{}` is not left or right", cfg.align))?;
+    // And the plugin's own side of the column, unless the set says otherwise.
+    let align = match (align, plugin) {
+        (Align::Default, Some((_, c))) if c.right => Align::Right,
+        (align, _) => align,
+    };
     Ok(Column {
         kind,
         width,
@@ -133,8 +171,79 @@ mod tests {
         let (cfg, problems) = Config::parse("test.toml", src).expect("it parses");
         assert!(problems.is_empty(), "{problems:?}");
         let mut warnings = Vec::new();
-        let sets = sets(&cfg, &mut warnings);
+        let sets = sets(&cfg, &[], &mut warnings);
         (sets, warnings)
+    }
+
+    fn plugin_column(plugin: &str, id: &str) -> crate::plugcol::PluginColumn {
+        crate::plugcol::PluginColumn {
+            plugin: plugin.into(),
+            id: id.into(),
+            title: id.into(),
+            width: None,
+            right: false,
+            program: std::path::PathBuf::from(id),
+            masks: None,
+            timeout: None,
+            batch: false,
+            folders: false,
+        }
+    }
+
+    #[test]
+    fn a_set_names_a_plugins_column_in_full_and_takes_its_width_and_side() {
+        let plugins = [
+            plugin_column("counts", "words"),
+            crate::plugcol::PluginColumn {
+                width: Some(7),
+                right: true,
+                ..plugin_column("counts", "lines")
+            },
+        ];
+        let (cfg, problems) = Config::parse(
+            "test.toml",
+            r#"
+            [[column_set]]
+            id = 5
+            columns = [
+              { type = "name" },
+              { type = "plugin:counts.lines" },
+              { type = "plugin:counts.lines", width = 12, align = "left" },
+              { type = "plugin:counts.words" },
+              { type = "plugin:counts.pages" },
+              { type = "plugin:other.lines" },
+              { type = "lines" },
+            ]
+            "#,
+        )
+        .expect("it parses");
+        assert!(problems.is_empty(), "{problems:?}");
+        let mut warnings = Vec::new();
+        let sets = sets(&cfg, &plugins, &mut warnings);
+        let columns = &sets[0].columns;
+        assert_eq!(
+            columns.iter().map(|c| c.kind).collect::<Vec<_>>(),
+            vec![
+                ColumnKind::Name,
+                ColumnKind::Plugin(1),
+                ColumnKind::Plugin(1),
+                ColumnKind::Plugin(0)
+            ]
+        );
+        // The plugin's own width and side, where the set leaves them alone…
+        assert_eq!(columns[1].width, Width::Fixed(7));
+        assert!(columns[1].right_aligned());
+        // …the set's where it does not, and the column's natural width where neither says.
+        assert_eq!(columns[2].width, Width::Fixed(12));
+        assert!(!columns[2].right_aligned());
+        assert_eq!(columns[3].width, Width::Auto);
+        assert_eq!(sets[0].plugin_columns(), vec![1, 0]);
+        // A column no plugin has, a plugin that is not there, and a bare id — which is not
+        // how one is named — are each said.
+        assert_eq!(warnings.len(), 3, "{warnings:?}");
+        assert!(warnings[0].contains("plugin:counts.pages"), "{warnings:?}");
+        assert!(warnings[1].contains("plugin:other.lines"), "{warnings:?}");
+        assert!(warnings[2].contains("`lines`"), "{warnings:?}");
     }
 
     #[test]

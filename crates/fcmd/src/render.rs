@@ -337,6 +337,8 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             descriptions: &panel.descriptions,
             links: &panel.links,
             git: &panel.git_status,
+            plugin_titles: &app.plugin_titles,
+            plugin_cells: &panel.plugin_cells,
             // The user's own columns for this view, if they wrote a set on its digit
             // (SPEC 02 §3a); without one the built-in mode draws, as it always has.
             columns: crate::colset::for_slot(&app.column_sets, panel.view.slot()),
@@ -3691,6 +3693,7 @@ mod tests {
             right: VPath::local("/tmp"),
             sites: Vec::new(),
             plugin_commands: Vec::new(),
+            plugin_columns: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
             column_sets: Vec::new(),
@@ -3867,7 +3870,7 @@ mod tests {
         .expect("it parses");
         assert!(problems.is_empty(), "{problems:?}");
         let mut warnings = Vec::new();
-        app.column_sets = crate::colset::sets(&cfg, &mut warnings);
+        app.column_sets = crate::colset::sets(&cfg, &[], &mut warnings);
         assert!(warnings.is_empty(), "{warnings:?}");
 
         let after = frame(&mut app, 100, 24);
@@ -3893,7 +3896,7 @@ mod tests {
             let (cfg, problems) = Config::parse("test.toml", src).expect("it parses");
             assert!(problems.is_empty(), "{problems:?}");
             let mut warnings = Vec::new();
-            let sets = crate::colset::sets(&cfg, &mut warnings);
+            let sets = crate::colset::sets(&cfg, &[], &mut warnings);
             assert!(warnings.is_empty(), "{warnings:?}");
             sets
         };
@@ -5718,6 +5721,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
             right: VPath::local(dir.path()),
             sites: Vec::new(),
             plugin_commands: Vec::new(),
+            plugin_columns: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
             column_sets: Vec::new(),
@@ -7335,6 +7339,7 @@ third line
             right: VPath::local(dir.path()),
             sites: Vec::new(),
             plugin_commands: Vec::new(),
+            plugin_columns: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
             column_sets: Vec::new(),
@@ -7412,6 +7417,7 @@ third line
             right: VPath::local(dir.path()),
             sites: Vec::new(),
             plugin_commands: Vec::new(),
+            plugin_columns: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
             column_sets: Vec::new(),
@@ -7494,6 +7500,7 @@ third line
             right: VPath::local(dir.path()),
             sites: Vec::new(),
             plugin_commands: Vec::new(),
+            plugin_columns: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
             column_sets: Vec::new(),
@@ -7550,6 +7557,7 @@ third line
             right: VPath::local(dir),
             sites: Vec::new(),
             plugin_commands: Vec::new(),
+            plugin_columns: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
             column_sets: Vec::new(),

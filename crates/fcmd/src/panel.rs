@@ -171,6 +171,13 @@ pub struct Panel {
     pub links: std::collections::HashMap<String, u64>,
     /// Where each row stands in its git repository, by name (the `git` column and sort key).
     pub git_status: std::collections::HashMap<String, String>,
+    /// What the plugins' columns say about the rows, by column and name (SPEC 08 §1d):
+    /// `None` while the program has been asked and has not answered. Filled only while a
+    /// view that draws such a column is on screen.
+    pub plugin_cells: std::collections::HashMap<(u8, String), Option<String>>,
+    /// Raised when the rows change, so that a worker still asking a plugin about the old
+    /// ones stops at the next file instead of running the program for nobody.
+    pub plugin_cancel: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Panel {
@@ -187,6 +194,8 @@ impl Panel {
             descriptions: Default::default(),
             links: Default::default(),
             git_status: Default::default(),
+            plugin_cells: Default::default(),
+            plugin_cancel: Default::default(),
             view,
             base_look: None,
             show_hidden,
@@ -214,6 +223,15 @@ impl Panel {
 
     pub fn current(&self) -> Option<&Entry> {
         self.listing.row(self.cursor)
+    }
+
+    /// The rows are new: what the plugins said about the old ones is not about these, and
+    /// whoever is still asking about them can stop.
+    pub fn forget_plugin_cells(&mut self) {
+        self.plugin_cells.clear();
+        self.plugin_cancel
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.plugin_cancel = Default::default();
     }
 
     /// Hand the panel the sort groups the program was started with.

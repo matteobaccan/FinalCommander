@@ -1776,3 +1776,7 @@ ai-send-failure = 失败的命令及其最后 { $lines } 行输出将发送到 {
 # archives and jobs
 arc-test-whole = { $name }：已测试 { $files } 个条目，{ $bytes } — 全部完好
 arc-test-bad-title = { $name }：{ $files } 个条目中有 { $bad } 个已损坏
+
+# extending it
+plugin-column-failed = { $column }：{ $error } — 未得到回答的文件，该列留空
+plugins-card-columns = 列（[[column_set]] 中的写法）：

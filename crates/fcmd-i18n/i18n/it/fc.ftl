@@ -1839,3 +1839,7 @@ ai-send-failure = Il comando fallito e le ultime { $lines } righe che ha stampat
 # archives and jobs
 arc-test-whole = { $name }: { $files } voci provate, { $bytes } — tutte intere
 arc-test-bad-title = { $name }: { $bad } voci su { $files } non sono uscite intere
+
+# extending it
+plugin-column-failed = { $column }: { $error } — la colonna resta vuota per i file a cui non ha risposto
+plugins-card-columns = Colonne (come le nomina un [[column_set]]):

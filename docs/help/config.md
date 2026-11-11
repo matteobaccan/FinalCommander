@@ -477,6 +477,13 @@ extra dates. A column that costs a lookup per file — the owner, the group, the
 description — is fetched by the same worker the view that shows it uses, so it fills in a
 moment after the listing; a view whose set does not ask for one of them pays nothing at all.
 
+A plugin can add columns of its own — a line count, what kind of file this really is, a
+photo's date — and a set names one by the plugin and the column together:
+`{ type = "plugin:line-count.lines" }`. *Options → Plugins configuration*, `F3` on a plugin,
+lists the columns it has, spelled this way. Its cells show `…` until the plugin's program has
+answered and are remembered afterwards, so a file is asked about once and again only when it
+changes. The *Plugins* chapter below says how one is written.
+
 Coming from FAR you can write the pair of strings its own panel-mode dialog writes instead:
 
 ```toml
@@ -698,12 +705,41 @@ command of fcmd's own to run — nothing a key could not do. A command that rena
 over files says so in its manifest, and fcmd asks before running it. `examples/plugins/` has
 twenty-one worked ones, from finding duplicates to converting line endings.
 
+A plugin can also compute a **column** for the panels. A `[[column]]` in its `plugin.toml`
+names a program:
+
+```toml
+[[column]]
+id = "lines"
+title = "Lines"
+width = 7
+align = "right"
+run = "count.sh"
+masks = "*.rs,*.toml"
+timeout = 10
+```
+
+and `{ type = "plugin:<plugin>.lines" }` in a `[[column_set]]` (see *Columns of your own*)
+draws it. The program is run once per file, with the path as its first argument, and the
+first line it prints is the cell; nothing printed, or a failing exit status, is an empty
+cell. `masks` says which files it is asked about (all of them when absent; directories only
+with `folders = true`), and `batch = true` runs it once per directory instead — the paths on
+its input, one per line, and `path<TAB>value` for each on its output — for a program that is
+slow to start. None of this holds the panel up: the listing is drawn at once with `…` in the
+cells still being asked about, and they fill in as the answers come. An answer is kept by
+path, date and size for the rest of the session. A run that takes longer than `timeout`
+seconds (ten when absent) is stopped; after three of those in one directory the column gives
+up there and the status line says so. Only folders on this machine's disks are asked about —
+inside an archive or on a server the column stays empty — and the panel cannot be sorted by
+such a column. A plugin's columns appear, or go, at the next start after it is turned on or
+off.
+
 *Options → Plugins configuration* lists every plugin found: `✓` for one that is on, `·` for
 one that is off, and `!` for one that did not load. `Enter` turns the one under the cursor on
 or off and writes it down at once (`[plugins] disabled` in `fcmd.toml`); its commands go grey
 in `F11`, or back, straight away, while the rest of what it brings — themes, keys, associations,
 decompilers, mask groups — is read at startup and changes at the next one. `F3` is its card:
-who wrote it, where it lives, what it brings, its commands, and anything said about it while
+who wrote it, where it lives, what it brings, its commands, its columns, and anything said about it while
 loading — for one that did not load, why. Its own settings are its own files: `F3` names the
 folder, and the plugin's `plugin.toml` is what to edit. `fcmd --list-plugins` prints what was
 found, and what did not load, without starting the interface.

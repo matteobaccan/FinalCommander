@@ -15,3 +15,15 @@ timeout = 300
 
 [command.when]
 local = true
+
+# And the same count per file, as a panel column: `{ type = "plugin:line-count.lines" }` in a
+# `[[column_set]]` of fcmd.toml. One run for the whole directory, because starting a shell
+# four hundred times to count four hundred files is most of the work.
+[[column]]
+id = "lines"
+title = "Lines"
+width = 7
+align = "right"
+run = "count.sh"
+batch = true
+timeout = 60

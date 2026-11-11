@@ -242,6 +242,14 @@ pub enum Request {
         generation: u64,
         dir: PathBuf,
     },
+    /// The files one plugin column has not been asked about yet, for a worker to run the
+    /// plugin's program over (SPEC 08 §1d). One request per column and per listing.
+    PluginColumn {
+        panel: usize,
+        generation: u64,
+        column: u8,
+        job: crate::plugcol::Job,
+    },
     /// How many names each file of one directory has, for the links view. A lookup per file
     /// — on Windows the file has to be opened — so it happens in a worker and only while
     /// that view is the one on screen (SPEC 02 §3).
@@ -937,6 +945,16 @@ pub enum Event {
         panel: usize,
         generation: u64,
         status: std::collections::HashMap<String, String>,
+    },
+    /// A part of a plugin column's answer: a few rows at a time, as the program gets to
+    /// them (SPEC 08 §1d). `dir` is where the files are, because what was learnt is kept by
+    /// path even when the panel has since gone somewhere else.
+    PluginColumn {
+        panel: usize,
+        generation: u64,
+        column: u8,
+        dir: PathBuf,
+        answer: crate::plugcol::Answer,
     },
     /// How many names each file of one directory has (SPEC 02 §3). Late, as the owners are.
     Links {
@@ -2647,6 +2665,19 @@ impl PluginRow {
     }
 }
 
+/// What a plugin's column said about one file, and what the file looked like when it said
+/// it: the answer holds for as long as the date and the size do.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PluginCell {
+    mtime: Option<std::time::SystemTime>,
+    size: u64,
+    value: String,
+}
+
+/// How many answers are remembered before the memory is emptied and starts again. An answer
+/// is a path and a few characters; this is a bound, not a budget anybody will meet.
+const PLUGIN_CACHE_MAX: usize = 50_000;
+
 /// A command a plugin provides, with everything needed to run it resolved (SPEC 08 §1).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PluginCommand {
@@ -2709,6 +2740,8 @@ pub struct Startup {
     pub sites: Vec<Site>,
     /// The commands the loaded plugins provide.
     pub plugin_commands: Vec<PluginCommand>,
+    /// The columns they compute (SPEC 08 §1d), in the order a `ColumnKind::Plugin` counts.
+    pub plugin_columns: Vec<crate::plugcol::PluginColumn>,
     /// The file-colouring groups: the configuration's, then FAR's own (SPEC 02 §5).
     pub highlight: fcmd_ui::Highlight,
     /// The `[[sort_group]]` bands, compiled (SPEC 02 §4). One list for the whole program:
@@ -3113,6 +3146,15 @@ pub struct App {
     pub last_calc: String,
     /// What the plugins provide (SPEC 08 §1): `F11` lists these.
     pub plugin_commands: Vec<PluginCommand>,
+    /// The columns the plugins compute (SPEC 08 §1d). A `[[column_set]]` names one, and
+    /// the number in its `ColumnKind::Plugin` is the place in this list.
+    pub plugin_columns: Vec<crate::plugcol::PluginColumn>,
+    /// Their headings, in the same order: what the panel widget is handed.
+    pub plugin_titles: Vec<String>,
+    /// What the plugins' programs have said, by column and path, with the date and size
+    /// the file had when it was asked about. A file that still has both is not asked about
+    /// again — not when the directory is read again, and not when one comes back to it.
+    plugin_cache: std::collections::HashMap<(u8, PathBuf), PluginCell>,
     /// The rows of the `F11` list that cannot run from here, by value, so the renderer can
     /// grey them out — by value because typing filters the list and moves the rows. Set each
     /// time the list is built, because it depends on where one is standing.
@@ -3255,6 +3297,7 @@ impl App {
             right,
             sites,
             plugin_commands,
+            plugin_columns,
             highlight,
             sort_groups,
             column_sets,
@@ -3459,6 +3502,9 @@ impl App {
             video_newest: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
             last_calc: String::new(),
             plugin_commands,
+            plugin_titles: plugin_columns.iter().map(|c| c.title.clone()).collect(),
+            plugin_columns,
+            plugin_cache: Default::default(),
             plugin_dim: Vec::new(),
             macros,
             recording: None,
@@ -4123,6 +4169,8 @@ impl App {
                         self.ask_for_owners(panel);
                         self.panels[panel].git_status.clear();
                         self.ask_for_git_column(panel);
+                        self.panels[panel].forget_plugin_cells();
+                        self.ask_for_plugin_columns(panel);
                         self.panels[panel].links.clear();
                         self.ask_for_links(panel);
                         self.panels[panel].descriptions = Default::default();
@@ -4245,6 +4293,51 @@ impl App {
                 self.panels[panel].git_status = status;
                 if self.panels[panel].sort.asks(SortKey::Git) {
                     self.panels[panel].resort();
+                }
+            }
+            Event::PluginColumn {
+                panel,
+                generation,
+                column,
+                dir,
+                answer,
+            } => {
+                // Remembered whether or not anybody is still looking: it is true of those
+                // files either way, and coming back to the directory finds it here.
+                if self.plugin_cache.len() + answer.cells.len() > PLUGIN_CACHE_MAX {
+                    self.plugin_cache.clear();
+                }
+                for (file, value) in &answer.cells {
+                    self.plugin_cache.insert(
+                        (column, dir.join(&file.name)),
+                        PluginCell {
+                            mtime: file.mtime,
+                            size: file.size,
+                            value: value.clone(),
+                        },
+                    );
+                }
+                if let Some(error) = &answer.error {
+                    let name = self
+                        .plugin_columns
+                        .get(column as usize)
+                        .map(|c| c.name())
+                        .unwrap_or_default();
+                    let m = self.i18n.t_args(
+                        "plugin-column-failed",
+                        &[("column", name.into()), ("error", error.clone().into())],
+                    );
+                    self.set_error(m);
+                }
+                if panel >= self.panels.len() || self.panels[panel].generation != generation {
+                    return;
+                }
+                let cells = &mut self.panels[panel].plugin_cells;
+                for (file, value) in answer.cells {
+                    cells.insert((column, file.name), Some(value));
+                }
+                for name in answer.blank {
+                    cells.insert((column, name), Some(String::new()));
                 }
             }
             Event::DirChanged { panel } => {
@@ -7981,6 +8074,87 @@ impl App {
         });
     }
 
+    /// Ask the plugins about the rows their columns have no answer for yet (SPEC 08 §1d).
+    ///
+    /// Only while a view that draws such a column is the one on screen, and only for a
+    /// directory on this machine's disks: the program is handed a path, and a row of a
+    /// list panel, of an archive or of a server has none it could open. A file the cache
+    /// already knows — same path, same date, same size — is answered from it at once; the
+    /// others get a placeholder and go to a worker, one request per column.
+    fn ask_for_plugin_columns(&mut self, panel: usize) {
+        let Some(p) = self.panels.get(panel) else {
+            return;
+        };
+        let wanted = crate::colset::for_slot(&self.column_sets, p.view.slot())
+            .map(|set| set.plugin_columns())
+            .unwrap_or_default();
+        if wanted.is_empty() || p.temp.is_some() || !p.cwd.is_local() || p.cwd.in_container() {
+            return;
+        }
+        let dir = p.cwd.as_path().to_path_buf();
+        let groups = self.cfg.mask_groups();
+        for n in wanted {
+            let Some(column) = self.plugin_columns.get(n as usize) else {
+                continue;
+            };
+            // A mask that does not read was said at startup; here it matches nothing,
+            // which leaves the column empty rather than running the program on everything.
+            let masks = match &column.masks {
+                Some(text) => match fcmd_core::MaskSet::parse_with(text, &groups, false) {
+                    Ok(set) => Some(set),
+                    Err(_) => continue,
+                },
+                None => None,
+            };
+            let p = &self.panels[panel];
+            let mut files = Vec::new();
+            let mut cells = Vec::new();
+            for e in (0..p.listing.len()).filter_map(|row| p.listing.row(row)) {
+                if e.kind == fcmd_core::EntryKind::Parent || (e.opens_as_dir() && !column.folders) {
+                    continue;
+                }
+                let name = e.name_str().into_owned();
+                if masks.as_ref().is_some_and(|set| !set.matches_name(&name))
+                    || p.plugin_cells.contains_key(&(n, name.clone()))
+                {
+                    continue;
+                }
+                let known = self
+                    .plugin_cache
+                    .get(&(n, dir.join(&name)))
+                    .filter(|cell| cell.mtime == e.mtime && cell.size == e.size)
+                    .map(|cell| cell.value.clone());
+                if known.is_none() {
+                    files.push(crate::plugcol::Asked {
+                        name: name.clone(),
+                        mtime: e.mtime,
+                        size: e.size,
+                    });
+                }
+                cells.push(((n, name), known));
+            }
+            let job = crate::plugcol::Job {
+                id: column.id.clone(),
+                program: column.program.clone(),
+                dir: dir.clone(),
+                files,
+                batch: column.batch,
+                timeout: column.timeout,
+                cancel: p.plugin_cancel.clone(),
+            };
+            let generation = p.generation;
+            self.panels[panel].plugin_cells.extend(cells);
+            if !job.files.is_empty() {
+                self.requests.push(Request::PluginColumn {
+                    panel,
+                    generation,
+                    column: n,
+                    job,
+                });
+            }
+        }
+    }
+
     /// Put text on the system clipboard, through the terminal. Returns whether the request
     /// went out, so that the caller only says what it copied when something was copied.
     fn copy_to_clipboard(&mut self, text: &str) -> bool {
@@ -10992,6 +11166,7 @@ impl App {
                 let active = self.active;
                 self.ask_for_owners(active);
                 self.ask_for_git_column(active);
+                self.ask_for_plugin_columns(active);
                 self.ask_for_links(active);
                 self.ask_for_descriptions(active);
                 let msg = self
@@ -21730,6 +21905,19 @@ impl App {
             lines.push(self.i18n.t("plugins-card-commands"));
             lines.extend(commands.into_iter().map(|c| format!("  {c}")));
         }
+        // The columns, spelled the way a `[[column_set]]` has to name them: this card is
+        // where somebody looks that up.
+        let columns: Vec<String> = self
+            .plugin_columns
+            .iter()
+            .filter(|c| c.plugin == p.id)
+            .map(|c| format!("{} ({})", c.title, c.name()))
+            .collect();
+        if !columns.is_empty() {
+            lines.push(String::new());
+            lines.push(self.i18n.t("plugins-card-columns"));
+            lines.extend(columns.into_iter().map(|c| format!("  {c}")));
+        }
         if !p.notes.is_empty() {
             lines.push(String::new());
             lines.push(self.i18n.t("plugins-card-notes"));
@@ -30197,6 +30385,7 @@ mod tests {
             right: VPath::local("/tmp"),
             sites: Vec::new(),
             plugin_commands: Vec::new(),
+            plugin_columns: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
             column_sets: Vec::new(),
@@ -36372,6 +36561,7 @@ run = ["echo one", "echo two", "echo three"]
             right: VPath::local("/tmp"),
             sites: Vec::new(),
             plugin_commands: Vec::new(),
+            plugin_columns: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
             column_sets: Vec::new(),
@@ -40493,6 +40683,7 @@ run = ["echo one", "echo two", "echo three"]
             right: VPath::local(dir),
             sites: Vec::new(),
             plugin_commands: Vec::new(),
+            plugin_columns: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
             column_sets: Vec::new(),
@@ -43553,6 +43744,261 @@ abcdefghij
         );
     }
 
+    /// What the tests of a plugin's column stand on: a `lines` column over `*.txt`, a
+    /// column set on `Ctrl+3` that draws it, and the panel in that view.
+    fn app_with_a_plugin_column(dir: &std::path::Path, program: PathBuf, batch: bool) -> App {
+        let mut app = editing_app(dir);
+        app.plugin_columns = vec![crate::plugcol::PluginColumn {
+            plugin: "counts".into(),
+            id: "lines".into(),
+            title: "Lines".into(),
+            width: Some(6),
+            right: true,
+            program,
+            masks: Some("*.txt".into()),
+            timeout: Some(10),
+            batch,
+            folders: false,
+        }];
+        app.plugin_titles = vec!["Lines".into()];
+        let (cfg, _) = Config::parse(
+            "test.toml",
+            r#"
+            [[column_set]]
+            id = 3
+            columns = [{ type = "name" }, { type = "plugin:counts.lines" }]
+            "#,
+        )
+        .expect("it parses");
+        let mut warnings = Vec::new();
+        app.column_sets = crate::colset::sets(&cfg, &app.plugin_columns, &mut warnings);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        app.take_requests();
+        app.run(Command::PanelViewSet(ViewMode::Full));
+        app
+    }
+
+    /// The one request a plugin column made, if it made one.
+    fn plugin_job(app: &mut App) -> Option<(u64, crate::plugcol::Job)> {
+        app.take_requests().into_iter().find_map(|r| match r {
+            Request::PluginColumn {
+                panel: 0,
+                generation,
+                column: 0,
+                job,
+            } => Some((generation, job)),
+            _ => None,
+        })
+    }
+
+    /// The left panel, as text.
+    fn left_panel(app: &mut App) -> String {
+        let mut buf = fcmd_ui::Buffer::new(100, 14);
+        crate::render::draw(app, &mut buf);
+        buf.to_text()
+            .lines()
+            .map(|line| line.chars().take(50).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// A plugin's column asks about the files its masks name and no others, draws a
+    /// placeholder until the program has answered, and never asks twice about a file that
+    /// has not changed.
+    #[test]
+    fn a_plugin_column_asks_once_per_file_and_waits_with_a_placeholder() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("two.txt"), "a\nb\n").unwrap();
+        std::fs::write(dir.path().join("five.txt"), "1\n2\n3\n4\n5\n").unwrap();
+        std::fs::write(dir.path().join("picture.png"), "x").unwrap();
+        std::fs::create_dir(dir.path().join("folder.txt")).unwrap();
+        let mut app = app_with_a_plugin_column(dir.path(), PathBuf::from("lines"), false);
+
+        let (generation, job) = plugin_job(&mut app).expect("the view asks");
+        let mut asked: Vec<&str> = job.files.iter().map(|f| f.name.as_str()).collect();
+        asked.sort_unstable();
+        // Not the picture, which the masks leave out, and not the folder, whatever it is
+        // called: a program that counts lines has nothing to say about one.
+        assert_eq!(asked, ["five.txt", "two.txt"]);
+        assert_eq!(job.dir, dir.path());
+        let text = left_panel(&mut app);
+        assert!(text.contains("Lines"), "the plugin's own heading:\n{text}");
+        let row = |text: &str, name: &str| {
+            text.lines()
+                .find(|l| l.contains(name))
+                .unwrap_or_else(|| panic!("no {name} in\n{text}"))
+                .to_string()
+        };
+        assert!(row(&text, "two").contains(fcmd_ui::widgets::PLUGIN_PENDING));
+        assert!(!row(&text, "picture").contains(fcmd_ui::widgets::PLUGIN_PENDING));
+
+        // The answer for one file lands; the other is still waiting.
+        let cell = |name: &str, value: &str| {
+            let file = job.files.iter().find(|f| f.name == name).unwrap().clone();
+            (file, value.to_string())
+        };
+        app.handle_event(Event::PluginColumn {
+            panel: 0,
+            generation,
+            column: 0,
+            dir: job.dir.clone(),
+            answer: crate::plugcol::Answer {
+                cells: vec![cell("two.txt", "2")],
+                ..Default::default()
+            },
+        });
+        let text = left_panel(&mut app);
+        assert!(row(&text, "two").contains(" 2"), "{text}");
+        assert!(row(&text, "five").contains(fcmd_ui::widgets::PLUGIN_PENDING));
+        app.handle_event(Event::PluginColumn {
+            panel: 0,
+            generation,
+            column: 0,
+            dir: job.dir.clone(),
+            answer: crate::plugcol::Answer {
+                cells: vec![cell("five.txt", "5")],
+                ..Default::default()
+            },
+        });
+
+        // Read again, nothing changed: both come out of the memory, and nobody is asked.
+        app.take_requests();
+        let reread = |app: &mut App| {
+            let generation = app.panels[0].generation + 1;
+            app.panels[0].generation = generation;
+            let entries = fcmd_vfs::local::list_blocking(&app.panels[0].cwd, &CancelToken::new())
+                .expect("it lists");
+            app.handle_event(Event::Listed {
+                panel: 0,
+                generation,
+                result: Ok(entries),
+            });
+        };
+        reread(&mut app);
+        assert!(plugin_job(&mut app).is_none(), "nothing changed");
+        let text = left_panel(&mut app);
+        assert!(row(&text, "five").contains(" 5"), "{text}");
+
+        // One of them is written to: that one is asked about again, and only that one.
+        std::fs::write(dir.path().join("two.txt"), "a\nb\nc\n").unwrap();
+        reread(&mut app);
+        let (_, job) = plugin_job(&mut app).expect("the changed file");
+        assert_eq!(
+            job.files
+                .iter()
+                .map(|f| f.name.as_str())
+                .collect::<Vec<_>>(),
+            ["two.txt"]
+        );
+        let text = left_panel(&mut app);
+        assert!(row(&text, "two").contains(fcmd_ui::widgets::PLUGIN_PENDING));
+        assert!(row(&text, "five").contains(" 5"), "{text}");
+    }
+
+    /// An answer that arrives after the panel has gone elsewhere draws nothing there, is
+    /// kept all the same, and a column that gave up says so and leaves its cells empty.
+    #[test]
+    fn a_late_plugin_answer_is_kept_and_a_column_that_gave_up_says_so() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "a\n").unwrap();
+        std::fs::write(dir.path().join("b.txt"), "b\n").unwrap();
+        let mut app = app_with_a_plugin_column(dir.path(), PathBuf::from("lines"), true);
+        let (generation, job) = plugin_job(&mut app).expect("the view asks");
+        assert!(job.batch);
+        // The listing the job was for is cancelled by the next one.
+        let old = app.panels[0].plugin_cancel.clone();
+        app.panels[0].forget_plugin_cells();
+        assert!(old.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(!app.panels[0]
+            .plugin_cancel
+            .load(std::sync::atomic::Ordering::Relaxed));
+
+        let a = job
+            .files
+            .iter()
+            .find(|f| f.name == "a.txt")
+            .unwrap()
+            .clone();
+        app.handle_event(Event::PluginColumn {
+            panel: 0,
+            generation: generation + 7,
+            column: 0,
+            dir: job.dir.clone(),
+            answer: crate::plugcol::Answer {
+                cells: vec![(a, "1".into())],
+                ..Default::default()
+            },
+        });
+        assert!(app.panels[0].plugin_cells.is_empty(), "not this listing's");
+        app.ask_for_plugin_columns(0);
+        let (_, job) = plugin_job(&mut app).expect("b is still unknown");
+        assert_eq!(job.files.len(), 1);
+        assert_eq!(job.files[0].name, "b.txt");
+        assert_eq!(
+            app.panels[0].plugin_cells.get(&(0, "a.txt".to_string())),
+            Some(&Some("1".to_string()))
+        );
+
+        app.handle_event(Event::PluginColumn {
+            panel: 0,
+            generation,
+            column: 0,
+            dir: job.dir.clone(),
+            answer: crate::plugcol::Answer {
+                blank: vec!["b.txt".into()],
+                error: Some("lines did not finish within 10 seconds".into()),
+                ..Default::default()
+            },
+        });
+        let said = app.status.clone();
+        assert!(said.contains("plugin:counts.lines"), "{said}");
+        assert!(said.contains("did not finish"), "{said}");
+        assert_eq!(
+            app.panels[0].plugin_cells.get(&(0, "b.txt".to_string())),
+            Some(&Some(String::new()))
+        );
+    }
+
+    /// The whole of it through a real script: the request the panel makes, run by the
+    /// worker, fills the column. Skipped where there is no shell to run a script with.
+    #[test]
+    #[cfg(unix)]
+    fn a_script_plugin_fills_its_column() {
+        use std::os::unix::fs::PermissionsExt;
+        if !std::path::Path::new("/bin/sh").exists() {
+            return;
+        }
+        let plugin = tempfile::tempdir().unwrap();
+        let program = plugin.path().join("lines.sh");
+        std::fs::write(&program, "#!/bin/sh\nwc -l < \"$1\" | tr -d ' '\n").unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("three.txt"), "a\nb\nc\n").unwrap();
+        std::fs::write(dir.path().join("none.txt"), "").unwrap();
+        let mut app = app_with_a_plugin_column(dir.path(), program, false);
+        let (generation, job) = plugin_job(&mut app).expect("the view asks");
+        let mut answers = Vec::new();
+        crate::plugcol::run(&job, &mut |a| answers.push(a));
+        for answer in answers {
+            app.handle_event(Event::PluginColumn {
+                panel: 0,
+                generation,
+                column: 0,
+                dir: job.dir.clone(),
+                answer,
+            });
+        }
+        let cells = &app.panels[0].plugin_cells;
+        assert_eq!(
+            cells.get(&(0, "three.txt".to_string())),
+            Some(&Some("3".to_string()))
+        );
+        assert_eq!(
+            cells.get(&(0, "none.txt".to_string())),
+            Some(&Some("0".to_string()))
+        );
+    }
+
     /// `Ctrl+Alt+X` in the viewer sends nothing until a dialog has said what goes and where;
     /// `Shift+F7` in a panel does the same for the staged diff.
     #[test]
@@ -44471,7 +44917,7 @@ abcdefghij
             let (cfg, problems) = Config::parse("test.toml", src).expect("it parses");
             assert!(problems.is_empty(), "{problems:?}");
             let mut warnings = Vec::new();
-            app.column_sets = crate::colset::sets(&cfg, &mut warnings);
+            app.column_sets = crate::colset::sets(&cfg, &[], &mut warnings);
             assert!(warnings.is_empty(), "{warnings:?}");
         };
         let asked = |app: &mut App| -> bool {

@@ -54,6 +54,12 @@ pub enum PlugError {
     },
     #[error("{path}: [[command]] `{id}` has no label")]
     CommandLabel { path: String, id: String },
+    #[error(
+        "{path}: [[column]] id `{id}` is not a column id (lower-case letters, digits and `-`)"
+    )]
+    BadColumnId { path: String, id: String },
+    #[error("{path}: [[column]] `{id}` is declared twice")]
+    DuplicateColumn { path: String, id: String },
     #[error("{path}: duplicate plugin id `{id}`, already loaded from `{first}`")]
     DuplicateId {
         path: String,
@@ -89,6 +95,9 @@ pub enum ItemKind {
     /// A `[[command]]`. It carries no TOML block to resolve — `ItemKind::all()` leaves it out
     /// for that reason — and is here so a refused `run =` path names its own section.
     Command,
+    /// A `[[column]]`: parsed into a type of its own, as a command is, and here for the same
+    /// reason — a refused `run =` names its own section.
+    Column,
 }
 
 impl ItemKind {
@@ -101,6 +110,7 @@ impl ItemKind {
             ItemKind::Decompile => "decompile",
             ItemKind::MaskGroup => "mask-group",
             ItemKind::Command => "command",
+            ItemKind::Column => "column",
         }
     }
 
@@ -171,6 +181,10 @@ pub struct Manifest {
     /// wrong, and nothing to match compiler versions with.
     #[serde(rename = "command")]
     pub commands: Vec<Command>,
+    /// `[[column]]` blocks: a panel column whose values a program of the plugin computes
+    /// (SPEC 08 §1d) — what Total Commander calls a content plugin.
+    #[serde(rename = "column", skip_serializing_if = "Vec::is_empty")]
+    pub columns: Vec<Column>,
     /// Anything else in the file, reported as a warning the way `fcmd-config` does it.
     #[serde(flatten, skip_serializing)]
     pub unknown: BTreeMap<String, toml::Value>,
@@ -221,6 +235,87 @@ pub struct Command {
     /// the author writes it down here (SPEC 08 §1).
     #[serde(default)]
     pub when: When,
+}
+
+/// A panel column a plugin computes (SPEC 08 §1d).
+///
+/// The same decision as a command, for the same reasons: a *process*, asked about files and
+/// answering in text. One file per run by default — the path is the first argument and the
+/// first line printed is the value — which is the script anybody can write; `batch = true`
+/// is for a program dear to start, which is then run once for a whole directory, reads the
+/// paths from standard input and answers `path<TAB>value`, a line per file it has something
+/// to say about.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct Column {
+    /// What a `[[column_set]]` calls it, after the plugin's own id: `plugin:<plugin>.<id>`.
+    pub id: String,
+    /// The heading. Not translated: it is the plugin's word, as a command's label is.
+    #[serde(default)]
+    pub title: String,
+    /// How wide the column is when the set that names it does not say.
+    #[serde(default)]
+    pub width: Option<u16>,
+    /// `left` or `right`; a figure reads better from the right. Default `left`.
+    #[serde(default)]
+    pub align: Option<String>,
+    /// The program, inside the plugin's own directory, and the one for Windows when a
+    /// script and a `.cmd` cannot be one file — exactly as a command says it.
+    pub run: String,
+    #[serde(default)]
+    pub run_windows: Option<String>,
+    /// The files it has an answer for, in the panel's mask language. The others are never
+    /// handed to the program and their cell stays empty. Absent means every file.
+    #[serde(default)]
+    pub masks: Option<String>,
+    /// Seconds one run may take: one file's, or the whole directory's for a batch.
+    #[serde(default)]
+    pub timeout: Option<u64>,
+    /// One run for a whole directory rather than one per file.
+    #[serde(default)]
+    pub batch: bool,
+    /// Whether directories are asked about as well. A program that reads a file's contents
+    /// has nothing to say about a directory, so the default is no.
+    #[serde(default)]
+    pub folders: bool,
+    /// A key this version does not know, said as a warning: a plugin written for a later
+    /// fcmd should still load here.
+    #[serde(flatten, skip_serializing)]
+    pub unknown: BTreeMap<String, Ignored>,
+}
+
+impl Column {
+    /// Which program this platform runs: `run_windows` on Windows when it is given.
+    pub fn program(&self) -> &str {
+        match (cfg!(windows), self.run_windows.as_deref()) {
+            (true, Some(windows)) => windows,
+            _ => self.run.as_str(),
+        }
+    }
+
+    /// The one for the other platform, checked for shape and not for existence.
+    pub fn other_program(&self) -> Option<&str> {
+        let other = match cfg!(windows) {
+            true => Some(self.run.as_str()),
+            false => self.run_windows.as_deref(),
+        };
+        other.filter(|p| *p != self.program())
+    }
+
+    /// The heading the panel draws: the title, or the id when the author wrote none.
+    pub fn heading(&self) -> &str {
+        match self.title.trim() {
+            "" => self.id.trim(),
+            title => title,
+        }
+    }
+
+    /// Does the column read from the right? Anything but `right` is left, and a spelling
+    /// nobody knows is a warning at load.
+    pub fn right_aligned(&self) -> bool {
+        self.align
+            .as_deref()
+            .is_some_and(|a| a.trim().eq_ignore_ascii_case("right"))
+    }
 }
 
 /// The conditions a command needs, all of which must hold. An empty table is "anywhere".
@@ -342,6 +437,26 @@ impl Manifest {
                     )
                 })
             }))
+            .chain(manifest.columns.iter().flat_map(|c| {
+                c.unknown
+                    .keys()
+                    .map(move |k| format!("{name}: column `{}`: unknown key `{k}` (ignored)", c.id))
+                    .chain(
+                        c.align
+                            .as_deref()
+                            .filter(|a| {
+                                let a = a.trim();
+                                !a.eq_ignore_ascii_case("left") && !a.eq_ignore_ascii_case("right")
+                            })
+                            .map(move |a| {
+                                format!(
+                                    "{name}: column `{}`: align = `{a}` is neither left nor \
+                                     right (left is used)",
+                                    c.id
+                                )
+                            }),
+                    )
+            }))
             .collect();
         Ok((manifest, warnings))
     }
@@ -367,8 +482,8 @@ impl Manifest {
             ItemKind::Assoc => &self.assocs,
             ItemKind::Decompile => &self.decompile,
             ItemKind::MaskGroup => &self.mask_groups,
-            // Not a declared TOML block: `[[command]]` is parsed into a type of its own.
-            ItemKind::Command => &[],
+            // Not declared TOML blocks: each is parsed into a type of its own.
+            ItemKind::Command | ItemKind::Column => &[],
         }
     }
 }
@@ -479,12 +594,44 @@ impl Plugin {
             }
         }
 
+        // The columns, by the commands' rules: an id that reads as one, declared once, and a
+        // program that is in the plugin's own directory.
+        for (n, column) in manifest.columns.iter().enumerate() {
+            let id = column.id.trim();
+            if !is_plugin_id(id) {
+                return Err(PlugError::BadColumnId {
+                    path,
+                    id: column.id.clone(),
+                });
+            }
+            if manifest.columns[..n].iter().any(|c| c.id.trim() == id) {
+                return Err(PlugError::DuplicateColumn {
+                    path,
+                    id: id.to_string(),
+                });
+            }
+            safe_join(dir, &path, ItemKind::Column, column.program())?;
+            if let Some(other) = column.other_program() {
+                safe_shape(&path, ItemKind::Column, other)?;
+            }
+        }
+
         Ok(Plugin {
             dir: dir.to_path_buf(),
             manifest,
             items,
             warnings,
         })
+    }
+
+    /// The columns this plugin computes, each with the program for *this* platform resolved
+    /// to a real path.
+    pub fn columns(&self) -> Vec<(&Column, PathBuf)> {
+        self.manifest
+            .columns
+            .iter()
+            .map(|c| (c, self.dir.join(c.program().trim())))
+            .collect()
     }
 
     /// The commands this plugin provides, with the program for *this* platform resolved to a
@@ -1063,7 +1210,7 @@ mod tests {
             [plugin]
             id = "later"
             capabilities = ["vfs:net"]
-            [[column]]
+            [[preview]]
             name = "git"
             "#,
         )
@@ -1071,7 +1218,7 @@ mod tests {
         assert_eq!(m.plugin.id, "later");
         assert_eq!(warnings.len(), 2, "{warnings:?}");
         assert!(
-            warnings.iter().any(|w| w.contains("`column`")),
+            warnings.iter().any(|w| w.contains("`preview`")),
             "{warnings:?}"
         );
         assert!(
@@ -1577,6 +1724,109 @@ mod tests {
         let p = Plugin::load(&dir).unwrap();
         assert!(p.supports("not a version"));
         assert!(p.supports("0.0.4-nightly"));
+    }
+
+    #[test]
+    fn a_column_is_declared_with_its_program_and_what_it_answers_for() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = plugin(
+            root.path(),
+            "counts",
+            r#"
+            [plugin]
+            id = "counts"
+
+            [[column]]
+            id = "lines"
+            title = "Lines"
+            width = 7
+            align = "right"
+            run = "lines.sh"
+            run_windows = "lines.cmd"
+            masks = "*.txt,*.md"
+            timeout = 5
+
+            [[column]]
+            id = "kind"
+            run = "kind.sh"
+            batch = true
+            folders = true
+            align = "middle"
+            later = 1
+            "#,
+        );
+        for file in ["lines.sh", "lines.cmd", "kind.sh"] {
+            std::fs::write(dir.join(file), "").unwrap();
+        }
+        let plugin = Plugin::load(&dir).expect("it loads");
+        let columns = plugin.columns();
+        assert_eq!(columns.len(), 2);
+        let (lines, program) = &columns[0];
+        assert_eq!(lines.heading(), "Lines");
+        assert_eq!(lines.width, Some(7));
+        assert!(lines.right_aligned());
+        assert!(!lines.batch && !lines.folders);
+        assert_eq!(lines.masks.as_deref(), Some("*.txt,*.md"));
+        assert_eq!(
+            program.file_name().and_then(|n| n.to_str()),
+            Some(if cfg!(windows) {
+                "lines.cmd"
+            } else {
+                "lines.sh"
+            })
+        );
+        // No title is the id; an alignment nobody knows and a key from a later version are
+        // each a warning, and the column is still there.
+        let (kind, _) = &columns[1];
+        assert_eq!(kind.heading(), "kind");
+        assert!(kind.batch && kind.folders && !kind.right_aligned());
+        let warnings = plugin.warnings();
+        assert!(
+            warnings.iter().any(|w| w.contains("middle")),
+            "{warnings:?}"
+        );
+        assert!(
+            warnings.iter().any(|w| w.contains("`later`")),
+            "{warnings:?}"
+        );
+    }
+
+    #[test]
+    fn a_column_that_is_misdeclared_keeps_the_plugin_from_loading() {
+        let root = tempfile::tempdir().unwrap();
+        let load = |folder: &str, columns: &str| {
+            let dir = plugin(
+                root.path(),
+                folder,
+                &format!("[plugin]\nid = \"{folder}\"\n{columns}"),
+            );
+            std::fs::write(dir.join("c.sh"), "").unwrap();
+            Plugin::load(&dir)
+        };
+        // An id that could not be written after `plugin:<id>.` in a column set.
+        let err = load("a", "[[column]]\nid = \"My Column\"\nrun = \"c.sh\"\n").unwrap_err();
+        assert!(matches!(err, PlugError::BadColumnId { .. }), "{err}");
+        // The same id twice: which of the two a set meant would be a matter of order.
+        let err = load(
+            "b",
+            "[[column]]\nid = \"x\"\nrun = \"c.sh\"\n[[column]]\nid = \"x\"\nrun = \"c.sh\"\n",
+        )
+        .unwrap_err();
+        assert!(matches!(err, PlugError::DuplicateColumn { .. }), "{err}");
+        // A program outside the plugin's folder, and one that is not there.
+        let err = load("c", "[[column]]\nid = \"x\"\nrun = \"../c.sh\"\n").unwrap_err();
+        assert!(
+            matches!(
+                err,
+                PlugError::Escape {
+                    section: "column",
+                    ..
+                }
+            ),
+            "{err}"
+        );
+        let err = load("d", "[[column]]\nid = \"x\"\nrun = \"gone.sh\"\n").unwrap_err();
+        assert!(matches!(err, PlugError::MissingFile { .. }), "{err}");
     }
 
     #[test]
