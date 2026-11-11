@@ -254,6 +254,7 @@ impl Command {
             }
             Command::AiRewrite => "rewrite the marked block as told in words: the model's version as a diff, applied on Enter",
             Command::AiRename => "rename what is selected from words: the model's pattern, previewed in the multi-rename dialog",
+            Command::AiFind => "find files from words: the model's answer fills the find dialog, and nothing is searched until OK",
             Command::AiLocalOnly => "ask only the AI services on this machine: on or off",
             Command::AiRedact => {
                 "mask keys, tokens and passwords in what is sent to the model: on or off"

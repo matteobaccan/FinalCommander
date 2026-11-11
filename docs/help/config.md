@@ -121,6 +121,7 @@ More ways to ask:
 | `Ctrl+Alt+X` in the viewer or the editor | asks **what this is**: the marked block in the editor, or what is on the screen, goes with the file's name — after a dialog that says how much and to which host |
 | `Ctrl+Alt+X` in the panels, after a command that failed | asks **why it failed**: the command, its exit code and the end of what it printed — the last 200 lines at most, the ones `Ctrl+O` shows — go after the same dialog, and the answer opens in the viewer. Once another command has ended well there is nothing to ask about |
 | `Ctrl+Alt+U` on selected files | asks for a **rename pattern** from words, and opens the multi-rename dialog with it — see *Renaming many files at once* |
+| `Ctrl+Alt+Q` in the panels or in the find dialog | asks for a **search** from words — *pdfs over 10 MB changed last week* — and fills the find dialog with it; nothing is searched until its `OK` — see *Finding things* |
 | `Ctrl+Alt+W` in the editor | has the marked block **rewritten**, shows the result as a comparison and puts it in only on `Enter` — see *Having a block rewritten* |
 | `Shift+F7` in a repository | drafts a **commit message** from the staged diff — after the same dialog — and opens the commit prompt with it, to read and change before anything is committed |
 

@@ -395,6 +395,9 @@ pub enum Command {
     /// Say in words what the selected names should become; the model's pattern goes into
     /// the multi-rename dialog (SPEC 03 §8a).
     AiRename,
+    /// Say in words what to look for; the model's answer fills the find dialog, which
+    /// searches nothing until its own OK (SPEC 06 §1f).
+    AiFind,
     /// Ask only language models on this machine, or any of them (SPEC 06 §14.2).
     AiLocalOnly,
     /// Mask secrets in what is sent to a language model, or stop masking them (SPEC 06 §14.2).
@@ -782,6 +785,7 @@ impl Command {
             Command::AiExplain,
             Command::AiRewrite,
             Command::AiRename,
+            Command::AiFind,
             Command::AiLocalOnly,
             Command::AiRedact,
             Command::ToolSysLog,
@@ -1097,6 +1101,7 @@ impl Command {
             Command::AiExplain => "ai.explain".into(),
             Command::AiRewrite => "ai.rewrite".into(),
             Command::AiRename => "ai.rename".into(),
+            Command::AiFind => "ai.find".into(),
             Command::AiLocalOnly => "ai.local".into(),
             Command::AiRedact => "ai.redact".into(),
             Command::ToolSysLog => "tool.syslog".into(),
@@ -1376,6 +1381,7 @@ impl Command {
             ("ai.explain", _) => Command::AiExplain,
             ("ai.rewrite", _) => Command::AiRewrite,
             ("ai.rename", _) => Command::AiRename,
+            ("ai.find", _) => Command::AiFind,
             ("ai.local", _) => Command::AiLocalOnly,
             ("ai.redact", _) => Command::AiRedact,
             ("tool.syslog", _) => Command::ToolSysLog,

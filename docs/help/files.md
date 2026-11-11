@@ -374,6 +374,19 @@ hundred megabytes up", `1M-1G` a range, `-4K` everything smaller than four kilob
 empty for any size. `K`, `M`, `G` and `T` are powers of 1024, as everywhere else in the
 program.
 
+The row under it is how old: *Changed, days ago*. `7` is the last week, `0` today, `>=30` a
+month old and older, `7-30` between the two — counted from the last time the file was
+written, which is the date the panels show.
+
+**Saying it in words.** With a language model set up (see *Asking an AI*), `Ctrl+Alt+Q` — in
+the panels, or inside this dialog — asks what you are looking for: *pdfs over 10 MB changed
+last week*. A dialog first says what goes and where: your words, and nothing of the panels —
+no name, no path. The model's answer fills the rows — here `*.pdf`, `10M-` and `7` — and
+**nothing is searched**: read them, change what is wrong, and press `OK` yourself. Where to
+look stays as you had it; the model is not asked. What you asked for that the rows cannot
+say — *taken in Rome* — is said on the status line rather than guessed at, so you know what
+the search will not do. `Esc` at the question goes back to the dialog as it was.
+
 **When you only half remember the name**, tick *Approximate name*: the mask row then takes
 letters instead of a mask and finds every name that has them in that order — `mnrs` finds
 `main.rs`, and `test app` finds `app_tests.rs`, because each word only has to be in there

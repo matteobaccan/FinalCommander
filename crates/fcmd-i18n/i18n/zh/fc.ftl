@@ -1783,3 +1783,13 @@ plugins-card-columns = 列（[[column_set]] 中的写法）：
 usermenu-far-row = 与 FarMenu.ini 读法不同之处（{ $count }）
 usermenu-far-notes = 菜单来自 FAR 的 FarMenu.ini：有 { $count } 处读法不同 — 最后一行列出
 usermenu-far-not-run = 未执行任何命令。
+find-age = 修改于几天前 (7, >=30, 7-30)
+find-bad-age = `{ $text }` 不是以天计的时间 — { $error }
+find-label-age = { $days } 天
+find-keys-ai = Ctrl+Alt+Q 用文字描述搜索：由语言模型填写这些行
+ai-find-prompt = 要找什么？（用文字描述）
+ai-send-words = 这些文字 — 不含面板中的任何内容：没有名称、路径或文件 — 将发送到 { $host }。
+ai-find-ready = 模型给出的搜索已填入对话框：请阅读各行，改正错误，只有 OK 才会开始搜索
+ai-find-waiting = 模型给出的搜索已就绪：Alt+F7 以它打开对话框
+ai-find-unreadable = 模型没有以搜索条件作答：其回答在回答文件夹 (ai:) 中，未进行任何搜索
+ai-find-left-out = { $said } — 未写入各行，因为它们无法表达：{ $what }

@@ -997,13 +997,17 @@ impl Form {
 
     /// Find file (SPEC 06 §1), filled in with what was searched for last — a search is very
     /// often the same one again with one thing changed.
-    pub fn find(last: &crate::app::FindSpec, index: bool, i18n: &I18n) -> Form {
+    ///
+    /// `words` is whether a language model is set up: the row that names the key for
+    /// saying the search in words is only there when the key would do something.
+    pub fn find(last: &crate::app::FindSpec, index: bool, words: bool, i18n: &I18n) -> Form {
         let t = |id: &str| i18n.t(id);
         let mut fields = vec![
             Field::text("find.mask", t("find-mask"), last.mask.clone()),
             // Right under the row it changes the meaning of.
             Field::toggle("find.fuzzy", t("find-fuzzy"), last.fuzzy),
             Field::text("find.size", t("find-size"), last.size.clone()),
+            Field::text("find.age", t("find-age"), last.age.clone()),
             Field::text("find.meta", t("find-meta"), last.meta.clone()),
             Field::text("find.text", t("find-text"), last.text.clone()),
             Field::toggle("find.case", t("find-case"), last.case_sensitive),
@@ -1037,6 +1041,9 @@ impl Form {
         fields.push(Field::Separator);
         // The two keys nothing else on the dialog would tell one about (SPEC 06 §1c).
         fields.push(Field::Dim(t("find-keys")));
+        if words {
+            fields.push(Field::Dim(t("find-keys-ai")));
+        }
         Form {
             pages: Vec::new(),
             page: 0,

@@ -200,6 +200,57 @@ that is tested as text, the answer is parsed from bytes, the conditions run over
 list of candidates, and the one test that runs a program runs `cat` (or `cmd /c type`) as
 a configured index.
 
+### 1f. How old, and the search said in words (0.46)
+
+**An age row.** *Changed, days ago* takes the grammar the filter's own age field has
+(SPEC 02 §5): `7` is "within the last seven days", `0` today, `>=30` "thirty days old and
+older", `7-30` a window. It is the date of the last write — the one the panels show — and it
+is checked where it is typed: one that does not read comes back on the dialog with the
+reason, as a size does. A kept search keeps it (`age` in the state file), and the results'
+frame says it. An absolute date range and the other three timestamps are still not in the
+dialog.
+
+**Words to a search (C2 of `docs/06-ai-study.md`).** `ai.find` — `Ctrl+Alt+Q` in the panels,
+and the same key inside the find dialog, which names it on a row of its own when a service
+is set up — asks *what are you looking for?* and sends the answer to the first service, to
+come back as the dialog's rows.
+
+* **What goes.** The words, and the instruction that says what shape the answer must have.
+  Nothing of the panels: no name, no path, no listing — the model is asked to translate a
+  sentence, not to look. The dialog that precedes every question (§14) says exactly that
+  and names the host, with *Cancel* lit; the redaction and the local-only switch of §14.2
+  stand where they stand for every question, so a service that is not on this machine is
+  refused before the dialog when local-only is on, and the search one was writing is still
+  on the screen.
+* **What is asked for.** Ten lines, `key: value`: `mask`, `size`, `age`, `text`, `case`,
+  `words`, `without` (files that do *not* contain the text), `folders`, `archives`, and
+  `note` — whatever was asked for that those rows cannot say. Each in the row's own
+  grammar, which the instruction spells out with an example per row.
+* **What comes back.** `ai_find_spec` reads the lines as forgivingly as a rename pattern is
+  read — a code fence, list markers, backticks or quotes round a value, `nothing` for an
+  empty one, a line missing. The answer is the **whole condition**: the rows it does not
+  mention are emptied, not left as they were, so nothing of the previous search hides under
+  the new one. *Where* to look is not the model's: the scope, *follow links* and *ask the
+  index* stay as the dialog had them. The approximate-name box and the hex box are turned
+  off and the metadata row emptied — the model is not asked about them. A size, an age or a
+  mask that is not one in the dialog's own grammar is left out and named, so the dialog
+  never opens holding something its own `OK` would refuse; and the switches that only mean
+  something with a text go off when there is none.
+* **Where it lands.** With the panels in front, in the find dialog — and that is all:
+  **nothing is searched until the dialog's own `OK`**, and every row is the user's to
+  change first. With anything else in front it becomes what `Alt+F7` opens with next, and
+  the status line says so, rather than a dialog landing on what one was doing.
+* **What could not be said.** The `note`, and anything left out as unreadable, goes on the
+  status line in the error ink beside the rows: it is the part of the request the search
+  will *not* honour, and the one thing the dialog cannot show.
+* **When it goes wrong.** An answer with none of the lines in it — prose — is said, opens
+  nothing and changes nothing; it is in the answers' folder like any other. `Esc` at the
+  words goes back to the dialog as it was (or to the panels, when the key was pressed
+  there), and so does an empty line.
+
+Tests never ask a real service: the question is read off the request the application
+queues, and the answer is an `Event::AiDone` the test writes.
+
 ## 2. Grep with jump-to-match
 
 `tool.grep` is a content-first search: pattern, file filter, context lines. Results are grouped
@@ -825,7 +876,8 @@ completions (and every server that speaks it), Anthropic's messages, Ollama's ch
   the quick view shows.
 * **`Ctrl+Alt+U`** (`ai.rename`, panels and the multi-rename dialog) asks for a rename pattern
   from words: SPEC 03 §8a. **`Ctrl+Alt+W`** (`ai.rewrite`, editor) has the marked block
-  rewritten and shows it as a diff: SPEC 05 §2.10.
+  rewritten and shows it as a diff: SPEC 05 §2.10. **`Ctrl+Alt+Q`** (`ai.find`, panels and
+  the find dialog) asks for a search from words and fills the find dialog with it: §1f.
 * A line that starts with `ai:`, `ai+` or `ai!` is not expanded: FAR's metasymbols would turn
   the `!` of `ai!` into a file name.
 

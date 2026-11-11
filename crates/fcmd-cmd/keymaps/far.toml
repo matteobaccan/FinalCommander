@@ -1534,6 +1534,15 @@ keys = ["Ctrl+Alt+U"]
 scope = "panel"
 cmd = "ai.rename"
 
+# Words to a search (SPEC 06 §1f): say what is wanted — "pdfs over 10 MB changed last week" —
+# and the model's answer fills the rows of the find dialog, which searches nothing until its
+# own OK. The dialog itself takes the same key. `Q` for the question; the letters nearer
+# "find" are taken (`Ctrl+Alt+F`) or do not arrive as themselves under `Ctrl` (`I`, `M`).
+[[bind]]
+keys = ["Ctrl+Alt+Q"]
+scope = "panel"
+cmd = "ai.find"
+
 # Rewrite the marked block (SPEC 05 §2.10): an instruction in words, the model's version shown
 # as a diff against the block, and `Enter` there putting it in — one `Ctrl+Z` takes it out.
 [[bind]]

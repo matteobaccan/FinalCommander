@@ -1855,3 +1855,13 @@ plugins-card-columns = Columns (as a [[column_set]] names them):
 usermenu-far-row = What was read differently from FarMenu.ini ({ $count })
 usermenu-far-notes = the menu comes from FAR's FarMenu.ini: { $count } things were read differently — the last row lists them
 usermenu-far-not-run = Nothing was run.
+find-age = Changed, days ago (7, >=30, 7-30)
+find-bad-age = `{ $text }` is not an age in days — { $error }
+find-label-age = { $days } d
+find-keys-ai = Ctrl+Alt+Q says the search in words: a language model fills these rows
+ai-find-prompt = What are you looking for? (in words)
+ai-send-words = These words — and nothing of the panels: no name, no path, no file — go to { $host }.
+ai-find-ready = the model's search is in the dialog: read the rows, change what is wrong, and only OK searches
+ai-find-waiting = the model's search is ready: Alt+F7 opens the dialog with it
+ai-find-unreadable = the model did not answer with a search: its answer is in the answers' folder (ai:), and nothing was searched
+ai-find-left-out = { $said } — NOT in the rows, because they cannot say it: { $what }

@@ -3364,6 +3364,9 @@ pub struct SavedSearch {
     pub not_containing: bool,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub size: String,
+    /// How long ago the file was last written, in days: `7`, `>=30`, `7-30`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub age: String,
     /// The mask is letters to find in order, not a mask (SPEC 06 §1d).
     #[serde(default)]
     pub fuzzy: bool,

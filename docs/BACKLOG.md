@@ -79,7 +79,7 @@ says what the decision stands on.
 
 | Item | Where | What is left |
 | --- | --- | --- |
-| Find file | `Alt+F7` | From FAR's dialog: a sixth scope, one code page or a chosen set, alternate streams, the advanced page (a first-N-bytes limit, result columns in the column grammar), and a new search from the results. |
+| Find file | `Alt+F7` | An absolute date range and the other three timestamps (an age in days of the last write is there, SPEC 06 §1f), and the attributes. From FAR's dialog: a sixth scope, one code page or a chosen set, alternate streams, the advanced page (a first-N-bytes limit, result columns in the column grammar), and a new search from the results. |
 | Checksums, split and combine | Files menu | Checksums, splits and joins of something that is not on this machine, which wait on `JobFs::read_chunks` beyond the local filesystem, and the self-joining script. |
 | A queue for jobs | `Alt+Shift+F5` | The queue, the lanes per device, background, pause, reordering and retries are in (0.31.0, SPEC 03 §5). A server's speed limit came in 0.34.0 (`max_kbps`). The journal that lets a copy or a move go on after a crash came in 0.41 (SPEC 03 §5a, `Alt+Shift+F6`). Left: cloning a job; journalling the jobs still waiting in the queue and the chain behind a running one, which a crash loses today; a per-job log kept on disk (feature 3.7). |
 | Disk usage | `Alt+Shift+F3` | A whole tree at once rather than one folder's level, and a treemap (SPEC 06 §12). |

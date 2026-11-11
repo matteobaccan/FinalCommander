@@ -375,6 +375,20 @@ su una cartella funziona su una ricerca. Se hai cercato un testo, `F3` e `F4` ap
 dove è stato trovato: il visualizzatore in quel punto, l'editor su quella riga (o su quel
 byte, per un file che si apre in esadecimale).
 
+**Dirlo a parole.** Con un modello linguistico configurato (vedi *Chiedere a un'AI*),
+`Ctrl+Alt+Q` — nei pannelli, o dentro questo dialogo — chiede che cosa stai cercando: *i pdf
+sopra i 10 MB modificati la settimana scorsa*. Prima un dialogo dice cosa parte e verso dove:
+le tue parole, e niente dei pannelli — nessun nome, nessun percorso. La risposta del modello
+riempie le righe — qui `*.pdf`, `10M-` e `7` — e **non viene cercato niente**: leggile,
+correggi ciò che non va, e premi `OK` tu. Dove guardare resta com'era; al modello non viene
+chiesto. Quello che hai chiesto e che le righe non sanno dire — *scattate a Roma* — viene
+detto sulla riga di stato invece di essere tirato a indovinare, così sai cosa la ricerca non
+farà. `Esc` alla domanda torna al dialogo com'era.
+
+La riga *Modificato, giorni fa* dice quanto è vecchio: `7` è l'ultima settimana, `0` oggi,
+`>=30` un mese o più, `7-30` tra i due — contati dall'ultima volta che il file è stato
+scritto, che è la data che mostrano i pannelli.
+
 **Dentro gli archivi** è una casella, e resta spenta finché non la spunti: spuntata, la ricerca
 entra in ogni `.zip`, `.7z` e `.tar.*` che incontra e guarda cosa c'è dentro — per nome, e per
 testo se ne hai dato uno. Un risultato si legge allora `src.zip!/doc/readme.md`, che `Enter`,

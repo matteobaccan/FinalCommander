@@ -659,6 +659,9 @@ pub enum AiUse {
     /// A marked block of the editor rewritten as asked: shown as a diff against the block,
     /// and put in its place only on a yes (SPEC 05 §2.10).
     Rewrite,
+    /// Words to a search: the rows of the find dialog, which searches nothing until its own
+    /// OK (SPEC 06 §1f).
+    Find,
 }
 
 /// A rewrite of the editor's block that is on its way or waiting for its yes: which file,
@@ -777,6 +780,133 @@ pub(crate) fn ai_rename_options(answer: &str) -> Option<fcmd_core::rename::Optio
         read += 1;
     }
     (read > 0).then_some(opts)
+}
+
+/// What the model is told for [`AiUse::Find`]: the rows of the find dialog, each in the
+/// grammar the row itself takes, and a line of its own for whatever was asked for that no
+/// row can say — so that it comes back as a sentence to read rather than as a guess hidden
+/// in a mask.
+const AI_FIND_INSTRUCTION: &str = "\
+You turn a description of files to look for into the fields of a file search dialog. Reply \
+with exactly these lines and nothing else, no explanation and no code fence:
+mask: <file name masks separated by commas, * and ? as wildcards, e.g. *.pdf or *.jpg,*.png; \
+* for any name; a mask after a | is excluded, e.g. *.log|debug*>
+size: <a size range, or nothing: 10M- is ten megabytes and more, -4K up to four kilobytes, \
+1M-1G between the two; the units are K, M and G>
+age: <how many days ago the file was last changed, or nothing: 7 is within the last seven \
+days, 0 is today, >=30 is thirty days old and older, 7-30 is between the two>
+text: <text the file must contain, or nothing>
+case: <yes if the text must match in case, otherwise no>
+words: <yes if the text must be a whole word, otherwise no>
+without: <yes to find the files that do NOT contain the text, otherwise no>
+folders: <yes if folders are wanted as results too, otherwise no>
+archives: <yes to look inside archives as well, otherwise no>
+note: <anything that was asked for and that these fields cannot express, in a few words; or \
+nothing>
+A week is 7 days, a month 30, a year 365. Do not invent a condition that was not asked for: \
+leave a field at nothing or no unless the description calls for it.";
+
+/// The rows a model's answer to [`AI_FIND_INSTRUCTION`] fills, laid over `base` — the
+/// dialog as it stood, whose scope and other switches the model was never asked about —
+/// and what it said it could not express. Read as forgivingly as a rename pattern is; a
+/// size or an age that is not one in the dialog's own grammar is left out and named in the
+/// second half, so that the dialog never opens holding something its own OK would refuse.
+/// `None` when not one of the lines is there, which is an answer in prose.
+pub(crate) fn ai_find_spec(answer: &str, base: &FindSpec) -> Option<(FindSpec, Vec<String>)> {
+    let mut spec = FindSpec {
+        // The model's answer is the whole of the condition: what the dialog held before
+        // is not part of what was asked for.
+        mask: "*".into(),
+        text: String::new(),
+        case_sensitive: false,
+        whole_words: false,
+        hex: false,
+        not_containing: false,
+        size: String::new(),
+        age: String::new(),
+        fuzzy: false,
+        meta: String::new(),
+        directories: false,
+        in_archives: false,
+        ..base.clone()
+    };
+    let mut notes = Vec::new();
+    let mut read = 0;
+    let yes = |v: &str| matches!(v.to_ascii_lowercase().as_str(), "yes" | "true" | "on");
+    for line in answer.lines() {
+        let line = line.trim().trim_start_matches(['-', '*', '•']).trim_start();
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
+        let key = key
+            .trim_matches(|c: char| c == '*' || c == '`' || c.is_whitespace())
+            .to_ascii_lowercase();
+        let mut value = value.trim().trim_start_matches("**").trim();
+        for quote in ['`', '"', '\''] {
+            if value.len() >= 2 && value.starts_with(quote) && value.ends_with(quote) {
+                value = &value[1..value.len() - 1];
+                break;
+            }
+        }
+        let value = match value.to_ascii_lowercase().as_str() {
+            "nothing" | "<nothing>" | "(nothing)" | "<empty>" | "(empty)" | "empty" | "none"
+            | "any" => "",
+            _ => value,
+        };
+        match key.as_str() {
+            "mask" | "masks" => {
+                // A list a model wrote with blanks after its commas is still that list.
+                let mask = value
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|m| !m.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                match fcmd_core::MaskSet::parse(&mask) {
+                    Ok(_) if !mask.is_empty() => spec.mask = mask,
+                    Ok(_) => {}
+                    Err(_) => notes.push(format!("mask: {value}")),
+                }
+            }
+            "size" => {
+                let size: String = value.split_whitespace().collect();
+                match fcmd_core::filter::SizeRange::parse(&size) {
+                    _ if size.is_empty() => {}
+                    Ok(_) => spec.size = size,
+                    Err(_) => notes.push(format!("size: {value}")),
+                }
+            }
+            "age" => {
+                let age: String = value.split_whitespace().collect();
+                match fcmd_core::filter::DateRange::parse_age(&age) {
+                    _ if age.is_empty() => {}
+                    Ok(_) => spec.age = age,
+                    Err(_) => notes.push(format!("age: {value}")),
+                }
+            }
+            "text" => spec.text = value.to_string(),
+            "case" => spec.case_sensitive = yes(value),
+            "words" => spec.whole_words = yes(value),
+            "without" => spec.not_containing = yes(value),
+            "folders" => spec.directories = yes(value),
+            "archives" => spec.in_archives = yes(value),
+            "note" => {
+                if !value.is_empty() {
+                    notes.push(value.to_string());
+                }
+                continue;
+            }
+            _ => continue,
+        }
+        read += 1;
+    }
+    // "Not containing" with nothing to contain is every file, which nobody asked for.
+    if spec.text.is_empty() {
+        spec.case_sensitive = false;
+        spec.whole_words = false;
+        spec.not_containing = false;
+    }
+    (read > 0).then_some((spec, notes))
 }
 
 /// A conversation with one service, in a panel (the AI row of `Alt+F1` / `Alt+F2`): the files
@@ -1505,6 +1635,8 @@ pub enum PromptKind {
     AiKey,
     /// Words for how the selected files should be renamed (`ai.rename`).
     AiRename,
+    /// What to look for, in words: the model's answer fills the find dialog (SPEC 06 §1f).
+    AiFind,
     /// What should become of the editor's marked block (`ai.rewrite`).
     AiRewrite,
     /// The password of the secrets file, to open it.
@@ -2114,6 +2246,10 @@ pub struct FindSpec {
     /// megabytes up", `1M-1G` a range, `-4K` an upper bound. Empty means any size. This is
     /// what finds the files worth deleting when a disk fills up.
     pub size: String,
+    /// How long ago the file was last written, in days, in the grammar of the filter's own
+    /// age field: `7` is "within the last week", `>=30` "a month old and older", `7-30` a
+    /// window. Empty means any date.
+    pub age: String,
     /// The mask row is letters to find in order anywhere in a name, and the results come
     /// best match first (SPEC 06 §1d).
     pub fuzzy: bool,
@@ -2146,6 +2282,7 @@ impl Default for FindSpec {
             hex: false,
             not_containing: false,
             size: String::new(),
+            age: String::new(),
             fuzzy: false,
             meta: String::new(),
             scope: FindScope::Tree,
@@ -2170,6 +2307,7 @@ impl FindSpec {
             hex: self.hex,
             not_containing: self.not_containing,
             size: self.size.clone(),
+            age: self.age.clone(),
             fuzzy: self.fuzzy,
             meta: self.meta.clone(),
             scope: self.scope.as_str().to_string(),
@@ -2191,6 +2329,7 @@ impl FindSpec {
             hex: saved.hex,
             not_containing: saved.not_containing,
             size: saved.size.clone(),
+            age: saved.age.clone(),
             fuzzy: saved.fuzzy,
             meta: saved.meta.clone(),
             scope: FindScope::parse(&saved.scope),
@@ -3107,6 +3246,9 @@ pub struct App {
     /// under, or the list of the kept ones — so that answering or dismissing either puts the
     /// dialog back with what was typed into it.
     search_form: Option<Box<Form>>,
+    /// The find dialog as it stood when a search was asked for in words: what the model's
+    /// answer is laid over (SPEC 06 §1f).
+    ai_find_base: Option<FindSpec>,
     /// The search the name is being asked for, as the dialog stood when `F2` was pressed.
     search_keeping: Option<FindSpec>,
     /// The search each smart-folder panel is running, so that leaving the panel or asking
@@ -3485,6 +3627,7 @@ impl App {
             searches: Vec::new(),
             visits: crate::frecency::Visits::default(),
             search_form: None,
+            ai_find_base: None,
             search_keeping: None,
             search_cancel: [None, None],
             drag: None,
@@ -6979,8 +7122,9 @@ impl App {
                     self.help_return();
                     return;
                 }
-                // The find dialog was waiting behind the name it asked for.
-                if matches!(prompt.kind, PromptKind::SearchName) {
+                // The find dialog was waiting behind the name it asked for, or behind the
+                // words: leaving either goes back to it as it was.
+                if matches!(prompt.kind, PromptKind::SearchName | PromptKind::AiFind) {
                     if let Some(form) = self.search_form.take() {
                         self.mode = Mode::Form(form);
                     }
@@ -7551,6 +7695,7 @@ impl App {
                 }
             }
             PromptKind::AiRename => self.ai_rename_ask(&prompt.text),
+            PromptKind::AiFind => self.ai_find_ask(&prompt.text),
             PromptKind::AiRewrite => self.ai_rewrite_ask(&prompt.text),
             PromptKind::AiKey => {
                 let key = prompt.text.trim().to_string();
@@ -11009,6 +11154,10 @@ impl App {
         }
         if cmd == Command::AiRename {
             self.ai_rename_prompt();
+            return;
+        }
+        if cmd == Command::AiFind {
+            self.ai_find_prompt();
             return;
         }
         if cmd == Command::AiRewrite {
@@ -15609,6 +15758,7 @@ impl App {
         match answer.purpose {
             AiUse::Probe => self.ai_logged_in(&answer.text),
             AiUse::Rename => self.ai_rename_ready(&answer.text, cost),
+            AiUse::Find => self.ai_find_ready(&answer.text, cost),
             AiUse::Rewrite => self.ai_rewrite_ready(&answer.text, cost),
             AiUse::Answer => {
                 self.ai_last = Some(answer.file.clone());
@@ -17584,6 +17734,113 @@ impl App {
         }
     }
 
+    /// `ai.find` (`Ctrl+Alt+Q`, in the panel and in the find dialog): say in words what to
+    /// look for (SPEC 06 §1f). The dialog — the one that was open, or the one `Alt+F7`
+    /// would open — waits behind the question, and is what `Esc` goes back to.
+    fn ai_find_prompt(&mut self) {
+        if self.cfg.ais.is_empty() {
+            let m = self.i18n.t("ai-none");
+            self.set_error(m);
+            return;
+        }
+        // Asked from inside the dialog, the dialog is what `Esc` goes back to; asked from
+        // the panels there is none yet, and `Esc` goes back to the panels.
+        self.search_form = match std::mem::replace(&mut self.mode, Mode::Normal) {
+            Mode::Form(form) if form.kind == FormKind::Find => Some(form),
+            other => {
+                self.mode = other;
+                None
+            }
+        };
+        let title = self.i18n.t("ai-find-prompt");
+        self.mode = Mode::Prompt(Prompt::new(PromptKind::AiFind, title, String::new()));
+    }
+
+    /// The words are typed: say what goes — the words and nothing else, to which host —
+    /// and ask on a yes. Nothing of the panel goes with them: not a name, not a path.
+    fn ai_find_ask(&mut self, words: &str) {
+        let words = words.trim();
+        let form = self.search_form.take();
+        let back = |app: &mut App, form: Option<Box<Form>>| {
+            if let Some(form) = form {
+                app.mode = Mode::Form(form);
+            }
+        };
+        if words.is_empty() || self.cfg.ais.is_empty() {
+            back(self, form);
+            return;
+        }
+        // The dialog as it stood is what the answer is laid over: its scope and its other
+        // switches are not the model's to choose. Read without the checks `OK` makes — a
+        // row half typed is about to be replaced anyway.
+        self.ai_find_base = Some(match &form {
+            Some(form) => FindSpec {
+                scope: FindScope::parse(&form.choice_value("find.scope")),
+                follow_links: form.toggle_value("find.links"),
+                index: form.toggle_value("find.index"),
+                ..self.last_find.clone()
+            },
+            None => self.last_find.clone(),
+        });
+        let mut query = AiQuery::new(self.cfg.ais[0].clone(), words.to_string());
+        query.purpose = AiUse::Find;
+        query.instruction = AI_FIND_INSTRUCTION.into();
+        let head = self.i18n.t_args(
+            "ai-send-words",
+            &[("host", ai_host(&query.service.url).into())],
+        );
+        self.confirm_ai_send(query, Vec::new(), Some(0));
+        match &mut self.mode {
+            Mode::Confirm(c) => c.lines[0] = head,
+            // Refused before any dialog (local only, and the service is elsewhere): back
+            // to the search, with the reason on the status line.
+            _ => back(self, form),
+        }
+    }
+
+    /// The model's rows are back. With the panels in front they go into the find dialog,
+    /// which is where they are read, changed and — on its own OK and nothing sooner —
+    /// searched for. With anything else in front they wait as the dialog's next contents,
+    /// and the status line says so, rather than a dialog landing on what one was doing.
+    fn ai_find_ready(&mut self, answer: &str, cost: String) {
+        let base = self
+            .ai_find_base
+            .take()
+            .unwrap_or_else(|| self.last_find.clone());
+        let Some((spec, notes)) = ai_find_spec(answer, &base) else {
+            let m = self.i18n.t("ai-find-unreadable");
+            self.set_error(m);
+            return;
+        };
+        let waiting = !matches!(self.mode, Mode::Normal);
+        let mut said = self.i18n.t(if waiting {
+            "ai-find-waiting"
+        } else {
+            "ai-find-ready"
+        });
+        // What the rows could not say is said here: it is the part of the request the
+        // search will *not* honour, and the one thing the dialog cannot show.
+        if !notes.is_empty() {
+            said = self.i18n.t_args(
+                "ai-find-left-out",
+                &[("said", said.into()), ("what", notes.join("; ").into())],
+            );
+        }
+        if !cost.is_empty() {
+            said = format!("{said}  {cost}");
+        }
+        if waiting {
+            self.last_find = spec;
+        } else {
+            self.mode = Mode::Form(Box::new(self.find_form(&spec)));
+        }
+        if notes.is_empty() {
+            self.set_status(said);
+        } else {
+            self.set_error(said);
+        }
+    }
+
     /// `ai.rewrite` (`Ctrl+Alt+W` in the editor): what should become of the marked block,
     /// in words (SPEC 05 §2.10). A block has to be marked — the rewrite replaces exactly
     /// that — and it has to be a stream block.
@@ -18970,7 +19227,12 @@ impl App {
     /// The find dialog for one search. The index row is offered unless the configuration
     /// says there is never to be one (`find.index = "off"`).
     fn find_form(&self, spec: &FindSpec) -> Form {
-        Form::find(spec, self.cfg.find.index.trim() != "off", &self.i18n)
+        Form::find(
+            spec,
+            self.cfg.find.index.trim() != "off",
+            !self.cfg.ais.is_empty(),
+            &self.i18n,
+        )
     }
 
     /// The find dialog, filled in with a kept search. The scope row says what it said when
@@ -19136,6 +19398,21 @@ impl App {
                 return None;
             }
         }
+        let age = form.text_value("find.age").trim().to_string();
+        if !age.is_empty() {
+            if let Err(e) = fcmd_core::filter::DateRange::parse_age(&age) {
+                let msg = self.i18n.t_args(
+                    "find-bad-age",
+                    &[
+                        ("text", age.clone().into()),
+                        ("error", e.to_string().into()),
+                    ],
+                );
+                self.set_error(msg);
+                self.mode = Mode::Form(Box::new(form.clone()));
+                return None;
+            }
+        }
         let scope = FindScope::parse(&form.choice_value("find.scope"));
         let mut spec = FindSpec {
             mask,
@@ -19145,6 +19422,7 @@ impl App {
             hex: form.toggle_value("find.hex"),
             not_containing: form.toggle_value("find.not"),
             size,
+            age,
             fuzzy: form.toggle_value("find.fuzzy"),
             meta: form.text_value("find.meta").trim().to_string(),
             scope,
@@ -19366,6 +19644,13 @@ impl App {
         if !spec.size.trim().is_empty() {
             label.push_str(" · ");
             label.push_str(spec.size.trim());
+        }
+        if !spec.age.trim().is_empty() {
+            label.push_str(" · ");
+            label.push_str(&self.i18n.t_args(
+                "find-label-age",
+                &[("days", spec.age.trim().to_string().into())],
+            ));
         }
         if !spec.meta.trim().is_empty() {
             label.push_str(" · ");
@@ -20804,6 +21089,13 @@ impl App {
             && self.keymap.resolve(&[Scope::Panel], key) == Some(Command::AiRename)
         {
             self.ai_rename_prompt();
+            return;
+        }
+        // And the find dialog the one that asks for its rows in words, the same way.
+        if matches!(&self.mode, Mode::Form(f) if f.kind == FormKind::Find)
+            && self.keymap.resolve(&[Scope::Panel], key) == Some(Command::AiFind)
+        {
+            self.ai_find_prompt();
             return;
         }
         let Mode::Form(form) = &mut self.mode else {
@@ -48916,6 +49208,309 @@ abcdefghij
             "report 2026-11-03.log".to_string()
         )));
         assert_eq!(plan.0.len(), 2);
+    }
+
+    /// SPEC 06 §1f, the whole road: the key inside the find dialog, the words, a dialog that
+    /// says the words and nothing else go to the host, the model's rows put into the find
+    /// dialog over the scope it already had, a row changed by hand, and only the dialog's
+    /// own OK searching anything.
+    #[test]
+    fn words_become_the_rows_of_the_find_dialog_and_only_ok_searches() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("secret-plans.pdf"), "x").unwrap();
+        let mut app = editing_app(dir.path());
+        app.cfg.ais = vec![ai_service_cfg("local", "http://127.0.0.1:11434/api/chat")];
+        app.take_requests();
+        let searched = |app: &mut App| {
+            app.take_requests().into_iter().find_map(|r| match r {
+                Request::Find { spec, .. } => Some(spec),
+                _ => None,
+            })
+        };
+
+        // The dialog says which key, because a service is set up; the scope is changed by
+        // hand first, to see that the model's answer leaves it alone.
+        press(&mut app, "Alt+F7");
+        let Mode::Form(form) = &mut app.mode else {
+            panic!("the find dialog: {:?}", app.mode)
+        };
+        assert!(form
+            .fields
+            .iter()
+            .any(|f| matches!(f, crate::form::Field::Dim(t) if t.contains("Ctrl+Alt+Q"))));
+        set_text(&mut app, "find.mask", "*.old");
+        if let Mode::Form(form) = &mut app.mode {
+            form.set_choice("find.scope", "panel");
+        }
+
+        press(&mut app, "Ctrl+Alt+Q");
+        let Mode::Prompt(p) = &app.mode else {
+            panic!("the words are asked for: {:?}", app.mode)
+        };
+        assert_eq!(p.kind, PromptKind::AiFind);
+        type_text(&mut app, "pdfs over 10 mb changed last week");
+        press(&mut app, "Enter");
+
+        // Said before it goes: the words, where — and nothing of the panel beside them.
+        let Mode::Confirm(c) = &app.mode else {
+            panic!("a dialog first: {:?}", app.mode)
+        };
+        assert!(
+            c.lines[0].contains("127.0.0.1") && c.lines[0].contains("no name"),
+            "{:?}",
+            c.lines
+        );
+        assert!(!c.lines.iter().any(|l| l.contains("secret-plans")));
+        assert_eq!(c.button, 1, "Cancel is the one lit");
+        assert!(ai_asked(&mut app).is_none());
+        if let Mode::Confirm(c) = &mut app.mode {
+            c.button = 0;
+        }
+        press(&mut app, "Enter");
+        let query = ai_asked(&mut app).expect("asked on yes");
+        assert_eq!(query.purpose, AiUse::Find);
+        assert_eq!(query.question, "pdfs over 10 mb changed last week");
+        assert!(query.instruction.contains("mask:") && query.instruction.contains("age:"));
+        assert!(query.files.is_empty() && query.inline.is_empty());
+        let sent = format!("{}{}", query.instruction, query.question);
+        assert!(!sent.contains("secret-plans"), "no name of the panel goes");
+        assert!(
+            !sent.contains(&dir.path().display().to_string()),
+            "and no path"
+        );
+        assert!(searched(&mut app).is_none(), "asking is not searching");
+
+        // The model answers, fenced and decorated as models do.
+        app.ai_busy = None;
+        ai_answers(
+            &mut app,
+            dir.path(),
+            AiUse::Find,
+            "```\nmask: `*.pdf`\nsize: 10M-\nage: 7\ntext: nothing\ncase: no\nwords: no\n\
+             without: no\nfolders: no\narchives: no\nnote: nothing\n```",
+        );
+        let Mode::Form(form) = &app.mode else {
+            panic!("the find dialog: {:?} / {}", app.mode, app.status)
+        };
+        assert_eq!(form.kind, FormKind::Find);
+        assert_eq!(form.text_value("find.mask"), "*.pdf");
+        assert_eq!(form.text_value("find.size"), "10M-");
+        assert_eq!(form.text_value("find.age"), "7");
+        assert_eq!(form.text_value("find.text"), "");
+        assert_eq!(form.choice_value("find.scope"), "panel", "the user's own");
+        assert!(!app.status_error, "{}", app.status);
+        assert!(app.status.contains("only OK searches"), "{}", app.status);
+        // A proposal is not a search.
+        assert!(searched(&mut app).is_none());
+
+        // The rows are the user's to change, and OK is what searches — with them.
+        set_text(&mut app, "find.size", "5M-");
+        press(&mut app, "F10");
+        let spec = searched(&mut app).expect("OK starts the search");
+        assert_eq!(
+            (spec.mask.as_str(), spec.size.as_str(), spec.age.as_str()),
+            ("*.pdf", "5M-", "7")
+        );
+        assert_eq!(spec.scope, FindScope::Panel);
+        match &app.mode {
+            Mode::Find(view) => assert!(view.label.contains("7 d"), "{}", view.label),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    /// Leaving at any step searches nothing and goes back to the dialog one was in; an
+    /// answer in prose is said and changes nothing; what the rows cannot say is said rather
+    /// than guessed; an answer that arrives while something else is in front waits for
+    /// `Alt+F7`; and "local only" refuses a service elsewhere before anything is asked.
+    #[test]
+    fn a_search_from_words_that_goes_wrong_searches_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "x").unwrap();
+        let mut app = editing_app(dir.path());
+        let none = |app: &mut App| {
+            !app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::Find { .. } | Request::AiAsk { .. }))
+        };
+        let in_find = |app: &App| matches!(&app.mode, Mode::Form(f) if f.kind == FormKind::Find);
+
+        // No service: said, no prompt, and the dialog has no row about the key.
+        press(&mut app, "Ctrl+Alt+Q");
+        assert!(app.status_error && matches!(&app.mode, Mode::Normal));
+        press(&mut app, "Alt+F7");
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(!form
+            .fields
+            .iter()
+            .any(|f| matches!(f, crate::form::Field::Dim(t) if t.contains("Ctrl+Alt+Q"))));
+        app.mode = Mode::Normal;
+        app.cfg.ais = vec![ai_service_cfg("local", "http://127.0.0.1:11434/api/chat")];
+
+        // From the panels `Esc` goes back to the panels; from the dialog, to the dialog as
+        // it was — and so does no words at all.
+        press(&mut app, "Ctrl+Alt+Q");
+        type_text(&mut app, "x");
+        press(&mut app, "Esc");
+        assert!(matches!(&app.mode, Mode::Normal) && none(&mut app));
+        press(&mut app, "Alt+F7");
+        set_text(&mut app, "find.mask", "*.keep");
+        press(&mut app, "Ctrl+Alt+Q");
+        press(&mut app, "Esc");
+        assert!(in_find(&app), "{:?}", app.mode);
+        press(&mut app, "Ctrl+Alt+Q");
+        press(&mut app, "Enter");
+        assert!(in_find(&app), "no words, no question");
+        let Mode::Form(form) = &app.mode else {
+            unreachable!()
+        };
+        assert_eq!(form.text_value("find.mask"), "*.keep");
+        // Cancel at the dialog that says what goes.
+        press(&mut app, "Ctrl+Alt+Q");
+        type_text(&mut app, "big files");
+        press(&mut app, "Enter");
+        assert!(matches!(&app.mode, Mode::Confirm(_)));
+        press(&mut app, "Enter");
+        assert!(none(&mut app), "Cancel was lit");
+        app.mode = Mode::Normal;
+
+        // Prose instead of rows: said, and neither a dialog nor the last search changes.
+        let before = app.last_find.clone();
+        ai_answers(
+            &mut app,
+            dir.path(),
+            AiUse::Find,
+            "I would look in your Documents folder first.",
+        );
+        assert!(app.status_error, "{}", app.status);
+        assert!(matches!(&app.mode, Mode::Normal), "{:?}", app.mode);
+        assert_eq!(app.last_find, before);
+
+        // What no row can say comes back as a sentence, in the error ink, beside rows that
+        // hold only what they can; a size that is not one is left out and named too.
+        ai_answers(
+            &mut app,
+            dir.path(),
+            AiUse::Find,
+            "mask: *.jpg, *.png\nsize: huge\nage: >=365\nnote: taken in Rome",
+        );
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(form.text_value("find.mask"), "*.jpg,*.png");
+        assert_eq!(form.text_value("find.size"), "");
+        assert_eq!(form.text_value("find.age"), ">=365");
+        assert!(app.status_error, "{}", app.status);
+        assert!(
+            app.status.contains("taken in Rome") && app.status.contains("size: huge"),
+            "{}",
+            app.status
+        );
+        assert!(none(&mut app));
+
+        // An answer that lands while something else is in front does not land on it: it is
+        // what `Alt+F7` opens with next.
+        app.mode = Mode::Message {
+            title: "busy".into(),
+            lines: Vec::new(),
+        };
+        ai_answers(&mut app, dir.path(), AiUse::Find, "mask: *.log\nage: 0");
+        assert!(matches!(&app.mode, Mode::Message { .. }));
+        assert!(app.status.contains("Alt+F7"), "{}", app.status);
+        app.mode = Mode::Normal;
+        press(&mut app, "Alt+F7");
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(form.text_value("find.mask"), "*.log");
+        assert_eq!(form.text_value("find.age"), "0");
+
+        // Local only, and the one service is elsewhere: refused by name before any dialog,
+        // nothing sent, and the search one was writing is still there.
+        app.cfg.ais = vec![fcmd_config::AiCfg {
+            api: "openai".into(),
+            ..ai_service_cfg("far", "https://api.example.com/v1/chat/completions")
+        }];
+        app.ai_tokens.insert("far".into(), "k".into());
+        app.cfg.ai_guard.local_only = true;
+        app.take_requests();
+        press(&mut app, "Ctrl+Alt+Q");
+        type_text(&mut app, "my tax returns");
+        press(&mut app, "Enter");
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.status.contains("api.example.com"), "{}", app.status);
+        assert!(in_find(&app), "{:?}", app.mode);
+        assert!(!app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::AiAsk { .. } | Request::AiPreview { .. })));
+    }
+
+    #[test]
+    fn a_models_search_is_read_however_it_is_dressed() {
+        let base = FindSpec {
+            mask: "*.old".into(),
+            text: "left over".into(),
+            size: "1G-".into(),
+            hex: true,
+            fuzzy: true,
+            scope: FindScope::Other,
+            follow_links: true,
+            ..FindSpec::default()
+        };
+        let (spec, notes) = ai_find_spec(
+            "Here you go:\n- **mask**: `*.rs`\n- **text**: \"TODO\"\n- **case**: Yes\n\
+             - **words**: yes\n- **without**: yes\n- **folders**: no\n- **archives**: true",
+            &base,
+        )
+        .unwrap();
+        assert!(notes.is_empty());
+        // The condition is the model's, whole: nothing of the old one is left under it…
+        assert_eq!(spec.mask, "*.rs");
+        assert_eq!(spec.text, "TODO");
+        assert!(spec.case_sensitive && spec.whole_words && spec.not_containing);
+        assert!(spec.in_archives && !spec.directories);
+        assert!(spec.size.is_empty() && !spec.hex && !spec.fuzzy);
+        // …and where to look is the user's, whole.
+        assert_eq!(spec.scope, FindScope::Other);
+        assert!(spec.follow_links);
+
+        // "Not containing" nothing is every file: the switches go with the text.
+        let (spec, _) = ai_find_spec("mask: *\nwithout: yes\ncase: yes", &base).unwrap();
+        assert!(!spec.not_containing && !spec.case_sensitive);
+        // Blanks a model puts in a range, and a mask that is not one.
+        let (spec, notes) = ai_find_spec("mask: /(/\nsize: 1M - 2G\nage: <= 30", &base).unwrap();
+        assert_eq!((spec.mask.as_str(), spec.size.as_str()), ("*", "1M-2G"));
+        assert_eq!(spec.age, "<=30");
+        assert_eq!(notes, ["mask: /(/"]);
+
+        assert!(ai_find_spec("I cannot do that.", &base).is_none());
+        assert!(ai_find_spec("", &base).is_none());
+        assert!(ai_find_spec("note: only a remark", &base).is_none());
+    }
+
+    /// The age row: checked where it is typed, kept with a kept search, and said on the
+    /// results' frame.
+    #[test]
+    fn an_age_reaches_the_search_and_a_bad_one_keeps_the_dialog_open() {
+        let mut app = app();
+        app.run(Command::ToolFind);
+        set_text(&mut app, "find.age", "soon");
+        press(&mut app, "F10");
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.status.contains("soon"), "{}", app.status);
+        assert!(matches!(&app.mode, Mode::Form(f) if f.kind == FormKind::Find));
+        set_text(&mut app, "find.age", "7-30");
+        press(&mut app, "F10");
+        match app.take_requests().into_iter().next() {
+            Some(Request::Find { spec, .. }) => {
+                assert_eq!(spec.age, "7-30");
+                let kept = FindSpec::from_saved(&spec.to_saved("a month"));
+                assert_eq!(kept.age, "7-30");
+            }
+            other => panic!("{other:?}"),
+        }
     }
 
     /// Leaving at any step renames nothing; an answer that is prose and not a pattern is

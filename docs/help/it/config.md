@@ -125,6 +125,7 @@ Altri modi di chiedere:
 | `Ctrl+Alt+X` nel visualizzatore o nell'editor | chiede **che cos'è questo**: il blocco marcato nell'editor, o quello che c'è sullo schermo, parte con il nome del file — dopo un dialogo che dice quanto e a quale host |
 | `Ctrl+Alt+X` nei pannelli, dopo un comando fallito | chiede **perché è fallito**: il comando, il suo codice di uscita e la fine di ciò che ha stampato — al massimo le ultime 200 righe, quelle che mostra `Ctrl+O` — partono dopo lo stesso dialogo, e la risposta si apre nel visualizzatore. Quando un altro comando è finito bene non c'è più niente da chiedere |
 | `Ctrl+Alt+U` sui file selezionati | chiede un **modello di rinomina** a parole, e apre con quello il dialogo di rinomina multipla — vedi *Rinominare molti file in una volta* |
+| `Ctrl+Alt+Q` nei pannelli o nel dialogo di ricerca | chiede una **ricerca** a parole — *i pdf sopra i 10 MB modificati la settimana scorsa* — e riempie con quella il dialogo di ricerca; non viene cercato niente fino al suo `OK` — vedi *Trovare le cose* |
 | `Ctrl+Alt+W` nell'editor | fa **riscrivere** il blocco marcato, mostra il risultato come confronto e lo inserisce solo con `Enter` — vedi *Far riscrivere un blocco* |
 | `Shift+F7` in un repository | scrive una **bozza del messaggio di commit** dal diff in staging — dopo lo stesso dialogo — e apre il prompt del commit con quella, da leggere e cambiare prima che si committi qualcosa |
 

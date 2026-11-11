@@ -197,7 +197,7 @@ fn find_hits(
     index: Option<&fcmd_find::Index>,
     on: &mut dyn FnMut(fcmd_find::Event),
 ) -> Result<(fcmd_find::Stats, Option<String>), String> {
-    use fcmd_core::filter::{Filter, MaskSet, SizeRange};
+    use fcmd_core::filter::{DateCondition, DateRange, Filter, MaskSet, SizeRange, TimeField};
     use fcmd_find::{Content, Needle};
 
     let mut filter = Filter::named("find");
@@ -213,6 +213,13 @@ fn find_hits(
     }
     if !spec.size.trim().is_empty() {
         filter.size = Some(SizeRange::parse(&spec.size).map_err(|e| e.to_string())?);
+    }
+    // The age is that of the last write, which is the date the panels show.
+    if !spec.age.trim().is_empty() {
+        filter.date = Some(DateCondition {
+            field: TimeField::Modified,
+            range: DateRange::parse_age(&spec.age).map_err(|e| e.to_string())?,
+        });
     }
 
     let content = if spec.text.is_empty() {
@@ -8291,6 +8298,47 @@ dir_attr = "D"
         serve(&mut app);
         assert!(names(&app).is_empty());
         assert!(app.status_error, "{}", app.status);
+    }
+
+    /// The age row through the real engine: the last write, counted in days back from now.
+    #[test]
+    fn a_search_by_age_finds_what_was_written_in_the_window() {
+        let root = tempfile::tempdir().unwrap();
+        let src = root.path().join("src");
+        std::fs::create_dir_all(&src).unwrap();
+        let day = std::time::Duration::from_secs(24 * 60 * 60);
+        for (name, days) in [("today.pdf", 0), ("last-week.pdf", 3), ("old.pdf", 40)] {
+            let path = src.join(name);
+            std::fs::write(&path, b"x").unwrap();
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_modified(std::time::SystemTime::now() - day * days)
+                .unwrap();
+        }
+        let found = |age: &str| {
+            let mut app = app_on(&src, root.path());
+            serve(&mut app);
+            app.last_find = app::FindSpec {
+                mask: "*.pdf".into(),
+                age: age.into(),
+                ..app::FindSpec::default()
+            };
+            app.run(FcCommand::ToolFind);
+            key(&mut app, "F10");
+            serve(&mut app);
+            let mut names: Vec<String> = match &app.mode {
+                app::Mode::Find(view) => view.rows.iter().map(|(p, _)| p.display_name()).collect(),
+                _ => panic!("{}", app.status),
+            };
+            names.sort();
+            names
+        };
+        assert_eq!(found("7"), ["last-week.pdf", "today.pdf"]);
+        assert_eq!(found(">=30"), ["old.pdf"]);
+        assert_eq!(found("1-30"), ["last-week.pdf"]);
+        assert_eq!(found(""), ["last-week.pdf", "old.pdf", "today.pdf"]);
     }
 
     /// A search by approximate name through the real engine: the letters in order, and the

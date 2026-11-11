@@ -1845,3 +1845,13 @@ plugins-card-columns = Spalten (wie ein [[column_set]] sie nennt):
 usermenu-far-row = Was anders als in FarMenu.ini gelesen wurde ({ $count })
 usermenu-far-notes = das Menü stammt aus FARs FarMenu.ini: { $count } Dinge wurden anders gelesen — die letzte Zeile nennt sie
 usermenu-far-not-run = Es wurde nichts ausgeführt.
+find-age = Geändert, vor Tagen (7, >=30, 7-30)
+find-bad-age = `{ $text }` ist kein Alter in Tagen — { $error }
+find-label-age = { $days } T
+find-keys-ai = Ctrl+Alt+Q sagt die Suche in Worten: ein Sprachmodell füllt diese Zeilen
+ai-find-prompt = Was suchst du? (in Worten)
+ai-send-words = Diese Worte — und nichts aus den Fenstern: kein Name, kein Pfad, keine Datei — gehen an { $host }.
+ai-find-ready = die Suche des Modells steht im Dialog: Zeilen lesen, Falsches ändern, und erst OK sucht
+ai-find-waiting = die Suche des Modells ist bereit: Alt+F7 öffnet den Dialog damit
+ai-find-unreadable = das Modell hat nicht mit einer Suche geantwortet: die Antwort liegt im Antwortordner (ai:), und es wurde nichts gesucht
+ai-find-left-out = { $said } — NICHT in den Zeilen, weil sie es nicht ausdrücken können: { $what }

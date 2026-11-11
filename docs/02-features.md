@@ -229,7 +229,7 @@ something readable rather than only into instructions.
 
 | # | Feature | Origin | State |
 | --- | --- | --- | --- |
-| 7.1 | Find files: mask, content (text/regex/hex), size/date/attr filters, archives included, encoding list, results panel, panelize results, "find folder" | FAR/TC | ~ dates and attributes in the dialog, code pages |
+| 7.1 | Find files: mask, content (text/regex/hex), size/date/attr filters, archives included, encoding list, results panel, panelize results, "find folder" | FAR/TC | ~ an absolute date range and attributes in the dialog (an age in days is there), code pages |
 | 7.2 | Grep-like content search with result navigation and jump-to-match in the editor | NEW | ✓ `F3` at the match, `F4` on its line |
 | 7.3 | Disk usage / occupied space view (per-dir sizes, sortable, graphical bars) | KRU/TC | ~ `Alt+Shift+F3`: one folder's entries largest first, with bars and shares, filled in as each folder is measured (SPEC 06 §12); one level at a time — a whole-tree view and a treemap are not there |
 | 7.4 | User menu (`F2`) with user-defined entries, submenus, hotkeys, per-directory menus | FAR/MC | ~ an editor for the entries; separators, `Shift+F10` and FAR's `FarMenu.ini` read as it stands are in |
@@ -251,6 +251,7 @@ something readable rather than only into instructions.
 | 7.20 | A local-only switch for the language models: only a service on this machine (`localhost`, `127.0.0.0/8`, `::1`, a unix socket, the user's own list) is asked, anything else refused before it is sent | NEW | ✓ `F6` in the AI panel, `[ai_guard] local_only` (SPEC 06 §14.2) |
 | 7.21 | Words to a rename: an instruction in words on the selected files, answered by a language model with a pattern that lands in the multi-rename dialog, previewed, editable, renamed only on `OK` | NEW | ✓ `Ctrl+Alt+U` (SPEC 03 §8a) |
 | 7.22 | Explain what failed: after a command that ended with a non-zero code, one key sends the command, the code and the end of its output to a language model and opens the answer | NEW | ✓ `Ctrl+Alt+X` in the panels (SPEC 06 §14) |
+| 7.23 | Words to a search: what is wanted in words, answered by a language model with the rows of the find dialog — mask, size, age, text — which are read, changed and searched only on `OK`; only the words are sent | NEW | ✓ `Ctrl+Alt+Q` (SPEC 06 §1f) |
 
 ## 8. Shell & terminal integration
 
