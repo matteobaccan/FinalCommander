@@ -305,7 +305,7 @@ every key on the screen you are looking at does.
   checking against `known_hosts`, a jump host, port forwarding, a speed limit per server, and
   `s3://` panels with the credentials read from the environment or `~/.aws/credentials`.
   Passwords are kept, if you want, in the encrypted secrets file — never in the configuration.
-- **The program itself**: seven themes, seven interface languages switchable while it runs, two
+- **The program itself**: nine themes, seven interface languages switchable while it runs, two
   keymap profiles (FAR and mc) and your own on top, macros, the screens list (`F12`), a terminal
   of its own (`Ctrl+Alt+E`), plugins (`F11` for their commands, *Options → Plugins
   configuration* to turn them on and off), questions to an AI service of your choice, a help
