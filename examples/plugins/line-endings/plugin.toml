@@ -13,6 +13,10 @@ run = "eol.sh"
 needs = ["panel", "selection", "cursor"]
 confirm = "This rewrites the selected text files. Only the line endings change."
 
+[command.when]
+local = true
+files = true
+
 [[command]]
 id = "user.eol.crlf"
 label = "Line endings: to CRLF (Windows)"
@@ -20,8 +24,16 @@ run = "eol.sh"
 needs = ["panel", "selection", "cursor"]
 confirm = "This rewrites the selected text files. Only the line endings change."
 
+[command.when]
+local = true
+files = true
+
 [[command]]
 id = "user.eol.what"
 label = "Line endings: what do these have"
 run = "eol.sh"
 needs = ["panel", "selection", "cursor"]
+
+[command.when]
+local = true
+files = true

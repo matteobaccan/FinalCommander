@@ -10,3 +10,6 @@ label = "What is taking up the room here"
 run = "big.sh"
 needs = ["panel"]
 timeout = 60
+
+[command.when]
+local = true

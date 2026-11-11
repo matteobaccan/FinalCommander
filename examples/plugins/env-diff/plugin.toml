@@ -11,3 +11,7 @@ label = "Which keys does .env miss from .env.example?"
 run = "env.sh"
 needs = ["panel"]
 timeout = 30
+
+[command.when]
+local = true
+here = [".env.example", ".env.sample", ".env.dist", "env.example"]

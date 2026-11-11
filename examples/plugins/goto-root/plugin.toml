@@ -11,3 +11,6 @@ label = "Go to the top of this project"
 run = "root.sh"
 needs = ["panel"]
 timeout = 10
+
+[command.when]
+local = true

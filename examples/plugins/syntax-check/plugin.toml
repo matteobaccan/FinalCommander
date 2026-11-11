@@ -12,3 +12,7 @@ label = "Does this parse? (php, python, node, ruby, sh, perl)"
 run = "check.sh"
 needs = ["panel", "selection", "cursor"]
 timeout = 120
+
+[command.when]
+local = true
+masks = "*.php,*.py,*.js,*.cjs,*.mjs,*.json,*.rb,*.sh,*.bash,*.pl,*.pm"

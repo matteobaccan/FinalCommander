@@ -43,6 +43,13 @@ Notable changes, newest first. The format follows
   panels** lists the plugins' commands like `F11`. The viewer's key bar now changes with the
   modifiers held, as the panels' already did, and names every viewer command it can.
 
+- **`F11` lists every plugin command, and says why one cannot run here.** The ones that can
+  come first; the rest are greyed out underneath with the reason — another screen, a plugin
+  turned off, or a condition its author wrote in the new `[command.when]` table (`local`,
+  `files`, `masks`, `here`, `inside`). `Enter` on a grey one says it again and runs nothing.
+  With no plugin installed, `F11` offers to open the plugins folder and the help about them
+  instead of a line in the status bar. Every example plugin declares where it makes sense.
+
 ### Changed
 
 - **Extensions of any length line up, as in FAR.** The full view used to keep a column of

@@ -169,6 +169,12 @@ pub const PROSE: &[Prose] = &[
     },
 ];
 
+/// The prose chapter with this id (`config`, `panels`…), for a link into the help from
+/// somewhere that knows which page it wants.
+pub fn prose(id: &str) -> Option<Chapter> {
+    PROSE.iter().position(|p| p.id == id).map(Chapter::Prose)
+}
+
 /// Every chapter, in index order. The generated ones come last: they are reference, and
 /// reference is what one comes back for rather than what one starts with.
 pub fn chapters(i18n: &fcmd_i18n::I18n) -> Vec<(Chapter, String)> {

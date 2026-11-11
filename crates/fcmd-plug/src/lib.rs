@@ -215,6 +215,65 @@ pub struct Command {
     /// where the names are not ours to read.
     #[serde(default)]
     pub confirm: Option<String>,
+    /// Where it makes sense. `F11` lists every command all the same and greys out the ones
+    /// whose conditions do not hold, so a plugin is never invisible just because the panel is
+    /// somewhere it cannot work; but only the host can say *why* before the program runs, so
+    /// the author writes it down here (SPEC 08 §1).
+    #[serde(default)]
+    pub when: When,
+}
+
+/// The conditions a command needs, all of which must hold. An empty table is "anywhere".
+///
+/// Each is something the host can check from what it already has on screen, without asking
+/// a program: running one only to be told it has nothing to do here is the waste this is for.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub struct When {
+    /// The panel must be a directory on this machine's disks: not inside an archive, not on
+    /// a server. A command that runs a program *in* the directory needs this.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub local: bool,
+    /// There must be files to act on: selected ones, or a file (not a folder) under the
+    /// cursor.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub files: bool,
+    /// Those files must match these masks — `*.zip,*.7z`, in the panel's own mask language.
+    /// Implies `files`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub masks: Option<String>,
+    /// Names that must be in this directory, any one of them: `[".env.example"]`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub here: Vec<String>,
+    /// Names that must be in this directory or one above it, any one of them: `[".git"]` for
+    /// a command about the repository one is in, wherever in it one is.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inside: Vec<String>,
+    /// A condition this version does not know, said as a warning like any other unknown key:
+    /// a plugin written for a later fcmd should still load here.
+    #[serde(flatten, skip_serializing)]
+    pub unknown: BTreeMap<String, Ignored>,
+}
+
+/// A value read only to be named in a warning. `toml::Value` would do, but it holds floats
+/// and so cannot be compared for equality, which a command can.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Ignored;
+
+impl<'de> Deserialize<'de> for Ignored {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        serde::de::IgnoredAny::deserialize(d).map(|_| Ignored)
+    }
+}
+
+impl When {
+    /// Anywhere at all: nothing to check.
+    pub fn is_anywhere(&self) -> bool {
+        !self.local
+            && !self.files
+            && self.masks.is_none()
+            && self.here.is_empty()
+            && self.inside.is_empty()
+    }
 }
 
 impl Command {
@@ -275,6 +334,14 @@ impl Manifest {
                     .keys()
                     .map(|k| format!("{name}: unknown key `plugin.{k}` (ignored)")),
             )
+            .chain(manifest.commands.iter().flat_map(|c| {
+                c.when.unknown.keys().map(move |k| {
+                    format!(
+                        "{name}: command `{}`: unknown condition `when.{k}` (ignored)",
+                        c.id
+                    )
+                })
+            }))
             .collect();
         Ok((manifest, warnings))
     }
@@ -852,6 +919,7 @@ mod tests {
             needs: Vec::new(),
             timeout: None,
             confirm: None,
+            when: When::default(),
         };
         // This platform's program, and the other one named for the shape check.
         if cfg!(windows) {
@@ -950,6 +1018,41 @@ mod tests {
             m.declared(ItemKind::MaskGroup)[0]["name"].as_str(),
             Some("media")
         );
+    }
+
+    /// `[command.when]` is read with the command, and a condition this version does not
+    /// know is a warning — the command still loads, without it.
+    #[test]
+    fn a_command_says_where_it_makes_sense() {
+        let (m, warnings) = Manifest::parse(
+            "plugin.toml",
+            r#"
+            [plugin]
+            id = "arc"
+            [[command]]
+            id = "user.arc.x"
+            label = "Unpack"
+            run = "x.sh"
+            [command.when]
+            local = true
+            masks = "*.zip,*.7z"
+            inside = [".git"]
+            weekday = "monday"
+            [[command]]
+            id = "user.arc.y"
+            label = "Anywhere"
+            run = "y.sh"
+            "#,
+        )
+        .unwrap();
+        let when = &m.commands[0].when;
+        assert!(when.local && !when.files);
+        assert_eq!(when.masks.as_deref(), Some("*.zip,*.7z"));
+        assert_eq!(when.inside, [".git"]);
+        assert!(!when.is_anywhere());
+        assert!(m.commands[1].when.is_anywhere());
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].contains("when.weekday"), "{warnings:?}");
     }
 
     #[test]

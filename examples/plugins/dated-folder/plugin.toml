@@ -10,3 +10,6 @@ label = "Make a folder named today, and go into it"
 run = "dated.sh"
 needs = ["panel"]
 timeout = 10
+
+[command.when]
+local = true

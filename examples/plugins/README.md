@@ -93,6 +93,27 @@ A macro's destructive steps are caught by their names; this is the same guardrai
 names are not ours to read. Every plugin here that changes a file declares one — `filecase`,
 `checksums`, `line-endings`, `touch-now`, `unpack-any` — and the ones that only look do not.
 
+## Saying where it makes sense
+
+`F11` lists every command, and greys out the ones that cannot run where one is standing, with
+the reason. The host can only say why if the plugin says what it needs, in `[command.when]`
+under the command:
+
+```toml
+[command.when]
+local = true                  # a directory on this machine: every script here cds to FCMD_DIR
+files = true                  # selected files, or a file under the cursor
+masks = "*.zip,*.7z,*.rar"    # …matching these (implies files)
+here = [".env.example"]       # one of these names in this directory
+inside = [".git"]             # …or in this directory or one above it
+```
+
+Every example here declares its own: `git-here` and `git-select` only inside a repository,
+`unpack-any` only on an archive, `syntax-check` only on the languages it knows, `env-diff` only
+where there is an example file; `ssh-hosts` and the process list have none, because they work
+from anywhere. A command without `when` is never greyed out, which is how every plugin written
+before it still behaves.
+
 ## Two systems, two programs
 
 A shell script and a `.cmd` are not interchangeable, so a command may name both:

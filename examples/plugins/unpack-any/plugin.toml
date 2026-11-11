@@ -17,9 +17,17 @@ needs = ["panel", "cursor"]
 timeout = 600
 confirm = "This unpacks the archive into a folder here, using a program on this machine."
 
+[command.when]
+local = true
+masks = "*.zip,*.7z,*.rar,*.tar,*.tgz,*.tbz2,*.txz,*.tar.*,*.gz,*.bz2,*.xz,*.zst,*.iso,*.cab,*.arj,*.lzh,*.cpio,*.rpm,*.deb,*.jar,*.apk,*.whl"
+
 [[command]]
 id = "user.arc.test-any"
 label = "Test this archive"
 run = "unpack.sh"
 needs = ["panel", "cursor"]
 timeout = 600
+
+[command.when]
+local = true
+masks = "*.zip,*.7z,*.rar,*.tar,*.tgz,*.tbz2,*.txz,*.tar.*,*.gz,*.bz2,*.xz,*.zst,*.iso,*.cab,*.arj,*.lzh,*.cpio,*.rpm,*.deb,*.jar,*.apk,*.whl"

@@ -16,6 +16,10 @@ run_windows = "case.cmd"
 needs = ["panel", "selection", "cursor"]
 confirm = "This renames files. The case of the names changes; nothing else does."
 
+[command.when]
+local = true
+files = true
+
 [[command]]
 id = "user.case.upper"
 label = "Names: TO UPPER CASE"
@@ -24,6 +28,10 @@ run_windows = "case.cmd"
 needs = ["panel", "selection", "cursor"]
 confirm = "This renames files. The case of the names changes; nothing else does."
 
+[command.when]
+local = true
+files = true
+
 [[command]]
 id = "user.case.title"
 label = "Names: To Title Case"
@@ -31,3 +39,7 @@ run = "case.sh"
 run_windows = "case.cmd"
 needs = ["panel", "selection", "cursor"]
 confirm = "This renames files. The case of the names changes; nothing else does."
+
+[command.when]
+local = true
+files = true

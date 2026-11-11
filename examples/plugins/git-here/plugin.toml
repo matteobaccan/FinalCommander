@@ -11,3 +11,7 @@ run = "status.sh"
 run_windows = "status.cmd"
 needs = ["panel"]
 timeout = 15
+
+[command.when]
+local = true
+inside = [".git"]

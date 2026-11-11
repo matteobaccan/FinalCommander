@@ -504,6 +504,14 @@ lists, all in the same words `fcmd.toml` uses — and **commands**: a `[[command
 program in the plugin's folder, and `F11` lists the commands for the screen you are on — in the panels `Ctrl+Shift+F11` as
 well, which the key bar shows while both are held.
 
+`F11` lists every command, those that can run where you are first. The others are greyed out
+underneath, each saying why — another screen, a plugin turned off, or a condition its author
+wrote in `[command.when]`: a folder on this machine (`local`), files to act on (`files`), files
+matching some masks (`masks`), a name in this folder (`here`) or in it or a folder above
+(`inside`, `[".git"]` for anything about a repository). `Enter` on a grey row says the reason
+again and runs nothing. With no plugin installed, `F11` offers to open the plugins folder and
+this page.
+
 A command runs as a program of its own, never inside fcmd, so a plugin that crashes crashes
 alone. It is told where the panels are and what is selected, in the environment and as JSON on
 its input, and answers one line at a time: a message, a folder to go to, files to select, or a
@@ -513,8 +521,8 @@ twenty-one worked ones, from finding duplicates to converting line endings.
 
 *Options → Plugins configuration* lists every plugin found: `✓` for one that is on, `·` for
 one that is off, and `!` for one that did not load. `Enter` turns the one under the cursor on
-or off and writes it down at once (`[plugins] disabled` in `fcmd.toml`); its commands come and
-go from `F11` straight away, while the rest of what it brings — themes, keys, associations,
+or off and writes it down at once (`[plugins] disabled` in `fcmd.toml`); its commands go grey
+in `F11`, or back, straight away, while the rest of what it brings — themes, keys, associations,
 decompilers, mask groups — is read at startup and changes at the next one. `F3` is its card:
 who wrote it, where it lives, what it brings, its commands, and anything said about it while
 loading — for one that did not load, why. Its own settings are its own files: `F3` names the

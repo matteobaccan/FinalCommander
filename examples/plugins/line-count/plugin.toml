@@ -12,3 +12,6 @@ label = "Count the lines under here, by kind"
 run = "lines.sh"
 needs = ["panel"]
 timeout = 300
+
+[command.when]
+local = true

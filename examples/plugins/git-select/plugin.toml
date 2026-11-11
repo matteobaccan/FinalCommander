@@ -10,3 +10,7 @@ label = "Git: select the files that changed"
 run = "select.sh"
 needs = ["panel"]
 timeout = 15
+
+[command.when]
+local = true
+inside = [".git"]

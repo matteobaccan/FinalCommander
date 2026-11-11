@@ -13,6 +13,10 @@ run = "bom.sh"
 needs = ["panel", "selection", "cursor"]
 timeout = 60
 
+[command.when]
+local = true
+files = true
+
 [[command]]
 id = "user.bom.strip"
 label = "Take the BOM off these files"
@@ -20,3 +24,7 @@ run = "bom.sh"
 needs = ["panel", "selection", "cursor"]
 timeout = 120
 confirm = "This rewrites the selected files, removing the three BOM bytes from the front."
+
+[command.when]
+local = true
+files = true

@@ -13,9 +13,17 @@ needs = ["panel", "selection", "cursor"]
 timeout = 300
 confirm = "This writes SHA256SUMS in this directory, over one already there."
 
+[command.when]
+local = true
+files = true
+
 [[command]]
 id = "user.sum.verify"
 label = "Check the files against a sums file"
 run = "sums.sh"
 needs = ["panel", "cursor"]
 timeout = 300
+
+[command.when]
+local = true
+masks = "*SHA256SUMS*,*.sha256,*.sha256sum,*.sum"

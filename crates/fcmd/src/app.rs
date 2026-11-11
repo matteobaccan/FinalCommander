@@ -2302,6 +2302,8 @@ pub struct PluginCommand {
     pub timeout: Option<u64>,
     /// What to ask before running it, when the plugin says it should be asked.
     pub confirm: Option<String>,
+    /// Where it makes sense: `F11` greys it out elsewhere and says why (SPEC 08 §1).
+    pub when: fcmd_plug::When,
 }
 
 impl PluginCommand {
@@ -2698,6 +2700,10 @@ pub struct App {
     pub last_calc: String,
     /// What the plugins provide (SPEC 08 §1): `F11` lists these.
     pub plugin_commands: Vec<PluginCommand>,
+    /// The rows of the `F11` list that cannot run from here, by value, so the renderer can
+    /// grey them out — by value because typing filters the list and moves the rows. Set each
+    /// time the list is built, because it depends on where one is standing.
+    pub plugin_dim: Vec<String>,
     /// Recorded macros (SPEC 08 §5), as `fcmd-macros.toml` holds them.
     pub macros: fcmd_cmd::Macros,
     /// The steps gathered so far, while `Ctrl+.` is recording, and where the recording
@@ -3017,6 +3023,7 @@ impl App {
             quick_size: (40, 20),
             last_calc: String::new(),
             plugin_commands,
+            plugin_dim: Vec::new(),
             macros,
             recording: None,
             recording_scope: fcmd_cmd::Scope::Panel,
@@ -13327,7 +13334,7 @@ impl App {
             // The answers so far, as a panel: F3 reads one, F8 forgets it.
             let dir = self.ai_dir();
             let _ = std::fs::create_dir_all(&dir);
-            self.goto(VPath::local(&dir));
+            self.goto(VPath::local(dir));
             return;
         }
         let mut query = AiQuery::new(service, question);
@@ -18898,34 +18905,177 @@ impl App {
 
     /// `F11`: what the loaded plugins provide, in the scope we are in.
     fn open_plugin_commands(&mut self) {
-        let scope = self.scope();
-        let rows: Vec<PickRow> = self
-            .plugin_commands
-            .iter()
-            .enumerate()
-            .filter(|(_, c)| c.scope == scope || c.scope == fcmd_cmd::Scope::Global)
-            // A plugin turned off in *Options → Plugins configuration* offers nothing.
-            .filter(|(_, c)| self.cfg.plugins.is_on(&c.plugin))
-            .map(|(i, c)| PickRow {
-                label: format!("{:<40} {}", c.label, c.plugin),
-                value: i.to_string(),
-                current: false,
-                hotkey: None,
-                separator: false,
-            })
-            .collect();
-        if rows.is_empty() {
-            // Said rather than a list with nothing in it, and said in a way that answers the
-            // next question: there is nowhere to get plugins from yet.
-            let m = self.i18n.t_args(
-                "plugin-none",
-                &[("dir", self.paths.plugins_dir.display().to_string().into())],
-            );
-            self.set_status(m);
+        // Nothing installed is said with a list too, and one that answers the next question:
+        // where plugins go, and how to get some.
+        if self.plugin_commands.is_empty() {
+            let dir = self.paths.plugins_dir.display().to_string();
+            let rows = vec![
+                PickRow::plain(
+                    self.i18n.t_args("plugin-none-open", &[("dir", dir.into())]),
+                    ":dir",
+                    false,
+                ),
+                PickRow::plain(self.i18n.t("plugin-none-help"), ":help", false),
+            ];
+            self.plugin_dim.clear();
+            let title = self.i18n.t("plugin-none-title");
+            self.mode = Mode::Pick(Box::new(Pick::new(PickKind::Plugins, title, rows, 0)));
             return;
         }
+        // Every command, the ones that can run here first. The others stay in the list,
+        // greyed out and saying why, so that a plugin never looks missing only because the
+        // panel is somewhere it cannot work.
+        let mut fit = Vec::new();
+        let mut unfit = Vec::new();
+        for (i, c) in self.plugin_commands.iter().enumerate() {
+            match self.plugin_unfit(c) {
+                None => fit.push((i, None)),
+                Some(why) => unfit.push((i, Some(why))),
+            }
+        }
+        let label_w = self
+            .plugin_commands
+            .iter()
+            .map(|c| unicode_width::UnicodeWidthStr::width(c.label.as_str()))
+            .max()
+            .unwrap_or(0)
+            .min(48);
+        let row = |i: usize, why: Option<String>, cmds: &[PluginCommand]| {
+            let c = &cmds[i];
+            let tail = match why {
+                Some(why) => format!("{}  — {why}", c.plugin),
+                None => c.plugin.clone(),
+            };
+            PickRow::plain(
+                format!("{:<label_w$}  {tail}", c.label),
+                i.to_string(),
+                false,
+            )
+        };
+        let mut rows: Vec<PickRow> = Vec::new();
+        for (i, why) in fit.iter().cloned() {
+            rows.push(row(i, why, &self.plugin_commands));
+        }
+        if !fit.is_empty() && !unfit.is_empty() {
+            rows.push(PickRow::rule());
+        }
+        for (i, why) in unfit.iter().cloned() {
+            rows.push(row(i, why, &self.plugin_commands));
+        }
+        self.plugin_dim = unfit.iter().map(|(i, _)| i.to_string()).collect();
         let title = self.i18n.t("plugin-list-title");
         self.mode = Mode::Pick(Box::new(Pick::new(PickKind::Plugins, title, rows, 0)));
+    }
+
+    /// Why a plugin command cannot run from where one is standing, or `None` when it can.
+    ///
+    /// Everything here is read off what is already on screen — the panel's place, its rows,
+    /// its selection — except `inside`, which looks for a name in the directories above a
+    /// local one: a handful of lookups, the same the prompt does for its git branch.
+    fn plugin_unfit(&self, c: &PluginCommand) -> Option<String> {
+        use fcmd_cmd::Scope;
+        if !self.cfg.plugins.is_on(&c.plugin) {
+            return Some(self.i18n.t("plugin-why-off"));
+        }
+        if c.scope != Scope::Global && !self.scopes().contains(&c.scope) {
+            return Some(self.i18n.t(match c.scope {
+                Scope::Viewer => "plugin-why-viewer",
+                Scope::Editor | Scope::Hex => "plugin-why-editor",
+                _ => "plugin-why-panel",
+            }));
+        }
+        let when = &c.when;
+        let p = self.panel();
+        let local = p.temp.is_none() && p.cwd.is_local() && !p.cwd.in_container();
+        if when.local && !local {
+            return Some(self.i18n.t("plugin-why-local"));
+        }
+        if when.files || when.masks.is_some() {
+            // The files it would act on: the selected ones, or the one under the cursor.
+            let is_file =
+                |e: &fcmd_core::Entry| !e.opens_as_dir() && e.kind != fcmd_core::EntryKind::Parent;
+            let mut names: Vec<String> = (0..p.listing.len())
+                .filter_map(|row| p.listing.row(row))
+                .filter(|e| p.selection.contains(e.id) && is_file(e))
+                .map(|e| e.name_str().into_owned())
+                .collect();
+            if names.is_empty() {
+                names.extend(
+                    p.current()
+                        .filter(|e| is_file(e))
+                        .map(|e| e.name_str().into_owned()),
+                );
+            }
+            if names.is_empty() {
+                return Some(self.i18n.t("plugin-why-files"));
+            }
+            if let Some(masks) = &when.masks {
+                // A mask the author got wrong is said as such, rather than as "these files do
+                // not match", which would send the user looking at the files.
+                let set =
+                    match fcmd_core::MaskSet::parse_with(masks, &self.cfg.mask_groups(), false) {
+                        Ok(set) => set,
+                        Err(e) => {
+                            return Some(self.i18n.t_args(
+                                "plugin-why-bad-mask",
+                                &[("error", e.to_string().into())],
+                            ));
+                        }
+                    };
+                if !names.iter().any(|n| set.matches_name(n)) {
+                    return Some(
+                        self.i18n
+                            .t_args("plugin-why-masks", &[("masks", masks.clone().into())]),
+                    );
+                }
+            }
+        }
+        if !when.here.is_empty() {
+            let found = (0..p.listing.len())
+                .filter_map(|row| p.listing.row(row))
+                .any(|e| when.here.iter().any(|n| *n == e.name_str()));
+            if !found {
+                return Some(
+                    self.i18n
+                        .t_args("plugin-why-here", &[("names", when.here.join(", ").into())]),
+                );
+            }
+        }
+        if !when.inside.is_empty() {
+            let found = local
+                && p.cwd
+                    .as_path()
+                    .ancestors()
+                    .any(|dir| when.inside.iter().any(|n| dir.join(n).exists()));
+            if !found {
+                return Some(self.i18n.t_args(
+                    "plugin-why-inside",
+                    &[("names", when.inside.join(", ").into())],
+                ));
+            }
+        }
+        None
+    }
+
+    /// The help on plugins, from the empty `F11` list: the chapter about configuration,
+    /// opened at its *Plugins* heading.
+    fn open_plugin_help(&mut self) {
+        let Some(chapter) = crate::help::prose("config") else {
+            return;
+        };
+        let heading = self.i18n.t("plugin-help-heading");
+        let width = self.help_width();
+        let scroll = self
+            .help_lines(chapter, width)
+            .iter()
+            .position(|l| l.trim() == heading)
+            .unwrap_or(0);
+        self.park_front_screen();
+        self.mode = Mode::Help {
+            chapter,
+            scroll,
+            at: 0,
+        };
     }
 
     /// *Options → Plugins configuration*: every plugin found at startup — on, off, or one
@@ -19138,6 +19288,15 @@ impl App {
         let Some(cmd) = self.plugin_commands.get(which).cloned() else {
             return;
         };
+        // A greyed-out row runs nothing: it says again why, which is all it is there for.
+        if let Some(why) = self.plugin_unfit(&cmd) {
+            let m = self.i18n.t_args(
+                "plugin-cannot",
+                &[("label", cmd.label.clone().into()), ("why", why.into())],
+            );
+            self.set_error(m);
+            return;
+        }
         let Some(question) = cmd.confirm.clone() else {
             self.start_plugin_command(which);
             return;
@@ -21161,11 +21320,24 @@ impl App {
                     self.tab_switch(which);
                 }
             }
-            PickKind::Plugins => {
-                if let Ok(i) = row.value.parse::<usize>() {
-                    self.run_plugin_command(i);
+            PickKind::Plugins => match row.value.as_str() {
+                ":dir" => {
+                    let dir = self.paths.plugins_dir.clone();
+                    // Made if it is not there yet: it is where the user is about to put
+                    // one, and a panel cannot go to a folder that does not exist.
+                    if let Err(e) = std::fs::create_dir_all(&dir) {
+                        self.set_error(format!("{}: {e}", dir.display()));
+                    } else {
+                        self.goto(VPath::local(dir));
+                    }
                 }
-            }
+                ":help" => self.open_plugin_help(),
+                value => {
+                    if let Ok(i) = value.parse::<usize>() {
+                        self.run_plugin_command(i);
+                    }
+                }
+            },
             PickKind::PluginsConfig => {
                 if let Ok(i) = row.value.parse::<usize>() {
                     self.toggle_plugin(i);
@@ -29419,6 +29591,7 @@ mod tests {
             needs: Vec::new(),
             timeout: None,
             confirm: None,
+            when: Default::default(),
         }];
         // From the menu, as a list.
         open(&mut app, 3, "menu-plugins-config");
@@ -29442,16 +29615,26 @@ mod tests {
         );
         press(&mut app, "Esc");
 
-        // `Enter` turns it off: written down, and gone from `F11`.
+        // `Enter` turns it off: written down, and greyed out in `F11`, saying where it was
+        // turned off.
         app.run(Command::OptPlugins);
         press(&mut app, "Enter");
         assert_eq!(app.cfg.plugins.disabled, vec!["demo".to_string()]);
         assert!(!app.status.is_empty());
         press(&mut app, "Esc");
         app.run(Command::PluginCommands);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
         assert!(
-            !matches!(&app.mode, Mode::Pick(p) if p.kind == PickKind::Plugins),
-            "a plugin turned off still offers its commands"
+            pick.rows[0].label.contains("turned off"),
+            "{}",
+            pick.rows[0].label
+        );
+        assert_eq!(
+            app.plugin_dim,
+            ["0"],
+            "a plugin turned off is offered as if it were on"
         );
         // And on again.
         app.mode = Mode::Normal;
@@ -32775,6 +32958,158 @@ run = ["echo one", "echo two", "echo three"]
         );
     }
 
+    /// `F11` lists every command, the ones that can run here first; the rest are greyed
+    /// out with the reason, and `Enter` on one of them says the reason again and runs nothing.
+    #[test]
+    fn f11_lists_every_command_and_says_why_one_cannot_run_here() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "x").unwrap();
+        std::fs::write(dir.path().join("b.zip"), "x").unwrap();
+        let mut app = app_on_disk(dir.path());
+        let program = dir.path().join("go.sh");
+        let cmd = |id: &str, when: fcmd_plug::When, scope: fcmd_cmd::Scope| PluginCommand {
+            plugin: "demo".into(),
+            id: format!("user.demo.{id}"),
+            label: format!("Demo {id}"),
+            scope,
+            program: program.clone(),
+            needs: Vec::new(),
+            timeout: None,
+            confirm: None,
+            when,
+        };
+        use fcmd_cmd::Scope;
+        app.plugin_commands = vec![
+            cmd(
+                "zip",
+                fcmd_plug::When {
+                    masks: Some("*.zip".into()),
+                    ..Default::default()
+                },
+                Scope::Panel,
+            ),
+            cmd("view", Default::default(), Scope::Viewer),
+            cmd("any", Default::default(), Scope::Panel),
+            cmd(
+                "env",
+                fcmd_plug::When {
+                    here: vec![".env".into()],
+                    ..Default::default()
+                },
+                Scope::Panel,
+            ),
+            cmd(
+                "repo",
+                fcmd_plug::When {
+                    local: true,
+                    inside: vec!["fcmd-test-marker".into()],
+                    ..Default::default()
+                },
+                Scope::Panel,
+            ),
+        ];
+        app.panels[0].cursor = app.panels[0].listing.row_of_name("a.txt").unwrap();
+        app.run(Command::PluginCommands);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        // The one that can run first, then a rule, then the others in the order they came.
+        assert!(
+            pick.rows[0].label.starts_with("Demo any"),
+            "{:?}",
+            pick.rows
+        );
+        assert!(pick.rows[1].separator);
+        let label = |id: &str| {
+            pick.rows
+                .iter()
+                .find(|r| r.label.starts_with(&format!("Demo {id}")))
+                .unwrap()
+                .label
+                .clone()
+        };
+        assert!(label("zip").contains("*.zip"), "{}", label("zip"));
+        assert!(label("view").contains("viewer"), "{}", label("view"));
+        assert!(label("env").contains(".env"), "{}", label("env"));
+        assert!(
+            label("repo").contains("fcmd-test-marker"),
+            "{}",
+            label("repo")
+        );
+        let mut dim = app.plugin_dim.clone();
+        dim.sort();
+        assert_eq!(dim, ["0", "1", "3", "4"]);
+
+        // `Enter` on a grey one: the reason, and nothing run.
+        let Mode::Pick(pick) = &mut app.mode else {
+            unreachable!()
+        };
+        pick.cursor = pick.rows.iter().position(|r| r.value == "0").unwrap();
+        press(&mut app, "Enter");
+        assert!(
+            app.status_error && app.status.contains("*.zip"),
+            "{}",
+            app.status
+        );
+        assert!(
+            !app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::Plugin { .. })),
+            "a greyed-out command ran"
+        );
+
+        // On the archive, the archive's command is one that can run; and with the marker
+        // in a folder above, so is the one about the repository.
+        std::fs::write(dir.path().join("fcmd-test-marker"), "").unwrap();
+        app.mode = Mode::Normal;
+        app.panels[0].cursor = app.panels[0].listing.row_of_name("b.zip").unwrap();
+        app.run(Command::PluginCommands);
+        let mut dim = app.plugin_dim.clone();
+        dim.sort();
+        assert_eq!(dim, ["1", "3"]);
+    }
+
+    /// With nothing installed `F11` is still a list, of the two things worth doing next:
+    /// going to the folder plugins live in, and reading how they work.
+    #[test]
+    fn f11_with_no_plugins_says_where_they_go() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.plugin_commands.clear();
+        app.run(Command::PluginCommands);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.rows.len(), 2);
+        let plugins = app.paths.plugins_dir.clone();
+        assert!(
+            pick.rows[0].label.contains(&plugins.display().to_string()),
+            "{}",
+            pick.rows[0].label
+        );
+        // The help, at its heading on plugins.
+        let Mode::Pick(pick) = &mut app.mode else {
+            unreachable!()
+        };
+        pick.cursor = 1;
+        press(&mut app, "Enter");
+        let Mode::Help { scroll, .. } = app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(scroll > 0, "the help opened at its top, not at the plugins");
+        // The folder: made, and the panel taken there.
+        app.mode = Mode::Normal;
+        app.run(Command::PluginCommands);
+        press(&mut app, "Enter");
+        assert!(plugins.is_dir());
+        assert!(
+            app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::Read { .. })),
+            "the panel was not sent to the folder"
+        );
+    }
+
     #[test]
     fn a_plugin_command_that_says_to_ask_is_asked_about_first() {
         let dir = tempfile::tempdir().unwrap();
@@ -32794,6 +33129,7 @@ run = ["echo one", "echo two", "echo three"]
                 needs: vec!["panel".into(), "selection".into()],
                 timeout: None,
                 confirm: Some("This renames files.".into()),
+                when: Default::default(),
             },
             PluginCommand {
                 plugin: "quiet".into(),
@@ -32804,6 +33140,7 @@ run = ["echo one", "echo two", "echo three"]
                 needs: vec!["panel".into()],
                 timeout: None,
                 confirm: None,
+                when: Default::default(),
             },
         ];
 

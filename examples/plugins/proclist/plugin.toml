@@ -19,3 +19,7 @@ run = "procs.sh"
 run_windows = "procs.cmd"
 needs = ["panel", "cursor"]
 timeout = 20
+
+[command.when]
+local = true
+files = true

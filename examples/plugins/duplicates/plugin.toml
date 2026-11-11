@@ -11,3 +11,6 @@ label = "Which of these are the same file twice"
 run = "dupes.sh"
 needs = ["panel", "selection"]
 timeout = 120
+
+[command.when]
+local = true

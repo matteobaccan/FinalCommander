@@ -15,3 +15,7 @@ label = "What is this file, really"
 run = "what.sh"
 needs = ["panel", "cursor"]
 timeout = 30
+
+[command.when]
+local = true
+files = true

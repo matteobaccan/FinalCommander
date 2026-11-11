@@ -14,6 +14,9 @@ run_windows = "open.cmd"
 needs = ["panel", "cursor", "selection"]
 timeout = 10
 
+[command.when]
+local = true
+
 [[command]]
 id = "user.open.folder"
 label = "Open this folder in the file manager of the desktop"
@@ -21,3 +24,6 @@ run = "open.sh"
 run_windows = "open.cmd"
 needs = ["panel"]
 timeout = 10
+
+[command.when]
+local = true

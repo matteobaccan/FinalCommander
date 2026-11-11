@@ -13,3 +13,6 @@ run = "sizes.sh"
 run_windows = "sizes.ps1"
 needs = ["panel"]
 timeout = 300
+
+[command.when]
+local = true

@@ -33,9 +33,28 @@ run_windows = "branch.cmd"        # optional: a shell script and a .cmd are not 
 needs = ["panel", "selection"]    # nothing is passed that is not asked for
 timeout = 20                      # seconds; a plugin that hangs is killed and said so
 confirm = "This renames files."   # optional: asked before running, for anything destructive
+
+[command.when]                    # optional: where it makes sense; all of these must hold
+local = true                      # the panel is a directory on this machine's disks
+files = true                      # selected files, or a file under the cursor
+masks = "*.zip,*.7z"              # …and they match (implies `files`); mask groups allowed
+here = [".env.example"]           # one of these names is in this directory
+inside = [".git"]                 # …or in this directory or one above it
 ```
 
-`F11` lists the commands of the scope one is in. The host runs the program on the worker pool,
+`F11` lists **every** command, the ones that can run where one is standing first; the others
+follow under a rule, drawn in the menu's dim ink (`menu.dim.fg`) with the reason beside them:
+another scope ("only in the viewer"), a plugin turned off, or the first `when` condition that
+fails. `Enter` on a greyed-out row runs nothing and says the reason again. The point is that a
+plugin never looks missing only because the panel is somewhere it cannot work, and that the
+host — which can see the panel — says so before a program is started only to answer "nothing
+to do here". Everything but `inside` is read off what is already on the screen; `inside`
+looks for a name in the directories above a local one, a handful of lookups when `F11` opens.
+A condition this version does not know is a warning at load and is ignored, so a plugin
+written for a later fcmd still loads. With no plugin at all `F11` is a list too: open the
+plugins folder (made if it is missing) or read the help at its *Plugins* heading.
+
+The host runs the program on the worker pool,
 with the context as one JSON object on standard input and the same facts in the environment
 (`FCMD_CWD`, `FCMD_DIR`, `FCMD_CURSOR`, `FCMD_SELECTED` one name per line) — because most of
 these will be shell scripts, and a script that has to parse JSON to learn its own directory is
@@ -98,7 +117,7 @@ message as the reason. `Enter` flips one and writes `[plugins] disabled = ["id",
 configuration at once. A plugin that is off is still loaded and still listed — that is what
 lets it be turned on again from the same list — but nothing it brings is used: its themes,
 keymaps, `[[assoc]]`, `[[decompile]]` and `[[mask-group]]` blocks are not applied at startup,
-and its commands are left out of `F11`. The commands are the one part that changes without a
+and its commands are greyed out in `F11`, saying where it was turned off. The commands are the one part that changes without a
 restart, because `F11` is built when it is opened; the data blocks are folded in at startup,
 and the status line says which of the two a change touched.
 

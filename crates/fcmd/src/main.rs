@@ -962,6 +962,7 @@ fn load_plugins(
                 needs: declared.needs.clone(),
                 timeout: declared.timeout,
                 confirm: declared.confirm.clone(),
+                when: declared.when.clone(),
             });
         }
         if commands > 0 {
@@ -5719,6 +5720,17 @@ timeout = 10
         ids.dedup();
         assert_eq!(before, ids.len(), "two commands share an id");
 
+        // Their masks are masks: one that does not parse would grey a command out for good,
+        // with a reason that is about the plugin rather than the files.
+        for command in &commands {
+            if let Some(masks) = &command.when.masks {
+                assert!(
+                    fcmd_core::MaskSet::parse(masks).is_ok(),
+                    "{}: `{masks}` is not a mask",
+                    command.id
+                );
+            }
+        }
         for command in &commands {
             assert!(
                 command.id.starts_with("user."),

@@ -1222,6 +1222,26 @@ fn draw_pick(
         }
     }
 
+    // The plugin commands that cannot run from here: still listed, so the reader knows they
+    // exist, but in the menu's dim ink — the colour FAR gives a menu item that is not
+    // available. The row under the cursor keeps the cursor's colours, as above.
+    if pick.kind == crate::menu::PickKind::Plugins {
+        let width = area.w.saturating_sub(2) as usize;
+        let dim = app.theme.fg_on("menu.dim.fg", "menu.bg");
+        for (row, line) in shown.iter().enumerate() {
+            let y = area.y + 1 + row as u16;
+            if y >= area.y + area.h.saturating_sub(1) || row == pick.cursor.saturating_sub(start) {
+                continue;
+            }
+            let value = pick.rows.get(start + row).map(|r| r.value.as_str());
+            if !value.is_some_and(|v| app.plugin_dim.iter().any(|d| d == v)) {
+                continue;
+            }
+            let text = format!(" {:<w$}", line, w = width.saturating_sub(1));
+            buf.put_str(area.x + 1, y, &text, dim, width as u16);
+        }
+    }
+
     // The rules between groups of rows, drawn across the frame and joined to it the way the
     // panel's own separators are: `lines()` leaves them blank because only this knows where
     // the frame is.
@@ -4702,6 +4722,57 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         );
     }
 
+    /// A plugin command that cannot run here is drawn in the menu's dim ink, so the list says
+    /// at a glance which rows will do something.
+    #[test]
+    fn a_plugin_command_that_cannot_run_here_is_greyed_out() {
+        let mut app = app("far", "en");
+        let cmd = |id: &str, when: fcmd_plug::When| crate::app::PluginCommand {
+            plugin: "demo".into(),
+            id: format!("user.demo.{id}"),
+            label: format!("Command {id}"),
+            scope: fcmd_cmd::Scope::Panel,
+            program: std::path::PathBuf::from("/bin/true"),
+            needs: Vec::new(),
+            timeout: None,
+            confirm: None,
+            when,
+        };
+        app.plugin_commands = vec![
+            cmd("ready", Default::default()),
+            cmd(
+                "blocked",
+                fcmd_plug::When {
+                    here: vec!["nothing-here-by-this-name".into()],
+                    ..Default::default()
+                },
+            ),
+        ];
+        app.handle_input(Input::Key("F11".parse().unwrap()));
+        let mut buf = Buffer::new(100, 30);
+        draw(&mut app, &mut buf);
+        let text = buf.to_text();
+        let row_of = |what: &str| text.lines().position(|l| l.contains(what)).unwrap() as u16;
+        let col_of = |what: &str| {
+            let line = text.lines().find(|l| l.contains(what)).unwrap();
+            line[..line.find(what).unwrap()].chars().count() as u16
+        };
+        let blocked = buf
+            .get(col_of("Command blocked"), row_of("Command blocked"))
+            .unwrap()
+            .style;
+        assert_eq!(blocked.fg, app.theme.color("menu.dim.fg"));
+        // The one that can run is not, whether or not the cursor is on it.
+        app.handle_input(Input::Key("Down".parse().unwrap()));
+        app.handle_input(Input::Key("Down".parse().unwrap()));
+        draw(&mut app, &mut buf);
+        let ready = buf
+            .get(col_of("Command ready"), row_of("Command ready"))
+            .unwrap()
+            .style;
+        assert_ne!(ready.fg, app.theme.color("menu.dim.fg"));
+    }
+
     /// The plugin list with every example plugin loaded: twenty-four commands in a list that
     /// used to hold seven, on a terminal with room for twenty rows.
     #[test]
@@ -4717,6 +4788,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
                 needs: Vec::new(),
                 timeout: None,
                 confirm: None,
+                when: Default::default(),
             })
             .collect();
         app.handle_input(Input::Key("F11".parse().unwrap()));
@@ -4862,6 +4934,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
                 needs: Vec::new(),
                 timeout: None,
                 confirm: None,
+                when: Default::default(),
             })
             .collect();
         app.handle_input(Input::Key("F11".parse().unwrap()));

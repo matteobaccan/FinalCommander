@@ -521,6 +521,14 @@ liste `[[mask-group]]`, con le stesse parole di `fcmd.toml` — e **comandi**: u
 nomina un programma nella cartella del plugin, e `F11` elenca i comandi per lo schermo in cui
 sei — nei pannelli anche `Ctrl+Shift+F11`, che la barra dei tasti mostra mentre li tieni premuti.
 
+`F11` elenca tutti i comandi, prima quelli che possono girare dove sei. Gli altri stanno sotto,
+in grigio, e ciascuno dice perché — un altro schermo, un plugin spento, o una condizione che il
+suo autore ha scritto in `[command.when]`: una cartella su questa macchina (`local`), file su cui
+lavorare (`files`), file che corrispondono a delle maschere (`masks`), un nome in questa cartella
+(`here`) o in questa o in una sopra (`inside`, `[".git"]` per tutto quello che riguarda un
+repository). `Invio` su una riga grigia ripete il motivo e non esegue niente. Senza plugin
+installati, `F11` propone di aprire la cartella dei plugin e questa pagina.
+
 Un comando gira come programma a sé, mai dentro fcmd, così un plugin che va in crash ci va da
 solo. Riceve dove sono i pannelli e cosa è selezionato, nell'ambiente e come JSON sul suo
 input, e risponde una riga alla volta: un messaggio, una cartella in cui andare, file da
@@ -532,7 +540,7 @@ fine riga.
 *Opzioni → Configurazione dei plugin* elenca tutti i plugin trovati: `✓` per uno attivo, `·`
 per uno disattivato e `!` per uno che non si è caricato. `Invio` attiva o disattiva quello
 sotto il cursore e lo scrive subito (`[plugins] disabled` in `fcmd.toml`); i suoi comandi
-entrano ed escono da `F11` immediatamente, mentre il resto di quello che porta — temi, tasti,
+diventano grigi in `F11`, o tornano normali, immediatamente, mentre il resto di quello che porta — temi, tasti,
 associazioni, decompilatori, gruppi di maschere — si legge all'avvio e cambia al prossimo. `F3`
 è la sua scheda: chi l'ha scritto, dove sta, cosa porta, i suoi comandi e quello che è stato
 detto mentre si caricava — per uno che non si è caricato, il perché. Le sue impostazioni sono
