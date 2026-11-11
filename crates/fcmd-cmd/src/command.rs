@@ -486,6 +486,9 @@ pub enum Command {
     /// Run a command and read its output instead of the file: Midnight Commander's filtered
     /// view (SPEC 05 §1).
     ViewerFilter,
+    /// Who wrote each line of the file in the viewer, and when: `git blame`, as a view of the
+    /// file, on the line that was on top.
+    ViewerBlame,
 
     // Editor (scope `editor`). Movement and typing are handled directly by the editor; the
     // keymap binds its commands.
@@ -804,6 +807,7 @@ impl Command {
             Command::ViewerDisasm,
             Command::ViewerDecompile,
             Command::ViewerFilter,
+            Command::ViewerBlame,
             Command::ViewerToEditor,
             Command::ViewerNextFile,
             Command::ViewerPrevFile,
@@ -1113,6 +1117,7 @@ impl Command {
             Command::ViewerToPanel => "viewer.to.panel".into(),
             Command::ViewerDecompile => "viewer.decompile".into(),
             Command::ViewerFilter => "viewer.filter".into(),
+            Command::ViewerBlame => "viewer.blame".into(),
             Command::EditorQuit => "editor.quit".into(),
             Command::EditorSave => "editor.save".into(),
             Command::EditorSaveAs => "editor.save.as".into(),
@@ -1393,6 +1398,7 @@ impl Command {
             ("viewer.to.panel", _) => Command::ViewerToPanel,
             ("viewer.decompile", _) => Command::ViewerDecompile,
             ("viewer.filter", _) => Command::ViewerFilter,
+            ("viewer.blame", _) => Command::ViewerBlame,
             ("editor.quit", _) => Command::EditorQuit,
             ("editor.save", _) => Command::EditorSave,
             ("editor.save.as", _) => Command::EditorSaveAs,
@@ -1517,6 +1523,7 @@ mod tests {
             Command::ViewerDisasm,
             Command::ViewerDecompile,
             Command::ViewerFilter,
+            Command::ViewerBlame,
             Command::EditorSave,
             Command::EditorPaste,
             Command::EditorToggleReadOnly,

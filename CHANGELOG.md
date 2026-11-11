@@ -17,6 +17,8 @@ Notable changes, newest first. The format follows
   Content credentials (C2PA) say who signed and whether the picture is called generated. PNG
   text that is compressed (`zTXt`, compressed `iTXt`) is read now, up to the size a workflow
   takes, and WebP files say their size, animation and EXIF.
+- **`git blame` in the viewer.** `Ctrl+Alt+G` on a file being read shows who changed each line
+  and when, opened on the line that was at the top; `Backspace` goes back to the file.
 - **Taking a picture's metadata out.** Files → *Strip picture metadata* on PNG, WebP and
   JPEG files: all of it; only what an image model wrote (the graph, the workflow, the
   settings, in text chunks and EXIF alike); or everything but the camera's EXIF and the

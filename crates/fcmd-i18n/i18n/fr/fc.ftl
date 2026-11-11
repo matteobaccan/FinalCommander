@@ -342,6 +342,7 @@ viewer-decompile-running = { $tool } s'exécute sur { $name }…
 viewer-decompile-none = rien ici ne décompile { $format } ; installez un outil et ajoutez une règle [[decompile]] dans fcmd.toml
 arc-needs-program = cette archive est lue par `{ $program }`, qui n'est pas installé sur cette machine
 viewer-decompile-failed = { $tool } : { $error }
+viewer-blame-derived = git blame porte sur le fichier lui-même : revenir d’abord au fichier
 viewer-derived = { $producer } de { $name }
 
 key-save = Enreg

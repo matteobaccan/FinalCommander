@@ -264,6 +264,10 @@ already names it (`!.!` is where it goes if you want it in the middle), the whol
 by your shell, so pipes work, and `Backspace` goes back to the file itself. It is Midnight
 Commander's filtered view, and it is the answer to every format nobody has written a rule for.
 
+`Ctrl+Alt+G` — the panel's git key — asks git who wrote the file: `git blame`, the commit, the
+author and the date in front of every line, opened on the line that was at the top so what you
+were reading is still on the screen. `Backspace` goes back to the file.
+
 Source files, class files and bytecode get a listing of their own where one makes sense: a
 `.class` is shown the way `javap -c` shows it, with the constant pool resolved into the
 comments.

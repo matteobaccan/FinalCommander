@@ -342,6 +342,7 @@ viewer-decompile-running = { $tool } 正在处理 { $name }…
 viewer-decompile-none = 没有可用于反编译 { $format } 的工具；请安装后在 fcmd.toml 中添加 [[decompile]] 规则
 arc-needs-program = 此压缩包由 `{ $program }` 读取，但本机未安装
 viewer-decompile-failed = { $tool }：{ $error }
+viewer-blame-derived = git blame 针对文件本身：请先回到文件
 viewer-derived = { $name } 的 { $producer }
 
 key-save = 保存

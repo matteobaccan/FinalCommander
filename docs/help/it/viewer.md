@@ -278,6 +278,10 @@ quello che il comando ha stampato invece del file — `strings`, `xxd`, `pdftote
 funzionano, e `Backspace` torna al file vero. È la *filtered view* di Midnight Commander, ed è
 la risposta a tutti i formati per cui nessuno ha scritto una regola.
 
+`Ctrl+Alt+G` — il tasto git del pannello — chiede a git chi ha scritto il file: `git blame`, il
+commit, l'autore e la data davanti a ogni riga, aperto sulla riga che era in cima, così quello
+che stavi leggendo è ancora sullo schermo. `Backspace` torna al file.
+
 I file sorgente, i class file e il bytecode hanno un listato tutto loro dove ha senso: un
 `.class` è mostrato come lo mostra `javap -c`, con la constant pool risolta nei commenti.
 

@@ -2716,6 +2716,8 @@ pub struct App {
     pub rename_undo: Option<(VPath, Vec<(String, String)>)>,
     /// The pictures `file.strip_metadata` was asked about, while its dialog is open.
     pub strip_files: Vec<PathBuf>,
+    /// The line the viewer had on top when `git blame` was asked for, to open the answer on.
+    pub blame_line: Option<usize>,
     /// The day the daily release check last asked, and the release it last offered: see
     /// `fcmd_config::State::update_checked` and `update_offered`.
     pub update_checked: u64,
@@ -3008,6 +3010,7 @@ impl App {
             last_rename: Default::default(),
             rename_undo: None,
             strip_files: Vec::new(),
+            blame_line: None,
             update_checked: 0,
             update_offered: String::new(),
             no_save: false,
@@ -4160,8 +4163,15 @@ impl App {
                             .live_viewer()
                             .map(|v| v.path.display_name())
                             .unwrap_or_default();
+                        let line = self
+                            .blame_line
+                            .take()
+                            .filter(|_| tool.starts_with("git blame"));
                         if let Some(viewer) = self.live_viewer_mut() {
                             viewer.show_derived(&tool, text);
+                            if let Some(line) = line {
+                                viewer.goto_line(line);
+                            }
                         }
                         let msg = self.i18n.t_args(
                             "viewer-derived",
@@ -10090,6 +10100,7 @@ impl App {
             // with the tool chosen by hand rather than by a rule — which is what makes it
             // useful on a file nobody wrote a rule for.
             Command::ViewerFilter => self.open_filter_prompt(),
+            Command::ViewerBlame => self.viewer_blame(),
             // Midnight Commander's external panelize: a command prints paths, and they
             // become the panel's rows. `find`, `git ls-files`, `grep -l` — anything that
             // names files, which is most of the shell.
@@ -22411,6 +22422,22 @@ impl App {
         );
         self.set_status(msg);
         self.requests.push(Request::Filter { id, line, cwd });
+    }
+
+    /// `Ctrl+Alt+G` in the viewer: `git blame` of the file, shown as a view of it — the
+    /// commit, the author and the date before every line — and opened on the line that was
+    /// at the top, so what was being read is still what is on the screen.
+    fn viewer_blame(&mut self) {
+        let Some(viewer) = self.live_viewer_mut() else {
+            return;
+        };
+        if viewer.derived.is_some() {
+            let m = self.i18n.t("viewer-blame-derived");
+            self.set_error(m);
+            return;
+        }
+        self.blame_line = Some(viewer.line_at_top());
+        self.run_filter("git blame --date=short --".into());
     }
 
     /// A prompt that keeps the viewer underneath it (search, go to).
@@ -37458,6 +37485,43 @@ abcdefghij
             result: Err("nope".into()),
         });
         assert!(app.ai_busy.is_none());
+    }
+
+    /// `Ctrl+Alt+G` in the viewer asks git who wrote the file, and the answer opens on the
+    /// line that was on top.
+    #[test]
+    fn blame_in_the_viewer_keeps_the_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let text: String = (0..40).map(|i| format!("line {i}\n")).collect();
+        std::fs::write(dir.path().join("a.rs"), &text).unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.panels[0].cursor = app.panels[0].listing.row_of_name("a.rs").unwrap();
+        press(&mut app, "F3");
+        for _ in 0..12 {
+            press(&mut app, "Down");
+        }
+        app.take_requests();
+        press(&mut app, "Ctrl+Alt+G");
+        let (id, line) = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::Filter { id, line, .. } => Some((id, line)),
+                _ => None,
+            })
+            .expect("git blame asked");
+        assert!(line.starts_with("git blame --date=short -- "), "{line}");
+        let blamed: String = (0..40)
+            .map(|i| format!("abc1234 (Matteo 2026-11-11 {i:>2}) line {i}\n"))
+            .collect();
+        app.handle_event(Event::Decompiled {
+            id,
+            tool: line,
+            result: Ok(blamed),
+        });
+        let viewer = app.mode.viewer_mut().expect("the viewer");
+        assert_eq!(viewer.line_at_top(), 12);
+        assert!(viewer.rows(80, 1)[0].text.ends_with("line 12"));
     }
 
     /// `file.strip_metadata` on a picture: three ways to choose from, and the one chosen

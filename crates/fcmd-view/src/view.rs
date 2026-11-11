@@ -1150,6 +1150,52 @@ impl Viewer {
         self.scroll(-(height as i64), width, height);
     }
 
+    /// Which line of the file is at the top, counting from 0: the newlines before it. Read in
+    /// pieces, so a long file costs time and not memory.
+    pub fn line_at_top(&mut self) -> usize {
+        let mut lines = 0;
+        let mut at = 0u64;
+        while at < self.top {
+            let want = (self.top - at).min(1 << 20) as usize;
+            let Ok(piece) = self.source.read_vec(at, want) else {
+                break;
+            };
+            if piece.is_empty() {
+                break;
+            }
+            lines += memchr::memchr_iter(b'\n', &piece).count();
+            at += piece.len() as u64;
+        }
+        lines
+    }
+
+    /// Put line `n` (from 0) at the top; past the end, the end.
+    pub fn goto_line(&mut self, n: usize) {
+        if n == 0 {
+            self.goto(0);
+            return;
+        }
+        let len = self.source.len();
+        let mut seen = 0;
+        let mut at = 0u64;
+        while seen < n && at < len {
+            let Ok(piece) = self.source.read_vec(at, (len - at).min(1 << 20) as usize) else {
+                return;
+            };
+            if piece.is_empty() {
+                break;
+            }
+            for nl in memchr::memchr_iter(b'\n', &piece) {
+                seen += 1;
+                if seen == n {
+                    self.goto(at + nl as u64 + 1);
+                    return;
+                }
+            }
+            at += piece.len() as u64;
+        }
+    }
+
     pub fn goto_percent(&mut self, percent: u16) {
         let len = self.source.len();
         let offset = len * percent.min(100) as u64 / 100;
@@ -2696,6 +2742,17 @@ mod tests {
 
     fn texts(v: &mut Viewer, w: u16, h: u16) -> Vec<String> {
         v.rows(w, h).into_iter().map(|r| r.text).collect()
+    }
+
+    #[test]
+    fn the_top_line_is_counted_and_found_again() {
+        let text: String = (0..50).map(|i| format!("line {i}\n")).collect();
+        let mut v = viewer(text.as_bytes());
+        v.goto_line(20);
+        assert_eq!(v.line_at_top(), 20);
+        assert!(texts(&mut v, 40, 1)[0].starts_with("line 20"));
+        v.goto_line(0);
+        assert_eq!(v.line_at_top(), 0);
     }
 
     /// `Enter` on a picture's prompt graph in the structure pane: the graph, laid out as

@@ -974,6 +974,12 @@ scope = "viewer"
 cmd = "viewer.filter"
 
 [[bind]]
+# The panel's git key, which in the viewer has one thing to say about the file: who wrote it.
+keys = ["Ctrl+Alt+G"]
+scope = "viewer"
+cmd = "viewer.blame"
+
+[[bind]]
 keys = ["+"]
 scope = "viewer"
 cmd = "viewer.file.next"
