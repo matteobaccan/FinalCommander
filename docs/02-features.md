@@ -375,7 +375,7 @@ What was read, per program:
 | broot | `Canop/broot`: the internal verbs of `src/verb/internal.rs` |
 | vifm | `vifm/vifm`: the sections and the `:commands` of `data/man/vifm.1` |
 | superfile | `yorukot/superfile`: `hotkeys.toml` |
-| xplr | `sayanarijit/xplr`: `docs/en/src/messages.md` |
+| xplr | `sayanarijit/xplr`: the *messages* page of its manual |
 | Directory Opus 13 | closed: the feature list of its home page |
 | TheFile.Ninja | closed: its home page |
 | Commander One | closed, and its site was not reachable: the feature list of its Wikipedia article |

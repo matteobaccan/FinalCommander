@@ -6,6 +6,29 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Disk usage of a whole tree, as a map.** `Tab` in the `Alt+Shift+F3` list measures
+  everything under the folder once, in the background (progress on screen, `Esc` stops it), and
+  draws it as a treemap in the terminal's cells: each rectangle as large as its share, in the
+  colour its name has in the panel, a folder showing what it is made of. Arrows move, `Enter`
+  goes in, `Backspace` comes out, `Tab` is the same folder as a list with bars, `Enter` on a
+  file or `G` leaves the panel's cursor there.
+- **Two binaries compared byte against byte.** `Ctrl+Shift+D` (and `--diff`) on two files that
+  are not text shows both lengths, the first differing offset, how many bytes differ and the
+  hex of both side by side from there; `Alt+↓`/`Alt+↑` walk the differences; equal files say
+  so. Compared in the background, with no size limit.
+- **A unified layout for the diff, saved as a patch.** `U` shows the comparison in one column
+  and back; `Shift+F2` saves it as a `.diff` with three lines of context that `patch` and
+  `git apply` take.
+
+### Changed
+
+- The diff's foot is two lines, the count and then the keys, so a narrow terminal no longer
+  hides the keys.
+- The feature table was read against the sources of eighteen other file managers; its states
+  are corrected both ways, and BACKLOG opens with what they have and this does not.
+
 ## [0.41.0] — 2026-11-11
 
 ### Added

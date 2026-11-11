@@ -691,7 +691,9 @@ mod tests {
                 let path = entry.expect("an entry").path();
                 let name = path.file_name().unwrap().to_string_lossy().into_owned();
                 if path.is_dir() {
-                    if !matches!(name.as_str(), "target" | ".git" | "node_modules") {
+                    // Hidden folders hold other working copies (a tool's worktree), whose
+                    // half-written documents are not this checkout's.
+                    if name != "target" && name != "node_modules" && !name.starts_with('.') {
                         stack.push(path);
                     }
                     continue;
@@ -854,12 +856,13 @@ mod tests {
     }
 
     /// Every row of the feature table says its state with one of the marks its legend
-    /// defines. A row that invented its own (`✗` had crept in for a decision) reads as a
-    /// fourth state to whoever counts them, and the table is what gets counted.
+    /// defines. A row that invents its own reads as one more state to whoever counts them,
+    /// and the table is what gets counted. `✗` is in the legend since the parity review
+    /// after 0.41: "not there", followed by the milestone or the decision.
     #[test]
     fn every_feature_row_has_a_state_the_legend_defines() {
         let text = std::fs::read_to_string(default_repo().join("docs/02-features.md")).unwrap();
-        let marks = ["✓", "~", "M2", "M3", "M4", "—"];
+        let marks = ["✓", "~", "✗", "M2", "M3", "M4", "—"];
         let mut rows = 0;
         let mut odd = Vec::new();
         for (n, line) in text.lines().enumerate() {
