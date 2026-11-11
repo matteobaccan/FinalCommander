@@ -526,6 +526,7 @@ hidden = "#808080"
   | `blade` | amber/teal on near-black, warm selection — "blade" |
   | `github-dark` | GitHub's dark terminal palette as terminalcolors.com publishes it: `#010409` ground, `#e6edf3` text, its sixteen colours and `#264f78` selection; dialogs and menus in the same interface's greys |
   | `delphi-dark-2027` | the Delphi IDE's dark theme, read off its editor: charcoal page, cream bold keywords, olive italic comments, azure `{$…}` directives, blue strings, pink numbers, cornflower selection; the IDE's chrome for panels and menus |
+  | `delphi-inspiration` | inherits `far` — FAR's classic blue everywhere — and gives only the viewer, the editor, the syntax and the diff Delphi Dark 2027's colours: the panels of one program, the editor of the other |
 
 - **External themes** are `[[theme]]` blocks in `fcmd.toml` (or themes a plugin declares). They
   are read at startup and hot-reloaded when the file changes; a block with the id of a built-in

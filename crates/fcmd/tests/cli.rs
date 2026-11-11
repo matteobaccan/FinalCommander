@@ -102,8 +102,8 @@ inherit = "commander"
     assert!(ok, "{stderr}");
     assert!(stdout.contains("Mine"), "{stdout}");
     assert!(stdout.contains("fcmd.toml"), "{stdout}");
-    // Still nine: the block replaced the built-in rather than adding a tenth.
-    assert_eq!(stdout.lines().count(), 9, "{stdout}");
+    // Still ten: the block replaced the built-in rather than adding an eleventh.
+    assert_eq!(stdout.lines().count(), 10, "{stdout}");
 }
 
 #[test]

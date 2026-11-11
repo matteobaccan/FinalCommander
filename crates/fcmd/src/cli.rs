@@ -110,7 +110,7 @@ const OPTS: &[Opt] = &[
     opt(
         "theme",
         &["ID"],
-        "Theme id (commander, far, black, white, matrix, tron, blade, github-dark, delphi-dark-2027, or an external one).",
+        "Theme id (commander, far, black, white, matrix, tron, blade, github-dark, delphi-dark-2027, delphi-inspiration, or an external one).",
     ),
     opt(
         "keymap",

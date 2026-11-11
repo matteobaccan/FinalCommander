@@ -8,7 +8,7 @@ Arguments:
 Options:
       --config <FILE>       Use this configuration file instead of the default one
       --plugins <DIR>       Use this plugins directory (the only directory fcmd ever reads besides the config file)
-      --theme <ID>          Theme id (commander, far, black, white, matrix, tron, blade, github-dark, delphi-dark-2027, or an external one)
+      --theme <ID>          Theme id (commander, far, black, white, matrix, tron, blade, github-dark, delphi-dark-2027, delphi-inspiration, or an external one)
       --keymap <NAME>       Keymap profile: a built-in one (far, mc) or a [[keymap]] block from the config file
       --lang <TAG>          Interface language: en, it, de, fr, es, ru, zh, or auto
       --set <KEY=VALUE>     Override a setting, e.g. --set panel.show_hidden=true

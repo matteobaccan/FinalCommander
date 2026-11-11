@@ -261,6 +261,8 @@ Nine themes ship with the program:
 - `blade` — amber and teal in the rain.
 - `github-dark` — GitHub's dark terminal colours.
 - `delphi-dark-2027` — the Delphi IDE's dark editor, for the whole program, block lines included.
+- `delphi-inspiration` — FAR's classic blue panels, menus and dialogs, with the Delphi IDE's dark
+  editor in the viewer (`F3`) and the editor (`F4`).
 
 `Ctrl+Shift+T` steps through them while the program runs; `F9` → Options → Themes offers them
 as a list, and `Shift+F9` keeps the choice. In `fcmd.toml` it is `theme = "far"` under `[ui]`,

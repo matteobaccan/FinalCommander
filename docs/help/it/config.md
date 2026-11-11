@@ -270,6 +270,8 @@ Nove temi arrivano col programma:
 - `blade` — ambra e verde acqua sotto la pioggia.
 - `github-dark` — i colori del terminale scuro di GitHub.
 - `delphi-dark-2027` — l'editor scuro dell'IDE di Delphi, per tutto il programma, linee dei blocchi comprese.
+- `delphi-inspiration` — i pannelli, i menu e i dialoghi blu classici di FAR, con l'editor scuro
+  dell'IDE di Delphi nel visualizzatore (`F3`) e nell'editor (`F4`).
 
 `Ctrl+Shift+T` passa dall'uno all'altro mentre il programma gira; `F9` → Opzioni → Temi li
 offre come elenco, e `Shift+F9` tiene la scelta. In `fcmd.toml` è `theme = "far"` sotto `[ui]`,

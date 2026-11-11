@@ -8,6 +8,11 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A tenth theme, `delphi-inspiration`.** FAR's classic blue panels, menus, dialogs and key bar,
+  with the Delphi IDE's dark editor where code is read and written: the viewer (`F3`) and the
+  editor (`F4`) take Delphi Dark 2027's page, white code, cream keywords, green comments and
+  block lines. It inherits from `far` and changes nothing else.
+
 - **Editor: replace in one dialog** (`Ctrl+F7`). What to look for, what to put there, text or
   regular expression, case, whole words and *Preserve style*, with two buttons: *Replace all*,
   which is one `Ctrl+Z`, and *Replace next*, which changes the hit under the cursor and selects

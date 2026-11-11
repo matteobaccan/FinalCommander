@@ -264,7 +264,7 @@ something readable rather than only into instructions.
 | --- | --- | --- | --- |
 | 9.1 | Human-editable config files (TOML) + in-app settings dialogs (System, Panel, Interface, Confirmations — every row bound to a config key and applied through the same code as `--set`, SPEC 10 §3); portable mode (config next to the binary) | MTN2 | ✓ |
 | 9.2 | Full keymap remapping, multiple **keymap profiles** (`far`, `tc`, `mc`, `nc`, `vi`) switchable at runtime | KRU/MTN2 | ~ the `tc`, `nc` and `vi` profiles |
-| 9.3 | Themes: 9 built-in (`commander`, `far` — FAR's own default palette element for element, `black`, `white`, `matrix`, `tron`, `blade`, `github-dark`, `delphi-dark-2027`), bold/italic/underline per key in `[styles]`, + `[[theme]]` blocks in `fcmd.toml` or from plugins, hot-reloaded, `inherit`-able, exportable with `--export-theme`; 24-bit colour with 256/16/mono degradation | MTN2 | ✓ |
+| 9.3 | Themes: 10 built-in (`commander`, `far` — FAR's own default palette element for element, `black`, `white`, `matrix`, `tron`, `blade`, `github-dark`, `delphi-dark-2027`, `delphi-inspiration`), bold/italic/underline per key in `[styles]`, + `[[theme]]` blocks in `fcmd.toml` or from plugins, hot-reloaded, `inherit`-able, exportable with `--export-theme`; 24-bit colour with 256/16/mono degradation | MTN2 | ✓ |
 | 9.4 | Localisation (fluent-based): EN, IT, DE, FR, ES, RU, ZH-Hans; UI + help + key names, runtime switchable from the `Languages` list, drop-in language dirs | FAR/MTN2 | ✓ |
 | 9.5 | CJK/wide-character correct layout, combining marks, RTL-safe truncation, emoji width | MTN2 | ~ combining marks and RTL-safe truncation |
 | 9.6 | Accessibility: no-colour mode, screen-reader-friendly output mode, configurable focus indication | NEW | M3 |

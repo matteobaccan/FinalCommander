@@ -1,0 +1,68 @@
+id = "delphi-inspiration"
+name = "Delphi Inspiration"
+author = "FinalCommander"
+variant = "dark"
+# FAR's classic blue for everything around the files — panels, menus, dialogs, the key bar —
+# and the Delphi IDE's dark editor for what is read and written: the viewer (`F3`) and the
+# editor (`F4`) take Delphi Dark 2027's page, code and syntax colours. For someone who lives in
+# FAR's panels and in Delphi's editor, and wants each to look like itself.
+#
+# Everything not named below comes from `far`; the colours below are Delphi Dark 2027's, read
+# off the IDE (see that theme for where each one comes from).
+inherit = "far"
+
+[palette]
+page = "#2e3034"
+code = "#ffffff"
+chrome = "#252526"
+dim = "#808080"
+blue = "#1e4f7a"
+selection = "#7fa6f2"
+ink = "#101828"
+cream = "#f0dcbe"
+olive = "#bce784"
+azure = "#6cb4e8"
+string = "#5a9be6"
+pink = "#e87bb0"
+red = "#e05050"
+green = "#7cc47c"
+fg = "#dcdcdc"
+
+[colors]
+# The viewer and the editor: Delphi's page.
+"viewer.fg" = "code"
+"viewer.bg" = "page"
+"viewer.status.fg" = "fg"
+"viewer.status.bg" = "blue"
+"viewer.selected.fg" = "ink"
+"viewer.selected.bg" = "selection"
+"editor.fg" = "code"
+"editor.bg" = "page"
+"editor.status.fg" = "fg"
+"editor.status.bg" = "blue"
+"editor.selected.fg" = "ink"
+"editor.selected.bg" = "selection"
+
+# The IDE's syntax colours, for every language and not only Pascal.
+"syntax.keyword" = "cream"
+"syntax.type" = "code"
+"syntax.string" = "string"
+"syntax.number" = "pink"
+"syntax.comment" = "olive"
+"syntax.preproc" = "azure"
+"syntax.tag" = "cream"
+"syntax.attr" = "azure"
+"syntax.entity" = "pink"
+"syntax.function" = "code"
+"syntax.added" = "green"
+"syntax.removed" = "red"
+"syntax.text" = "code"
+"syntax.guide" = "#4a5a70"
+"diff.line.fg" = "fg"
+"diff.removed.bg" = "#4a2020"
+"diff.added.bg" = "#1f3a24"
+
+[styles]
+"syntax.keyword" = "bold"
+"syntax.tag" = "bold"
+"syntax.comment" = "italic"

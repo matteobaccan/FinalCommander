@@ -5084,6 +5084,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
             "blade",
             "github-dark",
             "delphi-dark-2027",
+            "delphi-inspiration",
         ] {
             let mut app = app(id, "en");
             let out = frame(&mut app, 60, 15);
@@ -7320,6 +7321,7 @@ third line
             "blade",
             "github-dark",
             "delphi-dark-2027",
+            "delphi-inspiration",
         ] {
             for (tag, _) in fcmd_i18n::LANGUAGES {
                 let mut app = app_on_disk(dir.path());

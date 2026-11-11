@@ -357,6 +357,7 @@ const THEMES: &[&str] = &[
     "blade",
     "github-dark",
     "delphi-dark-2027",
+    "delphi-inspiration",
 ];
 
 /// A page built from one of the repository's documents, with the note that says it is English.

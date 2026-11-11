@@ -305,7 +305,7 @@ every key on the screen you are looking at does.
   checking against `known_hosts`, a jump host, port forwarding, a speed limit per server, and
   `s3://` panels with the credentials read from the environment or `~/.aws/credentials`.
   Passwords are kept, if you want, in the encrypted secrets file — never in the configuration.
-- **The program itself**: nine themes, seven interface languages switchable while it runs, two
+- **The program itself**: ten themes, seven interface languages switchable while it runs, two
   keymap profiles (FAR and mc) and your own on top, macros, the screens list (`F12`), a terminal
   of its own (`Ctrl+Alt+E`), plugins (`F11` for their commands, *Options → Plugins
   configuration* to turn them on and off), questions to an AI service of your choice, a help
@@ -376,11 +376,13 @@ pulled-down menu, and a Delphi unit in the viewer with the lines the IDE draws d
 - `blade` — **Blade**: amber and teal in the rain.
 - `github-dark` — **GitHub Dark**: GitHub's dark terminal colours.
 - `delphi-dark-2027` — **Delphi Dark 2027**: the Delphi IDE's dark editor, for the whole program, block lines included.
+- `delphi-inspiration` — **Delphi Inspiration**: FAR's classic blue panels, and the Delphi IDE's dark editor in `F3` and `F4`.
 
 <table>
 <tr><td align="center"><img src="docs/shots/theme-commander.svg" alt="Commander" width="280"><br><code>commander</code></td><td align="center"><img src="docs/shots/theme-far.svg" alt="FAR" width="280"><br><code>far</code></td><td align="center"><img src="docs/shots/theme-black.svg" alt="Black" width="280"><br><code>black</code></td></tr>
 <tr><td align="center"><img src="docs/shots/theme-white.svg" alt="White" width="280"><br><code>white</code></td><td align="center"><img src="docs/shots/theme-matrix.svg" alt="Matrix" width="280"><br><code>matrix</code></td><td align="center"><img src="docs/shots/theme-tron.svg" alt="Tron" width="280"><br><code>tron</code></td></tr>
 <tr><td align="center"><img src="docs/shots/theme-blade.svg" alt="Blade" width="280"><br><code>blade</code></td><td align="center"><img src="docs/shots/theme-github-dark.svg" alt="GitHub Dark" width="280"><br><code>github-dark</code></td><td align="center"><img src="docs/shots/theme-delphi-dark-2027.svg" alt="Delphi Dark 2027" width="280"><br><code>delphi-dark-2027</code></td></tr>
+<tr><td align="center"><img src="docs/shots/theme-delphi-inspiration.svg" alt="Delphi Inspiration" width="280"><br><code>delphi-inspiration</code></td><td></td><td></td></tr>
 </table>
 
 **Choosing one**: `Ctrl+Shift+T` steps through them while the program runs, `F9` → Options →

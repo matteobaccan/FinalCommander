@@ -125,7 +125,7 @@ pub enum ThemeSource {
     Plugin(String),
 }
 
-/// The nine themes compiled into the binary. `commander` is the default.
+/// The ten themes compiled into the binary. `commander` is the default.
 pub const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("commander", include_str!("../themes/commander.toml")),
     ("far", include_str!("../themes/far.toml")),
@@ -138,6 +138,10 @@ pub const BUILTIN_THEMES: &[(&str, &str)] = &[
     (
         "delphi-dark-2027",
         include_str!("../themes/delphi-dark-2027.toml"),
+    ),
+    (
+        "delphi-inspiration",
+        include_str!("../themes/delphi-inspiration.toml"),
     ),
 ];
 
@@ -548,7 +552,7 @@ impl Theme {
     }
 }
 
-/// Every theme available in this run: the nine built-ins plus whatever was found on disk.
+/// Every theme available in this run: the ten built-ins plus whatever was found on disk.
 /// A file theme with the id of a built-in replaces it, so a user can retune `commander`
 /// without renaming it.
 #[derive(Debug, Clone)]
@@ -643,7 +647,7 @@ mod tests {
     #[test]
     fn every_builtin_theme_loads_and_defines_every_key() {
         let set = ThemeSet::builtin_only();
-        assert_eq!(set.len(), 9);
+        assert_eq!(set.len(), 10);
         assert_eq!(
             set.ids(),
             vec![
@@ -655,7 +659,8 @@ mod tests {
                 "tron",
                 "blade",
                 "github-dark",
-                "delphi-dark-2027"
+                "delphi-dark-2027",
+                "delphi-inspiration"
             ]
         );
         for theme in set.iter() {
@@ -688,6 +693,7 @@ mod tests {
             "blade",
             "github-dark",
             "delphi-dark-2027",
+            "delphi-inspiration",
         ] {
             assert_eq!(set.get(id).unwrap().variant, Variant::Dark, "{id}");
         }
@@ -860,7 +866,7 @@ mod tests {
                 "##,
             )],
         );
-        assert_eq!(set.len(), 9, "the config theme replaced the built-in one");
+        assert_eq!(set.len(), 10, "the config theme replaced the built-in one");
         let t = set.get("commander").unwrap();
         assert_eq!(t.name, "Mine");
         assert_eq!(t.color("panel.bg"), Color::Rgb(1, 2, 3));
@@ -879,7 +885,7 @@ mod tests {
                 "##,
             )],
         );
-        assert_eq!(set.len(), 9, "the broken theme was not added");
+        assert_eq!(set.len(), 10, "the broken theme was not added");
         assert_eq!(set.load_errors.len(), 1);
         assert!(
             set.load_errors[0].contains("chartreuse"),
@@ -903,7 +909,8 @@ mod tests {
         let set = ThemeSet::builtin_only();
         assert_eq!(set.next_after("commander").id, "far");
         assert_eq!(set.next_after("blade").id, "github-dark");
-        assert_eq!(set.next_after("delphi-dark-2027").id, "commander");
+        assert_eq!(set.next_after("delphi-dark-2027").id, "delphi-inspiration");
+        assert_eq!(set.next_after("delphi-inspiration").id, "commander");
         assert_eq!(set.next_after("nonexistent").id, "far");
     }
 
