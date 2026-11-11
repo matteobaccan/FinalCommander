@@ -422,6 +422,52 @@ impl Diff {
         true
     }
 
+    /// The hunk at the top as the body of a unified patch from the left side to the right,
+    /// with no lines of context: `@@ -a,n +b,m @@`, the left's lines with `-`, the right's
+    /// with `+`, each line exactly as the file has it. What `git apply --unidiff-zero` takes
+    /// to stage one hunk and leave the rest. `None` when the top row is not in a hunk.
+    pub fn hunk_patch(&self) -> Option<String> {
+        let rows = self.hunk_rows()?;
+        let before = &self.rows[..rows.start];
+        let (left_from, right_from) = (
+            before.iter().filter(|r| r.left_no.is_some()).count(),
+            before.iter().filter(|r| r.right_no.is_some()).count(),
+        );
+        let inside = &self.rows[rows];
+        let (left_len, right_len) = (
+            inside.iter().filter(|r| r.left_no.is_some()).count(),
+            inside.iter().filter(|r| r.right_no.is_some()).count(),
+        );
+        // An empty range is named by the line before it, as diff writes one.
+        let start = |from: usize, len: usize| if len == 0 { from } else { from + 1 };
+        let mut out = format!(
+            "@@ -{},{} +{},{} @@\n",
+            start(left_from, left_len),
+            left_len,
+            start(right_from, right_len),
+            right_len
+        );
+        let mut lines = |sign: char, all: &[String], from: usize, len: usize, eol: bool| {
+            for line in &all[from..from + len] {
+                out.push(sign);
+                out.push_str(line);
+                out.push('\n');
+            }
+            if len > 0 && from + len == all.len() && !eol {
+                out.push_str("\\ No newline at end of file\n");
+            }
+        };
+        lines('-', &self.left, left_from, left_len, self.left_final_eol);
+        lines(
+            '+',
+            &self.right,
+            right_from,
+            right_len,
+            self.right_final_eol,
+        );
+        Some(out)
+    }
+
     /// Has either side been merged into since it was read?
     pub fn edited(&self) -> bool {
         self.left_edited || self.right_edited
@@ -455,6 +501,28 @@ mod tests {
             right.as_bytes(),
             Ignore::default(),
         )
+    }
+
+    /// The hunk at the top as a patch with no context: a changed line, a line added, a
+    /// line gone, and the last line of a file with no newline after it.
+    #[test]
+    fn a_hunk_becomes_a_patch_of_its_own() {
+        let mut d = diff("a\nb\nc\n", "a\nB\nc\nd\n");
+        assert!(d.next_hunk());
+        assert_eq!(d.hunk_patch().unwrap(), "@@ -2,1 +2,1 @@\n-b\n+B\n");
+        assert!(d.next_hunk());
+        assert_eq!(d.hunk_patch().unwrap(), "@@ -3,0 +4,1 @@\n+d\n");
+        let mut d = diff("a\nb\nc", "a\nc");
+        assert!(d.next_hunk());
+        assert_eq!(d.hunk_patch().unwrap(), "@@ -2,1 +1,0 @@\n-b\n");
+        let mut d = diff("a\nb", "a\nc");
+        assert!(d.next_hunk());
+        assert_eq!(
+            d.hunk_patch().unwrap(),
+            "@@ -2,1 +2,1 @@\n-b\n\\ No newline at end of file\n+c\n\\ No newline at end of file\n"
+        );
+        d.to_start();
+        assert!(d.hunk_patch().is_none(), "a line both have is no hunk");
     }
 
     /// `F5`: the focused side takes the other one's version of the hunk at the top. Three

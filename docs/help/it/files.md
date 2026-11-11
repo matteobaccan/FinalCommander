@@ -473,7 +473,7 @@ quello che c'è dentro. Sono i file veri, e i tasti sono quelli che mostra la ba
 
 | Tasto | In *cosa è cambiato* |
 | --- | --- |
-| `F3` | le due versioni affiancate, nel confronto interno: l'indice e il file su una riga non in staging, l'ultimo commit e l'indice su una in staging; un file che git non conosce si vede com'è |
+| `F3` | le due versioni affiancate, nel confronto interno: l'indice e il file su una riga non in staging, l'ultimo commit e l'indice su una in staging; un file che git non conosce si vede com'è. Lì `S` mette in stage il blocco in cima allo schermo e nient'altro — o, nel confronto di quello che è in staging, lo toglie dall'indice — e il confronto torna sui blocchi che restano |
 | `Ctrl+Q` | la vista rapida accanto mostra la diff della riga, a colori, e segue il cursore |
 | `F4` | modifica il file |
 | `F5` | mette in staging i file selezionati, o quello sotto il cursore (`git add`) |

@@ -4330,6 +4330,55 @@ fn git(cwd: &std::path::Path, args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+/// `file` as git names it inside the repository at `root`: relative, with `/`. The file's
+/// folder is resolved first, so a path through a link still finds its way in.
+fn repo_path(root: &std::path::Path, file: &std::path::Path) -> Result<String, String> {
+    let rel = file
+        .strip_prefix(root)
+        .map(|r| r.to_path_buf())
+        .or_else(|_| {
+            let real = file
+                .parent()
+                .and_then(|d| d.canonicalize().ok())
+                .map(|d| d.join(file.file_name().unwrap_or_default()))
+                .unwrap_or_else(|| file.to_path_buf());
+            let top = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+            real.strip_prefix(&top).map(|r| r.to_path_buf())
+        })
+        .map_err(|_| format!("{}: not in this repository", file.display()))?;
+    Ok(rel.to_string_lossy().replace('\\', "/"))
+}
+
+/// `git` with something written to its standard input: a patch for `git apply -`.
+fn git_with_input(cwd: &std::path::Path, args: &[&str], input: &str) -> Result<String, String> {
+    use std::io::Write;
+    let mut child = std::process::Command::new("git")
+        .arg("-C")
+        .arg(cwd)
+        .args(args)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .spawn()
+        .map_err(|e| format!("git: {e}"))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(input.as_bytes())
+            .map_err(|e| format!("git: {e}"))?;
+    }
+    let out = child.wait_with_output().map_err(|e| format!("git: {e}"))?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(if err.is_empty() {
+            format!("git {}: {}", args.join(" "), out.status)
+        } else {
+            err
+        });
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
 /// Where each name of one directory stands in its repository, for the `git` column: what
 /// `git status --short` writes for a file of this directory, and for a directory what is
 /// under it — `M` when anything there is changed or staged, `??` when all of it is new, `!!`
@@ -4524,20 +4573,7 @@ fn run_git(cwd: &std::path::Path, what: &app::GitAsk) -> Result<app::GitOut, Str
             text(&format!("{name}.diff"), body)
         }
         GitAsk::Sides { file, staged } => {
-            let rel = file
-                .strip_prefix(&root)
-                .map(|r| r.to_path_buf())
-                .or_else(|_| {
-                    let real = file
-                        .parent()
-                        .and_then(|d| d.canonicalize().ok())
-                        .map(|d| d.join(file.file_name().unwrap_or_default()))
-                        .unwrap_or_else(|| file.clone());
-                    let top = root.canonicalize().unwrap_or_else(|_| root.clone());
-                    real.strip_prefix(&top).map(|r| r.to_path_buf())
-                })
-                .map_err(|_| format!("{}: not in this repository", file.display()))?;
-            let rel = rel.to_string_lossy().replace('\\', "/");
+            let rel = repo_path(&root, file)?;
             let name = file
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
@@ -4560,6 +4596,7 @@ fn run_git(cwd: &std::path::Path, what: &app::GitAsk) -> Result<app::GitOut, Str
                     before,
                     after,
                     staged: true,
+                    file: file.clone(),
                 })
             } else {
                 let before = write("index", version(format!(":{rel}")))?;
@@ -4573,8 +4610,28 @@ fn run_git(cwd: &std::path::Path, what: &app::GitAsk) -> Result<app::GitOut, Str
                     before,
                     after,
                     staged: false,
+                    file: file.clone(),
                 })
             }
+        }
+        GitAsk::ApplyHunk {
+            file,
+            patch,
+            reverse,
+        } => {
+            let rel = repo_path(&root, file)?;
+            let whole = format!("diff --git a/{rel} b/{rel}\n--- a/{rel}\n+++ b/{rel}\n{patch}");
+            let mut args = vec!["apply", "--cached", "--unidiff-zero", "--whitespace=nowarn"];
+            if *reverse {
+                args.push("--reverse");
+            }
+            args.push("-");
+            git_with_input(&root, &args, &whole)?;
+            Ok(GitOut::Done(if *reverse {
+                format!("unstaged one hunk of {rel}")
+            } else {
+                format!("staged one hunk of {rel}")
+            }))
         }
         GitAsk::Discard {
             worktree,
@@ -6696,6 +6753,91 @@ dir_attr = "D"
 
     /// The git menu's three answers, from a real repository made here — which needs `git` on
     /// the machine, as the menu itself does; without one the test has nothing to say.
+    /// One hunk of two into the index from the side-by-side diff, the other left in the work
+    /// tree; then the same hunk out of the index again from the diff of what is staged.
+    #[test]
+    fn one_hunk_is_staged_and_unstaged_on_its_own() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let run = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+        };
+        if run(&["init", "-q", "-b", "main"]).is_err() {
+            return;
+        }
+        run(&["config", "user.email", "t@example.com"]).unwrap();
+        run(&["config", "user.name", "T"]).unwrap();
+        run(&["config", "core.autocrlf", "false"]).unwrap();
+        let a = root.join("a.txt");
+        let lines: String = (1..=12).map(|i| format!("line {i}\n")).collect();
+        std::fs::write(&a, &lines).unwrap();
+        run(&["add", "a.txt"]).unwrap();
+        run(&["commit", "-q", "-m", "first"]).unwrap();
+        std::fs::write(
+            &a,
+            lines
+                .replace("line 2\n", "LINE 2\n")
+                .replace("line 11\n", "LINE 11\n"),
+        )
+        .unwrap();
+        let sides = |staged| {
+            let Ok(app::GitOut::Sides { before, after, .. }) = run_git(
+                root,
+                &app::GitAsk::Sides {
+                    file: a.clone(),
+                    staged,
+                },
+            ) else {
+                panic!("the sides")
+            };
+            fcmd_view::Diff::new(
+                "l".into(),
+                &std::fs::read(before).unwrap(),
+                "r".into(),
+                &std::fs::read(after).unwrap(),
+                Default::default(),
+            )
+        };
+        let mut view = sides(false);
+        assert!(view.next_hunk());
+        let patch = view.hunk_patch().unwrap();
+        run_git(
+            root,
+            &app::GitAsk::ApplyHunk {
+                file: a.clone(),
+                patch,
+                reverse: false,
+            },
+        )
+        .expect("the hunk goes in");
+        let cached = String::from_utf8(run(&["diff", "--cached"]).unwrap().stdout).unwrap();
+        assert!(cached.contains("+LINE 2"), "{cached}");
+        assert!(!cached.contains("LINE 11"), "only the one hunk: {cached}");
+        let left = String::from_utf8(run(&["diff"]).unwrap().stdout).unwrap();
+        assert!(
+            left.contains("+LINE 11") && !left.contains("LINE 2"),
+            "{left}"
+        );
+        // And out again, from the diff of what is staged.
+        let mut staged = sides(true);
+        assert!(staged.next_hunk());
+        run_git(
+            root,
+            &app::GitAsk::ApplyHunk {
+                file: a.clone(),
+                patch: staged.hunk_patch().unwrap(),
+                reverse: true,
+            },
+        )
+        .expect("the hunk comes out");
+        let cached = String::from_utf8(run(&["diff", "--cached"]).unwrap().stdout).unwrap();
+        assert!(cached.is_empty(), "{cached}");
+    }
+
     #[test]
     fn git_says_what_changed_the_log_and_the_branches() {
         let dir = tempfile::tempdir().unwrap();

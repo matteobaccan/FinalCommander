@@ -2987,7 +2987,12 @@ fn draw_diff(app: &App, view: &fcmd_view::Diff, buf: &mut Buffer, screen: Rect) 
             ],
         )
     };
-    let keys = app.i18n.t("diff-hint");
+    // git's own diff says the key that stages or unstages a hunk.
+    let keys = app.i18n.t(match app.diff_git {
+        Some((_, false)) => "diff-hint-git",
+        Some((_, true)) => "diff-hint-git-staged",
+        None => "diff-hint",
+    });
     let y = inner.y + inner.h - 1;
     buf.put_str(inner.x, y, &foot, dim, inner.w);
     // The keys go at the right end, where there is room for them.

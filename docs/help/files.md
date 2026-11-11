@@ -449,7 +449,7 @@ it. They are the real files, and the keys are the ones the bar shows:
 
 | Key | In *what changed* |
 | --- | --- |
-| `F3` | the two versions side by side, in the internal diff: the index and the file on a row that is not staged, the last commit and the index on one that is; a file git does not know is shown as it is |
+| `F3` | the two versions side by side, in the internal diff: the index and the file on a row that is not staged, the last commit and the index on one that is; a file git does not know is shown as it is. There `S` stages the hunk at the top of the screen and nothing else — or, in the diff of what is staged, takes it out of the index — and the diff comes back on the hunks that are left |
 | `Ctrl+Q` | the quick view beside it shows the diff of the row, in colour, and follows the cursor |
 | `F4` | edit the file |
 | `F5` | stage the selected files, or the one under the cursor (`git add`) |

@@ -502,6 +502,13 @@ pub enum GitAsk {
     },
     Stage(Vec<std::path::PathBuf>),
     Unstage(Vec<std::path::PathBuf>),
+    /// One hunk of one file into the index, or out of it with `reverse`: the body of a
+    /// patch with no context, as `Diff::hunk_patch` writes it.
+    ApplyHunk {
+        file: std::path::PathBuf,
+        patch: String,
+        reverse: bool,
+    },
     /// Throw changes away: the work tree back to the index for `worktree`, both back to the
     /// last commit for `both`, and out of the index (the file kept, untracked) for `added`.
     Discard {
@@ -683,6 +690,8 @@ pub enum GitOut {
         before: std::path::PathBuf,
         after: std::path::PathBuf,
         staged: bool,
+        /// The file in the work tree the two versions are of.
+        file: std::path::PathBuf,
     },
 }
 
@@ -2440,6 +2449,12 @@ pub struct App {
     /// The two files the diff screen is comparing. The view holds their names to draw; `F2`
     /// needs the paths, and a name is not a path.
     diff_paths: Option<(VPath, VPath)>,
+    /// When the diff on screen is git's — the index against the work tree, or the last
+    /// commit against the index — the file it is of and which of the two: what `s` stages or
+    /// unstages a hunk of.
+    pub diff_git: Option<(PathBuf, bool)>,
+    /// Where the diff was when a hunk went into the index, to come back to.
+    pub diff_top: Option<usize>,
     /// Has an `Esc` already said there is something unwritten? The second one leaves anyway,
     /// which is how a screen with no dialog of its own asks "are you sure".
     diff_warned: bool,
@@ -2885,6 +2900,8 @@ impl App {
             held: Mods::NONE,
             attr_targets: Vec::new(),
             attr_owner: None,
+            diff_top: None,
+            diff_git: None,
             diff_paths: None,
             diff_warned: false,
             attr_seed_mode: None,
@@ -5601,6 +5618,7 @@ impl App {
                 }
                 self.leave_screen();
                 self.diff_paths = None;
+                self.diff_git = None;
                 return;
             }
             // Midnight Commander's merge: the focused column takes the other one's version
@@ -5673,6 +5691,24 @@ impl App {
             KeyCode::Left => view.scroll_sideways(-1),
             KeyCode::Right => view.scroll_sideways(1),
             KeyCode::Tab => view.right_focused = !view.right_focused,
+            // git's own diff: the hunk at the top into the index, or out of it when the diff
+            // is of what is staged.
+            KeyCode::Char('s') | KeyCode::Char('S') if self.diff_git.is_some() => {
+                let (file, staged) = self.diff_git.clone().expect("checked");
+                if view.edited() {
+                    error = Some("diff-stage-edited");
+                } else if let Some(patch) = view.hunk_patch() {
+                    self.diff_top = Some(view.top);
+                    self.git_ask(GitAsk::ApplyHunk {
+                        file,
+                        patch,
+                        reverse: staged,
+                    });
+                    return;
+                } else {
+                    error = Some("diff-no-hunk-here");
+                }
+            }
             KeyCode::Char('w') | KeyCode::Char('W') => {
                 view.ignore.whitespace = !view.ignore.whitespace;
                 view.align();
@@ -12942,6 +12978,12 @@ impl App {
                 self.open_viewer_on(&path, vpath);
             }
             Ok(GitOut::Done(said)) => {
+                // A hunk staged from the diff: the diff is asked for again, on its place.
+                if let (Mode::Diff(_), Some((file, staged))) = (&self.mode, self.diff_git.clone()) {
+                    if self.diff_top.is_some() {
+                        self.git_ask(GitAsk::Sides { file, staged });
+                    }
+                }
                 // Whatever the panel shows is out of date now: ask for it again, and say
                 // what git said in the meantime.
                 if let Some(view) = self.git_view.clone() {
@@ -13040,6 +13082,7 @@ impl App {
                 before,
                 after,
                 staged,
+                file,
             }) => {
                 self.set_status(String::new());
                 let name = after
@@ -13058,7 +13101,12 @@ impl App {
                 if let Mode::Diff(view) = &mut self.mode {
                     view.left_name = left;
                     view.right_name = right;
+                    // Back on the hunk it was at when it was asked for again after a stage.
+                    if let Some(top) = self.diff_top.take() {
+                        view.top = top.min(view.len().saturating_sub(1));
+                    }
                 }
+                self.diff_git = Some((file, staged));
             }
         }
     }

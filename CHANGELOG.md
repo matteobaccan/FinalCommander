@@ -17,6 +17,10 @@ Notable changes, newest first. The format follows
   Content credentials (C2PA) say who signed and whether the picture is called generated. PNG
   text that is compressed (`zTXt`, compressed `iTXt`) is read now, up to the size a workflow
   takes, and WebP files say their size, animation and EXIF.
+- **Staging one hunk.** In git's side-by-side diff (`F3` on a row of the git panel) `S` stages
+  the hunk at the top of the screen and leaves the rest of the file's changes where they are;
+  in the diff of what is staged it takes the hunk back out. The diff comes back on what is
+  left. It is `git apply --cached` of that one hunk, so the work tree is never touched.
 - **`git blame` in the viewer.** `Ctrl+Alt+G` on a file being read shows who changed each line
   and when, opened on the line that was at the top; `Backspace` goes back to the file.
 - **Taking a picture's metadata out.** Files → *Strip picture metadata* on PNG, WebP and
