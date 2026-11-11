@@ -163,6 +163,28 @@ patterns = ['ACME-\d{6}', 'customer id: (\d+)']   # your own, as regular express
 A pattern of your own masks its first group when it has one — so the words before it stay —
 and otherwise everything it matched; they show as `[REDACTED:custom]`.
 
+## Only models on this machine
+
+**Local only** is a switch for when nothing may leave: with it on, fcmd asks only a service
+whose address is this machine — `localhost` and anything under it, `127.0.0.1` and the rest of
+`127.x.x.x`, `::1`, a socket in the file system (`unix:/run/llm.sock`) — and the hosts you
+list as your own. Any other service is **refused before anything is sent**: the question, the
+files, the login that would send the key. The status line names the service and the host it
+would have gone to.
+
+`F6` in the list of services (the AI row of `Alt+F1`) switches it; the frame then says
+`local only`, and every row that will be refused says so. In `fcmd.toml`:
+
+```toml
+[ai_guard]
+local_only = true
+local_hosts = ["gpu-box.lan", "192.168.1.20"]   # a model on your own network counts as local
+```
+
+An address is judged by what is written, not looked up: a name that happens to point at
+`127.0.0.1` is not local unless you list it, because looking it up is already a question to
+somebody else. It is off by default.
+
 # Updates
 
 `Options → Check for updates` asks GitHub which release is the latest and, when it is newer

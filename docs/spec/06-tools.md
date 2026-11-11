@@ -830,6 +830,27 @@ arrives for a question other than the one in the dialog is ignored.
 `redact` off and on, writes the settings, and says which on the status line; the `:ai`
 panel's title carries the state.
 
+**Local only (A5).** `local_only = false` by default; `local_hosts = []`. With it on, a
+service is asked only when `fcmd_net::ai::is_local(url, local_hosts)` holds: the scheme is
+`unix`, `http+unix` or `https+unix`; or the host — what follows the last `@` of the
+authority, without port or brackets, lower case — is `localhost`, ends in `.localhost`, is a
+loopback IPv4 (`127.0.0.0/8`) or IPv6 (`::1`) address, or equals the host of an entry of
+`local_hosts`. Nothing is resolved: a look-up is itself a question to another machine.
+`0.0.0.0` is not local, an authority with a character that is not a letter, digit, `.`, `-`
+or `:` names no host, and a backslash ends the authority as a slash does — the address is
+read the way the HTTP library will read it. The study spelled the setting `ai.local_only`;
+it is `ai_guard.local_only`, for the reason above.
+
+It is checked twice. In the program (`ai_refused`): before the dialog that names the files,
+before a key or the secrets file's password is asked for, before the login — the status line
+says `Local only is on: <name> answers at <host>, which is not this machine — nothing was
+sent`, and no request is queued. And on the worker, first thing in `ask_ai`, for a question
+and a probe alike, from the `[ai_guard]` the request carries: the last door before the
+network does not depend on the first. `ai.local` — `F6` in the `:ai` panel — switches it and
+writes the settings; the panel's title then says `local only`, and each row that would be
+refused says so. Known limits: a redirect answered by a local server is followed, and an HTTP
+proxy named in the environment is used as for any other request.
+
 ## 15. Git
 
 `Ctrl+Alt+G` (`tool.git`, *Commands → Git*) on a folder of this disk, and `F2` inside any of

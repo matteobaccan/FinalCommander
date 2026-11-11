@@ -388,6 +388,8 @@ pub enum Command {
     GitCommitDraft,
     /// Ask the language model what the marked block, or the screen, is.
     AiExplain,
+    /// Ask only language models on this machine, or any of them (SPEC 06 §14.2).
+    AiLocalOnly,
     /// Mask secrets in what is sent to a language model, or stop masking them (SPEC 06 §14.2).
     AiRedact,
     /// The system's log, newest last, in the viewer (FAR's EventViewer, SPEC 06 §16).
@@ -771,6 +773,7 @@ impl Command {
             Command::ToolGit,
             Command::GitCommitDraft,
             Command::AiExplain,
+            Command::AiLocalOnly,
             Command::AiRedact,
             Command::ToolSysLog,
             Command::ToolAi,
@@ -1083,6 +1086,7 @@ impl Command {
             Command::ToolGit => "tool.git".into(),
             Command::GitCommitDraft => "git.commit.draft".into(),
             Command::AiExplain => "ai.explain".into(),
+            Command::AiLocalOnly => "ai.local".into(),
             Command::AiRedact => "ai.redact".into(),
             Command::ToolSysLog => "tool.syslog".into(),
             Command::ToolAi => "tool.ai".into(),
@@ -1359,6 +1363,7 @@ impl Command {
             ("tool.git", _) => Command::ToolGit,
             ("git.commit.draft", _) => Command::GitCommitDraft,
             ("ai.explain", _) => Command::AiExplain,
+            ("ai.local", _) => Command::AiLocalOnly,
             ("ai.redact", _) => Command::AiRedact,
             ("tool.syslog", _) => Command::ToolSysLog,
             ("tool.ai", _) => Command::ToolAi,

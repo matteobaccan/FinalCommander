@@ -168,6 +168,28 @@ patterns = ['ACME-\d{6}', 'codice cliente: (\d+)']   # i tuoi, come espressioni 
 Un tuo pattern maschera il suo primo gruppo quando ne ha uno — così le parole prima restano — e
 altrimenti tutto ciò che ha trovato; compaiono come `[REDACTED:custom]`.
 
+## Solo modelli su questa macchina
+
+**Solo locale** è un interruttore per quando niente deve uscire: acceso, fcmd chiede solo a un
+servizio il cui indirizzo è questa macchina — `localhost` e ciò che gli sta sotto, `127.0.0.1` e
+il resto di `127.x.x.x`, `::1`, un socket nel file system (`unix:/run/llm.sock`) — e agli host
+che elenchi come tuoi. Ogni altro servizio viene **rifiutato prima che parta qualcosa**: la
+domanda, i file, il login che manderebbe la chiave. La riga di stato dice il servizio e l'host
+a cui sarebbe andato.
+
+`F6` nella lista dei servizi (la riga AI di `Alt+F1`) lo commuta; la cornice allora dice
+`solo locale`, e ogni riga che verrà rifiutata lo dice. In `fcmd.toml`:
+
+```toml
+[ai_guard]
+local_only = true
+local_hosts = ["gpu-box.lan", "192.168.1.20"]   # un modello sulla tua rete conta come locale
+```
+
+Un indirizzo viene giudicato per com'è scritto, non risolto: un nome che per caso punta a
+`127.0.0.1` non è locale finché non lo elenchi, perché risolverlo è già una domanda fatta a
+qualcun altro. Di default è spento.
+
 # Aggiornamenti
 
 `Opzioni → Verifica aggiornamenti` chiede a GitHub qual è l'ultima versione e, se è più nuova

@@ -1694,6 +1694,13 @@ pub struct AiGuardCfg {
     /// group when the pattern has one, all it matched otherwise.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub patterns: Vec<String>,
+    /// Ask only services on this machine: `localhost`, `127.0.0.0/8`, `::1`, a socket in
+    /// the file system, and `local_hosts`. Anything else is refused before it is sent.
+    pub local_only: bool,
+    /// Hosts that count as this machine for `local_only`: a model on the user's own
+    /// network, by name or address.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub local_hosts: Vec<String>,
 }
 
 impl Default for AiGuardCfg {
@@ -1701,6 +1708,8 @@ impl Default for AiGuardCfg {
         AiGuardCfg {
             redact: true,
             patterns: Vec::new(),
+            local_only: false,
+            local_hosts: Vec::new(),
         }
     }
 }
@@ -2334,6 +2343,7 @@ impl Config {
             // a key it shows that `set` refuses would be a setting nobody can reach.
             "cmdline.prompt" => self.cmdline.prompt = value.to_string(),
             "ai_guard.redact" => self.ai_guard.redact = parse_bool(value)?,
+            "ai_guard.local_only" => self.ai_guard.local_only = parse_bool(value)?,
             "arc.max_entries" => self.arc.max_entries = parse_usize(value)?,
             "arc.max_depth" => self.arc.max_depth = parse_usize(value)?,
             "arc.max_total_mb" => self.arc.max_total_mb = parse_u64(value)?,

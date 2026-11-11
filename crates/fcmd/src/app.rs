@@ -10561,6 +10561,10 @@ impl App {
             self.ai_toggle_redact();
             return;
         }
+        if cmd == Command::AiLocalOnly {
+            self.ai_toggle_local_only();
+            return;
+        }
         if cmd == Command::AiExplain {
             self.ai_explain_here();
             return;
@@ -11665,9 +11669,12 @@ impl App {
                 }
                 // Nothing to copy in the list of AI services: `F5` there is the switch for
                 // what is masked before a question goes, as the key bar says.
+                // And `F6` the one for "local only".
                 if self.panel().temp_origin() == Some(":ai") {
-                    if cmd == Command::FileCopy {
-                        self.ai_toggle_redact();
+                    match cmd {
+                        Command::FileCopy => self.ai_toggle_redact(),
+                        Command::FileMove => self.ai_toggle_local_only(),
+                        _ => {}
                     }
                     return;
                 }
@@ -14696,6 +14703,10 @@ impl App {
     /// Say what is about to go and to where, before it goes: the names, how much and the host.
     /// `bytes` is `None` for what cannot be measured before it is made, the staged diff.
     fn confirm_ai_send(&mut self, query: AiQuery, names: Vec<String>, bytes: Option<u64>) {
+        // No dialog about what goes where nothing may go.
+        if self.ai_refused(&query.service) {
+            return;
+        }
         let host = query
             .service
             .url
@@ -14926,6 +14937,9 @@ impl App {
     }
 
     fn ask_ai(&mut self, query: AiQuery) {
+        if self.ai_refused(&query.service) {
+            return;
+        }
         let service = &query.service;
         let m = self
             .i18n
@@ -15155,13 +15169,21 @@ impl App {
     /// edits it, `F7` (or `Shift+F4`) adds one, `F8` removes it.
     pub(crate) fn open_ai_panel(&mut self, side: usize) {
         use fcmd_core::{Entry, EntryId, EntryKind};
+        let local_only = self.cfg.ai_guard.local_only;
+        let refused = self.i18n.t("ai-row-refused");
         let items: Vec<(VPath, Entry)> = self
             .cfg
             .ais
             .iter()
             .enumerate()
             .map(|(i, a)| {
-                let label = format!("{}   {} · {} · {}", a.name, a.api, a.model, ai_host(&a.url));
+                let mut label =
+                    format!("{}   {} · {} · {}", a.name, a.api, a.model, ai_host(&a.url));
+                // With "local only" on, the rows that will be refused say so before
+                // anybody presses `Enter` on one.
+                if local_only && !fcmd_net::ai::is_local(&a.url, &self.cfg.ai_guard.local_hosts) {
+                    label.push_str(&format!("   — {refused}"));
+                }
                 let entry = Entry {
                     name: label.into(),
                     kind: EntryKind::File,
@@ -15183,7 +15205,7 @@ impl App {
         }
         // The title says what stands between a question and a service, since this is the
         // panel where that is switched.
-        let title = format!(
+        let mut title = format!(
             "{} · {}",
             self.plain("drive-ai"),
             self.i18n.t(if self.cfg.ai_guard.redact {
@@ -15192,6 +15214,9 @@ impl App {
                 "ai-panel-redact-off"
             })
         );
+        if local_only {
+            title.push_str(&format!(" · {}", self.i18n.t("ai-panel-local-only")));
+        }
         let generation = self.panels[side].generation + 1;
         self.panels[side].generation = generation;
         self.panels[side].set_temp(title, items, generation);
@@ -15201,10 +15226,48 @@ impl App {
         self.active = side;
     }
 
-    /// `ai.redact` (`F5` in the AI panel): masking on or off, kept in the settings.
-    fn ai_toggle_redact(&mut self) {
-        self.cfg.ai_guard.redact = !self.cfg.ai_guard.redact;
+    /// `ai.local` (`F6` in the AI panel): only the services on this machine, or all of
+    /// them; kept in the settings.
+    fn ai_toggle_local_only(&mut self) {
+        self.cfg.ai_guard.local_only = !self.cfg.ai_guard.local_only;
         self.save_setup();
+        self.ai_panel_again();
+        let m = self.i18n.t(if self.cfg.ai_guard.local_only {
+            "ai-local-now-on"
+        } else {
+            "ai-local-now-off"
+        });
+        self.set_status(m);
+    }
+
+    /// With "local only" on, a service that is not this machine is not asked: said here,
+    /// before a dialog, a key prompt or a request, and true when it was refused. The worker
+    /// checks again on its own (SPEC 06 §14.2).
+    fn ai_refused(&mut self, service: &fcmd_config::AiCfg) -> bool {
+        let guard = &self.cfg.ai_guard;
+        if !guard.local_only || fcmd_net::ai::is_local(&service.url, &guard.local_hosts) {
+            return false;
+        }
+        // Whatever was waiting on this question is not waiting any more.
+        if let Some(s) = self.ai_session.as_mut() {
+            s.asking = None;
+        }
+        self.ai_probing = None;
+        self.quick_of = None;
+        let m = self.i18n.t_args(
+            "ai-local-refused",
+            &[
+                ("name", service.name.clone().into()),
+                ("host", fcmd_net::ai::host_of(&service.url).into()),
+            ],
+        );
+        self.set_error(m);
+        true
+    }
+
+    /// The list of services drawn again where it is shown, for a switch its title or its
+    /// rows say: the cursor and the active panel stay where they were.
+    fn ai_panel_again(&mut self) {
         for side in 0..2 {
             if self.panels[side].temp_origin() == Some(":ai") {
                 let (active, cursor) = (self.active, self.panels[side].cursor);
@@ -15213,6 +15276,13 @@ impl App {
                 self.active = active;
             }
         }
+    }
+
+    /// `ai.redact` (`F5` in the AI panel): masking on or off, kept in the settings.
+    fn ai_toggle_redact(&mut self) {
+        self.cfg.ai_guard.redact = !self.cfg.ai_guard.redact;
+        self.save_setup();
+        self.ai_panel_again();
         let m = self.i18n.t(if self.cfg.ai_guard.redact {
             "ai-redact-now-on"
         } else {
@@ -15255,6 +15325,10 @@ impl App {
             return;
         };
         let service = self.cfg.ais[at].clone();
+        // A login sends the key: it is a request like any other.
+        if self.ai_refused(&service) {
+            return;
+        }
         let m = self.i18n.t_args(
             "ai-probing",
             &[
@@ -28165,7 +28239,7 @@ impl App {
                 (3, ""),
                 (4, "key-ai-edit"),
                 (5, "key-ai-redact"),
-                (6, ""),
+                (6, "key-ai-local"),
                 (7, "key-ai-new"),
                 (8, "key-ai-remove"),
                 (9, "key-pulldown"),
@@ -47341,5 +47415,146 @@ abcdefghij
         assert!(matches!(&app.mode, Mode::Viewer(_)), "{:?}", app.mode);
         press(&mut app, "Esc");
         assert!(matches!(&app.mode, Mode::Normal), "{:?}", app.mode);
+    }
+
+    /// SPEC 06 §14.2: with "local only" on, a service that is not this machine is refused
+    /// with its host named — the question, the dialog for files, the login — and no request
+    /// is made; one on this machine, or on a host the user listed, is asked as before.
+    #[test]
+    fn local_only_refuses_a_remote_service_and_sends_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "alpha").unwrap();
+        let mut app = editing_app(dir.path());
+        app.paths.config_file = dir.path().join("fcmd.toml");
+        app.cfg.ais = vec![
+            fcmd_config::AiCfg {
+                api: "openai".into(),
+                ..ai_service_cfg("far", "https://api.example.com/v1/chat/completions")
+            },
+            ai_service_cfg("near", "http://127.0.0.1:11434/api/chat"),
+            ai_service_cfg("lan", "http://gpu-box.lan:11434/api/chat"),
+        ];
+        app.ai_tokens.insert("far".into(), "k".into());
+        app.cfg.ai_guard.local_only = true;
+        let asked = |app: &mut App| {
+            app.take_requests()
+                .into_iter()
+                .filter_map(|r| match r {
+                    Request::AiAsk { query, guard, .. } => Some((query.service.name, guard)),
+                    Request::AiPreview { query, .. } => {
+                        Some((query.service.name, Default::default()))
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        app.take_requests();
+
+        // The first service is the remote one: refused, by name and host, and nothing asked.
+        app.cmd.set("ai: why?");
+        press(&mut app, "Enter");
+        assert!(app.status_error, "{}", app.status);
+        assert!(
+            app.status.contains("far") && app.status.contains("api.example.com"),
+            "{}",
+            app.status
+        );
+        assert!(asked(&mut app).is_empty());
+        assert!(app.ai_busy.is_none());
+
+        // With files selected there is no dialog either: nothing would be read or shown.
+        let at = app.panels[0].listing.row_of_name("a.txt").unwrap();
+        app.panels[0].cursor = at;
+        press(&mut app, "Insert");
+        app.cmd.set("ai: what is this?");
+        press(&mut app, "Enter");
+        assert!(matches!(&app.mode, Mode::Normal), "{:?}", app.mode);
+        assert!(app.status_error && asked(&mut app).is_empty());
+        app.panels[0].selection.clear();
+
+        // The one on this machine is asked, and the request carries the switch for the
+        // worker to check again.
+        app.cmd.set("ai: near: why?");
+        press(&mut app, "Enter");
+        let went = asked(&mut app);
+        assert_eq!(went.len(), 1);
+        assert_eq!(went[0].0, "near");
+        assert!(went[0].1.local_only);
+        app.ai_busy = None;
+
+        // A host of the user's own counts once it is listed.
+        app.cmd.set("ai: lan: why?");
+        press(&mut app, "Enter");
+        assert!(app.status_error && asked(&mut app).is_empty());
+        app.cfg.ai_guard.local_hosts = vec!["gpu-box.lan".into()];
+        app.cmd.set("ai: lan: why?");
+        press(&mut app, "Enter");
+        assert_eq!(asked(&mut app).len(), 1);
+        app.ai_busy = None;
+
+        // The list of services says which rows will be refused, and `Enter` — the login,
+        // which would send the key — is refused like a question.
+        app.open_ai_panel(0);
+        let rows: Vec<String> = (0..app.panels[0].listing.len())
+            .map(|r| app.panels[0].listing.row(r).unwrap().name_str().to_string())
+            .collect();
+        assert!(rows[0].contains("refused"), "{rows:?}");
+        assert!(
+            !rows[1].contains("refused") && !rows[2].contains("refused"),
+            "{rows:?}"
+        );
+        assert!(app.panels[0]
+            .temp
+            .as_ref()
+            .unwrap()
+            .title
+            .contains("local only"));
+        app.panels[0].cursor = 0;
+        press(&mut app, "Enter");
+        assert!(app.status_error && app.status.contains("api.example.com"));
+        assert!(asked(&mut app).is_empty());
+        assert_eq!(
+            app.panels[0].temp_origin(),
+            Some(":ai"),
+            "no conversation opened"
+        );
+
+        // `F6` there is the switch, kept in the settings; off, the remote one is asked again.
+        press(&mut app, "F6");
+        assert!(!app.cfg.ai_guard.local_only);
+        assert!(!app.status_error, "{}", app.status);
+        let saved = std::fs::read_to_string(dir.path().join("fcmd.toml")).unwrap();
+        assert!(saved.contains("local_only = false"), "{saved}");
+        assert!(saved.contains("gpu-box.lan"), "{saved}");
+        let row = app.panels[0].listing.row(0).unwrap().name_str().to_string();
+        assert!(!row.contains("refused"), "{row}");
+        app.cmd.set("ai: why?");
+        press(&mut app, "Enter");
+        assert_eq!(asked(&mut app).len(), 1);
+        app.ai_busy = None;
+        app.run(Command::AiLocalOnly);
+        assert!(app.cfg.ai_guard.local_only);
+    }
+
+    /// A conversation with a remote service, and then "local only" is turned on: the next
+    /// question is refused and the panel is not left waiting for an answer.
+    #[test]
+    fn local_only_stops_a_conversation_with_a_remote_service() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = editing_app(dir.path());
+        ai_session_on(&mut app, Vec::new(), None);
+        if let Some(s) = app.ai_session.as_mut() {
+            s.service.url = "https://api.example.com/v1/chat/completions".into();
+        }
+        app.cfg.ai_guard.local_only = true;
+        app.take_requests();
+        app.cmd.set("and then?");
+        press(&mut app, "Enter");
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.ai_session.as_ref().unwrap().asking.is_none());
+        assert!(!app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::AiAsk { .. })));
     }
 }

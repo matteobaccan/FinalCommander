@@ -388,6 +388,83 @@ pub fn endpoint(api: Api, url: &str) -> String {
     url
 }
 
+/// The host a service's address names, lower case and without its port, its user or the
+/// brackets of an IPv6 literal; empty for a socket on this machine's file system.
+pub fn host_of(url: &str) -> String {
+    let url = url.trim();
+    if is_unix_socket(url) {
+        return String::new();
+    }
+    let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
+    // A backslash ends the host too: the library that sends the request reads it as a
+    // slash, and what is refused here must be read the way it will be sent.
+    let authority = rest.split(['/', '?', '#', '\\']).next().unwrap_or("");
+    let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+    let host = match host.strip_prefix('[') {
+        // `[::1]:11434`
+        Some(v6) => v6.split(']').next().unwrap_or(""),
+        // A bare IPv6 address has more than one colon and no port to cut.
+        None if host.matches(':').count() > 1 => host,
+        None => host.split(':').next().unwrap_or(""),
+    };
+    // Letters, digits, dots, hyphens and an IPv6 literal's colons. Anything else — a blank,
+    // a control character, a percent sign — is not a host this can vouch for, and no host is
+    // never a local one.
+    if !host
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':'))
+    {
+        return String::new();
+    }
+    host.trim_end_matches('.').to_ascii_lowercase()
+}
+
+/// `unix:/run/llm.sock`, `unix:///run/llm.sock`, `http+unix://…`: a socket in the file
+/// system, which no other machine can be behind.
+fn is_unix_socket(url: &str) -> bool {
+    let scheme = url.split(':').next().unwrap_or("").to_ascii_lowercase();
+    matches!(scheme.as_str(), "unix" | "http+unix" | "https+unix")
+}
+
+/// Does this address stay on this machine (SPEC 06 §14.2)? A socket in the file system,
+/// `localhost` and anything under it, the whole of `127.0.0.0/8`, `::1` — and the hosts the
+/// user listed as their own (`[ai_guard] local_hosts`), for a model on the machine in the
+/// next room, by name or address, compared without case.
+///
+/// By the name only, and on purpose: a name is not looked up to see where it points, because
+/// the look-up is itself a question sent to somebody else, and a name that resolves to
+/// `127.0.0.1` today is not a promise about tomorrow. `0.0.0.0` is not on the list either:
+/// it is where a server listens, not somewhere to send.
+pub fn is_local(url: &str, also: &[String]) -> bool {
+    if is_unix_socket(url.trim()) {
+        return true;
+    }
+    let host = host_of(url);
+    if host.is_empty() {
+        return false;
+    }
+    if host == "localhost" || host.ends_with(".localhost") || host == "::1" {
+        return true;
+    }
+    // The long spelling of the same address.
+    if host
+        .parse::<std::net::Ipv6Addr>()
+        .is_ok_and(|ip| ip.is_loopback())
+    {
+        return true;
+    }
+    if host
+        .parse::<std::net::Ipv4Addr>()
+        .is_ok_and(|ip| ip.is_loopback())
+    {
+        return true;
+    }
+    also.iter().any(|mine| {
+        let mine = mine.trim();
+        !mine.is_empty() && host_of(mine) == host
+    })
+}
+
 /// An answer read as it is written: the bytes of a streamed reply go in as they come, and
 /// what each of them adds to the text comes out. It reads the three shapes a stream comes in
 /// — OpenAI's and Anthropic's server-sent events, Ollama's lines of JSON — and, for a server
@@ -1136,5 +1213,63 @@ mod tests {
         assert!(request
             .to_ascii_lowercase()
             .contains("authorization: bearer sekrit"));
+    }
+
+    /// SPEC 06 §14.2: what "local" means, address by address.
+    #[test]
+    fn an_address_is_local_only_when_it_cannot_be_another_machine() {
+        let none: [String; 0] = [];
+        for local in [
+            "http://localhost:11434/api/chat",
+            "http://LOCALHOST/v1",
+            "http://127.0.0.1:8080/v1/chat/completions",
+            "http://127.8.9.10/v1",
+            "http://[::1]:11434/api/chat",
+            "http://[0:0:0:0:0:0:0:1]/api/chat",
+            "localhost:11434",
+            "127.0.0.1",
+            "http://ollama.localhost/api/chat",
+            "http://user:pw@localhost:1/x",
+            "unix:/run/llm.sock",
+            "unix:///run/llm.sock",
+            "http+unix://%2Frun%2Fllm.sock/v1",
+        ] {
+            assert!(is_local(local, &none), "{local}");
+        }
+        for remote in [
+            "https://api.openai.com/v1/chat/completions",
+            "https://api.anthropic.com/v1/messages",
+            "http://192.168.1.20:11434/api/chat",
+            "http://10.0.0.5/v1",
+            "http://0.0.0.0:11434",
+            "http://localhost.example.com/v1",
+            "http://notlocalhost/v1",
+            "http://127.0.0.1.example.com/v1",
+            // The host is what follows the `@`, whatever the user part is made to look like.
+            "http://localhost@evil.example.com/v1",
+            "http://localhost:80@evil.example.com/v1",
+            // And what the sending library would read differently from a naive reader.
+            "http://evil.example.com\\@localhost/v1",
+            "http://localhost\t.evil.example.com/v1",
+            "http://local host/v1",
+            "http://%6cocalhost.evil.example.com/v1",
+            "http://[2001:db8::1]/v1",
+            "",
+            "http://",
+        ] {
+            assert!(!is_local(remote, &none), "{remote}");
+        }
+        // The user's own machines, by name or address, with or without a scheme and a port.
+        let mine = vec![
+            "gpu-box.lan".to_string(),
+            "http://192.168.1.20:11434".to_string(),
+            " ".to_string(),
+        ];
+        assert!(is_local("http://GPU-BOX.lan:8000/v1", &mine));
+        assert!(is_local("http://192.168.1.20/api/chat", &mine));
+        assert!(!is_local("http://192.168.1.21/api/chat", &mine));
+        assert!(!is_local("https://api.openai.com/v1", &mine));
+        assert_eq!(host_of("https://Api.Example.com:443/v1"), "api.example.com");
+        assert_eq!(host_of("http://[::1]:11434/api/chat"), "::1");
     }
 }

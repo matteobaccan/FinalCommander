@@ -5230,6 +5230,15 @@ async fn ask_ai(
 ) -> Result<app::AiAnswer, String> {
     use fcmd_net::ai::{Api, Service};
     let cfg = &query.service;
+    // The last door before the network, for the login as much as for a question: with
+    // "local only" on, an address that is not this machine is refused here whatever the
+    // program in front of the worker did or did not check (SPEC 06 §14.2).
+    if guard.local_only && !fcmd_net::ai::is_local(&cfg.url, &guard.local_hosts) {
+        return Err(format!(
+            "local only is on, and {} is not this machine: nothing was sent",
+            fcmd_net::ai::host_of(&cfg.url)
+        ));
+    }
     let api = Api::parse(&cfg.api).ok_or_else(|| format!("api = \"{}\"?", cfg.api))?;
     // The variable first, when it holds a key; then the one typed in this session.
     let token = match std::env::var(&cfg.token_env) {
@@ -8963,5 +8972,47 @@ place = "diagonally"
         // A file that is not there is the same error the question itself would give.
         query.files = vec![dir.path().join("gone.txt")];
         assert!(ai_payload(&query, &guard).is_err());
+    }
+
+    /// SPEC 06 §14.2: with "local only" on, the worker itself refuses an address that is not
+    /// this machine — a question and a login alike — before anything is read or sent.
+    #[test]
+    fn local_only_refuses_a_remote_service_at_the_last_door() {
+        let dir = tempfile::tempdir().unwrap();
+        let guard = fcmd_config::AiGuardCfg {
+            local_only: true,
+            ..Default::default()
+        };
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        for purpose in [app::AiUse::Answer, app::AiUse::Probe] {
+            let mut query = app::AiQuery::new(
+                fcmd_config::AiCfg {
+                    name: "far".into(),
+                    // A name that resolves nowhere: were the door open, this would be an
+                    // error of another kind, never a request.
+                    url: "https://api.example.invalid/v1/chat/completions".into(),
+                    model: "m".into(),
+                    api: "openai".into(),
+                    ..Default::default()
+                },
+                "why?".into(),
+            );
+            query.purpose = purpose;
+            let said = runtime
+                .block_on(ask_ai(&query, None, dir.path(), &guard, |_| {}))
+                .unwrap_err();
+            assert!(
+                said.contains("local only") && said.contains("api.example.invalid"),
+                "{said}"
+            );
+        }
+        assert_eq!(
+            std::fs::read_dir(dir.path()).unwrap().count(),
+            0,
+            "and nothing is written"
+        );
     }
 }
