@@ -486,7 +486,17 @@ compressore usato qui conosce.
 installerebbe. Entrambi si leggono qui, quindi un rpm si apre anche su una macchina dove non c'è
 nient'altro; nessuno dei due si scrive, per la stessa ragione per cui non si scrive un `.deb`.
 
-I formati che questo programma non legge da sé — `.rar`, `.cab`, `.iso`, `.wim`, `.lha`, `.arj`,
+`Enter` apre anche un cabinet di Windows, `.cab`, e lo legge qui: quelli compressi con MSZIP
+— cioè la maggior parte, e tutti quelli vecchi — e quelli non compressi affatto, con ogni
+blocco controllato sul suo checksum quando il cabinet viene provato. Due cose restano fuori.
+Un cabinet compresso con **LZX** o **Quantum**, come gli aggiornamenti e i driver di Windows,
+viene passato intero a `7z` quando è installato; quando non lo è, il cabinet viene comunque
+elencato — l'elenco dei file non è compresso — e aprire un file da lì dice quale compressore
+serve e quale programma installare. E un file che continua da un cabinet di una serie al
+successivo viene elencato e rifiutato per nome; i file che stanno per intero in ciascun
+cabinet si leggono. Un cabinet non viene mai scritto.
+
+I formati che questo programma non legge da sé — `.rar`, `.iso`, `.wim`, `.lha`, `.arj`,
 `.msi` — si aprono attraverso un programma già presente sulla macchina:
 `7z`, in partenza. `Enter` entra esattamente come in uno zip, la cornice dice il formato, e il
 visualizzatore, la ricerca dentro gli archivi e `Ctrl+A` su una voce funzionano tutti. `F3`

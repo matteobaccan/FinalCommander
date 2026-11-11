@@ -287,7 +287,11 @@ a candidate for being read in process is `cpio` (which needs no dependency at al
 
 The first two are read in process since 0.30.0 (`crates/fcmd-arc/src/cpio.rs`), so an rpm opens
 on a machine without `7z`, and this crate being asked first means the table is no longer
-reached for either. `cab` is what is left of the list.
+reached for either. `cab` followed, without the crate it was thought to want
+(`crates/fcmd-arc/src/cab.rs`): stored and MSZIP folders are read in process, MSZIP being
+deflate, which `flate2` already gives. What is left of it for the table is a cabinet packed
+with LZX or Quantum, or a file split across a set: the cache reads the tables itself, sees
+which it is, and hands those — and only those — to `7z`.
 
 ## 10. Running it
 

@@ -468,7 +468,17 @@ Every level of a `zst` is the fastest, which is the only one the compressor here
 would install. Both are read here, so an rpm opens on a machine with nothing else installed;
 neither is written, for the reason a `.deb` is not.
 
-The formats this program does not read itself — `.rar`, `.cab`, `.iso`, `.wim`, `.lha`, `.arj`,
+`Enter` opens a Windows cabinet, `.cab`, too, and reads it here: the ones packed with MSZIP
+— which is most of them, and all the old ones — and the ones not packed at all, with every
+block checked against its checksum when the cabinet is tested. Two things are beyond it. A
+cabinet packed with **LZX** or **Quantum**, as Windows updates and drivers are, is handed
+whole to `7z` when that is installed; when it is not, the cabinet is still listed — the
+list of files is not compressed — and opening a file out of it says which compressor it
+wants and which program to install. And a file that runs from one cabinet of a set into the
+next is listed and refused by name; the files wholly inside each cabinet are read. A cabinet
+is never written.
+
+The formats this program does not read itself — `.rar`, `.iso`, `.wim`, `.lha`, `.arj`,
 `.msi` — open through a program already on the machine: `7z`, by
 default. `Enter` goes in exactly as it does into a zip, the frame names the format, and the
 viewer, the search inside archives and `Ctrl+A` on an entry all work. `F3` on an entry runs

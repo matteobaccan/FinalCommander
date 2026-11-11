@@ -22,6 +22,10 @@ pub enum Format {
     /// Read only — `rpmbuild` makes them, and a package written without its header would be
     /// a file that looks like one and is not.
     Rpm,
+    /// A Microsoft cabinet (`cab.rs`): stored and MSZIP folders are read here, and one packed
+    /// with Quantum or LZX is listed and handed to a program that unpacks it. Read only —
+    /// `makecab` writes them, for installers.
+    Cab,
     /// A single compressed stream: `notes.txt.gz` and nothing else in it.
     ///
     /// These four are the same codecs as the compressed tars above, without the tar: one
@@ -47,7 +51,7 @@ pub enum Format {
 
 impl Format {
     /// Every format this crate knows, read or write.
-    pub const ALL: [Format; 18] = [
+    pub const ALL: [Format; 19] = [
         Format::Zip,
         Format::SevenZ,
         Format::Tar,
@@ -58,6 +62,7 @@ impl Format {
         Format::Ar,
         Format::Cpio,
         Format::Rpm,
+        Format::Cab,
         Format::Gz,
         Format::Bz2,
         Format::Xz,
@@ -95,6 +100,7 @@ impl Format {
             Format::Ar
                 | Format::Cpio
                 | Format::Rpm
+                | Format::Cab
                 | Format::Sqlite
                 | Format::Json
                 | Format::Eml
@@ -141,6 +147,7 @@ impl Format {
             Format::Ar => "ar",
             Format::Cpio => "cpio",
             Format::Rpm => "rpm",
+            Format::Cab => "cab",
             Format::Gz => "gz",
             Format::Bz2 => "bz2",
             Format::Xz => "xz",
@@ -165,6 +172,7 @@ impl Format {
             Format::Ar => "a",
             Format::Cpio => "cpio",
             Format::Rpm => "rpm",
+            Format::Cab => "cab",
             Format::Gz => "gz",
             Format::Bz2 => "bz2",
             Format::Xz => "xz",
@@ -217,7 +225,7 @@ impl Format {
     /// `Cr24` header in front of it, so it is not one.
     pub fn of_name(name: &str) -> Option<Format> {
         let lower = name.to_ascii_lowercase();
-        const BY_SUFFIX: [(&str, Format); 44] = [
+        const BY_SUFFIX: [(&str, Format); 45] = [
             (".tar.gz", Format::TarGz),
             (".tgz", Format::TarGz),
             (".tar.bz2", Format::TarBz2),
@@ -250,6 +258,7 @@ impl Format {
             (".ddeb", Format::Ar),
             (".cpio", Format::Cpio),
             (".rpm", Format::Rpm),
+            (".cab", Format::Cab),
             // SQLite under the names it is given. `.db` is not here: half the `.db` files on
             // a disk are not SQLite (`Thumbs.db`), so one is let in only when its first bytes
             // say so — `ArcFs::looks_like_archive` asks `sqlite::is_database`.
@@ -315,6 +324,9 @@ impl Format {
         }
         if head.starts_with(b"!<arch>\n") {
             return Some(Format::Ar);
+        }
+        if head.starts_with(crate::cab::MAGIC) {
+            return Some(Format::Cab);
         }
         if let Some(format) = crate::cpio::of_bytes(head) {
             return Some(format);

@@ -20,6 +20,7 @@
 //! specification.
 
 mod archive;
+mod cab;
 mod cpio;
 mod ext;
 mod format;

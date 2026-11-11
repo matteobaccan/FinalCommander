@@ -121,6 +121,10 @@ pub struct Archive {
     /// opens the archive again: a 7z holds its files in blocks and every one of them is
     /// encrypted with the key the header was. Never written anywhere.
     key: Option<String>,
+    /// Why this crate cannot read every entry it lists, when that is so: a cabinet packed
+    /// with a compressor that is not here, or one of a set. The index is still good — and
+    /// the cache hands such an archive to a program that reads all of it, where there is one.
+    beyond: Option<String>,
 }
 
 impl Archive {
@@ -172,7 +176,13 @@ impl Archive {
             _ => format,
         };
 
+        let mut beyond = None;
         let entries = match format {
+            Format::Cab => {
+                let found = crate::cab::index(path, &name, limits, cancel)?;
+                beyond = found.beyond;
+                found.entries
+            }
             Format::Zip => index_zip(path, &name, limits, cancel)?,
             Format::SevenZ => index_sevenz(path, &name, limits, cancel, key)?,
             Format::Ar => index_ar(path, &name, limits, cancel)?,
@@ -220,6 +230,7 @@ impl Archive {
             by_path: HashMap::new(),
             children: HashMap::new(),
             key: key.map(str::to_string),
+            beyond,
         };
         archive.build_tree();
         Ok(archive)
@@ -303,6 +314,7 @@ impl Archive {
             by_path: HashMap::new(),
             children: HashMap::new(),
             key: None,
+            beyond: None,
         };
         archive.build_tree();
         Ok(archive)
@@ -422,6 +434,11 @@ impl Archive {
             (None, Some(tool)) => &tool.name,
             (None, None) => "archive",
         }
+    }
+
+    /// Why some of what this lists cannot be read here, when that is so — see the field.
+    pub fn beyond(&self) -> Option<&str> {
+        self.beyond.as_deref()
     }
 
     /// The table that reads this, when a program on the machine does.
@@ -634,6 +651,109 @@ impl Archive {
             outcome.map_err(|e| self.sevenz_error(e))?;
             return Ok(report);
         }
+        if self.format == Some(Format::Cab) {
+            // One pass over each folder, for a solid block's reason: a folder is one stream
+            // and its files are slices of it, so reading them one at a time would unpack
+            // the folder once per file. Each block's checksum is checked as it is read.
+            let mut by_folder: std::collections::BTreeMap<usize, Vec<(u64, &ArcEntry)>> =
+                Default::default();
+            for entry in self.entries.iter().filter(|e| e.kind != EntryKind::Dir) {
+                match entry.at {
+                    Some(at) => {
+                        let (folder, offset) = crate::cab::folder_of(at);
+                        by_folder.entry(folder).or_default().push((offset, entry));
+                    }
+                    // In another cabinet of the set: listed, and said to be untested.
+                    None => {
+                        report.members += 1;
+                        report
+                            .bad
+                            .push((entry.path.clone(), self.beyond.clone().unwrap_or_default()));
+                    }
+                }
+            }
+            for (folder, mut files) in by_folder {
+                files.sort_by_key(|(offset, _)| *offset);
+                let at = (folder as u64) << 32;
+                // Why nothing more can come out of this folder, once that is so: a
+                // compressor that is not here, or a block that failed — after which an
+                // MSZIP stream has lost the history every later block leans on.
+                let (mut reader, mut lost) =
+                    match crate::cab::folder(&self.source, &self.name(), at) {
+                        Ok((reader, _)) => (Some(reader), None),
+                        Err(ArcError::Refused { reason, .. }) => {
+                            (None, Some(self.beyond.clone().unwrap_or(reason)))
+                        }
+                        Err(e) => (None, Some(reason_of(e))),
+                    };
+                let mut position = 0u64;
+                for (offset, entry) in files {
+                    if cancel.is_cancelled() {
+                        return Err(ArcError::Cancelled);
+                    }
+                    let (Some(stream), None) = (reader.as_mut(), &lost) else {
+                        report.members += 1;
+                        report
+                            .bad
+                            .push((entry.path.clone(), lost.clone().unwrap_or_default()));
+                        continue;
+                    };
+                    // Two files over the same bytes is something a cabinet may say, and
+                    // going back is not something a stream can do: that one is read on
+                    // its own.
+                    if offset < position {
+                        let path = entry.path.clone();
+                        report.members += 1;
+                        let (members, before) = (report.members, report.bytes);
+                        progress(&path, members, before);
+                        match self.copy_out(&path, &mut io::sink(), cancel, &mut |n| {
+                            progress(&path, members, before + n)
+                        }) {
+                            Ok(bytes) => report.bytes += bytes,
+                            Err(ArcError::Cancelled) => return Err(ArcError::Cancelled),
+                            Err(e) => report.bad.push((path, reason_of(e))),
+                        }
+                        continue;
+                    }
+                    let gap = offset - position;
+                    match copy(
+                        &mut (&mut *stream).take(gap),
+                        &mut io::sink(),
+                        cancel,
+                        &mut |_| {},
+                    ) {
+                        Ok(skipped) if skipped == gap => {}
+                        Ok(_) => {
+                            lost = Some("the cabinet's data ends before this entry".to_string())
+                        }
+                        Err(ArcError::Cancelled) => return Err(ArcError::Cancelled),
+                        Err(e) => lost = Some(reason_of(e)),
+                    }
+                    if let Some(reason) = &lost {
+                        report.members += 1;
+                        report.bad.push((entry.path.clone(), reason.clone()));
+                        continue;
+                    }
+                    let failed_before = report.bad.len();
+                    let mut slice = crate::cab::Exactly {
+                        inner: &mut *stream,
+                        left: entry.size,
+                    };
+                    read_one(
+                        &mut report,
+                        entry.path.clone(),
+                        &mut slice,
+                        cancel,
+                        progress,
+                    )?;
+                    position = offset + entry.size;
+                    if report.bad.len() > failed_before {
+                        lost = report.bad.last().map(|(_, reason)| reason.clone());
+                    }
+                }
+            }
+            return Ok(report);
+        }
         if self.format == Some(Format::Rpm) {
             // One walk of the payload, for the reason a compressed tar gets one: reading the
             // entries one at a time would decompress the payload once for every file in it.
@@ -830,6 +950,39 @@ impl Archive {
                 let index = entry.at.unwrap_or(0) as usize;
                 let mut item = zip.by_index(index).map_err(|e| self.broken(e))?;
                 copy(&mut item, out, cancel, progress)
+            }
+            Format::Cab => {
+                // Listed, and not readable here: the reason the index gave is the answer,
+                // rather than a folder number.
+                let refused = || ArcError::Refused {
+                    path: self.name(),
+                    reason: self
+                        .beyond
+                        .clone()
+                        .unwrap_or_else(|| "this entry cannot be read here".to_string()),
+                };
+                let at = entry.at.ok_or_else(refused)?;
+                let (mut folder, offset) = crate::cab::folder(&self.source, &self.name(), at)
+                    .map_err(|e| match e {
+                        ArcError::Refused { .. } => refused(),
+                        other => other,
+                    })?;
+                // A folder is one stream and the entry is a slice of it: what is in front
+                // is unpacked and dropped, which is what a solid archive costs.
+                let skipped = copy(
+                    &mut (&mut folder).take(offset),
+                    &mut io::sink(),
+                    cancel,
+                    &mut |_| {},
+                )?;
+                if skipped != offset {
+                    return Err(self.broken("the cabinet's data ends before this entry starts"));
+                }
+                let mut slice = crate::cab::Exactly {
+                    inner: folder,
+                    left: entry.size,
+                };
+                copy(&mut slice, out, cancel, progress)
             }
             Format::Rpm => {
                 // The payload is one compressed stream, walked up to the member: a compressed
@@ -1103,6 +1256,7 @@ pub(crate) fn decoder(path: &Path, format: Format) -> Result<Box<dyn Read>> {
         | Format::Ar
         | Format::Cpio
         | Format::Rpm
+        | Format::Cab
         | Format::Sqlite
         | Format::Json
         | Format::Eml
@@ -1944,6 +2098,43 @@ impl Cache {
     /// we do — a `.zip` is never handed to `7z` because `7z` would also read it.
     fn read(&self, path: &Path, cancel: &CancelToken, key: Option<&str>) -> Result<Archive> {
         match Archive::open_with(path, &self.limits, cancel, key) {
+            // Read here, but not all of it: a cabinet packed with a compressor this crate
+            // has not got. A program that reads the whole of it is the better reader, so it
+            // gets the archive where it is installed; where it is not, the listing made
+            // here still stands, and the reason an entry will not open names the program.
+            Ok(mut archive) if archive.beyond.is_some() => {
+                let leaf = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let head = head_of(path).unwrap_or_default();
+                let Some(tool) = self.tools.iter().find(|tool| tool.claims(&leaf, &head)) else {
+                    return Ok(archive);
+                };
+                if tool.found().is_some() {
+                    let through = Archive::open_external(
+                        path,
+                        tool.clone(),
+                        self.runner.clone(),
+                        &self.limits,
+                        cancel,
+                    );
+                    return match through {
+                        Ok(read) => Ok(read),
+                        Err(ArcError::Cancelled) => Err(ArcError::Cancelled),
+                        // The program could not either: what was read here is still more
+                        // than nothing.
+                        Err(_) => Ok(archive),
+                    };
+                }
+                if let Some(reason) = archive.beyond.as_mut() {
+                    reason.push_str(&format!(
+                        " — `{}` reads it, and is not installed",
+                        tool.program
+                    ));
+                }
+                Ok(archive)
+            }
             Ok(archive) => Ok(archive),
             Err(ArcError::Unknown(_)) => {
                 let leaf = path
@@ -2125,6 +2316,23 @@ mod tests {
                 } else {
                     out.write_all(&cpio).unwrap();
                 }
+            }
+            Format::Cab => {
+                // One MSZIP folder, with a cabinet's own separator in the names.
+                let names: Vec<(String, &[u8])> = names
+                    .iter()
+                    .map(|(name, body)| (name.replace('/', "\\"), *body))
+                    .collect();
+                let bytes = crate::cab::tests::cabinet(&[crate::cab::tests::Unit {
+                    method: 1,
+                    members: names
+                        .iter()
+                        .map(|(name, body)| crate::cab::tests::Member { name, body })
+                        .collect(),
+                    blocks: None,
+                }]);
+                let mut out = out;
+                out.write_all(&bytes).unwrap();
             }
             Format::Zip | Format::SevenZ => unreachable!("handled above"),
             f if f.is_single() => unreachable!("a {} holds one file: write_single", f.label()),
@@ -3514,5 +3722,218 @@ mod tests {
             "a name with a space in it"
         );
         assert!(report.bad[0].1.contains("CRC"), "{report:?}");
+    }
+
+    // ── cabinets ────────────────────────────────────────────────────────────────────────────
+
+    use crate::cab::tests::{cabinet, noise, Member, Unit};
+
+    /// Two folders, one packed and one stored, with a file long enough to cross blocks.
+    fn two_folder_cabinet(big: &[u8]) -> Vec<u8> {
+        cabinet(&[
+            Unit {
+                method: 1,
+                members: vec![
+                    Member {
+                        name: "readme.md",
+                        body: b"leggimi\n",
+                    },
+                    Member {
+                        name: "src\\big.bin",
+                        body: big,
+                    },
+                    Member {
+                        name: "src\\last.txt",
+                        body: b"the last of the folder",
+                    },
+                ],
+                blocks: None,
+            },
+            Unit {
+                method: 0,
+                members: vec![Member {
+                    name: "stored.txt",
+                    body: b"as it is",
+                }],
+                blocks: None,
+            },
+        ])
+    }
+
+    /// A cabinet is tested a folder at a time, and damage in one block is the entries from
+    /// that block on — in that folder and no other.
+    #[test]
+    fn a_cabinet_tests_whole_and_a_damaged_block_names_the_entries_it_takes_with_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let big = noise(90_000, 11);
+        let bytes = two_folder_cabinet(&big);
+        let path = dir.path().join("setup.cab");
+        std::fs::write(&path, &bytes).unwrap();
+        let archive = open(&path);
+        assert_eq!(archive.format(), Some(Format::Cab));
+        assert_eq!(archive.beyond(), None);
+        assert_eq!(
+            archive.read("/src/last.txt", &CancelToken::new()).unwrap(),
+            b"the last of the folder"
+        );
+        assert_eq!(
+            archive.read("/src/big.bin", &CancelToken::new()).unwrap(),
+            big
+        );
+        let report = archive
+            .verify(&CancelToken::new(), &mut |_, _, _| {})
+            .expect("a test");
+        assert!(report.is_whole(), "{report:?}");
+        assert_eq!(report.members, 4);
+        assert_eq!(report.bytes, 8 + 90_000 + 22 + 8);
+
+        // A byte of the second block of the first folder: the first block is the readme
+        // and the start of the big file, which is therefore the first entry to fail.
+        let folder_start = u32::from_le_bytes(bytes[36..40].try_into().unwrap()) as usize;
+        let first_block = u16::from_le_bytes(
+            bytes[folder_start + 4..folder_start + 6]
+                .try_into()
+                .unwrap(),
+        );
+        let second = folder_start + 8 + usize::from(first_block);
+        let mut damaged = bytes.clone();
+        damaged[second + 8 + 100] ^= 0x10;
+        std::fs::write(&path, &damaged).unwrap();
+        let report = open(&path)
+            .verify(&CancelToken::new(), &mut |_, _, _| {})
+            .expect("a report");
+        let bad: Vec<&str> = report.bad.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(bad, ["/src/big.bin", "/src/last.txt"], "{report:?}");
+        assert!(report.bad[0].1.contains("checksum"), "{report:?}");
+        assert_eq!(report.members, 4, "the other folder was still read");
+    }
+
+    /// What `7z` makes of the cabinets these tests build, where there is a `7z`: the
+    /// fixture is written by hand from the specification, and this is the second opinion
+    /// on it — the block checksum, the tables, and the block that reaches back.
+    #[test]
+    fn the_cabinets_built_here_are_cabinets_to_7z_too() {
+        let Some(program) = crate::ext::which("7z") else {
+            eprintln!("no 7z on this machine: skipped");
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let big = noise(90_000, 11);
+        let first = noise(32 * 1024, 99);
+        let mut looking_back = first.clone();
+        looking_back.extend_from_slice(&first[32 * 1024 - 1000..32 * 1024 - 990]);
+        let cabinets = [
+            ("tree.cab", two_folder_cabinet(&big), "src/big.bin", big),
+            (
+                "back.cab",
+                cabinet(&[Unit {
+                    method: 1,
+                    members: vec![Member {
+                        name: "two-blocks.bin",
+                        body: &looking_back,
+                    }],
+                    blocks: Some(vec![
+                        (crate::cab::tests::mszip_block(&first), 32 * 1024),
+                        (crate::cab::tests::a_block_that_only_looks_back(), 10),
+                    ]),
+                }]),
+                "two-blocks.bin",
+                looking_back.clone(),
+            ),
+        ];
+        for (name, bytes, member, body) in cabinets {
+            let out = dir.path().join(format!("{name}.out"));
+            std::fs::create_dir(&out).unwrap();
+            let path = dir.path().join(name);
+            std::fs::write(&path, bytes).unwrap();
+            let ran = std::process::Command::new(&program)
+                .args(["x", "-y", "-bd"])
+                .arg(&path)
+                .current_dir(&out)
+                .output()
+                .expect("7z runs");
+            assert!(ran.status.success(), "{name}: {ran:?}");
+            assert_eq!(std::fs::read(out.join(member)).unwrap(), body, "{name}");
+            // And this crate agrees with it.
+            assert_eq!(
+                open(&path)
+                    .read(&format!("/{member}"), &CancelToken::new())
+                    .unwrap(),
+                body,
+                "{name}"
+            );
+        }
+    }
+
+    /// A cabinet packed with LZX: the program that reads all of it gets it where there is
+    /// one, and where there is none the listing made here stands and an entry says what it
+    /// wants — the compressor, and the program to install.
+    #[test]
+    fn a_cabinet_this_crate_cannot_unpack_goes_to_a_program_or_says_which_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("driver.cab");
+        let bytes = cabinet(&[Unit {
+            method: 0x1503,
+            members: vec![Member {
+                name: "driver.sys",
+                body: &[0u8; 1000],
+            }],
+            blocks: Some(vec![(vec![0x5b, 0x80, 0x80, 0x8d], 1000)]),
+        }]);
+        std::fs::write(&path, bytes).unwrap();
+
+        // No table at all: read here, as far as it goes. (The tables are set outright in
+        // this test, so that what is installed on the machine running it decides nothing.)
+        let mut alone = Cache::new(Limits::default());
+        alone.tools.clear();
+        let archive = alone.open(&path, &CancelToken::new()).expect("it lists");
+        assert_eq!(archive.format(), Some(Format::Cab));
+        assert_eq!(archive.entry("/driver.sys").expect("listed").size, 1000);
+        let error = archive
+            .read("/driver.sys", &CancelToken::new())
+            .unwrap_err();
+        assert!(matches!(error, ArcError::Refused { .. }), "{error:?}");
+        assert!(error.to_string().contains("LZX"), "{error}");
+        let report = archive
+            .verify(&CancelToken::new(), &mut |_, _, _| {})
+            .expect("a report");
+        assert_eq!(report.bad.len(), 1, "{report:?}");
+        assert!(report.bad[0].1.contains("LZX"), "{report:?}");
+
+        // A table whose program is not installed: the same listing, and the program named.
+        let mut absent = table();
+        absent.program = "fcmd-no-such-archiver".to_string();
+        let mut without = Cache::new(Limits::default());
+        without.tools = vec![Arc::new(absent)];
+        let archive = without.open(&path, &CancelToken::new()).expect("it lists");
+        assert_eq!(archive.format(), Some(Format::Cab));
+        let error = archive
+            .read("/driver.sys", &CancelToken::new())
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("LZX"), "{error}");
+        assert!(error.contains("fcmd-no-such-archiver"), "{error}");
+
+        // A table whose program is here: the whole archive is its to read.
+        let runner = Arc::new(Canned::listing(concat!(
+            "   Date      Time    Attr         Size   Compressed  Name\n",
+            "------------------- ----- ------------ ------------  ------------------------\n",
+            "2026-11-04 09:57:12 ....A         1000               driver.sys\n",
+            "------------------- ----- ------------ ------------  ------------------------\n",
+        )));
+        let with = Cache::new(Limits::default())
+            .with_tools(vec![Arc::new(table())])
+            .with_runner(runner.clone());
+        let archive = with.open(&path, &CancelToken::new()).expect("it lists");
+        assert_eq!(archive.format(), None, "the program read it");
+        assert_eq!(archive.label(), "7z");
+        assert_eq!(runner.calls().len(), 1);
+
+        // And a cabinet this crate does read never reaches the program at all.
+        let plain = dir.path().join("plain.cab");
+        std::fs::write(&plain, two_folder_cabinet(b"small")).unwrap();
+        let archive = with.open(&plain, &CancelToken::new()).expect("it opens");
+        assert_eq!(archive.format(), Some(Format::Cab));
+        assert_eq!(runner.calls().len(), 1, "nothing was run for it");
     }
 }
