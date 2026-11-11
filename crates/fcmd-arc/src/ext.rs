@@ -1148,7 +1148,10 @@ fn named_in<'a>(line: &str, known: &std::collections::HashSet<&'a str>) -> Optio
                 .trim_end_matches(['.', ':', ',', ';'])
                 .trim_matches(|c| matches!(c, '"' | '\'' | '`'))
                 .trim_end_matches(['.', ':', ',', ';']);
-            for candidate in [words, bare] {
+            // On Windows the programs write the separator their own way: `src\a.bin` is
+            // the entry `src/a.bin`.
+            let (words, bare) = (words.replace('\\', "/"), bare.replace('\\', "/"));
+            for candidate in [words.as_str(), bare.as_str()] {
                 if let Some(name) = known.get(candidate) {
                     if best.is_none_or(|found| name.len() > found.len()) {
                         best = Some(name);
@@ -1850,6 +1853,12 @@ Blocks = 1\n\
                 Some("My Documents/annual report.doc"),
             ),
             ("\"src/a.bin\": bad data", Some("src/a.bin")),
+            // 7-Zip on Windows writes its own separator.
+            ("ERROR: CRC Failed : src\\a.bin", Some("src/a.bin")),
+            (
+                "ERROR: CRC Failed : My Documents\\annual report.doc",
+                Some("My Documents/annual report.doc"),
+            ),
             // Part of a word is not the word.
             ("ERROR: CRC Failed : other/src/a.binary", None),
             ("Archives with Errors: 1", None),
