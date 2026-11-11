@@ -1710,3 +1710,7 @@ editor-converted-page = { $name }: il prossimo salvataggio scrive in { $what }
 editor-convert-same = Il file è già scritto così
 editor-convert-no-bom = { $page } non ha byte order mark: lo hanno solo UTF-8 e UTF-16
 editor-convert-lossy = { $page } non può contenere tutti i caratteri di { $name }: nulla è stato cambiato
+btn-reload = Ricarica
+btn-what-changed = Cosa è cambiato
+editor-diff-buffer = nell'editor
+editor-diff-hint = Questo confronto mostra soltanto cosa è cambiato — Esc torna alla domanda

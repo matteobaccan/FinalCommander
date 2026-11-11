@@ -619,7 +619,8 @@ it, and change nothing below the drawing.
 final-newline of the original preserved (`Eol::detect`, UTF-8/UTF-16LE/BE/CP1252/CP437);
 `Shift+F4` for a new file; atomic save through `name.fcmd-tmp` + rename with the permissions
 carried over; save-as; reload; refusal to overwrite a file that changed on disk without a
-confirmation; read-only files opened and marked as such. Editing: insert, newline with
+confirmation, which also offers to reload it or to see what changed (§2.2j); read-only files
+opened and marked as such. Editing: insert, newline with
 auto-indent, backspace, delete, delete to end of line, delete word left, tab expansion, indent
 and outdent, delete / duplicate / move line, undo and redo grouped per command and per burst
 of typing with a depth that is a setting (§2.2g), stream blocks
@@ -651,8 +652,9 @@ block only, macros, the buffer list (§2.3) and the external editor (§2.4).
 - Atomic save: write `name.fcmd-tmp` in the same directory, copy permissions/owner where
   possible, fsync, rename. Option for in-place save for special files (`/proc`, sockets,
   hardlink-sensitive paths).
-- External-change detection: if the file changed on disk while open, offer reload / keep /
-  save-as / diff.
+- External-change detection: if the file changed on disk while open, a save offers
+  overwrite / reload / diff / cancel (§2.2j). Keeping the buffer is *Cancel*, and save-as is
+  `Shift+F2` from there rather than a fifth button.
 
 ### 2.2 Editing model
 
@@ -809,6 +811,31 @@ editor; `Esc` returns with nothing changed.
 
 This is not the viewer's `Shift+F8` (§1.12), which decodes the same bytes as another page.
 Reading an open file again in another page is not implemented in the editor.
+
+### 2.2j A file changed underneath
+
+The editor remembers the modification time of the file it opened or last wrote. `F2` on a
+modified buffer whose file now has another time does not write: it asks *Changed on disk*,
+with four buttons in this order — **Overwrite**, **Reload**, **What changed**, **Cancel** —
+the first lit. `←`/`→`/`Tab`/`Shift+Tab` go round them, `Enter` takes the lit one, `Y` is
+*Overwrite*, and `Esc`, `N` or `F10` is *Cancel*.
+
+- **Overwrite** saves over the file as it is now.
+- **Reload** is `editor.reload` (`Ctrl+R`): the file is read again, the unsaved edits and the
+  undo history go, the cursor stays where it was if that line still exists.
+- **What changed** opens the diff screen of §3 on two texts: on the left the file on disk,
+  read as a reload would read it (BOM, detection, §1.11) and titled `name · on disk`; on the
+  right the buffer as it stands, unsaved edits included, titled `name · in the editor`. Line
+  endings are compared or ignored as the comparison dialog was last told, and `E` toggles it.
+  The screen only shows: `F5` (merge), `F2` (write) and `F12` (screens) are refused with a
+  message, since a merge would have to change either the buffer behind its undo history or a
+  file somebody else has just written. `Esc`, `F10` or `F3` closes it and **asks the same
+  question again**, on its first button. Either side larger than the diff's limit (§3), or a
+  file that can no longer be read, says so and leaves the question open.
+- **Cancel** returns to the editor with the buffer untouched and still modified.
+
+A fetched copy of a remote file (SPEC 04) asks its own question when the server's
+copy changed; that one still has two buttons.
 
 ### 2.2b Syntax highlighting
 

@@ -50,6 +50,25 @@ momento.
 Un blocco a colonne è un rettangolo invece di una sequenza di righe: è così che si sposta una
 colonna di numeri senza toccare quello che le sta accanto.
 
+# Quando il file è cambiato sotto
+
+Se qualcos'altro ha scritto il file mentre lo modificavi — una compilazione, un `git pull`, un
+altro editor — `F2` non ci salva sopra. Chiede, e la domanda ha quattro risposte:
+
+- **Sovrascrivi** scrive il tuo testo sopra quello che c'è adesso.
+- **Ricarica** rilegge il file e butta le tue modifiche, che è anche quello che fa `Ctrl+R` in
+  qualunque momento.
+- **Cosa è cambiato** mette le due versioni fianco a fianco: a sinistra il file com'è sul
+  disco, a destra il tuo testo con le modifiche non salvate, sulla stessa schermata con cui
+  `Ctrl+Shift+D` confronta due file — `Alt+↓` e `Alt+↑` vanno da una differenza alla
+  successiva, `W`, `C` ed `E` ignorano spazi, maiuscole e fine riga. Mostra soltanto: da lì
+  non si unisce e non si scrive nulla. `Esc` la chiude e la domanda viene fatta di nuovo, ora
+  che sai cosa farebbe perdere ogni risposta.
+- **Annulla** torna all'editor con tutto com'era; da lì `Shift+F2` salva il tuo testo con un
+  altro nome e lascia stare il file.
+
+Le frecce o `Tab` passano da un pulsante all'altro e `Enter` prende quello acceso.
+
 # Fine riga, byte order mark e tabella codici
 
 Un salvataggio scrive il file com'è stato letto: gli stessi fine riga, la stessa tabella

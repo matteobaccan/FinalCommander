@@ -1647,3 +1647,7 @@ editor-converted-page = { $name }：下次保存将以 { $what } 写入
 editor-convert-same = 文件已是这种写法
 editor-convert-no-bom = { $page } 没有字节顺序标记：只有 UTF-8 和 UTF-16 才有
 editor-convert-lossy = { $page } 无法容纳 { $name } 的所有字符：未作任何更改
+btn-reload = 重新载入
+btn-what-changed = 有何更改
+editor-diff-buffer = 编辑器中
+editor-diff-hint = 此比较只显示更改内容 — Esc 返回提问

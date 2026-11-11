@@ -6614,6 +6614,35 @@ See the [docs](https://example.com/docs) for more.
         assert_eq!(colour_at(&buf, 1, 1), app.theme.color("editor.fg"));
     }
 
+    /// The question about a file changed on disk has four answers, and a button that does
+    /// not fit is an answer nobody can give: all four are on one row of an 80-column
+    /// screen, in every language.
+    #[test]
+    fn the_changed_on_disk_question_shows_its_four_buttons_in_every_language() {
+        for (tag, _) in fcmd_i18n::LANGUAGES {
+            let mut app = super::tests::app("far", tag);
+            let confirm = crate::app::Confirm {
+                title: app.i18n.t("editor-changed-title"),
+                lines: vec![app
+                    .i18n
+                    .t_args("editor-changed-body", &[("name", "notes.txt".into())])],
+                action: crate::app::ConfirmAction::OverwriteChanged,
+                button: 0,
+            };
+            let labels = confirm.buttons(&app.i18n);
+            assert_eq!(labels.len(), 4, "{tag}");
+            app.mode = crate::app::Mode::Confirm(confirm);
+            let screen = frame(&mut app, 80, 24);
+            let row = screen
+                .lines()
+                .find(|line| line.contains(labels[0].as_str()) && line.contains(labels[3].as_str()))
+                .unwrap_or_else(|| panic!("{tag}: the buttons are not on one row\n{screen}"));
+            for label in &labels {
+                assert!(row.contains(label.as_str()), "{tag}: no {label} in {row:?}");
+            }
+        }
+    }
+
     #[test]
     fn the_panels_can_be_resized_and_what_they_give_up_shows_the_user_screen() {
         let width_of_left = |app: &mut App| {

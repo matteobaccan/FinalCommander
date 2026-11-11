@@ -53,7 +53,6 @@ says what the decision stands on.
 | More than one file in the editor | `F4` | Several files open at once, each a screen of its own today through `F12` (feature 6.1). |
 | Search and replace | `F7`, `Ctrl+F7` | Replacing inside a marked block only; the separator half of FAR's *preserve style* (`foo_bar` ↔ `fooBar`); a key that repeats *Replace next* without the dialog (feature 6.4). |
 | Encodings | `Shift+F8` | Reading an open file again in another code page, as the viewer does: today the editor's list only converts what will be written (feature 6.6). |
-| A file changed underneath | `F2` | A diff of what changed on disk, before choosing to overwrite or reload (feature 6.12). |
 
 ## Command line and history
 

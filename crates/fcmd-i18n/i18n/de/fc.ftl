@@ -1709,3 +1709,7 @@ editor-converted-page = { $name }: das nächste Speichern schreibt { $what }
 editor-convert-same = Die Datei wird bereits so geschrieben
 editor-convert-no-bom = { $page } hat kein Byte Order Mark: nur UTF-8 und UTF-16 haben eines
 editor-convert-lossy = { $page } kann nicht jedes Zeichen von { $name } aufnehmen: nichts wurde geändert
+btn-reload = Neu laden
+btn-what-changed = Änderungen
+editor-diff-buffer = im Editor
+editor-diff-hint = Dieser Vergleich zeigt nur, was sich geändert hat — Esc führt zur Frage zurück

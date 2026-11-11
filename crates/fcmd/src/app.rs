@@ -1694,6 +1694,19 @@ impl ConfirmAction {
             ConfirmAction::KillProcess { .. } => "btn-kill",
         }
     }
+
+    /// The buttons between the one that does it and the one that cancels: the other ways
+    /// out of the question. Nearly every question has none.
+    ///
+    /// A file that changed under the editor has two, because "save over it?" is not a yes
+    /// or no question to somebody who does not know what changed: one reads the file again
+    /// and drops the edits, the other shows the two versions side by side first.
+    pub fn other_keys(&self) -> &'static [&'static str] {
+        match self {
+            ConfirmAction::OverwriteChanged => &["btn-reload", "btn-what-changed"],
+            _ => &[],
+        }
+    }
 }
 
 /// One open tunnel, as the panels know about it.
@@ -1793,9 +1806,13 @@ pub struct Confirm {
 }
 
 impl Confirm {
-    /// The two buttons: what this will do, in a word, and the way out.
+    /// The buttons: what this will do, in a word, then the other answers the question has
+    /// — most have none — and last the way out.
     pub fn buttons(&self, i18n: &I18n) -> Vec<String> {
-        vec![i18n.t(self.action.verb_key()), i18n.t("btn-cancel")]
+        let mut out = vec![i18n.t(self.action.verb_key())];
+        out.extend(self.action.other_keys().iter().map(|key| i18n.t(key)));
+        out.push(i18n.t("btn-cancel"));
+        out
     }
 }
 
@@ -2464,6 +2481,9 @@ pub struct App {
     /// Has an `Esc` already said there is something unwritten? The second one leaves anyway,
     /// which is how a screen with no dialog of its own asks "are you sure".
     diff_warned: bool,
+    /// The diff on screen is the one a save opened, between the file on disk and the editor
+    /// parked underneath: closing it asks the save's question again instead of leaving.
+    editor_diff: bool,
     /// The service list the `:services` panel was built from, so a row can be turned back
     /// into the service it stands for.
     services: Vec<fcmd_platform::Service>,
@@ -2913,6 +2933,7 @@ impl App {
             diff_git: None,
             diff_paths: None,
             diff_warned: false,
+            editor_diff: false,
             attr_seed_mode: None,
             services: Vec::new(),
             attr_times: Default::default(),
@@ -5006,14 +5027,36 @@ impl App {
     }
 
     fn confirm_key(&mut self, key: Key, confirm: Confirm) {
-        // Two buttons, as every other dialog has: what this does, and the way out. The
-        // arrows and `Tab` move between them, `Enter` takes the one that is lit.
+        // What this does first and the way out last, as every other dialog has, and for a
+        // few questions other answers in between. The arrows and `Tab` move between them,
+        // `Enter` takes the one that is lit.
+        let others = confirm.action.other_keys();
+        let count = others.len() + 2;
         match key.code {
             // The page about dialogs, with the question waiting behind it.
             KeyCode::F(1) if key.mods == Mods::NONE => self.open_dialog_help(),
-            KeyCode::Left | KeyCode::Right | KeyCode::Tab | KeyCode::BackTab => {
+            KeyCode::Left | KeyCode::BackTab => {
                 if let Mode::Confirm(open) = &mut self.mode {
-                    open.button = 1 - open.button.min(1);
+                    open.button = (open.button.min(count - 1) + count - 1) % count;
+                }
+                return;
+            }
+            KeyCode::Right | KeyCode::Tab => {
+                if let Mode::Confirm(open) = &mut self.mode {
+                    open.button = (open.button.min(count - 1) + 1) % count;
+                }
+                return;
+            }
+            // One of the answers in between. Only the editor's question has any, so this is
+            // where they are done rather than in a table of their own.
+            KeyCode::Enter if (1..=others.len()).contains(&confirm.button) => {
+                match others[confirm.button - 1] {
+                    "btn-reload" => {
+                        self.mode = Mode::Normal;
+                        self.restore_editor();
+                        self.editor_command(Command::EditorReload);
+                    }
+                    _ => self.open_editor_disk_diff(),
                 }
                 return;
             }
@@ -5622,6 +5665,25 @@ impl App {
         // Any key but `Esc` ends the warning: an `Esc` that leaves has to be the one right
         // after the one that warned, or a keystroke half an hour ago would close the screen.
         self.diff_warned = false;
+        // The comparison a save opened, between the disk and the editor waiting underneath:
+        // leaving it goes back to the question it was opened from, and the keys that would
+        // change a side or walk off to another screen say that this one only shows.
+        if self.editor_diff && self.editor_parked.is_some() {
+            match key.code {
+                KeyCode::Esc | KeyCode::F(10) | KeyCode::F(3) => {
+                    self.editor_diff = false;
+                    self.set_status(String::new());
+                    self.ask_overwrite_changed();
+                    return;
+                }
+                KeyCode::F(2) | KeyCode::F(5) | KeyCode::F(12) => {
+                    let m = self.i18n.t("editor-diff-hint");
+                    self.set_error(m);
+                    return;
+                }
+                _ => {}
+            }
+        }
         let Mode::Diff(view) = &mut self.mode else {
             return;
         };
@@ -22493,9 +22555,109 @@ impl App {
     }
 
     fn restore_editor(&mut self) {
+        // Whatever was in front of the editor is gone once it is back, the comparison with
+        // the disk included.
+        self.editor_diff = false;
         if let Some(editor) = self.editor_parked.take() {
             self.mode = Mode::Editor(editor);
         }
+    }
+
+    /// The question a save asks when the file is no longer the one that was opened: save
+    /// over it, read it again, look at what changed, or go back to the editor.
+    ///
+    /// Asked with the editor parked underneath, and asked again when the comparison closes,
+    /// since seeing what changed is how one finds out which of the other answers to give.
+    fn ask_overwrite_changed(&mut self) {
+        let name = self
+            .mode
+            .editor()
+            .or(self.editor_parked.as_deref())
+            .map(|e| e.name())
+            .unwrap_or_default();
+        let title = self.i18n.t("editor-changed-title");
+        let body = self
+            .i18n
+            .t_args("editor-changed-body", &[("name", name.into())]);
+        self.park_editor();
+        self.mode = Mode::Confirm(Confirm {
+            title,
+            lines: vec![body],
+            action: ConfirmAction::OverwriteChanged,
+            button: 0,
+        });
+    }
+
+    /// *What changed* in that question: the file as it is on the disk now beside the text in
+    /// the editor, on the diff screen (SPEC 05 §3), and the question again when it closes.
+    ///
+    /// Both sides are handed over as text: the disk's read the way the editor would read it
+    /// if asked to reload, the editor's as it stands, unsaved edits included — so what the
+    /// screen shows is exactly what choosing *Overwrite* or *Reload* would lose. The
+    /// comparison only shows. Merging a hunk would have to change either the buffer under
+    /// its undo history or the file somebody else has just written, and neither is what was
+    /// asked for here.
+    fn open_editor_disk_diff(&mut self) {
+        let Some(editor) = self.editor_parked.as_deref() else {
+            return;
+        };
+        let name = editor.name();
+        let mine = editor.buffer.to_text();
+        let disk = editor
+            .path
+            .as_ref()
+            .ok_or_else(String::new)
+            .and_then(|path| {
+                let size = std::fs::metadata(path.as_path())
+                    .map_err(|e| format!("{path}: {e}"))?
+                    .len();
+                if size.max(mine.len() as u64) > fcmd_view::diff::MOST {
+                    return Err(self.i18n.t_args(
+                        "diff-too-big",
+                        &[
+                            ("name", name.clone().into()),
+                            ("most", fcmd_core::format_size(fcmd_view::diff::MOST).into()),
+                        ],
+                    ));
+                }
+                fcmd_edit::Buffer::open(path.as_path())
+                    .map(|buffer| buffer.to_text())
+                    .map_err(|e| e.to_string())
+            });
+        let theirs = match disk {
+            Ok(text) => text,
+            Err(why) => {
+                // The file went away, or cannot be read: the question is still open.
+                self.ask_overwrite_changed();
+                self.set_error(why);
+                return;
+            }
+        };
+        let ignore = fcmd_core::diff::Ignore {
+            whitespace: false,
+            case: false,
+            line_endings: self.cfg.compare.ignore_eol,
+        };
+        let view = fcmd_view::Diff::new(
+            format!("{name} · {}", self.i18n.t("git-version-disk")),
+            theirs.as_bytes(),
+            format!("{name} · {}", self.i18n.t("editor-diff-buffer")),
+            mine.as_bytes(),
+            ignore,
+        );
+        let same = view.identical();
+        // No paths and no git: this comparison writes nothing and stages nothing.
+        self.diff_paths = None;
+        self.diff_git = None;
+        self.diff_warned = false;
+        self.editor_diff = true;
+        self.mode = Mode::Diff(Box::new(view));
+        let m = self.i18n.t(if same {
+            "diff-same"
+        } else {
+            "editor-diff-hint"
+        });
+        self.set_status(m);
     }
 
     fn editor_prompt(&mut self, kind: PromptKind, title_key: &str, text: String) {
@@ -22541,17 +22703,7 @@ impl App {
             ),
             Err(fcmd_edit::editor::EditorError::ChangedOnDisk(_)) => {
                 // Never overwrite someone else's work without being told to.
-                let title = self.i18n.t("editor-changed-title");
-                let body = self
-                    .i18n
-                    .t_args("editor-changed-body", &[("name", name.into())]);
-                self.park_editor();
-                self.mode = Mode::Confirm(Confirm {
-                    title,
-                    lines: vec![body],
-                    action: ConfirmAction::OverwriteChanged,
-                    button: 0,
-                });
+                self.ask_overwrite_changed();
             }
             Err(e) => {
                 let msg = self.i18n.t_args(
@@ -40916,6 +41068,133 @@ abcdefghij
             format!("hi{}", fcmd_edit::Eol::detect("").0.bytes())
         );
         assert_eq!(app.mode.editor().unwrap().name(), "new.txt");
+    }
+
+    /// Feature 6.12: the question a save asks about a file changed on disk has two more
+    /// answers. *What changed* opens the diff — the disk on the left, the editor's text with
+    /// its unsaved edits on the right — and closing it asks the same question again.
+    #[test]
+    fn a_file_changed_underneath_can_be_compared_before_choosing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shared.txt");
+        std::fs::write(&path, b"one\nmine\n").unwrap();
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+        press(&mut app, "End");
+        press(&mut app, "!");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(&path, b"one\ntheirs\n").unwrap();
+
+        press(&mut app, "F2");
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("expected the question, got {:?}", app.mode)
+        };
+        assert_eq!(confirm.buttons(&app.i18n).len(), 4, "four answers");
+        // Overwrite, Reload, What changed, Cancel: two steps right is the comparison.
+        press(&mut app, "Right");
+        press(&mut app, "Right");
+        press(&mut app, "Enter");
+        let Mode::Diff(view) = &app.mode else {
+            panic!("expected the diff, got {:?}", app.mode)
+        };
+        assert!(!view.identical());
+        let changed: Vec<(&str, &str)> = view
+            .rows()
+            .iter()
+            .filter(|r| r.left != r.right)
+            .map(|r| (r.left.as_str(), r.right.as_str()))
+            .collect();
+        assert_eq!(
+            changed,
+            [("one", "one!"), ("theirs", "mine")],
+            "the disk left, the editor right"
+        );
+        assert!(
+            view.left_name.starts_with("shared.txt"),
+            "{}",
+            view.left_name
+        );
+
+        // It only shows: nothing merges, nothing is written, and the file stays theirs.
+        press(&mut app, "F5");
+        press(&mut app, "F2");
+        assert!(matches!(&app.mode, Mode::Diff(v) if !v.edited()));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "one\ntheirs\n");
+
+        // Closing it is the question again, on its first button, with every answer open.
+        press(&mut app, "Esc");
+        match &app.mode {
+            Mode::Confirm(c) => {
+                assert_eq!(c.action, ConfirmAction::OverwriteChanged);
+                assert_eq!(c.button, 0);
+            }
+            other => panic!("expected the question again, got {other:?}"),
+        }
+        press(&mut app, "Enter");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "one!\nmine\n");
+        assert!(app.mode.editor().is_some());
+    }
+
+    /// The other new answer: read the file again, and the edits go.
+    #[test]
+    fn a_file_changed_underneath_can_be_reloaded_from_the_question() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shared.txt");
+        std::fs::write(&path, b"mine\n").unwrap();
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+        press(&mut app, "!");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(&path, b"theirs\n").unwrap();
+
+        press(&mut app, "F2");
+        press(&mut app, "Right");
+        press(&mut app, "Enter");
+        let editor = app.mode.editor().expect("back in the editor");
+        assert_eq!(editor.buffer.line(0), "theirs");
+        assert!(!editor.buffer.modified());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "theirs\n");
+
+        // And the arrows go round all four buttons, both ways, ending on the way out.
+        press(&mut app, "!");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(&path, b"theirs again\n").unwrap();
+        press(&mut app, "F2");
+        press(&mut app, "Left");
+        assert!(matches!(&app.mode, Mode::Confirm(c) if c.button == 3));
+        press(&mut app, "Enter");
+        assert_eq!(app.mode.editor().unwrap().buffer.line(0), "t!heirs");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "theirs again\n");
+    }
+
+    /// The file can vanish between the question and the answer: the comparison says why it
+    /// cannot open, and the question stays.
+    #[test]
+    fn comparing_with_a_file_that_is_gone_keeps_the_question_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shared.txt");
+        std::fs::write(&path, b"mine\n").unwrap();
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+        press(&mut app, "!");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(&path, b"theirs\n").unwrap();
+        press(&mut app, "F2");
+        std::fs::remove_file(&path).unwrap();
+        press(&mut app, "Right");
+        press(&mut app, "Right");
+        press(&mut app, "Enter");
+        assert!(
+            matches!(&app.mode, Mode::Confirm(c) if c.action == ConfirmAction::OverwriteChanged),
+            "{:?}",
+            app.mode
+        );
+        assert!(app.status.contains("shared.txt"), "{}", app.status);
+        press(&mut app, "Esc");
+        assert_eq!(app.mode.editor().unwrap().buffer.line(0), "!mine");
     }
 
     /// Put the cursor of the open list on the row with this value and take it.

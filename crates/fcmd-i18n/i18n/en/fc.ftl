@@ -1719,3 +1719,7 @@ editor-converted-page = { $name }: the next save writes { $what }
 editor-convert-same = The file is already written that way
 editor-convert-no-bom = { $page } has no byte order mark: only UTF-8 and UTF-16 do
 editor-convert-lossy = { $page } cannot hold every character of { $name }: nothing was changed
+btn-reload = Reload
+btn-what-changed = What changed
+editor-diff-buffer = in the editor
+editor-diff-hint = This comparison only shows what changed — Esc goes back to the question

@@ -47,6 +47,25 @@ opened afterwards.
 A column block is a rectangle rather than a run of lines, which is how a column of numbers is
 moved without touching what is beside it.
 
+# When the file changed underneath
+
+If something else wrote the file while you were editing it — a build, a `git pull`, another
+editor — `F2` does not save over it. It asks, and the question has four answers:
+
+- **Overwrite** writes your text over what is there now.
+- **Reload** reads the file again and drops your edits, which is also what `Ctrl+R` does at
+  any time.
+- **What changed** puts the two side by side: the file as it is on the disk on the left, your
+  text with its unsaved edits on the right, on the same screen `Ctrl+Shift+D` compares two
+  files with — `Alt+↓` and `Alt+↑` go from one difference to the next, `W`, `C` and `E` ignore
+  spaces, case and line endings. It only shows: nothing is merged and nothing is written from
+  there. `Esc` closes it and the question is asked again, now that you know what each answer
+  would lose.
+- **Cancel** goes back to the editor with everything as it was; `Shift+F2` from there saves
+  your text under another name and leaves the file alone.
+
+The arrows or `Tab` move between the buttons and `Enter` takes the one that is lit.
+
 # End of line, byte order mark and code page
 
 A save writes a file the way it was read: the same line endings, the same code page, a byte

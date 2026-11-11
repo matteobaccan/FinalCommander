@@ -1709,3 +1709,7 @@ editor-converted-page = { $name } : le prochain enregistrement écrit en { $what
 editor-convert-same = Le fichier est déjà écrit ainsi
 editor-convert-no-bom = { $page } n'a pas de marque d'ordre des octets : seuls UTF-8 et UTF-16 en ont une
 editor-convert-lossy = { $page } ne peut pas contenir tous les caractères de { $name } : rien n'a été changé
+btn-reload = Recharger
+btn-what-changed = Différences
+editor-diff-buffer = dans l'éditeur
+editor-diff-hint = Cette comparaison montre seulement ce qui a changé — Échap revient à la question

@@ -1695,3 +1695,7 @@ editor-converted-page = { $name }: следующее сохранение за�
 editor-convert-same = Файл уже записывается так
 editor-convert-no-bom = У { $page } нет метки порядка байтов: она есть только у UTF-8 и UTF-16
 editor-convert-lossy = { $page } не вмещает все символы { $name }: ничего не изменено
+btn-reload = Перечитать
+btn-what-changed = Что изменилось
+editor-diff-buffer = в редакторе
+editor-diff-hint = Это сравнение только показывает, что изменилось — Esc возвращает к вопросу
