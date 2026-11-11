@@ -26,6 +26,7 @@ pub mod split;
 pub mod sum;
 pub mod sync;
 pub mod usage;
+pub mod wastebasket;
 
 pub use arcfs::ArcFs;
 pub use attrs::{set_attributes, Change, Mode};

@@ -142,7 +142,7 @@ since 0.41.0 also `MU` (muCommander), `NNN`, `RANGER`, `LF`, `BROOT`, `VIFM`, `X
 | 4.7 | **Transfers through the local operation engine**: copy and move up, down, between two servers and inside one, with progress, conflicts and cancellation; a `sftp://` URL in `Ctrl+L` connects | TC | ~ resuming an interrupted transfer; a speed limit per server (`max_kbps`) since 0.34.0 |
 | 4.8 | Temporary panel (collect unrelated files into a virtual panel and act on them) | FAR `tmppanel` | ✓ |
 | 4.9 | Special VFS: process list, services, registry (Windows), `/proc`-style views, package contents, git status/worktree view | FAR/far2l | ~ the registry and package contents; the system log is *Commands → System log* (SPEC 06 §16); git is `Ctrl+Alt+G`, all of it panels: what changed with stage, unstage, diff and commit, the branches and switching, the log of the repository or of a file, pull and push (SPEC 06 §15) |
-| 4.10 | Trash as a browsable VFS | KRU/MU/BROOT/VIFM/YAZI/TC | ✗ M3 |
+| 4.10 | Trash as a browsable VFS | KRU/MU/BROOT/VIFM/YAZI/TC | ~ a panel from `Alt+F1` with restore, delete for good and empty (SPEC 03 §4a); not on macOS, whose wastebasket a program cannot list |
 | 4.11 | VFS API available to plugins (so a plugin can add a scheme) | FAR/TC(WFX) | ✗ M3 |
 | 4.12 | SQLite databases: tables and views as CSV entries, `schema.sql`, and `sql:` queries opened in table mode, read only | FAR (SQLiteDB) | ✓ (SPEC 04 §4b) |
 | 4.13 | JSON documents as folders: objects and arrays as directories, values as files (strings as their text), read only | FarNet (JsonKit) | ✓ (SPEC 04 §4c) |

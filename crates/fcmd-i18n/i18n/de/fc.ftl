@@ -1879,3 +1879,46 @@ diff-unified-off = Zwei Spalten, nebeneinander
 diff-patch-title = Unterschiede als Patch speichern (.diff)
 diff-patch-saved = { $name } geschrieben: ein Unified-Diff mit { $lines } Zeilen
 diff-patch-nothing = Die beiden Dateien sind gleich: es gibt keinen Patch zu speichern
+# wastebasket and external editor
+drive-trash = Papierkorb
+drive-trash-closed = Papierkorb (dieses System lässt ihn kein Programm auflisten)
+menu-trash = Papierkorb
+menu-trash-empty = Papierkorb leeren
+key-trash-restore = Zurück
+key-trash-empty = Leeren
+btn-empty = Leeren
+btn-rename = Umbenennen
+trash-closed = der Papierkorb dieses Systems lässt sich nur aus dessen eigenem Dateimanager öffnen
+trash-empty = der Papierkorb ist leer
+trash-failed = der Papierkorb: { $why }
+trash-restored =
+    { $count ->
+        [one] ein Element wieder an seinem Platz
+       *[other] { $count } Elemente wieder an ihrem Platz
+    }
+trash-purged =
+    { $count ->
+        [one] ein Element endgültig gelöscht
+       *[other] { $count } Elemente endgültig gelöscht
+    }
+trash-card-name = Name
+trash-card-from = War in
+trash-card-deleted = Gelöscht
+trash-card-size = Größe
+trash-clash-title = Wiederherstellen
+trash-clash-body = { $path } existiert bereits.
+trash-clash-note = Überschreiben schickt das Vorhandene in den Papierkorb; Umbenennen legt dieses daneben.
+trash-clash-more =
+    { $count ->
+        [one] Ein weiteres Element ist in derselben Lage.
+       *[other] { $count } weitere Elemente sind in derselben Lage.
+    }
+trash-purge-title = Endgültig löschen
+trash-purge-body =
+    { $count ->
+        [one] { $name } aus dem Papierkorb löschen?
+       *[other] { $count } Elemente aus dem Papierkorb löschen?
+    }
+trash-purge-note = Das löscht endgültig: nichts kann sie zurückholen.
+trash-empty-title = Papierkorb leeren
+trash-empty-body = Alles im Papierkorb löschen?

@@ -1879,3 +1879,46 @@ diff-unified-off = Dos columnas, lado a lado
 diff-patch-title = Guardar las diferencias como parche (.diff)
 diff-patch-saved = { $name } escrito: un diff unificado de { $lines } líneas
 diff-patch-nothing = Los dos archivos son iguales: no hay parche que guardar
+# wastebasket and external editor
+drive-trash = Papelera
+drive-trash-closed = Papelera (este sistema no deja que un programa la liste)
+menu-trash = Papelera
+menu-trash-empty = Vaciar la papelera
+key-trash-restore = Restaur
+key-trash-empty = Vaciar
+btn-empty = Vaciar
+btn-rename = Renombrar
+trash-closed = la papelera de este sistema solo se abre desde su propio gestor de archivos
+trash-empty = la papelera está vacía
+trash-failed = la papelera: { $why }
+trash-restored =
+    { $count ->
+        [one] un elemento de vuelta donde estaba
+       *[other] { $count } elementos de vuelta donde estaban
+    }
+trash-purged =
+    { $count ->
+        [one] un elemento borrado para siempre
+       *[other] { $count } elementos borrados para siempre
+    }
+trash-card-name = Nombre
+trash-card-from = Estaba en
+trash-card-deleted = Borrado
+trash-card-size = Tamaño
+trash-clash-title = Restaurar
+trash-clash-body = { $path } ya existe.
+trash-clash-note = Sobrescribir manda a la papelera el que está; Renombrar pone este a su lado.
+trash-clash-more =
+    { $count ->
+        [one] Otro elemento está en la misma situación.
+       *[other] Otros { $count } elementos están en la misma situación.
+    }
+trash-purge-title = Borrar para siempre
+trash-purge-body =
+    { $count ->
+        [one] ¿Borrar { $name } de la papelera?
+       *[other] ¿Borrar { $count } elementos de la papelera?
+    }
+trash-purge-note = Esto borra definitivamente: nada podrá devolverlos.
+trash-empty-title = Vaciar la papelera
+trash-empty-body = ¿Borrar todo lo que hay en la papelera?

@@ -207,8 +207,45 @@ workspace is built on; the engine asks it one question and takes `None` for an a
   filesystems this is *not* a guarantee, and the UI says so.
 - Recursive delete asks once, with counts and the first three paths.
 
-Still to come: browsing the wastebasket as a panel, and putting something back from inside the
-program.
+### 4a. The wastebasket as a panel (`tool.trash`)
+
+The other direction: what is in the wastebasket, as a panel, with the three things one does
+there. It is the *Wastebasket* row of `Alt+F1` / `Alt+F2` (`:trash`, `drives.panels.trash`)
+and *Commands → Wastebasket*.
+
+- **The rows** are the items the system lists: the name with the folder it was in beside it,
+  the size in the size column and the moment it was thrown away in the date's, so the panel's
+  own sort keys order the list by any of them. A folder ends in the path separator and has no
+  size — the system does not say it without walking the tree. `F3` and `Enter` are the item's
+  card (name, where it was, when it went, size); a row is not somewhere to go, and `F4` and
+  `F6` say that the rows are not files.
+- **`F5` puts back** what is selected, or the row under the cursor (`Shift+F5`: that row
+  whatever is selected), where it came from. Nothing is asked first, because putting a file
+  back destroys nothing. Where something already stands in an item's place the item is left
+  and asked about, one at a time, as a copy asks: **Overwrite** sends the one standing there
+  to the wastebasket and the item takes its place — the two change places, nothing is lost;
+  **Rename** brings the item back beside it as `name (2).ext`; **Skip** leaves it in the
+  wastebasket and goes on to the next; **Cancel** leaves all that remain.
+- **`F8` / `Del` delete for good**, after a question that says nothing can put them back.
+- **`F7`, and *Commands → Empty the wastebasket* (`tool.trash.empty`)** delete everything in
+  it, after a question whose lit button is *Cancel*.
+- The key bar says so: `F5` *Restore*, `F7` *Empty*, `F8` *Delete*.
+
+All of it is a worker's (`Request::Trash`, `fcmd_jobs::wastebasket`): the list is read item by
+item and a recycle bin with years in it takes its time, so opening the panel sends the
+question and the panel appears when the answer does. `Ctrl+R` asks again, and so does every
+restore and delete.
+
+The platform half is the `trash` crate's listing: the freedesktop trash on Linux and the BSDs
+(the home trash and the one of every mounted device), the recycle bin on Windows. **macOS has
+no listing** a program may read — the Finder keeps *Put Back* to itself — so there the row
+reads *Wastebasket (this system does not let a program list it)* and choosing it says the
+same, rather than opening a panel with nothing in it.
+
+The decisions — what a clash is, what each answer does — are written against a trait
+(`Wastebasket`), and the tests hand it one made of temporary folders: no test lists, restores
+from or empties the wastebasket of whoever runs it. One test that does is `#[ignore]`d, for a
+person to run.
 
 ## 5. Queue and background
 

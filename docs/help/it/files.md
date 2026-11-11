@@ -264,6 +264,28 @@ in un bucket vengono cancellati e basta, e il dialogo lo dice prima che tu rispo
 cestino rifiuta qualcosa che avrebbe dovuto prendere — su Linux, un file su un disco che non ha
 una propria cartella di cestino — l'errore dice quale tasto lo cancella invece.
 
+Il cestino è anche un posto dove andare: la riga *Cestino* di `Alt+F1` / `Alt+F2`, oppure
+*Comandi → Cestino*, mostra quello che c'è dentro come pannello — il nome, la cartella in cui
+era, la dimensione, e quando è stato buttato nella colonna della data, così i soliti tasti di
+ordinamento ordinano l'elenco.
+
+| Tasto | Nel cestino |
+| --- | --- |
+| `F3`, `Enter` | la scheda dell'elemento: dov'era, quando è stato buttato, quanto è grande |
+| `F5` | rimette a posto quello che è selezionato, dov'era (`Shift+F5`: la riga sotto il cursore) |
+| `F8`, `Canc` | elimina per sempre, dopo aver chiesto |
+| `F7` | svuota il cestino, dopo aver chiesto — il pulsante acceso è *Annulla*; anche *Comandi → Svuota il cestino* |
+| `Ctrl+R` | lo rilegge |
+
+Rimettere a posto non chiede niente, a meno che dove stava un elemento ci sia già qualcosa.
+Allora chiede, un elemento alla volta: **Sovrascrivi** manda nel cestino quello che c'è e
+l'elemento prende il suo posto, così non si perde niente; **Rinomina** rimette l'elemento
+accanto come `nome (2).ext`; **Salta** lo lascia nel cestino; **Annulla** lascia tutti quelli
+che restano.
+
+Funziona dove il sistema lascia leggere il cestino a un programma: Linux e Windows. Su macOS
+può farlo solo il Finder, e la riga lo dice.
+
 `Alt+Del` è il terzo: sovrascrive i byte prima di scollegare il file. Il suo dialogo è onesto su
 quanto valga la cosa su un SSD, su un filesystem copy-on-write e con gli snapshot in giro.
 

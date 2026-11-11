@@ -18,7 +18,7 @@ rimovibile, ottico, di rete, in memoria), come si chiama, con che filesystem è 
 quanto è grande e quanto ne resta. Quali di queste colonne vengano disegnate lo scegli tu, con
 `F9` dentro il dialogo — e anche quali pannelli che non sono dischi la lista propone: una
 casella per ciascuno (NetBox, processi, socket, programmi installati, servizi, programmi
-esterni, pannello temporaneo), così la lista tiene solo quello che usi.
+esterni, pannello temporaneo, cestino), così la lista tiene solo quello che usi.
 
 Tutti i dischi vengono interrogati insieme e il dialogo li aspetta al massimo un secondo e
 mezzo. Un disco di rete il cui server non c'è può metterci molti secondi a dirlo: compare con
@@ -64,7 +64,10 @@ Sotto una riga di separazione, su `Ctrl+1`…`Ctrl+9`, stanno le cose che non so
   ognuno è un programma a parte;
 * un **pannello temporaneo**, che è un elenco e non una cartella: `Ctrl+Shift+Ins` ci aggiunge
   quello che è selezionato da qualunque posto, e i file dentro possono venire da una dozzina di
-  cartelle diverse.
+  cartelle diverse;
+* il **cestino**: quello che è stato buttato, ognuno con la cartella in cui era, la dimensione
+  e quando è finito lì. `F5` rimette a posto quello che è selezionato, `F8` lo elimina per
+  sempre e `F7` svuota tutto — *Cancellare, e il cestino* nel capitolo dei file dice il resto.
 
 Lo stesso elenco lo può riempire un comando invece della tua mano: *Comandi → Pannello
 dall'uscita di un comando* chiede una riga di comando, la esegue dove sta il pannello, e prende

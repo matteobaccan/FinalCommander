@@ -1879,3 +1879,46 @@ diff-unified-off = Deux colonnes, côte à côte
 diff-patch-title = Enregistrer les différences comme patch (.diff)
 diff-patch-saved = { $name } écrit : un diff unifié de { $lines } lignes
 diff-patch-nothing = Les deux fichiers sont identiques : il n'y a pas de patch à enregistrer
+# wastebasket and external editor
+drive-trash = Corbeille
+drive-trash-closed = Corbeille (ce système ne laisse pas un programme la lister)
+menu-trash = Corbeille
+menu-trash-empty = Vider la corbeille
+key-trash-restore = Restaur
+key-trash-empty = Vider
+btn-empty = Vider
+btn-rename = Renommer
+trash-closed = la corbeille de ce système ne s'ouvre que depuis son propre gestionnaire de fichiers
+trash-empty = la corbeille est vide
+trash-failed = la corbeille : { $why }
+trash-restored =
+    { $count ->
+        [one] un élément de retour à sa place
+       *[other] { $count } éléments de retour à leur place
+    }
+trash-purged =
+    { $count ->
+        [one] un élément supprimé définitivement
+       *[other] { $count } éléments supprimés définitivement
+    }
+trash-card-name = Nom
+trash-card-from = Était dans
+trash-card-deleted = Supprimé
+trash-card-size = Taille
+trash-clash-title = Restaurer
+trash-clash-body = { $path } existe déjà.
+trash-clash-note = Remplacer envoie celui qui est là à la corbeille ; Renommer remet celui-ci à côté.
+trash-clash-more =
+    { $count ->
+        [one] Un autre élément est dans le même cas.
+       *[other] { $count } autres éléments sont dans le même cas.
+    }
+trash-purge-title = Supprimer définitivement
+trash-purge-body =
+    { $count ->
+        [one] Supprimer { $name } de la corbeille ?
+       *[other] Supprimer { $count } éléments de la corbeille ?
+    }
+trash-purge-note = La suppression est définitive : rien ne pourra les remettre.
+trash-empty-title = Vider la corbeille
+trash-empty-body = Supprimer tout ce que contient la corbeille ?

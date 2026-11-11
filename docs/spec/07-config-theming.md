@@ -405,6 +405,7 @@ programs = true
 services = true
 tools = true             # the programs fcmd runs, found or not
 temp = true
+trash = true             # the system's wastebasket: put back, delete for good
 ```
 
 ```toml

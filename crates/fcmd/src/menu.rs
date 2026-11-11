@@ -671,6 +671,9 @@ pub fn menus() -> Vec<Menu> {
                 item("menu-git", "Ctrl+Alt+G", Action::Run(Command::ToolGit)),
                 item("menu-syslog", "", Action::Run(Command::ToolSysLog)),
                 item("menu-ai", "", Action::Run(Command::ToolAi)),
+                Entry::Separator,
+                item("menu-trash", "", Action::Run(Command::ToolTrash)),
+                item("menu-trash-empty", "", Action::Run(Command::ToolTrashEmpty)),
             ],
         },
         Menu {

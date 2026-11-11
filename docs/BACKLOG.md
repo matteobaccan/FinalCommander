@@ -78,7 +78,6 @@ Three findings that are not gaps against anybody:
 
 | Item | Who | Work | Rules | Note |
 | --- | --- | --- | --- | --- |
-| The wastebasket as a place: list it, put a file back, empty it | Krusader, muCommander, broot, vifm, yazi, Total Commander | M | yes | Feature 4.10, *The wastebasket as a panel* below. The `trash` crate already in the tree lists and restores on Linux and Windows; macOS has no listing |
 | Elevated operations | Krusader, Commander One, Double Commander, FAR, far2l, nnn | L | **no** — *Settled*: a privileged helper is a security design | Feature 3.19. The one large thing six of them have and we have decided not to |
 | Renaming many files by editing their names in the editor | ranger, vifm, nnn, yazi, Total Commander | S | yes | The names into our own editor, one per line; on save the lines become the plan the multi-rename tool already previews and undoes |
 | More digests: SHA-512, SHA-3, BLAKE | Krusader, Double Commander, Total Commander, muCommander | S | SHA-512 yes (`sha2` is in the tree); the others are a dependency each | |
@@ -279,7 +278,6 @@ Checked against the same sources: none of the programs above does these out of t
 | Item | Where | What is left |
 | --- | --- | --- |
 | Volumes with no mount point | `Ctrl+H` | Wants `FindFirstVolumeW`. The drive list shows what the platform can tell us otherwise. |
-| The wastebasket as a panel | — | Browsing it, and putting something back from inside the program. |
 
 ## Netbox
 

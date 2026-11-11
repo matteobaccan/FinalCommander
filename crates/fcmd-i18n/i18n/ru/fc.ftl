@@ -1865,3 +1865,34 @@ diff-unified-off = Две колонки, рядом
 diff-patch-title = Сохранить различия как патч (.diff)
 diff-patch-saved = { $name } записан: единый diff, строк: { $lines }
 diff-patch-nothing = Файлы одинаковы: сохранять нечего
+# wastebasket and external editor
+drive-trash = Корзина
+drive-trash-closed = Корзина (эта система не даёт программе её читать)
+menu-trash = Корзина
+menu-trash-empty = Очистить корзину
+key-trash-restore = Вернуть
+key-trash-empty = Очист
+btn-empty = Очистить
+btn-rename = Переименовать
+trash-closed = корзину этой системы можно открыть только из её собственного файлового менеджера
+trash-empty = корзина пуста
+trash-failed = корзина: { $why }
+trash-restored = возвращено на место: { $count }
+trash-purged = удалено навсегда: { $count }
+trash-card-name = Имя
+trash-card-from = Было в
+trash-card-deleted = Удалено
+trash-card-size = Размер
+trash-clash-title = Восстановить
+trash-clash-body = { $path } уже существует.
+trash-clash-note = «Перезаписать» отправляет в корзину то, что там есть; «Переименовать» кладёт это рядом.
+trash-clash-more = В том же положении ещё: { $count }.
+trash-purge-title = Удалить навсегда
+trash-purge-body =
+    { $count ->
+        [one] Удалить { $name } из корзины?
+       *[other] Удалить из корзины элементов: { $count }?
+    }
+trash-purge-note = Удаление окончательное: вернуть их будет нечем.
+trash-empty-title = Очистить корзину
+trash-empty-body = Удалить всё, что есть в корзине?

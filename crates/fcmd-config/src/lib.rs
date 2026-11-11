@@ -783,6 +783,8 @@ pub struct PanelRows {
     /// The programs from elsewhere: what fcmd runs, found or not (`:tools`).
     pub tools: bool,
     pub temp: bool,
+    /// The system's wastebasket (`:trash`).
+    pub trash: bool,
 }
 
 impl Default for PanelRows {
@@ -796,6 +798,7 @@ impl Default for PanelRows {
             services: !mac,
             tools: true,
             temp: true,
+            trash: true,
         }
     }
 }
@@ -811,6 +814,7 @@ impl PanelRows {
             ":services" => self.services,
             ":tools" => self.tools,
             ":temp" => self.temp,
+            ":trash" => self.trash,
             _ => true,
         }
     }
@@ -2397,6 +2401,7 @@ impl Config {
             "drives.panels.services" => self.drives.panels.services = parse_bool(value)?,
             "drives.panels.tools" => self.drives.panels.tools = parse_bool(value)?,
             "drives.panels.temp" => self.drives.panels.temp = parse_bool(value)?,
+            "drives.panels.trash" => self.drives.panels.trash = parse_bool(value)?,
             other => return Err(format!("unknown setting `{other}`")),
         }
         Ok(())

@@ -406,6 +406,10 @@ pub enum Command {
     ToolSysLog,
     /// The AI services as a list to keep: add, change, remove, choose the one `ai:` asks.
     ToolAi,
+    /// The system's wastebasket as a panel: put back, delete for good (SPEC 03 §4a).
+    ToolTrash,
+    /// Delete everything in the wastebasket for good, after asking.
+    ToolTrashEmpty,
     /// The screen grabber: copy a piece of the screen as it stands (SPEC 06 §11b).
     ToolGrab,
     /// Make the two panels' directories hold the same thing: decide about every pair, show
@@ -790,6 +794,8 @@ impl Command {
             Command::AiRedact,
             Command::ToolSysLog,
             Command::ToolAi,
+            Command::ToolTrash,
+            Command::ToolTrashEmpty,
             Command::ToolGrab,
             Command::ToolSyncDirs,
             Command::ToolSyncSaved,
@@ -1106,6 +1112,8 @@ impl Command {
             Command::AiRedact => "ai.redact".into(),
             Command::ToolSysLog => "tool.syslog".into(),
             Command::ToolAi => "tool.ai".into(),
+            Command::ToolTrash => "tool.trash".into(),
+            Command::ToolTrashEmpty => "tool.trash.empty".into(),
             Command::ToolGrab => "tool.grab".into(),
             Command::ToolSyncDirs => "tool.sync.dirs".into(),
             Command::ToolSyncSaved => "tool.sync.saved".into(),
@@ -1386,6 +1394,8 @@ impl Command {
             ("ai.redact", _) => Command::AiRedact,
             ("tool.syslog", _) => Command::ToolSysLog,
             ("tool.ai", _) => Command::ToolAi,
+            ("tool.trash", _) => Command::ToolTrash,
+            ("tool.trash.empty", _) => Command::ToolTrashEmpty,
             ("tool.grab", _) => Command::ToolGrab,
             ("tool.sync.dirs", _) => Command::ToolSyncDirs,
             ("tool.sync.saved", _) => Command::ToolSyncSaved,

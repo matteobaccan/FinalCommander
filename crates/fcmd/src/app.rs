@@ -7,6 +7,7 @@ use fcmd_config::{Config, Paths, QuickSearch};
 use fcmd_core::{CancelToken, Entry, MaskScope, Sort, SortKey, VPath, ViewMode};
 use fcmd_edit::{BlockKind, Editor, HexEdit};
 use fcmd_i18n::I18n;
+use fcmd_jobs::wastebasket::{OnClash, Restored, Trashed, Wastebasket};
 use fcmd_jobs::{Decision, JobKind, JobSpec, Outcome, Progress, Question};
 use fcmd_net::{SecretKind, Site};
 use fcmd_tui::Input;
@@ -152,6 +153,13 @@ pub enum Request {
     },
     /// What is open, with the counters as they are now.
     TunnelList,
+    /// The wastebasket (SPEC 03 §4a): list it, put items back, delete them for good. A
+    /// worker's job: the list is read from the disk item by item, and a recycle bin with
+    /// years in it takes its time.
+    Trash {
+        side: usize,
+        ask: TrashAsk,
+    },
     /// Start, stop or restart a service (SPEC 02 §14). A worker's job: a service manager
     /// takes seconds over it, and a panel that stopped answering for those seconds would be
     /// a panel somebody pressed the key in twice.
@@ -1055,6 +1063,20 @@ pub enum Event {
     /// carries nothing and does nothing but arrive.
     Redraw,
     Input(Input),
+    /// What the wastebasket holds, or why it could not be read.
+    TrashListed {
+        side: usize,
+        result: Result<Vec<Trashed>, String>,
+    },
+    /// Items of the wastebasket were put back, or were not.
+    TrashRestored {
+        side: usize,
+        outcome: Restored,
+    },
+    /// Items of the wastebasket were deleted for good: how many, or why not.
+    TrashPurged {
+        result: Result<usize, String>,
+    },
     /// A service was started, stopped or restarted — or the system refused.
     ServiceControlled {
         side: usize,
@@ -1939,6 +1961,43 @@ fn times_of(path: &VPath, listed: Option<std::time::SystemTime>) -> crate::form:
     times
 }
 
+/// What the wastebasket is asked (SPEC 03 §4a).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TrashAsk {
+    /// What is in it.
+    List,
+    /// Put these back where they came from; `clash` says what to do where something
+    /// already stands there.
+    Restore { items: Vec<Trashed>, clash: OnClash },
+    /// Delete these for good.
+    Purge { items: Vec<Trashed> },
+    /// Delete everything in it for good.
+    Empty,
+}
+
+/// Do what was asked of a wastebasket and say what happened: the worker's half, a function
+/// of its own so that a test can hand it a wastebasket that is not the user's.
+pub fn trash_answer(side: usize, ask: TrashAsk, basket: &dyn Wastebasket) -> Event {
+    match ask {
+        TrashAsk::List => Event::TrashListed {
+            side,
+            result: basket.list(),
+        },
+        TrashAsk::Restore { items, clash } => Event::TrashRestored {
+            side,
+            outcome: fcmd_jobs::wastebasket::restore(basket, &items, clash),
+        },
+        TrashAsk::Purge { items } => Event::TrashPurged {
+            result: basket.purge(&items).map(|()| items.len()),
+        },
+        TrashAsk::Empty => Event::TrashPurged {
+            result: basket
+                .list()
+                .and_then(|all| basket.purge(&all).map(|()| all.len())),
+        },
+    }
+}
+
 /// The message id for a service's state, so the panel and the card say the same word.
 fn state_id(state: fcmd_platform::ServiceState) -> &'static str {
     match state {
@@ -2050,6 +2109,13 @@ pub enum ConfirmAction {
         id: String,
         action: fcmd_platform::ServiceAction,
     },
+    /// Delete these items of the wastebasket for good (`F8` in its panel).
+    TrashPurge { side: usize, items: Vec<Trashed> },
+    /// Delete everything in the wastebasket for good.
+    TrashEmpty { side: usize },
+    /// Something stands where the first of these came from: overwrite, rename or skip it,
+    /// and then the same question about the next.
+    TrashClash { side: usize, items: Vec<Trashed> },
     /// Empty a history of everything nobody has pinned (`Del` in the list), and open it
     /// again where it was — FAR asks before this one too.
     ClearHistory {
@@ -2099,6 +2165,9 @@ impl ConfirmAction {
             },
             ConfirmAction::ArcRebuild { .. } => "btn-delete",
             ConfirmAction::ClearHistory { .. } => "btn-delete",
+            ConfirmAction::TrashPurge { .. } => "btn-delete",
+            ConfirmAction::TrashEmpty { .. } => "btn-empty",
+            ConfirmAction::TrashClash { .. } => "btn-overwrite",
             ConfirmAction::DiscardEdits | ConfirmAction::DiscardHex => "btn-discard",
             ConfirmAction::OverwriteChanged | ConfirmAction::OverwriteRemote => "btn-overwrite",
             ConfirmAction::QuitWithScreens => "btn-quit",
@@ -2129,6 +2198,7 @@ impl ConfirmAction {
     pub fn other_keys(&self) -> &'static [&'static str] {
         match self {
             ConfirmAction::OverwriteChanged => &["btn-reload", "btn-what-changed"],
+            ConfirmAction::TrashClash { .. } => &["btn-rename", "btn-skip"],
             _ => &[],
         }
     }
@@ -3050,6 +3120,10 @@ pub struct App {
     /// The service list the `:services` panel was built from, so a row can be turned back
     /// into the service it stands for.
     services: Vec<fcmd_platform::Service>,
+    /// What each side's `:trash` panel was built from, so a row can be turned back into
+    /// the item it stands for. One list per side: two panels on the wastebasket are read at
+    /// different moments, and a row must never name an item of the other's list.
+    trash: [Vec<Trashed>; 2],
     /// The times the file under the cursor carried when the dialog opened, so the dialog's
     /// `Original` button has something to put back.
     attr_times: crate::form::Times,
@@ -3574,6 +3648,7 @@ impl App {
             editor_diff: false,
             attr_seed_mode: None,
             services: Vec::new(),
+            trash: [Vec::new(), Vec::new()],
             attr_times: Default::default(),
             times_clip: None,
             copy_sources: Vec::new(),
@@ -3795,6 +3870,15 @@ impl App {
             self.probe_tools(index);
             return;
         }
+        // The wastebasket is asked again: what it holds is whatever the system says now.
+        if self.panels[index].temp_origin() == Some(":trash") {
+            self.panels[index].loading = false;
+            self.requests.push(Request::Trash {
+                side: index,
+                ask: TrashAsk::List,
+            });
+            return;
+        }
         // The AI panels are built from the settings and the conversation, not from files:
         // re-reading one builds it again, and the command line still goes to the model.
         if self.panels[index].temp_origin() == Some(":ai") {
@@ -4011,6 +4095,57 @@ impl App {
                 }
                 self.read_panel(0);
                 self.read_panel(1);
+            }
+            Event::TrashListed { side, result } => match result {
+                Ok(items) => self.show_trash(side, items),
+                Err(why) => {
+                    let m = self.i18n.t_args("trash-failed", &[("why", why.into())]);
+                    self.set_error(m);
+                }
+            },
+            Event::TrashRestored { side, outcome } => {
+                match outcome.errors.first() {
+                    Some(why) => {
+                        let m = self
+                            .i18n
+                            .t_args("trash-failed", &[("why", why.clone().into())]);
+                        self.set_error(m);
+                    }
+                    None if !outcome.back.is_empty() => {
+                        let m = self.i18n.t_args(
+                            "trash-restored",
+                            &[("count", (outcome.back.len() as i64).into())],
+                        );
+                        self.set_status(m);
+                    }
+                    None => {}
+                }
+                // What came back may be in the folder the other panel shows, and what did
+                // is no longer in this one.
+                self.read_panel(0);
+                self.read_panel(1);
+                if !outcome.clashes.is_empty() {
+                    self.ask_trash_clash(side, outcome.clashes);
+                }
+            }
+            Event::TrashPurged { result } => {
+                match result {
+                    Ok(n) => {
+                        let m = self
+                            .i18n
+                            .t_args("trash-purged", &[("count", (n as i64).into())]);
+                        self.set_status(m);
+                    }
+                    Err(why) => {
+                        let m = self.i18n.t_args("trash-failed", &[("why", why.into())]);
+                        self.set_error(m);
+                    }
+                }
+                for side in 0..2 {
+                    if self.panels[side].temp_origin() == Some(":trash") {
+                        self.read_panel(side);
+                    }
+                }
             }
             Event::UndoDone { result } => {
                 match result {
@@ -5856,11 +5991,21 @@ impl App {
             // One of the answers in between. Only the editor's question has any, so this is
             // where they are done rather than in a table of their own.
             KeyCode::Enter if (1..=others.len()).contains(&confirm.button) => {
-                match others[confirm.button - 1] {
-                    "btn-reload" => {
+                match (others[confirm.button - 1], confirm.action) {
+                    ("btn-reload", _) => {
                         self.mode = Mode::Normal;
                         self.restore_editor();
                         self.editor_command(Command::EditorReload);
+                    }
+                    // The wastebasket's question: beside the one that is there, or not at
+                    // all — and then the next item.
+                    (answer, ConfirmAction::TrashClash { side, items }) => {
+                        self.mode = Mode::Normal;
+                        let clash = match answer {
+                            "btn-rename" => OnClash::Rename,
+                            _ => OnClash::Skip,
+                        };
+                        self.trash_clash_answer(side, items, clash);
                     }
                     _ => self.open_editor_disk_diff(),
                 }
@@ -5899,6 +6044,21 @@ impl App {
                     ConfirmAction::PlayMacro(which) => self.run_macro(&which),
                     ConfirmAction::RunPlugin(which) => self.start_plugin_command(which),
                     ConfirmAction::Service { id, action } => self.start_service_action(id, action),
+                    ConfirmAction::TrashPurge { side, items } => {
+                        self.requests.push(Request::Trash {
+                            side,
+                            ask: TrashAsk::Purge { items },
+                        });
+                    }
+                    ConfirmAction::TrashEmpty { side } => {
+                        self.requests.push(Request::Trash {
+                            side,
+                            ask: TrashAsk::Empty,
+                        });
+                    }
+                    ConfirmAction::TrashClash { side, items } => {
+                        self.trash_clash_answer(side, items, OnClash::Overwrite)
+                    }
                     ConfirmAction::DiscardHex => {
                         self.hex_parked = None;
                         self.leave_screen();
@@ -10883,10 +11043,17 @@ impl App {
                 ("drive-tools", ":tools"),
                 ("drive-ai", ":ai"),
                 ("drive-temp", ":temp"),
+                ("drive-trash", ":trash"),
             ] {
                 if !shown.panels.shows(value) {
                     continue;
                 }
+                // Where the system keeps its wastebasket to itself the row says so, rather
+                // than opening a panel with nothing in it.
+                let id = match value {
+                    ":trash" if !fcmd_jobs::wastebasket::SUPPORTED => "drive-trash-closed",
+                    _ => id,
+                };
                 let on_it = origin.as_deref() == Some(value);
                 rows.push(keyed(self.plain(id), value.to_string(), on_it));
             }
@@ -11765,6 +11932,10 @@ impl App {
             Command::NavEnter if self.panel().temp_origin() == Some(":ai") => {
                 self.ai_login_at_cursor();
             }
+            // A row of the wastebasket is not somewhere to go: `Enter` says what it is.
+            Command::NavEnter if self.panel().temp_origin() == Some(":trash") => {
+                self.open_trash_card()
+            }
             Command::NavEnter if self.panel().temp_origin() == Some(":gitlog") => {
                 if let Some(c) = self.git_commit_at_cursor() {
                     self.git_ask(GitAsk::Show(c.hash));
@@ -12162,6 +12333,11 @@ impl App {
             Command::MacroList => self.open_macros(),
             Command::AppScreens => self.open_screens(),
             Command::ToolGit => self.open_git(),
+            Command::ToolTrash => {
+                let side = self.active;
+                self.open_trash_panel(side);
+            }
+            Command::ToolTrashEmpty => self.ask_trash_empty(),
             Command::ToolAi => self.open_ai_services(),
             Command::ToolSysLog => {
                 let m = self.i18n.t("syslog-reading");
@@ -12586,6 +12762,19 @@ impl App {
                     self.set_error(m);
                     return;
                 }
+                // In the wastebasket `F5` puts back what is selected, where it came from;
+                // there is nowhere else to move a row to.
+                if self.panel().temp_origin() == Some(":trash") {
+                    match cmd {
+                        Command::FileCopy => self.trash_restore(false),
+                        Command::FileCopyCurrent => self.trash_restore(true),
+                        _ => {
+                            let m = self.i18n.t("temp-not-a-file");
+                            self.set_error(m);
+                        }
+                    }
+                    return;
+                }
                 if self.panel().temp_origin() == Some(":services") {
                     self.service_action(match cmd {
                         Command::FileCopy | Command::FileCopyCurrent => {
@@ -12663,6 +12852,10 @@ impl App {
             Command::FileMkdir if self.panel().temp_origin() == Some(":git") => {
                 self.ask_commit_message()
             }
+            // In the wastebasket `F7` empties it, after asking.
+            Command::FileMkdir if self.panel().temp_origin() == Some(":trash") => {
+                self.ask_trash_empty()
+            }
             Command::FileMkdir if self.panel().temp_origin() == Some(":ai") => {
                 self.open_ai_form(None)
             }
@@ -12734,6 +12927,12 @@ impl App {
                 // asked: it takes the thing away from whatever was using it.
                 if self.panel().temp_origin() == Some(":services") {
                     self.service_action(fcmd_platform::ServiceAction::Stop);
+                    return;
+                }
+                // In the wastebasket `F8` and `Del` delete for good, which is the one thing
+                // left to do to a file that is already there.
+                if self.panel().temp_origin() == Some(":trash") {
+                    self.ask_trash_purge(cmd == Command::FileDeleteCurrent);
                     return;
                 }
                 // The other lists of things that are not files have nothing to delete, and
@@ -12816,6 +13015,11 @@ impl App {
         // And on the programs from elsewhere it is what fcmd knows about that one.
         if self.panel().temp_origin() == Some(":tools") {
             self.open_tool_card();
+            return;
+        }
+        // And in the wastebasket it is the item's: where it was, when it went, how big it is.
+        if self.panel().temp_origin() == Some(":trash") {
+            self.open_trash_card();
             return;
         }
         // On the service list it is that service's card, for the same reason.
@@ -20460,6 +20664,275 @@ impl App {
         self.active = side;
     }
 
+    // ── the wastebasket as a panel (SPEC 03 §4a) ────────────────────────────────────────────
+
+    /// `Alt+F1` → Wastebasket: what the system holds of what was thrown away.
+    ///
+    /// The row is the item: its name with the folder it was in beside it, its size in the
+    /// size column and the moment it went in the date's — so the sort keys the panel already
+    /// has order the list by any of them. `F5` puts back, `F8` deletes for good, `F7` empties.
+    /// The list is read by a worker and arrives as an event: a recycle bin with years in it
+    /// is not read in the time between two keys.
+    pub(crate) fn open_trash_panel(&mut self, side: usize) {
+        if !fcmd_jobs::wastebasket::SUPPORTED {
+            let m = self.i18n.t("trash-closed");
+            self.set_error(m);
+            return;
+        }
+        self.active = side;
+        let m = self.i18n.t("panel-loading");
+        self.set_status(m);
+        self.requests.push(Request::Trash {
+            side,
+            ask: TrashAsk::List,
+        });
+    }
+
+    /// The list has come: the panel on `side` becomes it.
+    fn show_trash(&mut self, side: usize, mut items: Vec<Trashed>) {
+        use fcmd_core::{Entry, EntryId, EntryKind};
+
+        // The system hands them over in no order. The panel sorts by its own key; where it
+        // is left unsorted, the last thrown away comes first, which is the order of somebody
+        // who has just deleted the wrong thing.
+        items.sort_by(|a, b| b.deleted.cmp(&a.deleted).then(a.name.cmp(&b.name)));
+        let name_w = items
+            .iter()
+            .map(|i| unicode_width::UnicodeWidthStr::width(&*i.name.to_string_lossy()))
+            .max()
+            .unwrap_or(0)
+            .min(32);
+        let rows: Vec<(VPath, Entry)> = items
+            .iter()
+            .enumerate()
+            .map(|(i, item)| {
+                let mut name = item.name.to_string_lossy().into_owned();
+                // A folder says so with the separator it would end in: the row is not one
+                // to go into, so it is not given a folder's kind.
+                if item.folder {
+                    name.push(std::path::MAIN_SEPARATOR);
+                }
+                let label = format!("{name:<name_w$}  {}", item.parent.display());
+                let entry = Entry {
+                    name: label.into(),
+                    kind: EntryKind::File,
+                    size: item.size,
+                    mtime: u64::try_from(item.deleted)
+                        .ok()
+                        .filter(|s| *s > 0)
+                        .map(|s| std::time::UNIX_EPOCH + std::time::Duration::from_secs(s)),
+                    btime: None,
+                    atime: None,
+                    flags: fcmd_core::EntryFlags::empty(),
+                    id: EntryId::Name(i as u64),
+                    link_target: None,
+                };
+                // Not a file: the row's place in the list, where a path would be.
+                (VPath::local(format!("/{i}")), entry)
+            })
+            .collect();
+        // A list read again keeps the cursor near where it was: after `F8` on a row the
+        // next one is the one to look at, not the top.
+        let was =
+            (self.panels[side].temp_origin() == Some(":trash")).then_some(self.panels[side].cursor);
+        if items.is_empty() {
+            let m = self.i18n.t("trash-empty");
+            self.set_status(m);
+        }
+        let title = self.plain("drive-trash");
+        let generation = self.panels[side].generation + 1;
+        self.panels[side].generation = generation;
+        self.panels[side].loading = false;
+        self.panels[side].set_temp(title, rows, generation);
+        self.panels[side].set_temp_origin(":trash");
+        if let Some(row) = was {
+            self.panels[side].cursor_to(row);
+            self.panels[side].clamp();
+        }
+        self.trash[side] = items;
+        self.quick_of = None;
+    }
+
+    /// The items of the wastebasket a key acts on: the selected ones, or — always for the
+    /// `Shift` keys — the one under the cursor.
+    fn trash_chosen(&self, only_current: bool) -> Vec<Trashed> {
+        if self.panel().temp_origin() != Some(":trash") {
+            return Vec::new();
+        }
+        let rows = if only_current {
+            self.cursor_source()
+        } else {
+            self.job_sources()
+        };
+        rows.iter()
+            .filter_map(|p| p.display_name().parse::<usize>().ok())
+            .filter_map(|i| self.trash[self.active].get(i).cloned())
+            .collect()
+    }
+
+    /// What is known of one item, as the lines of a card.
+    fn trash_card(&self, item: &Trashed) -> Vec<String> {
+        let mut rows: Vec<(String, String)> = vec![
+            (
+                self.i18n.t("trash-card-name"),
+                item.name.to_string_lossy().into_owned(),
+            ),
+            (
+                self.i18n.t("trash-card-from"),
+                item.parent.display().to_string(),
+            ),
+        ];
+        if let Some(secs) = u64::try_from(item.deleted).ok().filter(|s| *s > 0) {
+            rows.push((
+                self.i18n.t("trash-card-deleted"),
+                fcmd_ui::format_stamp(std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs)),
+            ));
+        }
+        if !item.folder {
+            rows.push((
+                self.i18n.t("trash-card-size"),
+                fcmd_core::format_size(item.size),
+            ));
+        }
+        let width = rows
+            .iter()
+            .map(|(label, _)| unicode_width::UnicodeWidthStr::width(label.as_str()))
+            .max()
+            .unwrap_or(0);
+        rows.iter()
+            .map(|(label, value)| format!("{label:<width$}  {value}"))
+            .collect()
+    }
+
+    /// `F3` or `Enter` on a row of the wastebasket.
+    fn open_trash_card(&mut self) {
+        let Some(item) = self.trash_chosen(true).into_iter().next() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        self.mode = Mode::Message {
+            title: self.plain("drive-trash"),
+            lines: self.trash_card(&item),
+        };
+    }
+
+    /// `F5` in the wastebasket: back where they came from. Nothing is asked first — putting
+    /// a file back destroys nothing — and what finds something standing in its place is
+    /// asked about one at a time when the worker reports it.
+    fn trash_restore(&mut self, only_current: bool) {
+        let items = self.trash_chosen(only_current);
+        if items.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        self.requests.push(Request::Trash {
+            side: self.active,
+            ask: TrashAsk::Restore {
+                items,
+                clash: OnClash::Ask,
+            },
+        });
+    }
+
+    /// Something stands where the first of `items` came from. *Overwrite* changes the two
+    /// places — the one standing there goes to the wastebasket — *Rename* brings the item
+    /// back beside it, *Skip* leaves it, and each of the three goes on to the next item;
+    /// *Cancel* leaves all that are left.
+    fn ask_trash_clash(&mut self, side: usize, items: Vec<Trashed>) {
+        let Some(first) = items.first() else {
+            return;
+        };
+        let mut lines = vec![
+            self.i18n.t_args(
+                "trash-clash-body",
+                &[("path", first.original().display().to_string().into())],
+            ),
+            self.i18n.t("trash-clash-note"),
+        ];
+        if items.len() > 1 {
+            lines.push(self.i18n.t_args(
+                "trash-clash-more",
+                &[("count", (items.len() as i64 - 1).into())],
+            ));
+        }
+        self.mode = Mode::Confirm(Confirm {
+            title: self.i18n.t("trash-clash-title"),
+            lines,
+            action: ConfirmAction::TrashClash { side, items },
+            button: 0,
+        });
+    }
+
+    /// The answer about the first of `items`, and the question about the next.
+    fn trash_clash_answer(&mut self, side: usize, mut items: Vec<Trashed>, clash: OnClash) {
+        if items.is_empty() {
+            return;
+        }
+        let first = items.remove(0);
+        if clash != OnClash::Skip {
+            self.requests.push(Request::Trash {
+                side,
+                ask: TrashAsk::Restore {
+                    items: vec![first],
+                    clash,
+                },
+            });
+        }
+        self.ask_trash_clash(side, items);
+    }
+
+    /// `F8` or `Del` in the wastebasket: delete for good, having asked — with nothing behind
+    /// it this time, which the question says.
+    fn ask_trash_purge(&mut self, only_current: bool) {
+        let items = self.trash_chosen(only_current);
+        let Some(first) = items.first() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        let lines = vec![
+            self.i18n.t_args(
+                "trash-purge-body",
+                &[
+                    ("count", (items.len() as i64).into()),
+                    ("name", first.name.to_string_lossy().into_owned().into()),
+                ],
+            ),
+            self.i18n.t("trash-purge-note"),
+        ];
+        self.mode = Mode::Confirm(Confirm {
+            title: self.i18n.t("trash-purge-title"),
+            lines,
+            action: ConfirmAction::TrashPurge {
+                side: self.active,
+                items,
+            },
+            button: 0,
+        });
+    }
+
+    /// `F7` in the wastebasket, and *Commands → Empty the wastebasket*: everything in it,
+    /// for good. *Cancel* is the button that is lit: this is the one question here whose
+    /// answer cannot be taken back by any key.
+    fn ask_trash_empty(&mut self) {
+        if !fcmd_jobs::wastebasket::SUPPORTED {
+            let m = self.i18n.t("trash-closed");
+            self.set_error(m);
+            return;
+        }
+        self.mode = Mode::Confirm(Confirm {
+            title: self.i18n.t("trash-empty-title"),
+            lines: vec![
+                self.i18n.t("trash-empty-body"),
+                self.i18n.t("trash-purge-note"),
+            ],
+            action: ConfirmAction::TrashEmpty { side: self.active },
+            button: 1,
+        });
+    }
+
     /// The service under the cursor, where the panel is a service list.
     fn service_at_cursor(&self) -> Option<&fcmd_platform::Service> {
         if self.panel().temp_origin() != Some(":services") {
@@ -21951,6 +22424,7 @@ impl App {
                     services: on("drives.panels.services"),
                     tools: on("drives.panels.tools"),
                     temp: on("drives.panels.temp"),
+                    trash: on("drives.panels.trash"),
                 },
             };
             // Back to the list it was opened from, which is where one was going anyway.
@@ -25137,6 +25611,7 @@ impl App {
                     ":sockets" => self.open_socket_panel(pick.side),
                     ":programs" => self.open_programs_panel(pick.side),
                     ":services" => self.open_services_panel(pick.side),
+                    ":trash" => self.open_trash_panel(pick.side),
                     ":tools" => self.open_tools_panel(pick.side),
                     ":ai" => self.open_ai_panel(pick.side),
                     // The log of the repository the panel is in, on that panel.
@@ -25607,7 +26082,7 @@ impl App {
         }
         if matches!(
             self.panel().temp_origin(),
-            Some(":gitlog") | Some(":gitbranches")
+            Some(":gitlog") | Some(":gitbranches") | Some(":trash")
         ) {
             let m = self.i18n.t("temp-not-a-file");
             self.set_error(m);
@@ -28063,6 +28538,10 @@ impl App {
                 let tool = self.tools.get(at.parse::<usize>().ok()?)?;
                 Some(self.tool_card(tool).join("\n"))
             }
+            ":trash" => {
+                let item = self.trash[panel].get(at.parse::<usize>().ok()?)?;
+                Some(self.trash_card(item).join("\n"))
+            }
             ":services" => {
                 let service = self.services.iter().find(|s| s.id == at)?;
                 let mut lines = vec![
@@ -29778,8 +30257,10 @@ impl App {
         // list of sessions would say nothing at all about how to make the first.
         // The service list is not a list of files either: `F5`, `F6` and `F8` are the three
         // things one does to a service, and the bar says so rather than offering `Copy`.
-        if self.panel().temp_origin() == Some(":services") {
-            return [
+        // And the wastebasket holds what was thrown away: `F5` puts it back, `F7` empties
+        // the lot and `F8` deletes for good.
+        let not_files: Option<[(u8, &str); 12]> = match self.panel().temp_origin() {
+            Some(":services") => Some([
                 (1u8, "key-help"),
                 (2, "key-menu"),
                 (3, "key-view"),
@@ -29792,19 +30273,37 @@ impl App {
                 (10, "key-quit"),
                 (11, ""),
                 (12, "key-screens"),
-            ]
-            .iter()
-            .map(|(n, id)| {
-                (
-                    *n,
-                    if id.is_empty() {
-                        String::new()
-                    } else {
-                        self.i18n.t(id)
-                    },
-                )
-            })
-            .collect();
+            ]),
+            Some(":trash") => Some([
+                (1u8, "key-help"),
+                (2, "key-menu"),
+                (3, "key-view"),
+                (4, ""),
+                (5, "key-trash-restore"),
+                (6, ""),
+                (7, "key-trash-empty"),
+                (8, "key-delete"),
+                (9, "key-pulldown"),
+                (10, "key-quit"),
+                (11, ""),
+                (12, "key-screens"),
+            ]),
+            _ => None,
+        };
+        if let Some(keys) = not_files {
+            return keys
+                .iter()
+                .map(|(n, id)| {
+                    (
+                        *n,
+                        if id.is_empty() {
+                            String::new()
+                        } else {
+                            self.i18n.t(id)
+                        },
+                    )
+                })
+                .collect();
         }
         let git_keys: Option<[(u8, &str); 12]> = match self.panel().temp_origin() {
             Some(":git") => Some([
@@ -50998,5 +51497,362 @@ abcdefghij
         assert_eq!(App::archive_stem("src.tar.gz"), "src");
         assert_eq!(App::archive_stem("disc.iso"), "disc");
         assert_eq!(App::archive_stem(".rar"), ".rar");
+    }
+
+    // ── the wastebasket as a panel (SPEC 03 §4a) ────────────────────────────────────────────
+
+    /// Two things thrown away from one folder, as a wastebasket would list them. Made up:
+    /// no test reads the wastebasket of whoever runs it.
+    fn thrown_away() -> Vec<Trashed> {
+        // Short, and built from its parts: the rows are drawn into a panel, and a path is
+        // written with whatever separator the platform has.
+        let from = std::path::Path::new("was").join("docs");
+        vec![
+            Trashed {
+                id: "id-of-notes".into(),
+                name: "notes.txt".into(),
+                parent: from.clone(),
+                deleted: 1_700_000_000,
+                size: 1234,
+                folder: false,
+            },
+            Trashed {
+                id: "id-of-old".into(),
+                name: "old".into(),
+                parent: from,
+                deleted: 1_700_000_100,
+                size: 0,
+                folder: true,
+            },
+        ]
+    }
+
+    /// An app whose left panel shows that wastebasket, the way the worker's answer makes it.
+    fn app_in_the_wastebasket() -> App {
+        let mut app = app();
+        app.active = 0;
+        app.handle_event(Event::TrashListed {
+            side: 0,
+            result: Ok(thrown_away()),
+        });
+        app.take_requests();
+        app
+    }
+
+    /// The row the cursor has to be on for an item, whatever the panel sorts by.
+    fn cursor_on_item(app: &mut App, name: &str) {
+        let row = (0..app.panel().listing.len())
+            .find(|r| {
+                app.panel()
+                    .listing
+                    .row(*r)
+                    .is_some_and(|e| e.name_str().starts_with(name))
+            })
+            .expect("the row");
+        app.panel_mut().cursor_to(row);
+    }
+
+    fn trash_asks(app: &mut App) -> Vec<TrashAsk> {
+        app.take_requests()
+            .into_iter()
+            .filter_map(|r| match r {
+                Request::Trash { ask, .. } => Some(ask),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_wastebasket_is_a_row_of_the_drive_list_and_a_worker_reads_it() {
+        let mut app = app();
+        let row = app
+            .drive_pick(0, Vec::new())
+            .rows
+            .into_iter()
+            .find(|r| r.value == ":trash")
+            .expect("a row for the wastebasket");
+        if !fcmd_jobs::wastebasket::SUPPORTED {
+            // Where the system keeps it to itself the row says so, and so does choosing it.
+            assert_eq!(row.label, app.i18n.t("drive-trash-closed"));
+            app.open_trash_panel(0);
+            assert!(app.status_error && app.take_requests().is_empty());
+            return;
+        }
+        assert_eq!(row.label, app.i18n.t("drive-trash"));
+        // Opening it asks; nothing is read on the way to the key's answer.
+        app.open_trash_panel(0);
+        assert_eq!(trash_asks(&mut app), vec![TrashAsk::List]);
+        assert_ne!(app.panels[0].temp_origin(), Some(":trash"));
+
+        app.handle_event(Event::TrashListed {
+            side: 0,
+            result: Ok(thrown_away()),
+        });
+        assert_eq!(app.panels[0].temp_origin(), Some(":trash"));
+        assert_eq!(app.panels[0].listing.len(), 2);
+        // The key bar says what the keys do here.
+        let bar = app.keybar();
+        let says = |n: u8| bar.iter().find(|(k, _)| *k == n).map(|(_, l)| l.clone());
+        assert_eq!(says(5), Some(app.i18n.t("key-trash-restore")));
+        assert_eq!(says(6), Some(String::new()));
+        assert_eq!(says(7), Some(app.i18n.t("key-trash-empty")));
+        assert_eq!(says(8), Some(app.i18n.t("key-delete")));
+        // And the rows say where each thing was.
+        let mut buf = fcmd_ui::Buffer::new(160, 24);
+        crate::render::draw(&mut app, &mut buf);
+        let drawn = buf.to_text();
+        assert!(drawn.contains("notes.txt"), "{drawn}");
+        let from = thrown_away()[0].parent.display().to_string();
+        assert!(drawn.contains(&from), "{drawn}");
+
+        // `Ctrl+R` asks the system again.
+        app.read_panel(0);
+        assert_eq!(trash_asks(&mut app), vec![TrashAsk::List]);
+
+        // The row can be taken out of the list like the others.
+        app.cfg.set("drives.panels.trash", "false").unwrap();
+        assert!(!app
+            .drive_pick(0, Vec::new())
+            .rows
+            .iter()
+            .any(|r| r.value == ":trash"));
+    }
+
+    #[test]
+    fn a_wastebasket_that_cannot_be_read_says_why_and_an_empty_one_says_so() {
+        let mut app = app();
+        app.handle_event(Event::TrashListed {
+            side: 0,
+            result: Err("no such folder".into()),
+        });
+        assert!(app.status_error && app.status.contains("no such folder"));
+        assert_ne!(app.panels[0].temp_origin(), Some(":trash"));
+
+        app.handle_event(Event::TrashListed {
+            side: 0,
+            result: Ok(Vec::new()),
+        });
+        assert_eq!(app.panels[0].temp_origin(), Some(":trash"));
+        assert_eq!(app.status, app.i18n.t("trash-empty"));
+    }
+
+    #[test]
+    fn f5_in_the_wastebasket_puts_back_and_enter_says_what_a_row_is() {
+        let mut app = app_in_the_wastebasket();
+        let items = thrown_away();
+        cursor_on_item(&mut app, "notes.txt");
+        press(&mut app, "F5");
+        assert!(app.mode.is_normal(), "putting back asks nothing first");
+        assert_eq!(
+            trash_asks(&mut app),
+            vec![TrashAsk::Restore {
+                items: vec![items[0].clone()],
+                clash: OnClash::Ask,
+            }]
+        );
+
+        // `Enter` and `F3` are the item's card; neither goes anywhere.
+        for key in ["Enter", "F3"] {
+            press(&mut app, key);
+            let Mode::Message { lines, .. } = &app.mode else {
+                panic!("{key}: no card: {:?}", app.mode)
+            };
+            let from = items[0].parent.display().to_string();
+            assert!(lines.iter().any(|l| l.contains(&from)), "{lines:?}");
+            assert!(lines.iter().any(|l| l.contains("notes.txt")), "{lines:?}");
+            press(&mut app, "Esc");
+        }
+        assert_eq!(app.panels[0].temp_origin(), Some(":trash"));
+
+        // And the keys that mean a file elsewhere say that these are not files.
+        for key in ["F4", "F6"] {
+            app.status.clear();
+            press(&mut app, key);
+            assert!(app.mode.is_normal(), "{key}: {:?}", app.mode);
+            assert_eq!(app.status, app.i18n.t("temp-not-a-file"), "{key}");
+        }
+        assert!(app.take_requests().is_empty());
+
+        // What came back is said, and both panels are read again.
+        app.handle_event(Event::TrashRestored {
+            side: 0,
+            outcome: Restored {
+                back: vec![items[0].original()],
+                ..Default::default()
+            },
+        });
+        assert!(!app.status_error, "{}", app.status);
+        assert!(trash_asks(&mut app).contains(&TrashAsk::List));
+    }
+
+    #[test]
+    fn f8_in_the_wastebasket_deletes_for_good_only_after_asking() {
+        let mut app = app_in_the_wastebasket();
+        let items = thrown_away();
+        cursor_on_item(&mut app, "old");
+        press(&mut app, "F8");
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("deleting for good did not ask: {:?}", app.mode)
+        };
+        assert!(confirm.lines[0].contains("old"), "{:?}", confirm.lines);
+        press(&mut app, "Esc");
+        assert!(trash_asks(&mut app).is_empty(), "it deleted anyway");
+
+        press(&mut app, "Del");
+        press(&mut app, "Enter");
+        assert_eq!(
+            trash_asks(&mut app),
+            vec![TrashAsk::Purge {
+                items: vec![items[1].clone()],
+            }]
+        );
+        app.handle_event(Event::TrashPurged { result: Ok(1) });
+        assert!(!app.status_error);
+        assert_eq!(trash_asks(&mut app), vec![TrashAsk::List]);
+
+        // A refusal is an error on the status line, not a quiet nothing.
+        app.handle_event(Event::TrashPurged {
+            result: Err("permission denied".into()),
+        });
+        assert!(app.status_error && app.status.contains("permission denied"));
+    }
+
+    #[test]
+    fn emptying_the_wastebasket_asks_with_cancel_lit() {
+        let mut app = app_in_the_wastebasket();
+        press(&mut app, "F7");
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("emptying did not ask: {:?}", app.mode)
+        };
+        assert_eq!(confirm.button, 1, "Cancel is the one that is lit");
+        press(&mut app, "Enter");
+        assert!(app.mode.is_normal());
+        assert!(
+            trash_asks(&mut app).is_empty(),
+            "Enter on Cancel emptied it"
+        );
+
+        // The menu's command is the same question, from any panel.
+        app.active = 1;
+        app.run(Command::ToolTrashEmpty);
+        if !fcmd_jobs::wastebasket::SUPPORTED {
+            assert!(app.status_error);
+            return;
+        }
+        press(&mut app, "Left");
+        press(&mut app, "Enter");
+        assert_eq!(trash_asks(&mut app), vec![TrashAsk::Empty]);
+    }
+
+    #[test]
+    fn something_standing_where_an_item_was_is_asked_about_one_at_a_time() {
+        let mut app = app_in_the_wastebasket();
+        let items = thrown_away();
+        app.handle_event(Event::TrashRestored {
+            side: 0,
+            outcome: Restored {
+                clashes: items.clone(),
+                ..Default::default()
+            },
+        });
+        app.take_requests();
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("a clash did not ask: {:?}", app.mode)
+        };
+        let path = items[0].original().display().to_string();
+        assert!(confirm.lines[0].contains(&path), "{:?}", confirm.lines);
+        assert_eq!(
+            confirm.buttons(&app.i18n),
+            ["btn-overwrite", "btn-rename", "btn-skip", "btn-cancel"].map(|id| app.i18n.t(id))
+        );
+
+        // Rename for the first: it goes back beside the one that is there, and the question
+        // moves on to the second.
+        press(&mut app, "Right");
+        press(&mut app, "Enter");
+        assert_eq!(
+            trash_asks(&mut app),
+            vec![TrashAsk::Restore {
+                items: vec![items[0].clone()],
+                clash: OnClash::Rename,
+            }]
+        );
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("the second was not asked about: {:?}", app.mode)
+        };
+        let path = items[1].original().display().to_string();
+        assert!(confirm.lines[0].contains(&path), "{:?}", confirm.lines);
+
+        // Skip for the second: nothing is asked of the wastebasket, and that was the last.
+        press(&mut app, "Right");
+        press(&mut app, "Right");
+        press(&mut app, "Enter");
+        assert!(app.mode.is_normal(), "{:?}", app.mode);
+        assert!(trash_asks(&mut app).is_empty());
+
+        // Overwrite is the button that is lit.
+        app.handle_event(Event::TrashRestored {
+            side: 0,
+            outcome: Restored {
+                clashes: vec![items[0].clone()],
+                ..Default::default()
+            },
+        });
+        app.take_requests();
+        press(&mut app, "Enter");
+        assert_eq!(
+            trash_asks(&mut app),
+            vec![TrashAsk::Restore {
+                items: vec![items[0].clone()],
+                clash: OnClash::Overwrite,
+            }]
+        );
+        assert!(app.mode.is_normal());
+    }
+
+    /// The worker's half against a wastebasket that only remembers what it was asked.
+    #[test]
+    fn the_worker_lists_purges_and_empties_through_the_wastebasket_it_is_given() {
+        struct Fake {
+            held: std::cell::RefCell<Vec<Trashed>>,
+        }
+        impl Wastebasket for Fake {
+            fn list(&self) -> Result<Vec<Trashed>, String> {
+                Ok(self.held.borrow().clone())
+            }
+            fn put_back(&self, _item: &Trashed) -> Result<(), String> {
+                Err("not in this test".into())
+            }
+            fn purge(&self, items: &[Trashed]) -> Result<(), String> {
+                self.held.borrow_mut().retain(|i| !items.contains(i));
+                Ok(())
+            }
+            fn throw_away(&self, _path: &std::path::Path) -> Result<(), String> {
+                Err("not in this test".into())
+            }
+        }
+        let basket = Fake {
+            held: std::cell::RefCell::new(thrown_away()),
+        };
+        let Event::TrashListed { side: 1, result } = trash_answer(1, TrashAsk::List, &basket)
+        else {
+            panic!("not a list")
+        };
+        assert_eq!(result.unwrap().len(), 2);
+
+        let one = vec![thrown_away().remove(0)];
+        let Event::TrashPurged { result } =
+            trash_answer(0, TrashAsk::Purge { items: one }, &basket)
+        else {
+            panic!("not a purge")
+        };
+        assert_eq!(result, Ok(1));
+        assert_eq!(basket.held.borrow().len(), 1);
+
+        let Event::TrashPurged { result } = trash_answer(0, TrashAsk::Empty, &basket) else {
+            panic!("not a purge")
+        };
+        assert_eq!(result, Ok(1), "what was left, and only that");
+        assert!(basket.held.borrow().is_empty());
     }
 }

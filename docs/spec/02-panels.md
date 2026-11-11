@@ -1067,6 +1067,9 @@ A service name is checked before it goes anywhere near a command line — letter
 handful of punctuation — so that a name with a semicolon in it is refused here rather than
 interpreted there.
 
+**Wastebasket.** What the system holds of what was thrown away, with `F5` to put back, `F8`
+to delete for good and `F7` to empty it: SPEC 03 §4a has the whole of it.
+
 **Socket list.** What is listening and what is connected, as a panel: the protocol, this end,
 the other end, the state, and the process holding it — in columns, as the drive dialog is. The
 other end is left empty for a socket that is only listening, because `0.0.0.0:0` says nothing.

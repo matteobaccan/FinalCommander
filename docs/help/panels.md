@@ -16,7 +16,8 @@ table of everything mounted — what each one is (disk, removable, optical, netw
 what it is called, what it is formatted as, how big it is and how much is left. Which of
 those columns are drawn is yours to choose, with `F9` inside the dialog — and so is which of
 the panels that are not disks the list offers: a box for each (NetBox, processes, sockets,
-installed programs, services, external programs, the temporary panel), so the list holds only what you use.
+installed programs, services, external programs, the temporary panel, the wastebasket), so
+the list holds only what you use.
 
 Every drive is asked at once and the dialog waits for them a second and a half at most. A
 network drive whose server is not there can take many seconds to say so; it is listed with
@@ -59,7 +60,10 @@ Under a rule, on `Ctrl+1` to `Ctrl+9`, are the things that are not filesystems:
   `F3` is the card and `F4` installs a missing one, after showing the line it will run. *Programs from elsewhere* in the configuration chapter says why each is a program;
 * a **temporary panel**, which is a list rather than a directory: `Ctrl+Shift+Ins` adds what
   is selected to it from anywhere, and the files in it can come from a dozen directories at
-  once.
+  once;
+* the **wastebasket**: what was thrown away, each with the folder it was in, its size and
+  when it went. `F5` puts back what is selected, `F8` deletes it for good and `F7` empties
+  the lot — *Deleting, and the wastebasket* in the files chapter says the rest.
 
 The same list can be filled by a command rather than by hand: *Commands → Panelize a
 command's output* asks for a command line, runs it where the panel is, and takes every line

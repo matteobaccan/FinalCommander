@@ -1889,3 +1889,46 @@ diff-unified-off = Two columns, side by side
 diff-patch-title = Save the differences as a patch (.diff)
 diff-patch-saved = { $name } written: a unified diff of { $lines } lines
 diff-patch-nothing = The two files are the same: there is no patch to save
+# wastebasket and external editor
+drive-trash = Wastebasket
+drive-trash-closed = Wastebasket (this system does not let a program list it)
+menu-trash = Wastebasket
+menu-trash-empty = Empty the wastebasket
+key-trash-restore = Restore
+key-trash-empty = Empty
+btn-empty = Empty
+btn-rename = Rename
+trash-closed = this system's wastebasket can only be opened from its own file manager
+trash-empty = the wastebasket is empty
+trash-failed = the wastebasket: { $why }
+trash-restored =
+    { $count ->
+        [one] one item back where it was
+       *[other] { $count } items back where they were
+    }
+trash-purged =
+    { $count ->
+        [one] one item deleted for good
+       *[other] { $count } items deleted for good
+    }
+trash-card-name = Name
+trash-card-from = Was in
+trash-card-deleted = Deleted
+trash-card-size = Size
+trash-clash-title = Restore
+trash-clash-body = { $path } already exists.
+trash-clash-note = Overwrite sends the one that is there to the wastebasket; Rename puts this one back beside it.
+trash-clash-more =
+    { $count ->
+        [one] One more item is in the same position.
+       *[other] { $count } more items are in the same position.
+    }
+trash-purge-title = Delete for good
+trash-purge-body =
+    { $count ->
+        [one] Delete { $name } from the wastebasket?
+       *[other] Delete { $count } items from the wastebasket?
+    }
+trash-purge-note = This deletes permanently: nothing can put them back.
+trash-empty-title = Empty the wastebasket
+trash-empty-body = Delete everything in the wastebasket?

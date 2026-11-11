@@ -1880,3 +1880,46 @@ diff-unified-off = Due colonne, affiancate
 diff-patch-title = Salva le differenze come patch (.diff)
 diff-patch-saved = { $name } scritto: un diff unificato di { $lines } righe
 diff-patch-nothing = I due file sono uguali: non c'è nessuna patch da salvare
+# wastebasket and external editor
+drive-trash = Cestino
+drive-trash-closed = Cestino (questo sistema non lo lascia elencare a un programma)
+menu-trash = Cestino
+menu-trash-empty = Svuota il cestino
+key-trash-restore = Riprist
+key-trash-empty = Svuota
+btn-empty = Svuota
+btn-rename = Rinomina
+trash-closed = il cestino di questo sistema si apre solo dal suo file manager
+trash-empty = il cestino è vuoto
+trash-failed = il cestino: { $why }
+trash-restored =
+    { $count ->
+        [one] un elemento di nuovo dov'era
+       *[other] { $count } elementi di nuovo dov'erano
+    }
+trash-purged =
+    { $count ->
+        [one] un elemento eliminato per sempre
+       *[other] { $count } elementi eliminati per sempre
+    }
+trash-card-name = Nome
+trash-card-from = Era in
+trash-card-deleted = Eliminato
+trash-card-size = Dimensione
+trash-clash-title = Ripristina
+trash-clash-body = { $path } esiste già.
+trash-clash-note = Sovrascrivi manda nel cestino quello che c'è; Rinomina rimette questo accanto.
+trash-clash-more =
+    { $count ->
+        [one] Un altro elemento è nella stessa situazione.
+       *[other] Altri { $count } elementi sono nella stessa situazione.
+    }
+trash-purge-title = Elimina per sempre
+trash-purge-body =
+    { $count ->
+        [one] Eliminare { $name } dal cestino?
+       *[other] Eliminare { $count } elementi dal cestino?
+    }
+trash-purge-note = L'eliminazione è definitiva: niente potrà rimetterli a posto.
+trash-empty-title = Svuota il cestino
+trash-empty-body = Eliminare tutto quello che c'è nel cestino?

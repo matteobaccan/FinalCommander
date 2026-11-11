@@ -256,6 +256,26 @@ in a bucket are deleted outright, and the dialog says so before you answer. If t
 refuses something it ought to have taken — on Linux, a file on a disk with no trash directory
 of its own — the error says which key deletes it instead.
 
+The wastebasket is also a place to go: the *Wastebasket* row of `Alt+F1` / `Alt+F2`, or
+*Commands → Wastebasket*, shows what is in it as a panel — the name, the folder it was in, its
+size, and when it was thrown away in the date column, so the usual sort keys order the list.
+
+| Key | In the wastebasket |
+| --- | --- |
+| `F3`, `Enter` | the item's card: where it was, when it went, how big it is |
+| `F5` | put back what is selected, where it came from (`Shift+F5`: the row under the cursor) |
+| `F8`, `Del` | delete for good, after asking |
+| `F7` | empty the wastebasket, after asking — *Cancel* is the button lit; also *Commands → Empty the wastebasket* |
+| `Ctrl+R` | read it again |
+
+Putting back asks nothing unless something already stands where an item was. Then it asks,
+one item at a time: **Overwrite** sends the one that is there to the wastebasket and the item
+takes its place, so nothing is lost; **Rename** puts the item back beside it as
+`name (2).ext`; **Skip** leaves it in the wastebasket; **Cancel** leaves all that remain.
+
+This works where the system lets a program read its wastebasket: Linux and Windows. On macOS
+only the Finder can, and the row says so.
+
 `Alt+Del` is the third one: it overwrites the bytes before unlinking the file. Its dialog is
 honest about what that is worth on an SSD, on a copy-on-write filesystem and with snapshots
 about.

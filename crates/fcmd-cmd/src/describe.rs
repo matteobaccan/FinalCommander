@@ -261,6 +261,8 @@ impl Command {
             }
             Command::ToolSysLog => "the system log, the latest entries, in the viewer",
             Command::ToolAi => "the AI services: add, change, remove, choose the one asked",
+            Command::ToolTrash => "the wastebasket as a panel: put back, or delete for good",
+            Command::ToolTrashEmpty => "delete everything in the wastebasket for good",
             Command::ToolGrab => "copy a piece of the screen as it stands",
             Command::ToolSyncDirs => "make the two directories hold the same thing",
             Command::ToolSyncSaved => "the synchronisations saved under a name, to run again",

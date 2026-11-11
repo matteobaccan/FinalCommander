@@ -2259,6 +2259,15 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         let _ = tx.send(Event::UndoDone { result });
                     });
                 }
+                Request::Trash { side, ask } => {
+                    let tx = tx.clone();
+                    // Off the loop: listing a wastebasket reads every item's record, and
+                    // emptying one deletes trees.
+                    runtime.spawn_blocking(move || {
+                        let basket = fcmd_jobs::wastebasket::System;
+                        let _ = tx.send(app::trash_answer(side, ask, &basket));
+                    });
+                }
                 Request::SysLog => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || {
@@ -7450,6 +7459,8 @@ dir_attr = "D"
                 | Request::AiAsk { .. }
                 | Request::AiPreview { .. }
                 | Request::Undo { .. }
+                // Never for real in a test: the wastebasket is the user's own.
+                | Request::Trash { .. }
                 | Request::StripMeta { .. }
                 | Request::OpenUrl { .. }
                 | Request::Shell { .. }
