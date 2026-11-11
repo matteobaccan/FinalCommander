@@ -6,6 +6,8 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.40.0] — 2026-11-11
+
 ### Added
 
 - **How a picture was made, in `F11`.** A picture from an image model gets an *AI

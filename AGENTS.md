@@ -128,6 +128,13 @@ bug. The loop is input-driven and keeps no timer: anything that must happen on i
 - **Comments say why**, not what. The code in this repository is commented as prose for a
   reader who was not there; match it.
 - **Portability**: `std::env::temp_dir()`, never a literal `/tmp`. Windows runs the same tests.
+- **Temporary files are never shared between two answers.** Anything a worker writes for a
+  view to read (a diff's sides, a git text, a query's rows) goes in a folder of its own under
+  the session's `fcmd-sql-<pid>`: two tests in one process, or two views in one session, that
+  write `a.txt` to the same place read each other's files — which is how CI was red for a
+  morning in 0.40's making.
+- **A file a test compares byte for byte is LF in `.gitattributes`**, or the Windows checkout
+  turns it CRLF and the test fails on a file nobody touched.
 
 ## Releases
 
@@ -184,13 +191,25 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.39.5 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.40.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.40.0** — two crates of our own instead of dependencies: the Fluent reader
+  (`fcmd-i18n/src/ftl.rs`) and the command-line parser (`fcmd/src/cli.rs`), each checked
+  case by case against what it replaced (26 crates out of `Cargo.lock`). The AI panel: `Esc`
+  stops an answer, `F8` the context, `F7` the conversations, a token estimate. `F11` on a
+  picture an image model made says how (ComfyUI and the rest), and *Strip picture metadata*
+  takes it out without re-encoding. Git: one hunk staged from the diff (`S`), blame in the
+  viewer (`Ctrl+Alt+G`). PowerShell on the command line. The key bar following the modifiers
+  on Windows and in the viewer; `Shift+F11` for the structure and `Ctrl+Shift+F11` for the
+  plugins. `Alt+F1` asking every drive at once, and anything slower than 1.5 s said on the
+  status line. `F11` listing every plugin command, greyed out with the reason where it cannot
+  run (`[command.when]`). Extensions aligned by FAR's own rule (`filelist.cpp`), and Delphi
+  Dark 2027 measured against the IDE. A Themes section with nine pictures.
 - **0.39.5** — two themes, `delphi-dark-2027` and `github-dark`, and `black` rebuilt with
   black behind everything; bold, italic and underline per key in a theme's `[styles]`;
   Delphi's reserved words and directives as Embarcadero lists them, a member after a dot no
