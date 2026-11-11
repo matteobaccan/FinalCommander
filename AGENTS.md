@@ -343,6 +343,9 @@ anything.
   a minor number for a feature, a patch for fixes alone — without asking first, and the
   author is told afterwards. Renovate's merges alone still never make one.
 - **At least 24 hours between two releases**, counted from the previous one's publication.
+- **A cut-off before each release** (the author, 11 November 2026): what is integrated with
+  green CI by 09:00 UTC on the day of the release goes in; what arrives later waits for the
+  next one, and only fixes land in between.
 - **1.0 is the goal, and then a stop.** Once 1.0 is out, no new feature is started: only pull
   requests and issues, to make it stable, before any release after it.
 - **Sub-agents in parallel, only until 1.0.** At most two at a time — a compiled working copy
