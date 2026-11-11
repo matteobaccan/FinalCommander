@@ -8,6 +8,24 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Columns a plugin computes.** A `[[column]]` in a plugin's `plugin.toml` names a program, and
+  `{ type = "plugin:<plugin>.<column>" }` in a `[[column_set]]` draws it: one run per file (path
+  in, first line out) or one per folder with `batch = true`. The panel is drawn at once with `…`
+  in the cells still being asked about; answers are remembered by path, date and size; a
+  program that hangs three times gives the column up for that folder and says so. Local folders
+  only, and not a sort key yet. `line-count` and `what-is-this` each gained one.
+- **FAR's `FarMenu.ini`, read as it stands.** Beside `fcmd.toml` and in project folders, `F2`
+  reads FAR's own menu file: hot keys, labels, `{ }` submenus, `--` separators, UTF-16 or UTF-8.
+  FAR's metasymbols are rewritten into ours; short-name forms are read as the long ones and
+  said; a row using something with no counterpart (`!:`, the other panel's selection) stays on
+  the menu and runs nothing. Where `fcmd-menu.toml` exists it wins and `FarMenu.ini` is not
+  read. The last row of the menu lists what was read differently.
+- **Words to a search.** `Ctrl+Alt+Q`, in the panels or in the `Alt+F7` dialog: say what you
+  are looking for and a language model fills the dialog's rows. Only the words are sent, after
+  the usual dialog; nothing is searched until `OK`; what the rows cannot express is said on the
+  status line.
+- **Find file: an age row.** *Changed, days ago* — `7`, `>=30`, `7-30` — kept with a kept
+  search.
 - **A selection out of a `.rar`, `.iso`, `.wim`… is one run of the program**, not one per file:
   it writes beside the destination, each file moves into place as it is finished, the bar
   counts bytes as they land, and `Esc` stops the program and cleans up. `Shift+F2` and the
