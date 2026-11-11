@@ -20,6 +20,8 @@ pub const STATE_FILE_NAME: &str = "fcmd-state.toml";
 pub const MACROS_FILE_NAME: &str = "fcmd-macros.toml";
 /// The one directory: optional, and the only thing that may live outside the binary.
 pub const PLUGINS_DIR_NAME: &str = "plugins";
+/// The folder the running copies keep their journals in, beside the configuration.
+pub const JOBS_DIR_NAME: &str = "fcmd-jobs";
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -121,9 +123,20 @@ impl Paths {
     }
 
     /// Human-readable summary for `fcmd --paths`: the first question anyone asks.
+    /// Where a copy or a move keeps its journal while it runs (SPEC 03 §5a): a folder beside
+    /// the configuration, made when the first job needs it and removed when the last one
+    /// ends, so that it is there only while there is something in it.
+    pub fn jobs_dir(&self) -> PathBuf {
+        self.config_file
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(JOBS_DIR_NAME)
+    }
+
     pub fn describe(&self) -> String {
         format!(
-            "config   {}{}\nstate    {}\nmacros   {}{}\nmenu     {}{}\nsecrets  {}{}\nplugins  {}{}\n",
+            "config   {}{}\nstate    {}\nmacros   {}{}\nmenu     {}{}\nsecrets  {}{}\nplugins  {}{}\njobs     {}{}\n",
             self.config_file.display(),
             if self.config_file.exists() {
                 ""
@@ -154,6 +167,12 @@ impl Paths {
                 ""
             } else {
                 "   (not present; no plugins loaded)"
+            },
+            self.jobs_dir().display(),
+            if self.jobs_dir().is_dir() {
+                "   (a copy is running, or one was left unfinished)"
+            } else {
+                "   (not present; no copy is running or was left unfinished)"
             }
         )
     }

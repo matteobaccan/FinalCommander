@@ -122,6 +122,37 @@ how far each one got.
 Quitting with jobs running asks first and names them: they are part of this program and end
 with it, so the choice is to stop them or to stay.
 
+## A copy that survives a crash
+
+A copy or a move that is running keeps a **journal**: a small file, in `fcmd-jobs/` beside the
+settings, that says what was asked — the sources, the destination, the options — and which
+files are finished. It is removed when the job ends, whether it ended well, with errors or by
+`Esc`, and the folder goes with the last one. So a journal that is still there when the
+program starts belongs to a job that never reached its end: the program was killed, or the
+machine went down under it.
+
+When that happens the status line says so once — *Copies left unfinished by the last session*
+— and `Alt+Shift+F6`, *Commands → Unfinished jobs*, lists them, each with how many files it
+had done.
+
+- `Enter` goes on with one. It is queued again as it was asked, the files its journal names as
+  done are passed over without a question, and the file it was in the middle of continues from
+  its `name.fcmd-part`. What a move had already taken away is not looked for again.
+- `Del` discards one: the journal goes, and so does the half-written part it names. What was
+  copied whole stays where it is.
+
+The journal is written when a file is finished and at most a few times a second, not for every
+byte, so a file completed in the very last instant before a crash may not be in it. The job
+then meets that file as one that is already there, and does what the copy was told to do about
+those — which by default is to ask.
+
+A journal that cannot be read — damaged, or written by a later version — is reported when the
+program starts and listed with the others, where `Del` removes it. It is never a reason not to
+start. A second copy of the program does not offer the jobs the first one is still running.
+
+Only the job that was running is remembered: one that was still waiting in the queue, and the
+later steps of a copy to several places or of a synchronisation, have to be asked for again.
+
 # Renaming many files at once
 
 `Ctrl+Shift+F6` renames what is selected from one pattern — *Files → Rename from a pattern*.

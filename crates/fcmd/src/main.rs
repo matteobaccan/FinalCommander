@@ -629,6 +629,20 @@ fn run(cli: Cli) -> Result<()> {
     app.tree_cache = crate::tree::Cache::from_state(&state.tree);
     app.restore_tabs(0, &state.left_tabs, state.left_tab);
     app.restore_tabs(1, &state.right_tabs, state.right_tab);
+    // The copies a session that died left unfinished (SPEC 03 §5a). Read here, before the
+    // loop starts, like the state file: a handful of small files in one folder. One that
+    // cannot be read is a warning and a row of the list, never a reason not to start.
+    let left_jobs = fcmd_jobs::journal::left_in(&app.paths.jobs_dir(), &app.cfg.mask_groups());
+    for (path, error) in &left_jobs.problems {
+        warnings.push(app.i18n.t_args(
+            "journal-unreadable",
+            &[
+                ("file", path.display().to_string().into()),
+                ("error", error.to_string().into()),
+            ],
+        ));
+    }
+    app.offer_left_jobs(left_jobs);
     if !warnings.is_empty() {
         // Startup problems are shown once, as a dialog: they are easy to miss in a status line.
         app.show_message("Startup warnings", warnings.clone());
@@ -1156,7 +1170,22 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         }
                     });
                 }
-                Request::Job { id, spec, cancel } => {
+                Request::DiscardJournal { path, journal } => {
+                    // Off the UI thread like every other delete: a part may be gigabytes
+                    // on a disk that is slow to let go of them.
+                    runtime.spawn_blocking(move || match journal {
+                        Some(journal) => {
+                            fcmd_jobs::journal::discard(&fcmd_jobs::LocalFs, &path, &journal)
+                        }
+                        None => fcmd_jobs::journal::forget(&path),
+                    });
+                }
+                Request::Job {
+                    id,
+                    spec,
+                    cancel,
+                    journal,
+                } => {
                     let tx = tx.clone();
                     // A job runs on a blocking thread, which is what lets the remote
                     // provider's async calls be driven with `block_on` (see `fcmd-net`).
@@ -1168,7 +1197,7 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                             runtime.handle().clone(),
                         ),
                     );
-                    runtime.spawn_blocking(move || run_job(id, spec, cancel, tx, &fs));
+                    runtime.spawn_blocking(move || run_job(id, spec, cancel, tx, &fs, journal));
                 }
                 Request::SetAttrs {
                     id,
@@ -2196,6 +2225,7 @@ fn run_job(
     cancel: CancelToken,
     tx: mpsc::Sender<Event>,
     fs: &dyn fcmd_jobs::JobFs,
+    journal: Option<Box<fcmd_jobs::Ticket>>,
 ) {
     struct ChannelReporter {
         id: u64,
@@ -2242,16 +2272,51 @@ fn run_job(
         last: std::time::Instant::now() - std::time::Duration::from_secs(1),
     };
 
-    let outcome = match fcmd_jobs::plan(fs, &spec, &cancel) {
-        Ok(plan) => fcmd_jobs::execute(fs, &spec, plan, &mut reporter, &cancel),
-        Err(e) => fcmd_jobs::Outcome {
-            errors: vec![(
-                spec.target.clone().unwrap_or_else(|| VPath::local(".")),
-                e.to_string(),
-            )],
-            ..fcmd_jobs::Outcome::default()
-        },
+    // A job taken up after a crash (SPEC 03 §5a): what a move already took away is not
+    // looked for again, and the dead run's journal is this run's starting point.
+    let resumed = journal
+        .as_ref()
+        .and_then(|ticket| ticket.resumes.as_ref())
+        .map(|(path, _)| path.clone());
+    let spec = match resumed {
+        Some(_) => fcmd_jobs::journal::remaining(fs, spec),
+        None => spec,
     };
+    // Written before the plan is made: counting a large tree takes its time, and a crash
+    // during it is still a job that was asked for and did not happen.
+    let mut recorder = journal.and_then(|ticket| fcmd_jobs::Recorder::begin(*ticket, &spec));
+
+    let outcome = if resumed.is_some() && spec.sources.is_empty() {
+        // Everything had been moved already; only the journal was left to remove.
+        fcmd_jobs::Outcome::default()
+    } else {
+        match fcmd_jobs::plan(fs, &spec, &cancel) {
+            Ok(plan) => fcmd_jobs::execute_recorded(
+                fs,
+                &spec,
+                plan,
+                &mut reporter,
+                &cancel,
+                recorder.as_mut(),
+            ),
+            Err(e) => fcmd_jobs::Outcome {
+                errors: vec![(
+                    spec.target.clone().unwrap_or_else(|| VPath::local(".")),
+                    e.to_string(),
+                )],
+                ..fcmd_jobs::Outcome::default()
+            },
+        }
+    };
+    // The job has ended, however it ended: there is nothing left to take up. Before the
+    // result is sent, so that whoever hears of the end finds the journal already gone.
+    if let Some(recorder) = recorder.take() {
+        recorder.finish();
+    }
+    // And the dead run's own, when this run could keep no journal to replace it with.
+    if let Some(old) = resumed {
+        fcmd_jobs::journal::forget(&old);
+    }
     let _ = tx.send(Event::JobDone { id, kind, outcome });
 }
 
@@ -6381,7 +6446,18 @@ dir_attr = "D"
                         fcmd_arc::Cache::new(Default::default()),
                     )),
                 ),
-                Request::Job { id, spec, cancel } => {
+                Request::DiscardJournal { path, journal } => match journal {
+                    Some(journal) => {
+                        fcmd_jobs::journal::discard(&fcmd_jobs::LocalFs, &path, &journal)
+                    }
+                    None => fcmd_jobs::journal::forget(&path),
+                },
+                Request::Job {
+                    id,
+                    spec,
+                    cancel,
+                    journal,
+                } => {
                     let (tx, rx) = mpsc::channel();
                     // The archive layer, as the program has it: a job whose source is inside
                     // a zip has to read it out rather than copy the zip.
@@ -6389,7 +6465,7 @@ dir_attr = "D"
                         std::sync::Arc::new(fcmd_arc::Cache::new(Default::default())),
                         fcmd_jobs::LocalFs,
                     );
-                    run_job(id, spec, cancel, tx, &fs);
+                    run_job(id, spec, cancel, tx, &fs, journal);
                     while let Ok(event) = rx.try_recv() {
                         app.handle_event(event);
                     }
@@ -7169,6 +7245,7 @@ dir_attr = "D"
             CancelToken::new(),
             tx,
             &fcmd_jobs::LocalFs,
+            None,
         );
 
         let mut done = None;
@@ -7234,6 +7311,65 @@ dir_attr = "D"
             "the passive panel was not refreshed"
         );
         assert!(app.status.contains("11 B"), "{}", app.status);
+    }
+
+    /// The journal, through the whole program (SPEC 03 §5a): a copy that died halfway is
+    /// found at the next start, offered, taken up with one key and finished — and a job that
+    /// ends leaves nothing behind in the journals' folder, which goes with its last file.
+    #[test]
+    fn a_copy_that_died_is_offered_at_the_next_start_and_finished() {
+        let root = tempfile::tempdir().unwrap();
+        let left = root.path().join("left");
+        let right = root.path().join("right");
+        std::fs::create_dir_all(left.join("docs")).unwrap();
+        std::fs::create_dir_all(right.join("docs")).unwrap();
+        for name in ["one.txt", "two.txt", "three.txt"] {
+            std::fs::write(left.join("docs").join(name), name.as_bytes()).unwrap();
+        }
+        let mut app = app_on(&left, &right);
+        let folder = app.paths.jobs_dir();
+
+        // What the dead session left: its journal, saying one file was done, and that file.
+        let spec = JobSpec::new(
+            fcmd_jobs::JobKind::Copy,
+            vec![VPath::local(left.join("docs"))],
+            Some(VPath::local(&right)),
+        );
+        let mut recorder = fcmd_jobs::Recorder::begin(fcmd_jobs::Ticket::new(&folder, 1, 1), &spec)
+            .expect("the journal starts")
+            .eagerly();
+        let done = VPath::local(right.join("docs")).join("one.txt");
+        recorder.opened(&done);
+        std::fs::write(right.join("docs/one.txt"), b"one.txt").unwrap();
+        recorder.closed(&done);
+        recorder.abandon();
+
+        // The next start.
+        app.offer_left_jobs(fcmd_jobs::journal::left_in(&folder, &app.cfg.mask_groups()));
+        assert_eq!(app.left_jobs.len(), 1, "the journal was not found");
+        serve(&mut app);
+        key(&mut app, "Alt+Shift+F6");
+        key(&mut app, "Enter");
+        serve(&mut app);
+        serve(&mut app);
+
+        for name in ["one.txt", "two.txt", "three.txt"] {
+            assert_eq!(
+                std::fs::read(right.join("docs").join(name)).unwrap(),
+                name.as_bytes(),
+                "{name} did not arrive"
+            );
+        }
+        assert!(
+            matches!(app.mode, crate::app::Mode::Normal),
+            "the finished file was asked about: {:?}",
+            app.mode
+        );
+        assert!(
+            !folder.exists(),
+            "a job that ended left something in {}",
+            folder.display()
+        );
     }
 
     /// A DOS text file becomes a Unix one, and a file that is already as asked is not
@@ -7890,6 +8026,7 @@ dir_attr = "D"
             CancelToken::new(),
             tx,
             &fcmd_jobs::LocalFs,
+            None,
         );
         let event = rx.recv().expect("an event");
         match event {

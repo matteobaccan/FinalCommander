@@ -1713,3 +1713,17 @@ btn-reload = Neu laden
 btn-what-changed = Änderungen
 editor-diff-buffer = im Editor
 editor-diff-hint = Dieser Vergleich zeigt nur, was sich geändert hat — Esc führt zur Frage zurück
+
+
+# job journal and saved syncs (0.41)
+journal-left = Von der letzten Sitzung unfertig gelassene Kopien: { $count } · Alt+Shift+F6 listet sie auf
+journal-title = Unfertige Jobs
+journal-hint = Enter fortsetzen · Entf verwerfen · Esc zu
+journal-none = Kein Job ist unfertig geblieben
+journal-row = { $kind }: { $what } → { $target } · fertige Dateien: { $done }
+journal-row-unreadable = nicht lesbar: { $file } ({ $error })
+journal-unreadable = { $file }: kein Job-Journal, das diese Version lesen kann ({ $error }). Alt+Shift+F6 listet es auf, Entf entfernt es dort
+journal-resumed = { $kind } wird fortgesetzt: { $done } Dateien waren schon fertig
+journal-discarded = Der unfertige Job wurde verworfen, samt dem halb Geschriebenen
+journal-cannot-resume = Dieses Journal ist nicht lesbar; Entf entfernt es
+menu-jobs-left = Unfertige Jobs

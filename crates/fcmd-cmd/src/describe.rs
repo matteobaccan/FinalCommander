@@ -134,6 +134,9 @@ impl Command {
             Command::JobQueue => {
                 "the jobs, running, waiting and finished, to pause, reorder or retry"
             }
+            Command::JobJournal => {
+                "the copies a crash left unfinished, to go on with or to discard"
+            }
             Command::ShellOutputSearch => "find a line in what the commands printed",
             Command::PanelToggle(side) => match side {
                 Side::Left => "hide the left panel, or bring it back",

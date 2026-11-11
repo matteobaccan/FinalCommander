@@ -1714,3 +1714,17 @@ btn-reload = Ricarica
 btn-what-changed = Cosa è cambiato
 editor-diff-buffer = nell'editor
 editor-diff-hint = Questo confronto mostra soltanto cosa è cambiato — Esc torna alla domanda
+
+
+# job journal and saved syncs (0.41)
+journal-left = Copie lasciate a metà dall'ultima sessione: { $count } · Alt+Shift+F6 le elenca
+journal-title = Job non finiti
+journal-hint = Enter riprende · Canc scarta · Esc chiude
+journal-none = Nessun job è rimasto a metà
+journal-row = { $kind }: { $what } → { $target } · file fatti: { $done }
+journal-row-unreadable = illeggibile: { $file } ({ $error })
+journal-unreadable = { $file }: non è un giornale di job che questa versione sa leggere ({ $error }). Alt+Shift+F6 lo elenca, e Canc lì lo toglie
+journal-resumed = Riprendo { $kind }: { $done } file erano già fatti
+journal-discarded = Il job non finito è stato scartato, con quello che aveva scritto a metà
+journal-cannot-resume = Quel giornale non si legge; Canc lo toglie
+menu-jobs-left = Job non finiti

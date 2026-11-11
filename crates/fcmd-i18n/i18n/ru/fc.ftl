@@ -1699,3 +1699,17 @@ btn-reload = Перечитать
 btn-what-changed = Что изменилось
 editor-diff-buffer = в редакторе
 editor-diff-hint = Это сравнение только показывает, что изменилось — Esc возвращает к вопросу
+
+
+# job journal and saved syncs (0.41)
+journal-left = Копирований, не завершённых прошлым сеансом: { $count } · Alt+Shift+F6 показывает список
+journal-title = Незавершённые задания
+journal-hint = Enter продолжить · Del отбросить · Esc закрыть
+journal-none = Незавершённых заданий нет
+journal-row = { $kind }: { $what } → { $target } · готово файлов: { $done }
+journal-row-unreadable = не читается: { $file } ({ $error })
+journal-unreadable = { $file }: это не журнал задания, который умеет читать эта версия ({ $error }). Alt+Shift+F6 показывает его, Del там удаляет
+journal-resumed = Продолжается { $kind }: файлов уже готово: { $done }
+journal-discarded = Незавершённое задание отброшено вместе с недописанным
+journal-cannot-resume = Этот журнал не читается; Del удаляет его
+menu-jobs-left = Незавершённые задания

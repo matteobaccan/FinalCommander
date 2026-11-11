@@ -326,5 +326,5 @@ Found by reading FAR's own help and configuration tables; the detail is in
 | 11.3 | **No GUI backend, ever** — strictly TUI; terminal extras (inline images, kitty keyboard, OSC 52) are capability-detected, not a second UI | decision | — |
 | 11.4 | Single static binary, no installer required; packages: `.deb`, `.rpm`, Homebrew, Scoop/winget, AUR, Flatpak | — | ~ the packages: the release publishes the four archives and their sums |
 | 11.5 | Startup under ~50 ms, listing of 100k entries without blocking the UI | YAZI | ✓ |
-| 11.6 | Crash safety: no data loss on operation interruption; journaled job state | NEW | ~ a journal of the job state across a restart |
+| 11.6 | Crash safety: no data loss on operation interruption; journaled job state | NEW | ~ the jobs waiting in the queue are not journalled, only the one running |
 | 11.7 | Tests: unit + golden-screen snapshot tests + VFS integration + fuzzed archive/path parsing | — | ✓ |

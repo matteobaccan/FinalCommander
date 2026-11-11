@@ -127,6 +127,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | git: what changed, log, blame, branches | — | — | — | **Ctrl+Alt+G** — FAR has these as plugins (GitKit); a menu of the four |
 | disk usage | — | Ctrl+Space on a dir | Alt+Shift+S | `F3` on a directory computes its size; **Alt+Shift+F3** shows every entry of the folder by size, with bars |
 | job queue | — | — | F2 in the copy dialog queues; a button opens the list | **Alt+Shift+F5** lists the jobs; `B` in a progress box sends the job to the background |
+| jobs a crash left unfinished | — | — | — | **Alt+Shift+F6** lists the copies and moves whose journal outlived their session: `Enter` goes on with one, `Del` discards it |
 | compare directories | Commands menu, no default key (marks what is missing or newer in the other panel; names, sizes and times only, no subfolders) | — | Alt+Shift+C | Commands menu, no default key, as in FAR |
 | synchronise directories | — | — | Ctrl+Y | **Ctrl+Shift+Y** — Total Commander's `Ctrl+Y` is FAR's *clear the command line*, and `--check-keymap` is what said so |
 | pack / unpack | Shift+F1 / Shift+F2 | — | Alt+Shift+P / Alt+Shift+U | Shift+F1 / Shift+F2 |
@@ -381,7 +382,7 @@ file.multirename  file.checksum.create|verify  file.split  file.combine
 file.pack  file.unpack  file.archive.test  file.archive.commands
 tool.find  tool.grep  tool.diskusage  tool.compare.dirs  tool.compare.files
 tool.sync.dirs  tool.usermenu  tool.history(cmd|view|folder)  tool.macro.record|play
-job.queue.show  job.pause  job.resume  job.cancel
+job.queue.show  job.journal.show  job.pause  job.resume  job.cancel
 shell.run  shell.output.show  shell.term.toggle  shell.insert(name|path|other)
 app.menu  app.help  app.settings  app.palette  app.theme.next  app.keymap.profile(name)
 app.font(N)

@@ -8,6 +8,7 @@ Tutto è un file che puoi leggere, confrontare e copiare su un'altra macchina:
     fcmd-menu.toml     il tuo menu di F2
     fcmd-secrets.vault chiavi e password, cifrate con una password tua
     fcmd-plugins/      i plugin
+    fcmd-jobs/         i giornali delle copie in corso — c'è solo finché ce n'è una
 
 Stanno uno accanto all'altro nella cartella dove la piattaforma tiene le impostazioni —
 `~/.config` su Linux, `~/Library/Application Support` su macOS, `%APPDATA%` su Windows —

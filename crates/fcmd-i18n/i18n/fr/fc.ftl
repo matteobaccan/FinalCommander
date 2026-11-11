@@ -1713,3 +1713,17 @@ btn-reload = Recharger
 btn-what-changed = Différences
 editor-diff-buffer = dans l'éditeur
 editor-diff-hint = Cette comparaison montre seulement ce qui a changé — Échap revient à la question
+
+
+# job journal and saved syncs (0.41)
+journal-left = Copies laissées inachevées par la dernière session : { $count } · Alt+Shift+F6 les liste
+journal-title = Travaux inachevés
+journal-hint = Entrée reprendre · Suppr abandonner · Échap fermer
+journal-none = Aucun travail n'est resté inachevé
+journal-row = { $kind } : { $what } → { $target } · fichiers faits : { $done }
+journal-row-unreadable = illisible : { $file } ({ $error })
+journal-unreadable = { $file } : ce n'est pas un journal de travail que cette version sait lire ({ $error }). Alt+Shift+F6 le liste, et Suppr l'y retire
+journal-resumed = Reprise de { $kind } : { $done } fichiers étaient déjà faits
+journal-discarded = Le travail inachevé a été abandonné, avec ce qu'il avait écrit à moitié
+journal-cannot-resume = Ce journal est illisible ; Suppr le retire
+menu-jobs-left = Travaux inachevés

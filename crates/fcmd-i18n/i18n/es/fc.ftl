@@ -1713,3 +1713,17 @@ btn-reload = Recargar
 btn-what-changed = Qué cambió
 editor-diff-buffer = en el editor
 editor-diff-hint = Esta comparación solo muestra lo que ha cambiado — Esc vuelve a la pregunta
+
+
+# job journal and saved syncs (0.41)
+journal-left = Copias que la última sesión dejó sin terminar: { $count } · Alt+Shift+F6 las lista
+journal-title = Trabajos sin terminar
+journal-hint = Intro continuar · Supr descartar · Esc cerrar
+journal-none = Ningún trabajo quedó sin terminar
+journal-row = { $kind }: { $what } → { $target } · archivos hechos: { $done }
+journal-row-unreadable = no se puede leer: { $file } ({ $error })
+journal-unreadable = { $file }: no es un diario de trabajo que esta versión sepa leer ({ $error }). Alt+Shift+F6 lo lista, y Supr allí lo quita
+journal-resumed = Se continúa { $kind }: { $done } archivos ya estaban hechos
+journal-discarded = El trabajo sin terminar se descartó, con lo que había escrito a medias
+journal-cannot-resume = Ese diario no se puede leer; Supr lo quita
+menu-jobs-left = Trabajos sin terminar

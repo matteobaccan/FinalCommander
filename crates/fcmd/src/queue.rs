@@ -53,6 +53,9 @@ pub struct Job {
     /// rest of a synchronisation. They start when this ends well and are dropped when it does
     /// not.
     pub then: VecDeque<JobSpec>,
+    /// For a job taken up again after a crash: the journal the dead run left and where it
+    /// is, so that this run starts from its marks (SPEC 03 §5a).
+    pub resumes: Option<(std::path::PathBuf, fcmd_jobs::Journal)>,
 }
 
 impl Job {
@@ -71,6 +74,7 @@ impl Job {
             carry: None,
             undo: None,
             then: VecDeque::new(),
+            resumes: None,
         }
     }
 

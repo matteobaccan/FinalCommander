@@ -87,6 +87,9 @@ pub enum PickKind {
     Usage,
     /// The jobs: running, waiting and finished (SPEC 03 §5).
     Jobs,
+    /// The copies a crash left unfinished: `Enter` goes on with one, `Del` discards it
+    /// (SPEC 03 §5a).
+    LeftJobs,
     /// The lines of the help that hold what `F7` looked for, every chapter at once.
     HelpHits,
     Languages,
@@ -536,6 +539,11 @@ pub fn menus() -> Vec<Menu> {
                     Action::Run(Command::PanelUsage),
                 ),
                 item("menu-jobs", "Alt+Shift+F5", Action::Run(Command::JobQueue)),
+                item(
+                    "menu-jobs-left",
+                    "Alt+Shift+F6",
+                    Action::Run(Command::JobJournal),
+                ),
                 item(
                     "menu-branch",
                     "Ctrl+Alt+B",

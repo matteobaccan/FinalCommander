@@ -217,6 +217,9 @@ pub enum Command {
     PanelBranch,
     /// The jobs: running, queued, paused and finished (SPEC 03 §5).
     JobQueue,
+    /// The copies and moves a crash left unfinished, to go on with or to discard
+    /// (SPEC 03 §5a).
+    JobJournal,
     /// Find a line in what the commands printed, the user screen behind the panels.
     ShellOutputSearch,
     /// `Ctrl+F1`/`Ctrl+F2`: hide one panel and give the screen to the other.
@@ -640,6 +643,7 @@ impl Command {
             Command::PanelUsage,
             Command::PanelBranch,
             Command::JobQueue,
+            Command::JobJournal,
             Command::ShellOutputSearch,
             Command::NavUp,
             Command::NavDown,
@@ -956,6 +960,7 @@ impl Command {
             Command::PanelUsage => "panel.usage".into(),
             Command::PanelBranch => "panel.branch".into(),
             Command::JobQueue => "job.queue.show".into(),
+            Command::JobJournal => "job.journal.show".into(),
             Command::ShellOutputSearch => "shell.output.search".into(),
             Command::NavUp => "nav.up".into(),
             Command::NavDown => "nav.down".into(),
@@ -1215,6 +1220,7 @@ impl Command {
             ("panel.usage", _) => Command::PanelUsage,
             ("panel.branch", _) => Command::PanelBranch,
             ("job.queue.show", _) => Command::JobQueue,
+            ("job.journal.show", _) => Command::JobJournal,
             ("shell.output.search", _) => Command::ShellOutputSearch,
             ("panel.focus.toggle", _) => Command::PanelFocusToggle,
             ("panel.swap", _) => Command::PanelSwap,

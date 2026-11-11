@@ -254,9 +254,60 @@ run (its result is a question), packing and rewriting an archive, archive tests,
 
 - Cloning a finished job into a new one. (A server's speed limit is in since 0.34.0: `max_kbps`
   on the session, SPEC 04 §6.)
-- **Journal**: each job writing an append-only record (`$STATE/jobs/<id>.jsonl`) with planned
-  units and completion marks, so after a crash `fcmd` can report what had been done and offer
-  to resume a Copy/Move.
+- The journal of §5a for what is not running: a job still waiting in the queue, and the chain
+  behind a running one.
+
+### 5a. The journal: a copy that survives a crash (`fcmd_jobs::journal`, 0.41)
+
+A Copy or a Move that runs keeps a journal, `fcmd-jobs/<pid>-<id>.journal` beside the
+configuration (`Paths::jobs_dir`). It holds what was asked — kind, sources, target, every
+option — and, as the job goes, the destinations of the files that are **done** and of the
+files that are **open**: begun and not known to be finished, which is the one being written
+and any that failed before it. Each open one may have left a `.fcmd-part` (§3c). A dry run, a
+job that is not a copy, and a job with a path that is not text keep none.
+
+- **Written whole, renamed into place.** This section used to plan an append-only `.jsonl`.
+  It is one text file instead, one fact per line with `end` as its last, rewritten to
+  `<name>.tmp` and renamed over the old one: a crash is exactly what the file is for, and an
+  append can be half a line long at the moment of one. The engine crate needs no serialiser
+  for it, and somebody who finds one can read it.
+- **Per file, a few times a second.** The recorder is told of each file begun and finished
+  (`execute_recorded`) and writes when 250 ms have passed since the last write — and never
+  sooner than twenty times what the last write took, so a journal of a hundred thousand names
+  cannot cost more than a twentieth of the job. Inside a large file the engine's progress
+  tick gives it its turn, so the file is on record as open long before it ends. It is not
+  synced to the disk. The price of all three is the same and is accepted: a file finished in
+  the last instant may be unmarked, and the resumed job meets it as a conflict, under the
+  policy the job was started with.
+- **Removed when the job ends** — clean, with errors, or cancelled — together with the folder
+  when that leaves it empty. A job that failed is retried from the queue (§5), in the session
+  that still has it. Quitting with jobs running stops them; one whose thread had not got to
+  its end when the process went leaves its journal, and is offered at the next start.
+- **Alive or dead** is a lock, not a process id: the job holds `<pid>-<id>.lock` locked
+  (`File::try_lock`) for as long as it runs, and the system takes a lock away when a process
+  dies. A journal whose lock is held belongs to a running job — in this process or in another
+  copy of the program — and is not offered.
+
+**At startup** `journal::left_in` reads the folder before the loop starts. Each journal with
+no live owner is a job that never ended: the status line says how many, once, and
+`job.journal.show` (`Alt+Shift+F6`, *Commands → Unfinished jobs*) lists them. A file there
+that is not a journal this version reads — no header, cut short, a line it does not know — is
+a startup warning and a row of the same list, never a stop.
+
+- `Enter` **resumes**: the journal's own spec is queued again with `resume` on, carrying the
+  dead run's marks. The engine passes over every unit whose destination is marked done —
+  counted in the progress, never asked about, never looked at, because whatever happened to
+  that file since is the user's doing — and the open file goes on from its part. A Move drops
+  the sources that are no longer there (`journal::remaining`): moved is what they are. The
+  resumed run writes a journal of its own and removes the old one once that is in place. It
+  is not pushed on the undo stack (§14): half of what it wrote was written by another session.
+- `Del` **discards**: the journal goes, and the `.fcmd-part` of every open file it names, on
+  a worker thread. Finished files stay.
+
+Only the running job is journalled. The jobs waiting behind it, and the chain it carries (the
+next destinations, the later steps of a synchronisation), are not: they have to be asked for
+again. Resuming *within* a file is §3c's and so is local only; a remote copy taken up again
+skips its finished files and starts the open one over.
 
 ## 6. Progress UI
 

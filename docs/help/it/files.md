@@ -127,6 +127,37 @@ con quanto ha fatto ciascuno.
 Uscire con dei job in corso chiede prima e li nomina: fanno parte di questo programma e finiscono
 con lui, quindi la scelta è fermarli o restare.
 
+## Una copia che sopravvive a un crash
+
+Una copia o uno spostamento in corso tiene un **giornale**: un piccolo file, in `fcmd-jobs/`
+accanto alle impostazioni, che dice cosa era stato chiesto — le sorgenti, la destinazione, le
+opzioni — e quali file sono finiti. Viene tolto quando il job finisce, che sia finito bene, con
+errori o con `Esc`, e la cartella se ne va con l'ultimo. Quindi un giornale che è ancora lì
+quando il programma parte appartiene a un job che non è mai arrivato in fondo: il programma è
+stato ucciso, o la macchina è caduta mentre lavorava.
+
+Quando succede la riga di stato lo dice una volta — *Copie lasciate a metà dall'ultima sessione*
+— e `Alt+Shift+F6`, *Comandi → Job non finiti*, li elenca, ciascuno con quanti file aveva fatto.
+
+- `Enter` ne riprende uno. Torna in coda com'era stato chiesto, i file che il suo giornale dà
+  per fatti vengono saltati senza domande, e il file che stava scrivendo continua dal suo
+  `nome.fcmd-part`. Quello che uno spostamento aveva già portato via non viene più cercato.
+- `Canc` ne scarta uno: il giornale sparisce, e con lui il pezzo scritto a metà che nomina.
+  Quello che era stato copiato per intero resta dov'è.
+
+Il giornale viene scritto quando un file è finito e al massimo qualche volta al secondo, non a
+ogni byte, quindi un file completato proprio nell'ultimo istante prima del crash può non
+esserci. Il job allora incontra quel file come uno che c'è già, e fa quello che alla copia era
+stato detto di fare in quel caso — che per default è chiedere.
+
+Un giornale che non si riesce a leggere — rovinato, o scritto da una versione più nuova — viene
+segnalato all'avvio ed elencato con gli altri, dove `Canc` lo toglie. Non è mai un motivo per
+non partire. Una seconda copia del programma non offre i job che la prima sta ancora eseguendo.
+
+Viene ricordato solo il job che stava girando: uno che era ancora in attesa nella coda, e i
+passi successivi di una copia verso più destinazioni o di una sincronizzazione, vanno chiesti
+di nuovo.
+
 # Rinominare molti file in una volta
 
 `Ctrl+Shift+F6` rinomina ciò che è selezionato a partire da un modello — *File → Rinomina in

@@ -1651,3 +1651,17 @@ btn-reload = 重新载入
 btn-what-changed = 有何更改
 editor-diff-buffer = 编辑器中
 editor-diff-hint = 此比较只显示更改内容 — Esc 返回提问
+
+
+# job journal and saved syncs (0.41)
+journal-left = 上次会话未完成的复制：{ $count } 个 · Alt+Shift+F6 列出
+journal-title = 未完成的任务
+journal-hint = Enter 继续 · Del 丢弃 · Esc 关闭
+journal-none = 没有未完成的任务
+journal-row = { $kind }：{ $what } → { $target } · 已完成文件：{ $done }
+journal-row-unreadable = 无法读取：{ $file }（{ $error }）
+journal-unreadable = { $file }：不是此版本能读取的任务日志（{ $error }）。Alt+Shift+F6 列出它，在那里按 Del 删除
+journal-resumed = 继续{ $kind }：已有 { $done } 个文件完成
+journal-discarded = 未完成的任务已丢弃，连同写了一半的内容
+journal-cannot-resume = 该日志无法读取；Del 删除它
+menu-jobs-left = 未完成的任务

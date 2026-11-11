@@ -1467,6 +1467,12 @@ keys = ["Alt+Shift+F5"]
 cmd = "job.queue.show"
 
 [[bind]]
+# The copies a crash left unfinished (SPEC 03 §5a): one key along from the queue, because it
+# is the queue of the session that died.
+keys = ["Alt+Shift+F6"]
+cmd = "job.journal.show"
+
+[[bind]]
 # MultiTotal Commander's key for it. The output is the user screen `Ctrl+O` shows, and the
 # search shows it too, at the line it found.
 keys = ["Ctrl+Shift+F"]

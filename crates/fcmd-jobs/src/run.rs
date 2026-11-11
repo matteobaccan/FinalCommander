@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 use fcmd_core::{CancelToken, VPath};
 
 use crate::fs::{free_name, JobFs};
+use crate::journal::Recorder;
 use crate::plan::{Plan, Unit, UnitKind};
 use crate::replace::{Matcher, ReplacePass};
 use crate::spec::{ConflictPolicy, Decision, JobKind, JobSpec, Phase, Question};
@@ -131,7 +132,26 @@ pub fn execute(
     reporter: &mut dyn Reporter,
     cancel: &CancelToken,
 ) -> Outcome {
+    execute_recorded(fs, spec, plan, reporter, cancel, None)
+}
+
+/// [`execute`], keeping a journal as it goes (SPEC 03 §5a).
+///
+/// The recorder is told of every file begun and every file finished, and writes that down
+/// when it is time to. A recorder that carries the marks of an earlier run — the job is one
+/// taken up again after a crash — makes this pass over the files that run finished: they are
+/// counted as done, so the bar starts where the dead job stopped, and nothing about them is
+/// asked or touched.
+pub fn execute_recorded(
+    fs: &dyn JobFs,
+    spec: &JobSpec,
+    plan: Plan,
+    reporter: &mut dyn Reporter,
+    cancel: &CancelToken,
+    journal: Option<&mut Recorder>,
+) -> Outcome {
     let mut state = State {
+        journal,
         progress: Progress {
             phase: Phase::Running,
             files_total: plan.files,
@@ -204,6 +224,17 @@ pub fn execute(
                 continue;
             }
         }
+        // What an earlier run of this job finished, by its journal's word. Not looked at
+        // again: the file may have been renamed, edited or taken away since, and all of
+        // those are the user's doing, not something a resumed copy should put right.
+        let copies = matches!(unit.kind, UnitKind::File { .. } | UnitKind::Symlink { .. });
+        if copies && state.journal.as_ref().is_some_and(|j| j.is_done(&unit.dst)) {
+            state.progress.files_done += 1;
+            if let UnitKind::File { size } = unit.kind {
+                state.progress.bytes_done += size;
+            }
+            continue;
+        }
         // Anything under a source we already renamed is done.
         if renamed_sources.iter().any(|src| unit_belongs_to(unit, src)) {
             if let UnitKind::File { size } = unit.kind {
@@ -247,7 +278,9 @@ pub fn execute(
     state.outcome
 }
 
-struct State {
+struct State<'a> {
+    /// The job's journal, when it keeps one.
+    journal: Option<&'a mut Recorder>,
     progress: Progress,
     overwrite_all: bool,
     append_all: bool,
@@ -290,18 +323,38 @@ fn run_unit(
     reporter: &mut dyn Reporter,
     cancel: &CancelToken,
 ) {
+    // Only what a copy writes is worth a line of the journal: a directory is made again for
+    // nothing, and a removal that already happened is not an error.
+    let copies = matches!(unit.kind, UnitKind::File { .. } | UnitKind::Symlink { .. });
+    if let Some(journal) = state.journal.as_mut().filter(|_| copies) {
+        journal.opened(&unit.dst);
+    }
     loop {
         let result = attempt(fs, spec, unit, matcher, state, reporter, cancel);
         match result {
-            Attempt::Done => return,
+            Attempt::Done => {
+                if let Some(journal) = state.journal.as_mut().filter(|_| copies) {
+                    journal.closed(&unit.dst);
+                }
+                return;
+            }
             Attempt::Skipped => {
                 state.progress.skipped += 1;
                 keep_source(state, unit);
+                if let Some(journal) = state.journal.as_mut().filter(|_| copies) {
+                    journal.dropped(&unit.dst);
+                }
                 return;
             }
             Attempt::Cancelled => {
                 state.outcome.cancelled = true;
                 keep_source(state, unit);
+                // `Esc` takes the part away with it (§3c), so nothing of this file is left
+                // to remember. A failure is the other case: its part stays, and so does its
+                // line, which is how a discarded journal knows what to clear up.
+                if let Some(journal) = state.journal.as_mut().filter(|_| copies) {
+                    journal.dropped(&unit.dst);
+                }
                 return;
             }
             Attempt::Failed(error) => {
@@ -436,6 +489,11 @@ fn attempt(
                     state.bytes_since_report = 0;
                     state.progress.elapsed = state.started.elapsed();
                     reporter.progress(&state.progress);
+                    // The journal's turn as well: a file that takes minutes is written down
+                    // as begun while it is being copied, not when it ends.
+                    if let Some(journal) = state.journal.as_mut() {
+                        journal.tick();
+                    }
                 }
                 !cancel.is_cancelled()
             };

@@ -1130,6 +1130,7 @@ fn draw_pick(
         crate::menu::PickKind::EditorMatches => "editor-matches-hint",
         crate::menu::PickKind::EditorConvert => "editor-convert-hint",
         crate::menu::PickKind::Jobs => "jobs-hint",
+        crate::menu::PickKind::LeftJobs => "journal-hint",
         // A history has three keys of its own, and a footer that does not name them is a
         // footer that keeps them secret.
         crate::menu::PickKind::CommandHistory
@@ -6362,6 +6363,49 @@ Some **bold** text and a [link](https://example.com).
             stopped: false,
             cancel: fcmd_core::CancelToken::new(),
         }
+    }
+
+    /// The list of what a dead session left: each job with what it was doing and how far it
+    /// had got, an unreadable journal as a row of its own, and a footer naming the two keys.
+    #[test]
+    fn the_unfinished_jobs_are_listed_with_how_far_each_had_got() {
+        let mut app = app("far", "en");
+        let spec = fcmd_jobs::JobSpec::new(
+            fcmd_jobs::JobKind::Copy,
+            vec![
+                fcmd_core::VPath::local("/home/mb/project/film.mkv"),
+                fcmd_core::VPath::local("/home/mb/project/notes.txt"),
+            ],
+            Some(fcmd_core::VPath::local("/media/stick")),
+        );
+        let mut journal = fcmd_jobs::Journal::of(&spec, 0).expect("a copy keeps a journal");
+        journal
+            .done
+            .insert(fcmd_core::VPath::local("/media/stick").join("notes.txt"));
+        app.offer_left_jobs(fcmd_jobs::journal::Left {
+            journals: vec![(std::path::PathBuf::from("7-1.journal"), journal)],
+            problems: vec![(
+                std::path::PathBuf::from("7-2.journal"),
+                fcmd_jobs::JournalError::Foreign,
+            )],
+        });
+        app.run(fcmd_cmd::Command::JobJournal);
+        let out = frame(&mut app, 110, 20);
+        assert!(out.contains("Unfinished jobs"), "{out}");
+        let row = out
+            .lines()
+            .find(|l| l.contains("film.mkv"))
+            .expect("the job's row");
+        assert!(row.contains("(+1)"), "the second source is counted: {row}");
+        assert!(row.contains("files done: 1"), "{row}");
+        assert!(
+            out.contains("cannot be read: 7-2.journal"),
+            "the unreadable one is listed too: {out}"
+        );
+        assert!(
+            out.contains("Del discard"),
+            "the footer names its keys: {out}"
+        );
     }
 
     #[test]

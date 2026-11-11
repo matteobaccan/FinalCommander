@@ -387,6 +387,15 @@ pub enum Request {
         id: u64,
         spec: JobSpec,
         cancel: CancelToken,
+        /// Where a copy or a move keeps its journal, and the one it takes up again when it
+        /// is a job resumed after a crash (SPEC 03 §5a). `None` for every other kind.
+        journal: Option<Box<fcmd_jobs::Ticket>>,
+    },
+    /// Give an unfinished job up: remove its journal and the `.fcmd-part` files it names.
+    /// A journal that could not be read names none, and only its own file goes.
+    DiscardJournal {
+        path: std::path::PathBuf,
+        journal: Option<Box<fcmd_jobs::Journal>>,
     },
     /// Open a connection (or reuse the one that is already open) and show it in `panel`.
     Connect {
@@ -1923,6 +1932,15 @@ impl FindScope {
     }
 }
 
+/// A journal found at startup: a job that never reached its end (SPEC 03 §5a).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LeftJob {
+    pub path: std::path::PathBuf,
+    /// What it says, or why it could not be read. An unreadable one is still listed, so
+    /// that it can be removed from where it was reported.
+    pub journal: Result<fcmd_jobs::Journal, String>,
+}
+
 /// The review table of a synchronisation (SPEC 03 §10).
 ///
 /// It is a screen rather than a dialog because it is the whole of what was decided, and the
@@ -2501,6 +2519,12 @@ pub struct App {
     /// steps of a synchronisation. `start_job` hands them to the job it starts, which runs
     /// them in order once it has ended well.
     queued_jobs: std::collections::VecDeque<JobSpec>,
+    /// The journals a dead session left, read at startup: the jobs `job.journal.show` offers
+    /// (SPEC 03 §5a).
+    pub left_jobs: Vec<LeftJob>,
+    /// The journal the job being queued right now takes up again, set by the list of
+    /// unfinished jobs and taken by `enqueue`.
+    resuming: Option<(std::path::PathBuf, fcmd_jobs::Journal)>,
     /// Every job asked for, running, waiting or finished (SPEC 03 §5).
     pub queue: crate::queue::Queue,
     /// Stops the branch walk that is running when another one is asked for.
@@ -2944,6 +2968,8 @@ impl App {
             copy_sources: Vec::new(),
             last_copy: CopyChoices::default(),
             queued_jobs: std::collections::VecDeque::new(),
+            left_jobs: Vec::new(),
+            resuming: None,
             queue: Default::default(),
             branch_cancel: CancelToken::new(),
             split_source: None,
@@ -7370,7 +7396,12 @@ impl App {
                 cancel: cancel.clone(),
                 choice: 0,
             }));
-            self.requests.push(Request::Job { id, spec, cancel });
+            self.requests.push(Request::Job {
+                id,
+                spec,
+                cancel,
+                journal: None,
+            });
             return;
         }
         let lane = crate::queue::lane(&spec);
@@ -7382,6 +7413,12 @@ impl App {
         // unless it is itself an undo, which is not undone again.
         if !self.undoing {
             job.undo = crate::undo::Undo::plan(&job.spec);
+        }
+        // A job taken up again is not one to take back: half of what it wrote was written
+        // by a session that is gone, and the plan made now would call those files old.
+        job.resumes = self.resuming.take();
+        if job.resumes.is_some() {
+            job.undo = None;
         }
         job.then = std::mem::take(&mut self.queued_jobs);
         let busy = self.queue.lane_busy(&job.lane, self.cfg.general.job_queue);
@@ -7410,6 +7447,15 @@ impl App {
         };
         job.state = crate::queue::JobState::Running;
         let (kind, spec, cancel) = (job.kind, job.spec.clone(), job.cancel.clone());
+        // Only what copies keeps a journal: a delete that died is asked for again in a
+        // moment, and nothing of it is left half done.
+        let journal = matches!(kind, JobKind::Copy | JobKind::Move).then(|| {
+            let ticket = fcmd_jobs::Ticket::new(&self.paths.jobs_dir(), std::process::id(), id);
+            Box::new(match job.resumes.take() {
+                Some((from, old)) => ticket.resuming(from, old),
+                None => ticket,
+            })
+        });
         if front {
             self.mode = Mode::Job(Box::new(JobView {
                 id,
@@ -7420,7 +7466,12 @@ impl App {
                 choice: 0,
             }));
         }
-        self.requests.push(Request::Job { id, spec, cancel });
+        self.requests.push(Request::Job {
+            id,
+            spec,
+            cancel,
+            journal,
+        });
         self.refresh_jobs_pick();
     }
 
@@ -10432,6 +10483,14 @@ impl App {
             Command::PanelUsage => self.open_usage(),
             Command::PanelBranch => self.toggle_branch(),
             Command::JobQueue => self.open_pick(PickKind::Jobs, self.active),
+            Command::JobJournal => {
+                if self.left_jobs.is_empty() {
+                    let m = self.i18n.t("journal-none");
+                    self.set_status(m);
+                } else {
+                    self.open_pick(PickKind::LeftJobs, self.active);
+                }
+            }
             Command::ShellOutputSearch => {
                 if self.user_screen.is_empty() {
                     let m = self.i18n.t("output-search-empty");
@@ -15367,6 +15426,125 @@ impl App {
                 }
             })
             .collect()
+    }
+
+    // ── the jobs a crash left unfinished (SPEC 03 §5a) ──────────────────────────────────
+
+    /// What startup found in the journals' folder. Said once, on the status line: a box
+    /// would be in the way of somebody who started the program to do something else, and
+    /// the jobs wait in their list for as long as it takes.
+    pub fn offer_left_jobs(&mut self, left: fcmd_jobs::journal::Left) {
+        self.left_jobs = left
+            .journals
+            .into_iter()
+            .map(|(path, journal)| LeftJob {
+                path,
+                journal: Ok(journal),
+            })
+            .chain(left.problems.into_iter().map(|(path, error)| LeftJob {
+                path,
+                journal: Err(error.to_string()),
+            }))
+            .collect();
+        let whole = self.left_jobs.iter().filter(|j| j.journal.is_ok()).count();
+        if whole > 0 {
+            let msg = self
+                .i18n
+                .t_args("journal-left", &[("count", (whole as i64).into())]);
+            self.set_status(msg);
+        }
+    }
+
+    fn left_job_rows(&self) -> Vec<PickRow> {
+        self.left_jobs
+            .iter()
+            .enumerate()
+            .map(|(at, left)| {
+                let label = match &left.journal {
+                    Ok(journal) => {
+                        let first = journal
+                            .sources
+                            .first()
+                            .map(|p| p.display_name())
+                            .unwrap_or_default();
+                        let more = journal.sources.len().saturating_sub(1);
+                        let what = if more > 0 {
+                            format!("{first} (+{more})")
+                        } else {
+                            first
+                        };
+                        self.i18n.t_args(
+                            "journal-row",
+                            &[
+                                ("kind", self.kind_label(journal.kind).into()),
+                                ("what", what.into()),
+                                ("target", journal.target.to_string().into()),
+                                ("done", (journal.done.len() as i64).into()),
+                            ],
+                        )
+                    }
+                    Err(error) => self.i18n.t_args(
+                        "journal-row-unreadable",
+                        &[
+                            (
+                                "file",
+                                left.path
+                                    .file_name()
+                                    .map(|n| n.to_string_lossy().into_owned())
+                                    .unwrap_or_default()
+                                    .into(),
+                            ),
+                            ("error", error.clone().into()),
+                        ],
+                    ),
+                };
+                PickRow::plain(label, at.to_string(), false)
+            })
+            .collect()
+    }
+
+    /// `Enter` on an unfinished job: queue it again from where its journal says it stopped.
+    fn resume_left_job(&mut self, at: usize, pick: Pick) {
+        let Some(left) = self.left_jobs.get(at) else {
+            return;
+        };
+        let Ok(journal) = left.journal.clone() else {
+            // Still listed, so that `Del` can take it away; there is nothing in it to run.
+            self.mode = Mode::Pick(Box::new(pick));
+            let m = self.i18n.t("journal-cannot-resume");
+            self.set_error(m);
+            return;
+        };
+        let left = self.left_jobs.remove(at);
+        let msg = self.i18n.t_args(
+            "journal-resumed",
+            &[
+                ("kind", self.kind_label(journal.kind).into()),
+                ("done", (journal.done.len() as i64).into()),
+            ],
+        );
+        let spec = journal.spec();
+        self.resuming = Some((left.path, journal));
+        self.start_job(spec);
+        // Only when it was queued behind another job is there no box to say what is going
+        // on, and then the queue's own line has already said it.
+        if matches!(self.mode, Mode::Job(_)) {
+            self.set_status(msg);
+        }
+    }
+
+    /// `Del` on an unfinished job: its journal goes, and the parts it left with it.
+    fn discard_left_job(&mut self, at: usize) {
+        if at >= self.left_jobs.len() {
+            return;
+        }
+        let left = self.left_jobs.remove(at);
+        self.requests.push(Request::DiscardJournal {
+            path: left.path,
+            journal: left.journal.ok().map(Box::new),
+        });
+        let m = self.i18n.t("journal-discarded");
+        self.set_status(m);
     }
 
     /// The queue list, again, when something in it changed — keeping the row the cursor is
@@ -20784,6 +20962,12 @@ impl App {
             }
             // Built by `help_search`, which knows what was looked for.
             PickKind::HelpHits => return,
+            PickKind::LeftJobs => Pick::new(
+                kind,
+                self.i18n.t("journal-title"),
+                self.left_job_rows(),
+                side,
+            ),
             PickKind::Jobs => {
                 let rows = self.job_rows();
                 let title = self.i18n.t_args(
@@ -21226,6 +21410,21 @@ impl App {
                 }
                 self.refresh_jobs_pick();
             }
+            // Giving an unfinished job up, from the list that offers it.
+            KeyCode::Delete | KeyCode::F(8) if kind == PickKind::LeftJobs => {
+                let (side, cursor) = (pick.side, pick.cursor);
+                if let Some(at) = pick.chosen().and_then(|r| r.value.parse::<usize>().ok()) {
+                    self.discard_left_job(at);
+                }
+                if self.left_jobs.is_empty() {
+                    self.mode = Mode::Normal;
+                } else {
+                    self.open_pick(PickKind::LeftJobs, side);
+                    if let Mode::Pick(fresh) = &mut self.mode {
+                        fresh.cursor = cursor.min(fresh.rows.len().saturating_sub(1));
+                    }
+                }
+            }
             KeyCode::Up => pick.move_cursor(-1),
             KeyCode::Down => pick.move_cursor(1),
             KeyCode::PageUp => pick.move_cursor(-10),
@@ -21603,6 +21802,11 @@ impl App {
                     return;
                 };
                 self.job_enter(id, *pick);
+            }
+            PickKind::LeftJobs => {
+                if let Ok(at) = row.value.parse::<usize>() {
+                    self.resume_left_job(at, *pick);
+                }
             }
             PickKind::HelpHits => {
                 let mut parts = row.value.split(':').filter_map(|p| p.parse::<usize>().ok());
@@ -33909,6 +34113,156 @@ run = ["echo one", "echo two", "echo three"]
             "no box for a job from the queue"
         );
         assert_eq!(app.queue.active(), 1);
+    }
+
+    // ── the job journal (SPEC 03 §5a) ───────────────────────────────────────────────────
+
+    /// A journal as startup would have read it: a copy of two files, one of them done.
+    fn left_copy() -> (std::path::PathBuf, fcmd_jobs::Journal) {
+        let spec = JobSpec::new(
+            JobKind::Copy,
+            vec![
+                VPath::local("/home/mb/a.txt"),
+                VPath::local("/home/mb/b.txt"),
+            ],
+            Some(VPath::local("/home/mb/backup")),
+        );
+        let mut journal = fcmd_jobs::Journal::of(&spec, 0).expect("a copy keeps a journal");
+        journal
+            .done
+            .insert(VPath::local("/home/mb/backup").join("a.txt"));
+        (std::path::PathBuf::from("9-1.journal"), journal)
+    }
+
+    #[test]
+    fn a_copy_is_given_a_place_for_its_journal_and_a_delete_is_not() {
+        let mut app = app();
+        app.cfg.general.job_queue = fcmd_config::JobQueue::Off;
+        app.start_job(JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local("/home/mb/a.txt")],
+            Some(VPath::local("/home/mb/backup")),
+        ));
+        app.start_job(JobSpec::new(
+            JobKind::Delete,
+            vec![VPath::local("/home/mb/a.txt")],
+            None,
+        ));
+        let journals: Vec<Option<Box<fcmd_jobs::Ticket>>> = app
+            .take_requests()
+            .into_iter()
+            .filter_map(|r| match r {
+                Request::Job { journal, .. } => Some(journal),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(journals.len(), 2);
+        let ticket = journals[0].as_ref().expect("the copy keeps a journal");
+        assert!(
+            ticket.path.starts_with(app.paths.jobs_dir()),
+            "{:?}",
+            ticket.path
+        );
+        assert!(ticket.resumes.is_none(), "a new job takes nothing up");
+        assert!(journals[1].is_none(), "a delete keeps none");
+    }
+
+    #[test]
+    fn unfinished_jobs_are_said_once_and_enter_goes_on_with_one() {
+        let mut app = app();
+        let (path, journal) = left_copy();
+        app.offer_left_jobs(fcmd_jobs::journal::Left {
+            journals: vec![(path.clone(), journal.clone())],
+            problems: Vec::new(),
+        });
+        assert!(
+            app.status.contains("1") && app.status.contains("Alt+Shift+F6"),
+            "{}",
+            app.status
+        );
+
+        press(&mut app, "Alt+Shift+F6");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list did not open: {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::LeftJobs);
+        assert_eq!(pick.rows.len(), 1);
+        assert!(pick.rows[0].label.contains("a.txt (+1)"), "{:?}", pick.rows);
+
+        press(&mut app, "Enter");
+        assert!(
+            app.left_jobs.is_empty(),
+            "a job taken up is offered no more"
+        );
+        let (spec, ticket) = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::Job { spec, journal, .. } => Some((spec, journal)),
+                _ => None,
+            })
+            .expect("the job was queued");
+        assert_eq!(spec.sources, journal.sources);
+        assert!(spec.options.resume, "it goes on from the part");
+        let (from, old) = ticket
+            .expect("a copy keeps a journal")
+            .resumes
+            .expect("and this one takes the dead run's up");
+        assert_eq!(from, path);
+        assert_eq!(old.done, journal.done);
+        // What a dead session half wrote is not this session's to take back.
+        assert!(app.queue.jobs.iter().all(|j| j.undo.is_none()));
+    }
+
+    #[test]
+    fn del_discards_an_unfinished_job_and_an_unreadable_journal_alike() {
+        let mut app = app();
+        let (path, journal) = left_copy();
+        app.offer_left_jobs(fcmd_jobs::journal::Left {
+            journals: vec![(path.clone(), journal)],
+            problems: vec![(
+                std::path::PathBuf::from("9-2.journal"),
+                fcmd_jobs::JournalError::Foreign,
+            )],
+        });
+        app.run(Command::JobJournal);
+
+        // Enter on the one that cannot be read does nothing but say so, and keeps the list.
+        press(&mut app, "Down");
+        press(&mut app, "Enter");
+        assert!(app.status_error, "{}", app.status);
+        assert!(matches!(app.mode, Mode::Pick(_)), "{:?}", app.mode);
+        assert!(app.take_requests().is_empty(), "nothing was queued");
+
+        press(&mut app, "Home");
+        press(&mut app, "Delete");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("one row is left, so the list stays: {:?}", app.mode)
+        };
+        assert_eq!(pick.rows.len(), 1);
+        press(&mut app, "Delete");
+        assert!(app.mode.is_normal(), "an empty list closes: {:?}", app.mode);
+
+        let discarded: Vec<(std::path::PathBuf, bool)> = app
+            .take_requests()
+            .into_iter()
+            .filter_map(|r| match r {
+                Request::DiscardJournal { path, journal } => Some((path, journal.is_some())),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            discarded,
+            vec![
+                (path, true),
+                (std::path::PathBuf::from("9-2.journal"), false)
+            ]
+        );
+
+        // And with nothing left, the command says so rather than opening an empty box.
+        app.run(Command::JobJournal);
+        assert!(app.mode.is_normal());
+        assert_eq!(app.status, app.i18n.t("journal-none"));
     }
 
     /// With the queue off, both start at once.

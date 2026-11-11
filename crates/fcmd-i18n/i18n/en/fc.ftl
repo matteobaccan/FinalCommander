@@ -1723,3 +1723,17 @@ btn-reload = Reload
 btn-what-changed = What changed
 editor-diff-buffer = in the editor
 editor-diff-hint = This comparison only shows what changed — Esc goes back to the question
+
+
+# job journal and saved syncs (0.41)
+journal-left = Copies left unfinished by the last session: { $count } · Alt+Shift+F6 lists them
+journal-title = Unfinished jobs
+journal-hint = Enter go on with it · Del discard · Esc close
+journal-none = No job was left unfinished
+journal-row = { $kind }: { $what } → { $target } · files done: { $done }
+journal-row-unreadable = cannot be read: { $file } ({ $error })
+journal-unreadable = { $file }: not a job journal this version can read ({ $error }). Alt+Shift+F6 lists it, and Del there removes it
+journal-resumed = Going on with { $kind }: { $done } files were done already
+journal-discarded = The unfinished job was discarded, with what it had half written
+journal-cannot-resume = That journal cannot be read; Del removes it
+menu-jobs-left = Unfinished jobs

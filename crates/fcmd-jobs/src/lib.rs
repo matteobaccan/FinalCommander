@@ -15,6 +15,7 @@ pub mod attrs;
 pub mod branch;
 pub mod dupes;
 pub mod fs;
+pub mod journal;
 pub mod link;
 pub mod plan;
 pub mod rename;
@@ -28,13 +29,14 @@ pub mod sync;
 pub use arcfs::ArcFs;
 pub use attrs::{set_attributes, Change, Mode};
 pub use fs::{free_name, part_path, replace_file, CopyHow, Facts, JobFs, LocalFs, PART_SUFFIX};
+pub use journal::{Journal, JournalError, Recorder, Ticket};
 pub use link::{create_link, LinkError, LinkKind};
 pub use plan::{plan, Plan, PlanError, Unit, UnitKind};
 pub use rename::{rename_all, RenameError};
 pub use replace::{
     replace_bytes, Matcher, ReplaceError, ReplaceOptions, ReplacePass, Replaced, PATTERN_FILE_LIMIT,
 };
-pub use run::{execute, Outcome, Progress, Reporter};
+pub use run::{execute, execute_recorded, Outcome, Progress, Reporter};
 pub use spec::{
     ConflictPolicy, Decision, ErrorPolicy, JobKind, JobOptions, JobSpec, Phase, Preserve, Question,
 };

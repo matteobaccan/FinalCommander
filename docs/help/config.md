@@ -8,6 +8,7 @@ Everything is a file you can read, diff and copy to another machine:
     fcmd-menu.toml     your own F2 menu
     fcmd-secrets.vault your keys and passwords, encrypted with a password of your own
     fcmd-plugins/      plugins
+    fcmd-jobs/         the journals of the copies that are running — there only while one is
 
 They sit side by side in the folder the platform keeps settings in — `~/.config` on Linux,
 `~/Library/Application Support` on macOS, `%APPDATA%` on Windows — or beside the executable,
