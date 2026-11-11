@@ -63,6 +63,10 @@ pty threads            ── one reader thread per embedded terminal
 
 - `fcmd-tui` decodes: legacy xterm sequences, kitty keyboard protocol (enabled when advertised),
   Win32 input mode on Windows, bracketed paste, focus events, SGR mouse, mouse wheel.
+- A modifier held on its own (the key bar showing what `Shift`, `Ctrl` or `Alt` would do) comes
+  from the kitty protocol where the terminal speaks it. The Windows console never reports one,
+  so there `fcmd-platform::held_keys` reads the keyboard twenty times a second while the
+  console's window — or, in Windows Terminal, the window that owns it — is the one in front.
 - Decoded into `KeyEvent { code, mods, kind }`; `fcmd-cmd` resolves it through the active keymap
   and the current **scope stack** (dialog > editor > viewer > panel > global).
 - Ambiguities (Esc vs Alt, F-keys without modifiers reported) are resolved by capability

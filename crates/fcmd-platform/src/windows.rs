@@ -1571,3 +1571,37 @@ fn nt_processes() -> Option<std::collections::HashMap<u32, NtProcess>> {
     }
     Some(out)
 }
+
+/// Shift, Ctrl and Alt as the keyboard has them now, while the console is in front: its own
+/// window in the old console host, or the terminal window that owns the pseudo-console
+/// window in Windows Terminal.
+pub fn held_keys() -> Option<super::HeldKeys> {
+    use windows_sys::Win32::System::Console::GetConsoleWindow;
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+        GetAsyncKeyState, VK_CONTROL, VK_MENU, VK_SHIFT,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetAncestor, GetForegroundWindow, GetWindow, GA_ROOTOWNER, GW_OWNER,
+    };
+    // SAFETY: none of these take pointers or keep anything; a null window is a valid answer
+    // and is checked before it is compared.
+    let in_front = unsafe {
+        let console = GetConsoleWindow();
+        let front = GetForegroundWindow();
+        !console.is_null()
+            && !front.is_null()
+            && (front == console
+                || GetWindow(console, GW_OWNER) == front
+                || GetAncestor(console, GA_ROOTOWNER) == front)
+    };
+    if !in_front {
+        return None;
+    }
+    // The high bit is "down now".
+    let down = |key: u16| unsafe { GetAsyncKeyState(i32::from(key)) } < 0;
+    Some(super::HeldKeys {
+        shift: down(VK_SHIFT),
+        ctrl: down(VK_CONTROL),
+        alt: down(VK_MENU),
+    })
+}

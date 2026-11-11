@@ -33,7 +33,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
 use anyhow::{Context, Result};
-use fcmd_cmd::{Command as FcCommand, Keymap, Scope as FcmdScope};
+use fcmd_cmd::{Command as FcCommand, Keymap, Mods, Scope as FcmdScope};
 use fcmd_config::{Config, Paths};
 use fcmd_core::{CancelToken, VPath};
 use fcmd_i18n::I18n;
@@ -50,6 +50,36 @@ use crate::app::{
 };
 
 use crate::cli::Cli;
+
+/// Send the modifiers held down whenever they change, for as long as the loop listens.
+fn follow_held_keys(tx: &mpsc::Sender<Event>) {
+    let mut last = Mods::NONE;
+    loop {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        // Another window in front counts as nothing held: the bar goes back to plain keys.
+        let now = held_mods(fcmd_platform::held_keys().unwrap_or_default());
+        if now != last {
+            last = now;
+            if tx.send(Event::Input(Input::Mods(now))).is_err() {
+                return;
+            }
+        }
+    }
+}
+
+fn held_mods(keys: fcmd_platform::HeldKeys) -> Mods {
+    let mut mods = Mods::NONE;
+    if keys.shift {
+        mods.insert(Mods::SHIFT);
+    }
+    if keys.ctrl {
+        mods.insert(Mods::CTRL);
+    }
+    if keys.alt {
+        mods.insert(Mods::ALT);
+    }
+    mods
+}
 
 /// A search on a worker thread. The engine streams events; each one becomes an event the app
 /// already knows how to draw, so the list fills while the walk is still going.
@@ -993,6 +1023,14 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
             }
         }
     });
+
+    // The key bar that changes while Shift, Ctrl or Alt is held, where the terminal does not
+    // say so (the Windows console): the keyboard is looked at twenty times a second, and a
+    // change is sent as the terminal would have sent it.
+    if cfg!(windows) {
+        let held_tx = tx.clone();
+        std::thread::spawn(move || follow_held_keys(&held_tx));
+    }
 
     // How a terminal's program says it has written something. It is not a key and nobody
     // asked for it, so the loop — which blocks on this very channel — has to be woken.
@@ -6851,6 +6889,17 @@ dir_attr = "D"
         ] {
             assert!(generated.contains(flag), "{flag} is not in the manual page");
         }
+    }
+
+    /// What the keyboard says is held becomes the modifiers the key bar follows.
+    #[test]
+    fn held_keys_become_the_key_bar_s_modifiers() {
+        let keys = |shift, ctrl, alt| fcmd_platform::HeldKeys { shift, ctrl, alt };
+        assert_eq!(held_mods(keys(false, false, false)), Mods::NONE);
+        assert_eq!(held_mods(keys(true, false, false)), Mods::SHIFT);
+        let mut both = Mods::CTRL;
+        both.insert(Mods::ALT);
+        assert_eq!(held_mods(keys(false, true, true)), both);
     }
 
     #[test]

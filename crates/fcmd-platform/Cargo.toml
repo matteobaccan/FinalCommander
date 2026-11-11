@@ -58,4 +58,9 @@ windows-sys = { version = "0.61", features = [
   "Win32_System_Console",
   "Win32_System_Pipes",
   "Win32_System_LibraryLoader",
+  # The modifier keys held down, for the key bar to change as FAR's does: the Windows console
+  # does not report Shift, Ctrl or Alt on their own, so they are asked for with
+  # `GetAsyncKeyState`, and only while the console's window is the one in front.
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_WindowsAndMessaging",
 ] }

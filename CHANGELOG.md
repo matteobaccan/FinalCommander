@@ -6,6 +6,20 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The key bar follows `Shift`, `Ctrl` and `Alt` on Windows too.** Holding one down shows
+  what the function keys do with it, as FAR does. The Windows console never says a modifier
+  went down on its own, so the program reads the keyboard while its window is in front; it
+  already worked in terminals that speak the kitty keyboard protocol.
+- **Twenty-six crates fewer.** The localisation catalogues are read by our own reader of the
+  part of Fluent they are written in, which gave the same text as `fluent-bundle` for every
+  message of the seven languages; and the command line — the parser, `-h`, `--help`, the
+  error messages and the manual page — is our own code, printing what `clap` printed: some
+  40,000 command lines gave the same result through both. The one difference is a slip of
+  `clap`'s, which on an unexpected value given to a switch after other options listed every
+  option in the `Usage:` line; the usual line is printed there now.
+
 ## [0.39.5] - 2026-11-11
 
 ### Added

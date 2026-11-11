@@ -208,6 +208,32 @@ pub fn memory() -> Option<Memory> {
     }
 }
 
+/// The modifier keys held down at this moment.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct HeldKeys {
+    pub shift: bool,
+    pub ctrl: bool,
+    pub alt: bool,
+}
+
+/// Which modifiers are held down, where the terminal cannot say so itself.
+///
+/// A terminal that speaks the keyboard protocol reports Shift, Ctrl and Alt going down on
+/// their own, and the key bar changes with them; the Windows console never does. There they
+/// are read from the keyboard — but only while this console's window is the one in front,
+/// so that holding Shift in another program changes nothing here. `None` on every other
+/// platform, and while another window has the keyboard.
+pub fn held_keys() -> Option<HeldKeys> {
+    #[cfg(windows)]
+    {
+        windows::held_keys()
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
