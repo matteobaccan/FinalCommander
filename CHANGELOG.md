@@ -8,6 +8,20 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Pictures in real pixels.** `F3` and the quick view draw a picture with the terminal's own
+  graphics where it has them: kitty's protocol (kitty, Ghostty), iTerm2's inline images (iTerm2,
+  WezTerm) and sixel (foot, mlterm, contour). Half blocks stay for every other terminal, while
+  the pixels are prepared, and under a dialog. `viewer.pixels` (`auto`, `kitty`, `iterm`,
+  `sixel`, `off`; *Options → Viewer settings → Pictures*) chooses; `auto` goes by the terminal's
+  environment and never asks the terminal. Windows Terminal, `xterm -ti 340`, VS Code and
+  Konsole are named by hand. `viewer.cell_width` / `viewer.cell_height` state the size of a cell
+  where the system does not report it.
+- **Video frames through `ffmpeg`.** `F3` on an MP4, MOV, MKV, WebM or AVI shows a frame a tenth
+  of the way in, drawn as a picture; `PgUp`/`PgDn` or `←`/`→` step by a tenth of the film,
+  `Home`/`End` go to its ends, and the top line says time, duration and codec. `Ctrl+Q` shows the
+  same frame. `Space` plays at eight frames a second without sound, and pauses. `ffmpeg` is run
+  as a program, never linked; without it the viewer says what is missing and `F11` still reads
+  the container.
 - **Search and replace in the hex editor.** `F7` asks with the same dialog as the viewer and
   the text editor: text (through the file's code page) or hex bytes such as `DE AD ?? EF`, where
   `??` is any byte, forwards or backwards, wrapping with a note on the status line.
@@ -88,6 +102,7 @@ Notable changes, newest first. The format follows
 
 ### Changed
 
+- The external programs panel says what `ffmpeg` is for.
 - *Whole words only* in the editor means what it says for anything, not only for words: a hit
   counts when no letter, digit or underscore stands right before or after it, so `++` can be
   found as a whole word and `set` is still not found inside `offset`.
