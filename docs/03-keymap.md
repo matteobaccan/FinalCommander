@@ -133,6 +133,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | saved synchronisations | — | — | a list inside the synchronise dialog | **Ctrl+Alt+Y** lists the pairs saved under a name: `Enter` runs one, `F4` changes it, `Del` forgets it |
 | pack / unpack | Shift+F1 / Shift+F2 | — | Alt+Shift+P / Alt+Shift+U | Shift+F1 / Shift+F2 |
 | test archive | — | — | Alt+Shift+E | Commands menu, no default key |
+| multi-rename from words (an AI's pattern, previewed) | — | — | — | **Ctrl+Alt+U** |
 | multi-rename | — | — | Ctrl+M | **Ctrl+Shift+F6** — Total Commander's `Ctrl+M` reaches a terminal as `Enter`, and FAR's own `Ctrl+M` restores the previous selection, which it does here too, on `Ctrl+Shift+M` |
 | select group / unselect group | Gray + / Gray − | + / \ | Ctrl++ / Ctrl+− | + / − |
 | invert selection | Gray * | — | Alt+* | `*` (files), `Alt+*` (folders too, FAR's `Ctrl+Gray *`) |

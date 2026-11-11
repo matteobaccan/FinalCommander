@@ -645,6 +645,85 @@ pub enum AiUse {
     /// No question: a knock on the service, to see that the address, the key and the protocol
     /// are right before a session is opened on it.
     Probe,
+    /// Words to a rename: a pattern for the multi-rename dialog, which previews it and
+    /// renames nothing until its own OK (SPEC 03 §8a).
+    Rename,
+}
+
+/// What the model is told for [`AiUse::Rename`]: the dialog's own language, and the six
+/// lines its answer must be, so that what comes back is something the dialog can hold
+/// rather than prose about it.
+const AI_RENAME_INSTRUCTION: &str = "\
+You turn a description of how files should be renamed into one rename pattern for all of \
+them. Reply with exactly these six lines and nothing else, no explanation and no code fence:
+name: <mask for the part of the name before the extension>
+ext: <mask for the extension>
+search: <text or regular expression to replace in the whole new name, or nothing>
+replace: <the replacement; $1, $2 are the groups of a regular expression; or nothing>
+regex: <yes or no>
+case: <same, lower, upper, title or sentence>
+The masks: [N] is the name without its extension, [N1-5] its characters 1 to 5, [N3-] from \
+the third on, [E] the extension, [C] a counter, [C1,1,3] a counter from 1 by 1 with three \
+digits, [d] the file's date, [d:%Y-%m-%d] the date in strftime form, [t] its time, [P] the \
+name of the folder, [[ a literal [. Anything else in a mask is literal text. The search runs \
+on the whole new name after the masks, and the case is applied last. Use `name: [N]` and \
+`ext: [E]` for a part that does not change. Put a value in double quotes when it starts or \
+ends with a blank. The names given are a sample of the files; the pattern must work for \
+every file like them.";
+
+/// The pattern out of a model's answer to [`AI_RENAME_INSTRUCTION`]: the six `key: value`
+/// lines, read forgivingly — a code fence, a list marker, backticks or quotes around a value,
+/// a line missing — and `None` when not one of them is there, which is an answer in prose.
+/// The counter is not the model's to set; `[C10,2,3]` in a mask says it where it matters.
+pub(crate) fn ai_rename_options(answer: &str) -> Option<fcmd_core::rename::Options> {
+    use fcmd_core::rename::{Case, Options};
+    let mut opts = Options::default();
+    let mut read = 0;
+    for line in answer.lines() {
+        let line = line.trim().trim_start_matches(['-', '*', '•']).trim_start();
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
+        let key = key
+            .trim_matches(|c: char| c == '*' || c == '`' || c.is_whitespace())
+            .to_ascii_lowercase();
+        let mut value = value.trim().trim_start_matches("**").trim();
+        // One pair of backticks or quotes around the value is the model's, not the name's.
+        for quote in ['`', '"', '\''] {
+            if value.len() >= 2 && value.starts_with(quote) && value.ends_with(quote) {
+                value = &value[1..value.len() - 1];
+                break;
+            }
+        }
+        // "nothing", as the instruction's own placeholder words it.
+        let or_empty = |v: &str| match v.to_ascii_lowercase().as_str() {
+            "nothing" | "<nothing>" | "(nothing)" | "<empty>" | "(empty)" | "empty" => {
+                String::new()
+            }
+            _ => v.to_string(),
+        };
+        match key.as_str() {
+            "name" => opts.name = value.to_string(),
+            "ext" | "extension" => opts.ext = value.to_string(),
+            "search" => opts.search = or_empty(value),
+            "replace" => opts.replace = or_empty(value),
+            "regex" => {
+                opts.regex = matches!(value.to_ascii_lowercase().as_str(), "yes" | "true" | "on")
+            }
+            "case" => {
+                opts.case = match value.to_ascii_lowercase().as_str() {
+                    "lower" => Case::Lower,
+                    "upper" => Case::Upper,
+                    "title" => Case::Title,
+                    "sentence" => Case::Sentence,
+                    _ => Case::Unchanged,
+                }
+            }
+            _ => continue,
+        }
+        read += 1;
+    }
+    (read > 0).then_some(opts)
 }
 
 /// A conversation with one service, in a panel (the AI row of `Alt+F1` / `Alt+F2`): the files
@@ -1361,6 +1440,8 @@ pub enum PromptKind {
     EditorDeleteMatching,
     /// An AI service's key, typed because its variable holds none.
     AiKey,
+    /// Words for how the selected files should be renamed (`ai.rename`).
+    AiRename,
     /// The password of the secrets file, to open it.
     VaultPassword,
     /// A password for a new secrets file, to keep a key in; empty keeps it for this session.
@@ -7298,6 +7379,7 @@ impl App {
                     }
                 }
             }
+            PromptKind::AiRename => self.ai_rename_ask(&prompt.text),
             PromptKind::AiKey => {
                 let key = prompt.text.trim().to_string();
                 let Some(query) = self.ai_pending.take() else {
@@ -10563,6 +10645,10 @@ impl App {
         }
         if cmd == Command::AiLocalOnly {
             self.ai_toggle_local_only();
+            return;
+        }
+        if cmd == Command::AiRename {
+            self.ai_rename_prompt();
             return;
         }
         if cmd == Command::AiExplain {
@@ -15041,6 +15127,7 @@ impl App {
         }
         match answer.purpose {
             AiUse::Probe => self.ai_logged_in(&answer.text),
+            AiUse::Rename => self.ai_rename_ready(&answer.text, cost),
             AiUse::Answer => {
                 self.ai_last = Some(answer.file.clone());
                 // The answer of a conversation in a panel: the conversation is that file now,
@@ -16883,11 +16970,22 @@ impl App {
     /// The files are taken in the order the panel shows them, which is the order the counter
     /// counts in: sorted by date, `[C]` numbers them by date, which is usually the point.
     fn open_rename_form(&mut self) {
+        if !self.collect_rename_items() {
+            return;
+        }
+        self.mode = Mode::Form(Box::new(Form::multi_rename(&self.last_rename, &self.i18n)));
+        self.refresh_rename_preview();
+    }
+
+    /// What a multi-rename is about: the selected entries of the panel, or the one under the
+    /// cursor, with the folder they are in and every name in it. False, with the reason on
+    /// the status line, when there is nothing to rename here.
+    fn collect_rename_items(&mut self) -> bool {
         let panel = self.panel();
         if panel.cwd.in_container() {
             let m = self.i18n.t("rename-not-in-archive");
             self.set_error(m);
-            return;
+            return false;
         }
         let dir = panel.cwd.clone();
         let parent = dir.display_name();
@@ -16906,7 +17004,7 @@ impl App {
         if chosen.is_empty() {
             let m = self.i18n.t("msg-nothing-to-do");
             self.set_error(m);
-            return;
+            return false;
         }
         let items: Vec<fcmd_core::rename::Item> = chosen
             .iter()
@@ -16925,8 +17023,94 @@ impl App {
         self.rename_dir = Some(dir);
         self.rename_items = items;
         self.rename_existing = existing;
-        self.mode = Mode::Form(Box::new(Form::multi_rename(&self.last_rename, &self.i18n)));
+        true
+    }
+
+    /// `ai.rename` (`Ctrl+Alt+U`, in the panel and in the multi-rename dialog): say in words
+    /// what the names should become (SPEC 03 §8a). In the dialog it is about the files the
+    /// dialog is open on; in the panel, about what is selected.
+    fn ai_rename_prompt(&mut self) {
+        if self.cfg.ais.is_empty() {
+            let m = self.i18n.t("ai-none");
+            self.set_error(m);
+            return;
+        }
+        let in_dialog = matches!(&self.mode, Mode::Form(f) if f.kind == FormKind::MultiRename);
+        if !in_dialog && !self.collect_rename_items() {
+            return;
+        }
+        let title = self.i18n.t_args(
+            "ai-rename-prompt",
+            &[("count", (self.rename_items.len() as i64).into())],
+        );
+        self.mode = Mode::Prompt(Prompt::new(PromptKind::AiRename, title, String::new()));
+    }
+
+    /// The words are typed: say what goes — the instruction and a sample of the names, to
+    /// which host — and ask on a yes.
+    fn ai_rename_ask(&mut self, words: &str) {
+        /// How many of the names go as the sample: enough to show the scheme they are in,
+        /// few enough to read in the dialog's preview before saying yes.
+        const SAMPLE: usize = 20;
+        let words = words.trim();
+        if words.is_empty() || self.rename_items.is_empty() || self.cfg.ais.is_empty() {
+            return;
+        }
+        let names: Vec<String> = self
+            .rename_items
+            .iter()
+            .take(SAMPLE)
+            .map(|i| i.name.clone())
+            .collect();
+        let mut query = AiQuery::new(self.cfg.ais[0].clone(), words.to_string());
+        query.purpose = AiUse::Rename;
+        query.instruction = AI_RENAME_INSTRUCTION.into();
+        let list = names.join("\n");
+        let bytes = list.len() as u64;
+        query.inline = vec![("names".into(), list)];
+        let host = ai_host(&query.service.url);
+        let head = self.i18n.t_args(
+            "ai-send-names",
+            &[
+                ("count", (names.len() as i64).into()),
+                ("total", (self.rename_items.len() as i64).into()),
+                ("host", host.into()),
+            ],
+        );
+        self.confirm_ai_send(query, names, Some(bytes));
+        // Names, not files: nothing of what is in them goes.
+        if let Mode::Confirm(c) = &mut self.mode {
+            c.lines[0] = head;
+        }
+    }
+
+    /// The model's pattern is back: into the multi-rename dialog, whose preview says what
+    /// every name would become and whose OK is the only thing that renames. With something
+    /// else on the screen by now, the pattern waits as the dialog's next opening instead of
+    /// taking the screen away.
+    fn ai_rename_ready(&mut self, answer: &str, cost: String) {
+        let Some(opts) = ai_rename_options(answer) else {
+            let m = self.i18n.t("ai-rename-unreadable");
+            self.set_error(m);
+            return;
+        };
+        let with_cost = |m: String| {
+            if cost.is_empty() {
+                m
+            } else {
+                format!("{m}  {cost}")
+            }
+        };
+        if !matches!(self.mode, Mode::Normal) || self.rename_dir.is_none() {
+            self.last_rename = opts;
+            let m = self.i18n.t("ai-rename-waiting");
+            self.set_status(with_cost(m));
+            return;
+        }
+        self.mode = Mode::Form(Box::new(Form::multi_rename(&opts, &self.i18n)));
         self.refresh_rename_preview();
+        let m = self.i18n.t("ai-rename-ready");
+        self.set_status(with_cost(m));
     }
 
     /// The dialog's rows, as options for the engine — or why they are not.
@@ -19968,6 +20152,14 @@ impl App {
     }
 
     fn form_key(&mut self, key: Key) {
+        // The multi-rename dialog takes the key that asks a model for its pattern, by
+        // whatever key the keymap gives that command in the panel it was opened from.
+        if matches!(&self.mode, Mode::Form(f) if f.kind == FormKind::MultiRename)
+            && self.keymap.resolve(&[Scope::Panel], key) == Some(Command::AiRename)
+        {
+            self.ai_rename_prompt();
+            return;
+        }
         let Mode::Form(form) = &mut self.mode else {
             return;
         };
@@ -47556,5 +47748,306 @@ abcdefghij
             .take_requests()
             .iter()
             .any(|r| matches!(r, Request::AiAsk { .. })));
+    }
+
+    /// The answer of a service that is not there: what the worker would send back for
+    /// `query`, with `text` as the model's words. No test asks a real one.
+    fn ai_answers(app: &mut App, dir: &std::path::Path, purpose: AiUse, text: &str) {
+        let file = dir.join("answer.md");
+        std::fs::write(&file, format!("# asked\n\n{text}\n")).unwrap();
+        app.handle_event(Event::AiDone {
+            result: Ok(AiAnswer {
+                file,
+                text: text.into(),
+                purpose,
+                tokens: (None, None),
+                model: String::new(),
+                redacted: 0,
+            }),
+        });
+    }
+
+    /// The `AiAsk` among what the app queued, if it asked.
+    fn ai_asked(app: &mut App) -> Option<AiQuery> {
+        app.take_requests().into_iter().find_map(|r| match r {
+            Request::AiAsk { query, .. } => Some(query),
+            _ => None,
+        })
+    }
+
+    /// SPEC 03 §8a, the whole road: words typed on two selected files, a dialog that says
+    /// the instruction and the names — not the files — go to the host, the model's pattern
+    /// put into the multi-rename dialog with its preview, a field changed by hand, and only
+    /// the dialog's own OK renaming anything.
+    #[test]
+    fn words_become_a_rename_pattern_that_is_previewed_and_renames_only_on_ok() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["Report 03-11-2026.TXT", "Notes 01-02-2025.TXT", "keep.md"] {
+            std::fs::write(dir.path().join(name), "x").unwrap();
+        }
+        let mut app = editing_app(dir.path());
+        app.cfg.ais = vec![ai_service_cfg("local", "http://127.0.0.1:11434/api/chat")];
+        for name in ["Report 03-11-2026.TXT", "Notes 01-02-2025.TXT"] {
+            let at = app.panels[0].listing.row_of_name(name).unwrap();
+            app.panels[0].cursor = at;
+            press(&mut app, "Insert");
+        }
+        app.take_requests();
+
+        press(&mut app, "Ctrl+Alt+U");
+        let Mode::Prompt(p) = &app.mode else {
+            panic!("the words are asked for: {:?}", app.mode)
+        };
+        assert_eq!(p.kind, PromptKind::AiRename);
+        assert!(p.title.contains('2'), "{}", p.title);
+        type_text(&mut app, "dates to iso, lowercase");
+        press(&mut app, "Enter");
+
+        // Said before it goes: names, how many, where — and nothing asked yet.
+        let Mode::Confirm(c) = &app.mode else {
+            panic!("a dialog first: {:?}", app.mode)
+        };
+        assert!(
+            c.lines[0].contains("127.0.0.1") && c.lines[0].contains("names only"),
+            "{:?}",
+            c.lines
+        );
+        assert!(c.lines.iter().any(|l| l.contains("Report 03-11-2026.TXT")));
+        assert!(
+            !c.lines.iter().any(|l| l.contains("keep.md")),
+            "not selected"
+        );
+        assert_eq!(c.button, 1, "Cancel is the one lit");
+        assert!(ai_asked(&mut app).is_none());
+        if let Mode::Confirm(c) = &mut app.mode {
+            c.button = 0;
+        }
+        press(&mut app, "Enter");
+        let query = ai_asked(&mut app).expect("asked on yes");
+        assert_eq!(query.purpose, AiUse::Rename);
+        assert_eq!(query.question, "dates to iso, lowercase");
+        assert!(query.instruction.contains("[N]") && query.instruction.contains("case:"));
+        assert!(query.files.is_empty(), "no file's contents go");
+        assert_eq!(query.inline.len(), 1);
+        assert!(query.inline[0].1.contains("Notes 01-02-2025.TXT"));
+        assert!(!query.inline[0].1.contains("keep.md"));
+
+        // The model answers, fenced and decorated as models do.
+        app.ai_busy = None;
+        ai_answers(
+            &mut app,
+            dir.path(),
+            AiUse::Rename,
+            "```\nname: [N]\next: [E]\nsearch: `(\\d{2})-(\\d{2})-(\\d{4})`\nreplace: $3-$2-$1\nregex: yes\ncase: lower\n```",
+        );
+        let Mode::Form(form) = &app.mode else {
+            panic!("the multi-rename dialog: {:?}", app.mode)
+        };
+        assert_eq!(form.kind, FormKind::MultiRename);
+        assert_eq!(form.text_value("ren.search"), r"(\d{2})-(\d{2})-(\d{4})");
+        assert_eq!(form.text_value("ren.replace"), "$3-$2-$1");
+        assert!(form.toggle_value("ren.regex"));
+        assert_eq!(form.choice_value("ren.case"), "lower");
+        let preview = rename_preview(&app);
+        assert!(
+            preview
+                .iter()
+                .any(|l| l.contains("Report 03-11-2026.TXT → report 2026-11-03.txt")),
+            "{preview:#?}"
+        );
+        assert!(
+            preview
+                .iter()
+                .any(|l| l.contains("Notes 01-02-2025.TXT → notes 2025-02-01.txt")),
+            "{preview:#?}"
+        );
+        // A proposal is not a rename: nothing is asked of the disk, and nothing moved.
+        assert!(!app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::Rename { .. })));
+        assert!(dir.path().join("Report 03-11-2026.TXT").is_file());
+        assert!(!dir.path().join("report 2026-11-03.txt").exists());
+
+        // The pattern is the user's to change: the extension, by hand, and the preview follows.
+        if let Mode::Form(form) = &mut app.mode {
+            form.set_text("ren.ext", "log".into());
+        }
+        app.refresh_rename_preview();
+        let preview = rename_preview(&app);
+        assert!(
+            preview
+                .iter()
+                .any(|l| l.contains("→ report 2026-11-03.log")),
+            "{preview:#?}"
+        );
+
+        // OK is what renames, with the plan the preview showed.
+        press(&mut app, "F10");
+        let plan = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::Rename { plan, undo, .. } => Some((plan, undo)),
+                _ => None,
+            })
+            .expect("OK starts the rename");
+        assert!(!plan.1);
+        assert!(plan.0.contains(&(
+            "Report 03-11-2026.TXT".to_string(),
+            "report 2026-11-03.log".to_string()
+        )));
+        assert_eq!(plan.0.len(), 2);
+    }
+
+    /// Leaving at any step renames nothing; an answer that is prose and not a pattern is
+    /// said and opens no dialog; a pattern that would collide is stopped by the dialog's own
+    /// check; and with no service or nothing to rename the key says why.
+    #[test]
+    fn a_rename_from_words_that_goes_wrong_renames_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["a.txt", "b.txt"] {
+            std::fs::write(dir.path().join(name), "x").unwrap();
+        }
+        let mut app = editing_app(dir.path());
+        let none = |app: &mut App| {
+            !app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::Rename { .. } | Request::AiAsk { .. }))
+        };
+        let at = app.panels[0].listing.row_of_name("a.txt").unwrap();
+        app.panels[0].cursor = at;
+
+        // No service: said, and no prompt.
+        press(&mut app, "Ctrl+Alt+U");
+        assert!(app.status_error && matches!(&app.mode, Mode::Normal));
+        app.cfg.ais = vec![ai_service_cfg("local", "http://127.0.0.1:11434/api/chat")];
+
+        // `Esc` at the words, and `Esc` at the dialog.
+        press(&mut app, "Ctrl+Alt+U");
+        type_text(&mut app, "x");
+        press(&mut app, "Esc");
+        assert!(matches!(&app.mode, Mode::Normal) && none(&mut app));
+        press(&mut app, "Ctrl+Alt+U");
+        press(&mut app, "Enter");
+        assert!(matches!(&app.mode, Mode::Normal), "no words, no question");
+        press(&mut app, "Ctrl+Alt+U");
+        type_text(&mut app, "all the same name");
+        press(&mut app, "Enter");
+        assert!(matches!(&app.mode, Mode::Confirm(_)));
+        press(&mut app, "Enter");
+        assert!(matches!(&app.mode, Mode::Normal), "Cancel was lit");
+        assert!(none(&mut app));
+
+        // Prose instead of a pattern.
+        ai_answers(
+            &mut app,
+            dir.path(),
+            AiUse::Rename,
+            "I would rename them by date, if I knew their dates.",
+        );
+        assert!(app.status_error, "{}", app.status);
+        assert!(matches!(&app.mode, Mode::Normal), "{:?}", app.mode);
+
+        // Both files to one name: the dialog opens, says so, and its OK refuses.
+        for name in ["a.txt", "b.txt"] {
+            let at = app.panels[0].listing.row_of_name(name).unwrap();
+            app.panels[0].cursor = at;
+            press(&mut app, "Insert");
+        }
+        press(&mut app, "Ctrl+Alt+U");
+        type_text(&mut app, "same");
+        press(&mut app, "Enter");
+        if let Mode::Confirm(c) = &mut app.mode {
+            c.button = 0;
+        }
+        press(&mut app, "Enter");
+        app.take_requests();
+        app.ai_busy = None;
+        ai_answers(&mut app, dir.path(), AiUse::Rename, "name: same\next: [E]");
+        let preview = rename_preview(&app);
+        assert!(preview.iter().any(|l| l.starts_with('✗')), "{preview:#?}");
+        press(&mut app, "F10");
+        assert!(none(&mut app), "a plan with a problem is not run");
+        assert!(dir.path().join("a.txt").is_file() && dir.path().join("b.txt").is_file());
+    }
+
+    /// The multi-rename dialog takes the same key, for the files it is open on; and a
+    /// pattern that comes back while something else is on the screen does not take the
+    /// screen: it is what the dialog opens with next.
+    #[test]
+    fn the_multi_rename_dialog_asks_too_and_a_late_pattern_waits() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Photo.JPG"), "x").unwrap();
+        let mut app = editing_app(dir.path());
+        app.cfg.ais = vec![ai_service_cfg("local", "http://127.0.0.1:11434/api/chat")];
+        let at = app.panels[0].listing.row_of_name("Photo.JPG").unwrap();
+        app.panels[0].cursor = at;
+        press(&mut app, "Ctrl+Shift+F6");
+        assert!(matches!(&app.mode, Mode::Form(f) if f.kind == FormKind::MultiRename));
+        press(&mut app, "Ctrl+Alt+U");
+        assert!(
+            matches!(&app.mode, Mode::Prompt(p) if p.kind == PromptKind::AiRename),
+            "{:?}",
+            app.mode
+        );
+        type_text(&mut app, "lowercase");
+        press(&mut app, "Enter");
+        if let Mode::Confirm(c) = &mut app.mode {
+            c.button = 0;
+        }
+        press(&mut app, "Enter");
+        assert!(ai_asked(&mut app).is_some());
+        app.ai_busy = None;
+
+        // The user has gone on to read a file by the time the answer comes.
+        let file = dir.path().join("Photo.JPG");
+        app.view_path(&file.display().to_string());
+        assert!(matches!(&app.mode, Mode::Viewer(_)));
+        ai_answers(&mut app, dir.path(), AiUse::Rename, "case: lower");
+        assert!(
+            matches!(&app.mode, Mode::Viewer(_)),
+            "the screen is not taken"
+        );
+        assert!(app.status.contains("Ctrl+Shift+F6"), "{}", app.status);
+        press(&mut app, "Esc");
+        press(&mut app, "Ctrl+Shift+F6");
+        let preview = rename_preview(&app);
+        assert!(
+            preview.iter().any(|l| l.contains("Photo.JPG → photo.jpg")),
+            "{preview:#?}"
+        );
+    }
+
+    /// What a model writes around the six lines is taken off, and what is not a pattern at
+    /// all is not mistaken for one.
+    #[test]
+    fn a_rename_pattern_is_read_out_of_what_the_model_wrapped_it_in() {
+        use fcmd_core::rename::Case;
+        let o = ai_rename_options(
+            "Here is the pattern:\n- **name**: `[d:%Y-%m-%d] [N]`\n- ext: \"[E]\"\n- search: nothing\n- replace: \n- regex: no\n- case: Title\n",
+        )
+        .unwrap();
+        assert_eq!(o.name, "[d:%Y-%m-%d] [N]");
+        assert_eq!(o.ext, "[E]");
+        assert_eq!(o.search, "");
+        assert_eq!(o.replace, "");
+        assert!(!o.regex);
+        assert_eq!(o.case, Case::Title);
+        // Blanks kept inside quotes; a missing line keeps the dialog's own default.
+        let o = ai_rename_options("search: \" \"\nreplace: _\nregex: no").unwrap();
+        assert_eq!((o.search.as_str(), o.replace.as_str()), (" ", "_"));
+        assert_eq!((o.name.as_str(), o.ext.as_str()), ("[N]", "[E]"));
+        assert_eq!(o.case, Case::Unchanged);
+        assert_eq!(
+            (o.counter_start, o.counter_step, o.counter_width),
+            (1, 1, 1)
+        );
+        // A colon inside a value is the value's.
+        let o = ai_rename_options("name: [N] [t:%H:%M]").unwrap();
+        assert_eq!(o.name, "[N] [t:%H:%M]");
+        assert!(ai_rename_options("I cannot do that.").is_none());
+        assert!(ai_rename_options("").is_none());
+        assert!(ai_rename_options("note: this is not one of the six").is_none());
     }
 }

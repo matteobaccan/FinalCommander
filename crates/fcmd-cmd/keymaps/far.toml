@@ -1518,6 +1518,15 @@ keys = ["Shift+F7"]
 scope = "panel"
 cmd = "git.commit.draft"
 
+# Words to a rename (SPEC 03 §8a): on what is selected, say what the names should become; the
+# model's pattern lands in the multi-rename dialog, whose preview and OK are the user's. The
+# dialog itself takes the same key. `U` because the letters with a meaning of their own under
+# `Ctrl` in a terminal — `I`, `M`, `H`, `J` — do not arrive as themselves.
+[[bind]]
+keys = ["Ctrl+Alt+U"]
+scope = "panel"
+cmd = "ai.rename"
+
 # Undo the last file operation (SPEC 03 §14). FAR has none; `Ctrl+Z` in a panel is the
 # description, as it is there, so the undo takes `Alt` with it as well.
 [[bind]]

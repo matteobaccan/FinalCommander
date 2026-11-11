@@ -188,6 +188,24 @@ era.
 *File → Annulla l'ultima rinomina multipla* rimette i nomi, anche dopo un riavvio: l'ultima
 rinomina resta scritta nel file di stato.
 
+## Dirlo a parole
+
+`Ctrl+Alt+U` — nel pannello su ciò che è selezionato, o dentro il dialogo qui sopra — chiede i
+nuovi nomi **a parole**: `date in ISO, minuscolo`, oppure `la data, poi il titolo`. Un servizio
+AI (vedi *Chiedere a un'AI*) trasforma le parole in un modello per questo dialogo, e il dialogo
+si apre già compilato: le maschere, la ricerca e la sua sostituzione, le lettere. Da lì è il
+dialogo che conosci. L'anteprima mostra come si chiamerebbe ogni file, ogni campo è tuo da
+cambiare, un nome che collide è segnato con `✗`, e **non si rinomina nulla finché non premi
+`OK`**; *Annulla l'ultima rinomina multipla* la annulla come ogni altra.
+
+Che cosa va al servizio viene detto prima, in un dialogo con *Annulla* acceso: le tue parole e
+fino a venti **nomi** — mai niente di ciò che sta dentro i file — e l'host a cui vanno. Lì `F3`
+lo mostra esattamente. Il modello risponde con un modello di rinomina, non con una lista di
+nomi, quindi copre anche i file che non gli sono stati mostrati; quando risponde con qualcosa
+che non è un modello, la riga di stato lo dice e non succede nulla. Se nel frattempo sei
+passato a un'altra schermata, la risposta non interrompe: il modello è ciò con cui si apre
+`Ctrl+Shift+F6` la volta dopo.
+
 # Le somme di controllo
 
 *Somme di controllo…* nel menu File scrive un elenco di impronte per quello che è selezionato:

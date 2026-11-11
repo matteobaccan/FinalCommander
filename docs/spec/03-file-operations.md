@@ -377,6 +377,39 @@ through a temporary name; a failure halfway undoes the renames already made, in 
 `[last_rename]` so it outlives the session that did it — one step, not a history. The export,
 the ordered list of regex rules, transliteration and the dedup rule are still to come.
 
+### 8a. Words to a rename (0.44, `docs/06-ai-study.md` C3)
+
+`ai.rename` — `Ctrl+Alt+U` in the panel, and the same key inside the multi-rename dialog —
+asks for the new names in words and has a language model (SPEC 06 §14) answer with a
+**pattern for the dialog**, not with names. The model proposes; the dialog previews; only the
+dialog's `OK` renames, through the same plan, the same checks and the same undo as §8.
+
+* **What is asked.** The entries are those a multi-rename would take (the selection, or the
+  one under the cursor; not inside an archive). A prompt takes the words; empty words ask
+  nothing. The request carries the words as the question, an instruction that describes the
+  mask language and the six lines the answer must be (`name:`, `ext:`, `search:`, `replace:`,
+  `regex:`, `case:`), and the first 20 names as one inline text called `names`. No file is
+  read. The first `[[ai]]` service is the one asked.
+* **Said first.** The send dialog of SPEC 06 §14, with its first line replaced: the
+  instruction and *n* of the *m* names — names only — go to the host. *Cancel* is lit; `F3`
+  previews; redaction and the local-only switch apply as to any question (§14.2).
+* **What comes back.** `ai_rename_options` reads the six lines forgivingly: a code fence, a
+  list marker, bold around a key, one pair of backticks or quotes around a value, `nothing` /
+  `empty` for an empty search or replacement; a line that is missing keeps the dialog's
+  default (`[N]`, `[E]`, no search, case unchanged). The counter fields are never the
+  model's. An answer with none of the six lines is not a pattern: the status line says so and
+  no dialog opens. The answer is a file in `fcmd-ai/` like every other.
+* **Where it lands.** With the panels in front, the multi-rename dialog opens on the
+  pattern, its preview already drawn; every field can be changed and the preview follows; a
+  mask that does not parse or a plan with a problem is refused by the dialog exactly as a
+  hand-typed one is. With anything else in front — a viewer, an editor, another dialog — the
+  screen is not taken: the pattern becomes the dialog's remembered options and the status
+  line says `Ctrl+Shift+F6` opens it.
+
+The study's alternative, a list of new names from the model, was not built: it would need
+every name sent, a preview nobody can correct field by field, and trust in names that no rule
+produced.
+
 ## 9. Checksums, split, combine (shipped)
 
 **Checksums.** MD5, SHA-1, SHA-256 and CRC32 over what is selected, written as a list of

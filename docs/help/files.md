@@ -182,6 +182,24 @@ already done are put back, so the folder is either all in the new names or as it
 *Files → Undo the last multi-rename* puts the names back, after a restart too: the last one is
 kept in the state file.
 
+## Saying it in words
+
+`Ctrl+Alt+U` — in the panel on what is selected, or inside the dialog above — asks for the
+new names **in words**: `dates to ISO, lowercase`, or `the date, then the title`. An AI
+service (see *Asking an AI*) turns the words into a pattern for this dialog, and the dialog
+opens with it filled in: the masks, the search and its replacement, the letters. From there it
+is the dialog you know. The preview shows what every file would be called, every field is
+yours to change, a name that collides is marked `✗`, and **nothing is renamed until you press
+`OK`**; *Undo the last multi-rename* undoes it like any other.
+
+What goes to the service is said first, in a dialog with *Cancel* lit: your words and up to
+twenty of the **names** — never anything from inside the files — and the host they go to.
+`F3` there shows it exactly. The model answers with a pattern, not with a list of names, so
+the pattern also covers the files it was not shown; when it answers with something that is
+not a pattern, the status line says so and nothing happens. If you have moved on to another
+screen by the time the answer comes, it does not interrupt: the pattern is what
+`Ctrl+Shift+F6` opens with next.
+
 # Checksums
 
 *Checksums…* in the Files menu writes a list of digests for what is selected: SHA-256, SHA-1,

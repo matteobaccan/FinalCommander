@@ -388,6 +388,8 @@ pub enum Command {
     GitCommitDraft,
     /// Ask the language model what the marked block, or the screen, is.
     AiExplain,
+    /// Say in words what the selected names should become; the model's pattern goes into the multi-rename dialog (SPEC 03 §8a).
+    AiRename,
     /// Ask only language models on this machine, or any of them (SPEC 06 §14.2).
     AiLocalOnly,
     /// Mask secrets in what is sent to a language model, or stop masking them (SPEC 06 §14.2).
@@ -773,6 +775,7 @@ impl Command {
             Command::ToolGit,
             Command::GitCommitDraft,
             Command::AiExplain,
+            Command::AiRename,
             Command::AiLocalOnly,
             Command::AiRedact,
             Command::ToolSysLog,
@@ -1086,6 +1089,7 @@ impl Command {
             Command::ToolGit => "tool.git".into(),
             Command::GitCommitDraft => "git.commit.draft".into(),
             Command::AiExplain => "ai.explain".into(),
+            Command::AiRename => "ai.rename".into(),
             Command::AiLocalOnly => "ai.local".into(),
             Command::AiRedact => "ai.redact".into(),
             Command::ToolSysLog => "tool.syslog".into(),
@@ -1363,6 +1367,7 @@ impl Command {
             ("tool.git", _) => Command::ToolGit,
             ("git.commit.draft", _) => Command::GitCommitDraft,
             ("ai.explain", _) => Command::AiExplain,
+            ("ai.rename", _) => Command::AiRename,
             ("ai.local", _) => Command::AiLocalOnly,
             ("ai.redact", _) => Command::AiRedact,
             ("tool.syslog", _) => Command::ToolSysLog,
