@@ -5526,7 +5526,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
                 },
             ),
         ];
-        app.handle_input(Input::Key("F11".parse().unwrap()));
+        app.handle_input(Input::Key("Ctrl+Shift+F11".parse().unwrap()));
         let mut buf = Buffer::new(100, 30);
         draw(&mut app, &mut buf);
         let text = buf.to_text();
@@ -5569,7 +5569,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
                 when: Default::default(),
             })
             .collect();
-        app.handle_input(Input::Key("F11".parse().unwrap()));
+        app.handle_input(Input::Key("Ctrl+Shift+F11".parse().unwrap()));
         let out = frame(&mut app, 80, 24);
         assert!(out.contains("Command number 0"), "{out}");
         for line in out.lines() {
@@ -5715,7 +5715,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
                 when: Default::default(),
             })
             .collect();
-        app.handle_input(Input::Key("F11".parse().unwrap()));
+        app.handle_input(Input::Key("Ctrl+Shift+F11".parse().unwrap()));
         for _ in 0..12 {
             app.handle_input(Input::Key("Down".parse().unwrap()));
         }
@@ -6349,7 +6349,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         let out = frame(&mut app, 100, 20);
         assert!(!out.contains("Structure"), "the pane starts closed");
 
-        app.handle_input(Input::Key("F11".parse().unwrap()));
+        app.handle_input(Input::Key("Shift+F11".parse().unwrap()));
         let out = frame(&mut app, 100, 20);
         assert!(out.contains("Structure"), "{out}");
         assert!(out.contains("e_machine"), "{out}");
@@ -6359,7 +6359,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         assert!(out.contains("7F 45 4C 46"), "{out}");
         assert!(app.viewer_size.0 < 100, "the content did not make room");
 
-        app.handle_input(Input::Key("F11".parse().unwrap()));
+        app.handle_input(Input::Key("Shift+F11".parse().unwrap()));
         let out = frame(&mut app, 100, 20);
         assert!(!out.contains("Structure"), "F11 closes it again");
     }
@@ -6367,7 +6367,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
     #[test]
     fn enter_in_the_pane_takes_the_bytes_there() {
         let (_dir, mut app) = app_with_viewer("prog.bin", &elf_bytes());
-        app.handle_input(Input::Key("F11".parse().unwrap()));
+        app.handle_input(Input::Key("Shift+F11".parse().unwrap()));
         let _ = frame(&mut app, 100, 20);
         // Walk down to the row for the section table, which points at 0x80.
         let mut found = false;
@@ -6397,7 +6397,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
     fn the_arrows_go_back_to_the_bytes_when_the_pane_lets_go() {
         let (_dir, mut app) = app_with_viewer("prog.bin", &elf_bytes());
         app.handle_input(Input::Key("F4".parse().unwrap()));
-        app.handle_input(Input::Key("F11".parse().unwrap()));
+        app.handle_input(Input::Key("Shift+F11".parse().unwrap()));
         let _ = frame(&mut app, 100, 20);
         let before = app.mode.viewer_mut().unwrap().top;
         app.handle_input(Input::Key("Down".parse().unwrap()));
@@ -6418,7 +6418,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
     #[test]
     fn f11_on_a_text_file_says_there_is_nothing_to_decode() {
         let (_dir, mut app) = app_with_viewer("notes.txt", b"nothing binary here\n");
-        app.handle_input(Input::Key("F11".parse().unwrap()));
+        app.handle_input(Input::Key("Shift+F11".parse().unwrap()));
         assert!(app.status_error, "{}", app.status);
         assert!(!app.mode.viewer().unwrap().show_structure);
         let out = frame(&mut app, 100, 20);
@@ -9366,7 +9366,7 @@ third line
             app.status
         );
         assert!(app.status.contains("H.264/AVC 64×48"), "{}", app.status);
-        assert!(app.status.contains("F11"), "{}", app.status);
+        assert!(app.status.contains("Shift+F11"), "{}", app.status);
         // Nothing else changed: no frame, no picture mode, and the keys turn pages.
         app.status.clear();
         assert_eq!(frame(&mut app, 80, 24), before);

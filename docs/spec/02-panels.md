@@ -628,7 +628,7 @@ real reader with its chrome turned off, so everything the viewer does it does. W
 have the focus it only follows the cursor, as FAR's does. Give it the focus with `Tab` and its
 own keys are the viewer's: `F2` wraps, `F4` walks text → dump → hex → document → table,
 `Shift+F4` is hex and back, `F5` disassembles, `F6` decompiles, `F7` searches, `F8` changes
-the code page, `F11` opens the structure pane, and the key bar says so. The ones that would
+the code page, `Shift+F11` opens the structure pane, and the key bar says so. The ones that would
 leave — closing a file it did not open, going to the next file, crossing to the editor — stay
 with the panel, and so does every letter: `n` and `/` belong to the command line, whatever the
 viewer binds them to.

@@ -130,10 +130,10 @@ too, though the panel's own sort then decides. The frame writes the pattern as `
 
 **Metadata.** A row that asks about what the file says of itself — the camera of a
 photograph, the artist of a song, the author of a document. No parser was written for it:
-the viewer's `F11` already reads EXIF and PNG text, ID3, FLAC and Ogg comments, the
+the viewer's `Shift+F11` already reads EXIF and PNG text, ID3, FLAC and Ogg comments, the
 properties of PDFs and office documents, the version resource of a program and the rest
 into rows of a label and a value (SPEC 05 §1.8), and the condition is a question asked of
-those same rows (`fcmd_find::MetaCond`). So what `F11` shows about a file is exactly what
+those same rows (`fcmd_find::MetaCond`). So what `Shift+F11` shows about a file is exactly what
 it can be found by, and a format the pane learns is a format the search knows.
 
 The grammar is `field=value`, both matched as substrings without regard to case, against

@@ -289,7 +289,7 @@ every key on the screen you are looking at does.
   UTF-16 with or without a BOM, CP1252, CP437) and switchable with `F8`; `F2` cycles
   no-wrap / character / word wrap; `F4` between text and hex; `F7` opens one search dialog that
   asks the whole question — text, hex or a regular expression, case, whole words, forwards or
-  backwards. A structure pane (`F11`) for binaries, with sections and symbols, and `F5` to read
+  backwards. A structure pane (`Shift+F11`) for binaries, with sections and symbols, and `F5` to read
   the bytes as instructions.
 - **Editor** (`F4`): undo over the session, column blocks, search and replace, an atomic save,
   and syntax colouring for Rust, C, C++, Java, C#, JavaScript, TypeScript, PHP, Python, Ruby,
@@ -309,7 +309,7 @@ every key on the screen you are looking at does.
   Passwords are kept, if you want, in the encrypted secrets file — never in the configuration.
 - **The program itself**: ten themes, seven interface languages switchable while it runs, two
   keymap profiles (FAR and mc) and your own on top, macros, the screens list (`F12`), a terminal
-  of its own (`Ctrl+Alt+E`), plugins (`F11` for their commands, *Options → Plugins
+  of its own (`Ctrl+Alt+E`), plugins (`Ctrl+Shift+F11` for their commands, *Options → Plugins
   configuration* to turn them on and off), questions to an AI service of your choice, a help
   system whose key pages are generated from the keymap in force, and a manual page.
 

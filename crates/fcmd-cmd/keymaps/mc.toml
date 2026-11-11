@@ -126,8 +126,10 @@ keys = ["Ctrl+Shift+."]
 scope = "global"
 cmd = "macro.list"
 
-# The commands the loaded plugins provide. FAR's own key for it.
+# The commands the loaded plugins provide. Not on F11, FAR's key for it: terminals and
+# desktops take F11 for full screen before it reaches us, so it is the one key here that
+# would work for some people and silently not for others.
 [[bind]]
-keys = ["F11", "Ctrl+Shift+F11"]
+keys = ["Ctrl+Shift+F11"]
 scope = "panel"
 cmd = "plugin.commands"

@@ -336,7 +336,6 @@
 <text xml:space="preserve" x="604.8 613.2" y="391.6" fill="#1c1c1c">10</text>
 <text xml:space="preserve" x="621.6 630.0 638.4 646.8" y="391.6" fill="#ffffff">Quit</text>
 <text xml:space="preserve" x="672.0 680.4" y="391.6" fill="#1c1c1c">11</text>
-<text xml:space="preserve" x="688.8 697.2 705.6 714.0 722.4 730.8" y="391.6" fill="#ffffff">Plugin</text>
 <text xml:space="preserve" x="739.2 747.6" y="391.6" fill="#1c1c1c">12</text>
 <text xml:space="preserve" x="756.0 764.4 772.8 781.2 789.6 798.0" y="391.6" fill="#ffffff">Scree…</text>
 <rect x="0.0" y="396.0" width="840.0" height="18" fill="#1c3f94"/>
@@ -503,7 +502,6 @@
 <text xml:space="preserve" x="604.8 613.2" y="823.6" fill="#1c1c1c">10</text>
 <text xml:space="preserve" x="621.6 630.0 638.4 646.8" y="823.6" fill="#ffffff">Quit</text>
 <text xml:space="preserve" x="672.0 680.4" y="823.6" fill="#1c1c1c">11</text>
-<text xml:space="preserve" x="688.8 697.2 705.6 714.0 722.4 730.8" y="823.6" fill="#ffffff">Struct</text>
 <text xml:space="preserve" x="739.2 747.6" y="823.6" fill="#1c1c1c">12</text>
 <text xml:space="preserve" x="756.0 764.4 772.8 781.2 789.6 798.0" y="823.6" fill="#ffffff">Scree…</text>
 </svg>

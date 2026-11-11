@@ -229,7 +229,7 @@ Perché ognuno è un programma a parte e non è dentro fcmd:
 | `7z` | gli archivi che fcmd non legge da sé: rar, cab, iso, lha, arj, msi, wim, dmg… | il codice che spacchetta RAR ha una licenza sua, non aperta, e gli altri sono decine di formati che un programma legge già bene. Lo guida una tabella (`[[archiver]]`, *Formati tuoi*) e gli si chiede soltanto di elencare ed estrarre |
 | `git` | il pannello Git (`Ctrl+Alt+G`) e il ramo nel prompt | cosa contiene un repository è quello che dice `git`; una seconda implementazione dentro fcmd potrebbe non essere d'accordo con la prima |
 | `javap`, `ilspycmd`, `python3`, `wasm2wat`, `objdump`, `retdec-decompiler` | `Shift+F6` nel visualizzatore, tramite le regole `[[decompile]]` | ognuno è il lavoro di uno specialista per un tipo di codice; fcmd disassembla da sé il codice macchina e lascia a loro la decompilazione |
-| `ffmpeg` | i fotogrammi di un video nel visualizzatore e nella vista rapida (`F3`, `Ctrl+Q`), e la sua riproduzione senza audio | i codec video sono coperti da brevetti, le librerie che li decodificano sono LGPL o GPL e non c'è ancora un decoder pronto in Rust puro; senza, un video si apre come i suoi byte e `F11` ne legge comunque il contenitore |
+| `ffmpeg` | i fotogrammi di un video nel visualizzatore e nella vista rapida (`F3`, `Ctrl+Q`), e la sua riproduzione senza audio | i codec video sono coperti da brevetti, le librerie che li decodificano sono LGPL o GPL e non c'è ancora un decoder pronto in Rust puro; senza, un video si apre come i suoi byte e `Shift+F11` ne legge comunque il contenitore |
 | `xdg-open` / `open` | aprire un link nel browser | quale browser è una scelta del desktop, non di fcmd |
 | `journalctl` / `log` / `wevtutil` | *Comandi → Log di sistema* | ogni sistema ha un solo strumento che conosce il suo log |
 | `systemctl` / `launchctl` | il pannello dei servizi | solo il gestore dei servizi può avviare e fermare un servizio |
@@ -727,16 +727,17 @@ Un plugin è una cartella dentro `fcmd-plugins/`, accanto alle impostazioni (`fc
 dove), con dentro un `plugin.toml`. Viene trovato all'avvio: niente da registrare, niente da
 compilare. Può portare **dati** — temi, keymap, blocchi `[[assoc]]`, regole `[[decompile]]`,
 liste `[[mask-group]]`, con le stesse parole di `fcmd.toml` — e **comandi**: un `[[command]]`
-nomina un programma nella cartella del plugin, e `F11` elenca i comandi per lo schermo in cui
-sei — nei pannelli anche `Ctrl+Shift+F11`, che la barra dei tasti mostra mentre li tieni premuti.
+nomina un programma nella cartella del plugin, e `Ctrl+Shift+F11` elenca i comandi per lo schermo in cui
+sei (non `F11`, che terminali e desktop si prendono per lo schermo intero prima che arrivi al
+programma).
 
-`F11` elenca tutti i comandi, prima quelli che possono girare dove sei. Gli altri stanno sotto,
+`Ctrl+Shift+F11` elenca tutti i comandi, prima quelli che possono girare dove sei. Gli altri stanno sotto,
 in grigio, e ciascuno dice perché — un altro schermo, un plugin spento, o una condizione che il
 suo autore ha scritto in `[command.when]`: una cartella su questa macchina (`local`), file su cui
 lavorare (`files`), file che corrispondono a delle maschere (`masks`), un nome in questa cartella
 (`here`) o in questa o in una sopra (`inside`, `[".git"]` per tutto quello che riguarda un
 repository). `Invio` su una riga grigia ripete il motivo e non esegue niente. Senza plugin
-installati, `F11` propone di aprire la cartella dei plugin e questa pagina.
+installati, `Ctrl+Shift+F11` propone di aprire la cartella dei plugin e questa pagina.
 
 Un comando gira come programma a sé, mai dentro fcmd, così un plugin che va in crash ci va da
 solo. Riceve dove sono i pannelli e cosa è selezionato, nell'ambiente e come JSON sul suo
@@ -779,7 +780,7 @@ disattiva.
 *Opzioni → Configurazione dei plugin* elenca tutti i plugin trovati: `✓` per uno attivo, `·`
 per uno disattivato e `!` per uno che non si è caricato. `Invio` attiva o disattiva quello
 sotto il cursore e lo scrive subito (`[plugins] disabled` in `fcmd.toml`); i suoi comandi
-diventano grigi in `F11`, o tornano normali, immediatamente, mentre il resto di quello che porta — temi, tasti,
+diventano grigi in `Ctrl+Shift+F11`, o tornano normali, immediatamente, mentre il resto di quello che porta — temi, tasti,
 associazioni, decompilatori, gruppi di maschere — si legge all'avvio e cambia al prossimo. `F3`
 è la sua scheda: chi l'ha scritto, dove sta, cosa porta, i suoi comandi, le sue colonne e quello che è stato
 detto mentre si caricava — per uno che non si è caricato, il perché. Le sue impostazioni sono

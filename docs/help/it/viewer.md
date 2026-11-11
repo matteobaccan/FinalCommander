@@ -116,7 +116,7 @@ dov'è il fotogramma, quanto dura il film e che cos'è: `00:12 / 02:00  H.264/AV
 | `Home`, `End` | il primo fotogramma, l'ultimo |
 | `Spazio` | riproduce da questo fotogramma, e mette in pausa |
 | `F4` | prosegue verso il dump e l'esadecimale, dove i tasti tornano a girare pagina |
-| `F11` | il contenitore: tracce, codec, tag |
+| `Shift+F11` | il contenitore: tracce, codec, tag |
 
 La vista rapida (`Ctrl+Q`) mostra lo stesso fotogramma, a un decimo della durata, mentre il
 cursore passa.
@@ -128,7 +128,7 @@ non ce la fanno (`viewer.pixels = "off"`).
 
 fcmd non decodifica nessun video. I fotogrammi vengono da **`ffmpeg`**, eseguito come
 programma quando è nel `PATH` e mai parte di fcmd. Senza, il visualizzatore dice che manca e
-che cos'è il file, apre il file come i suoi byte come ha sempre fatto, e `F11` legge comunque
+che cos'è il file, apre il file come i suoi byte come ha sempre fatto, e `Shift+F11` legge comunque
 il contenitore; `Alt+F1` → *Programmi esterni* elenca `ffmpeg`, e lì `F4` lo installa. Un file
 che contiene solo suono — un `.m4a`, un `.mka` — non è un film e non gli viene passato.
 
@@ -259,7 +259,7 @@ Su un disassemblato `F7` cerca le *istruzioni*, non i byte: `call` trova tutte l
 `mov *, eax` tutti gli spostamenti in quel registro, e `*` sta per quello che c'è fra i pezzi
 del modello.
 
-`F11` (o `Shift+F11`, che le abitudini di FAR lasciano libero) apre la struttura di un eseguibile: ELF, PE, Mach-O, `ar` e le famiglie più vecchie — NE,
+`Shift+F11` apre la struttura di un eseguibile: ELF, PE, Mach-O, `ar` e le famiglie più vecchie — NE,
 LE e LX, e il TE di cui è fatto il firmware UEFI — ogni campo di testata con i
 byte grezzi accanto al significato, le sezioni, gli import e gli export, e i simboli — che poi
 danno il nome alle funzioni nel disassemblato. `Enter` su una posizione prende i byte che stanno
@@ -315,7 +315,7 @@ Lo stesso tasto risponde anche per i file che non sono programmi:
 - **la musica** — MP3, FLAC, Ogg Vorbis, Opus: titolo, artista, album, anno, traccia, genere,
   se c'è una copertina, e per FLAC e Ogg il flusso e la durata.
 
-`F11` non mostra un'immagine del file. I fotogrammi di un video li mostra `F3` stesso (*I
+`Shift+F11` non mostra un'immagine del file. I fotogrammi di un video li mostra `F3` stesso (*I
 video*, qui sopra); per il testo di un PDF o per quello che `ffprobe` dice di un film si
 prepara una regola `[[decompile]]` (`pdftotext`, `ffprobe`) e si preme `Shift+F6`.
 
@@ -423,7 +423,7 @@ Text* di Delphi: gli oggetti annidati, `inherited` e `inline` dove ci sono, ogni
 `Nome = valore`, gli insiemi in `[ … ]`, le liste in `( … )`, le collection in `< … >` e i
 dati binari in esadecimale. `F4` passa ai byte, e torna indietro.
 
-**Programmi.** `F11` su un `.exe`, `.dll` o `.bpl` compilato con Delphi o C++Builder ha una
+**Programmi.** `Shift+F11` su un `.exe`, `.dll` o `.bpl` compilato con Delphi o C++Builder ha una
 parte *Delphi*: quale dei due l'ha compilato, i package che richiede, quante unit contiene e i
 loro nomi, e ogni form al suo interno con nome e classe. `Invio` su una form la apre come
 testo, come se fosse la sua `.dfm`.

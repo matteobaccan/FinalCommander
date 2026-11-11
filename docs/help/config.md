@@ -224,7 +224,7 @@ Why each one is a program and not part of fcmd:
 | `7z` | archives fcmd does not read itself: rar, cab, iso, lha, arj, msi, wim, dmg… | RAR's unpacking code comes under its own licence, not an open one, and the rest are dozens of formats one program already reads well. A table drives it (`[[archiver]]`, *Formats of your own*), and it is only ever asked to list and extract |
 | `git` | the Git panel (`Ctrl+Alt+G`) and the branch in the prompt | what a repository holds is what `git` says it holds; a second implementation inside fcmd could disagree with the first |
 | `javap`, `ilspycmd`, `python3`, `wasm2wat`, `objdump`, `retdec-decompiler` | `Shift+F6` in the viewer, through the `[[decompile]]` rules | each is a specialist's project for one kind of code; fcmd disassembles machine code itself and leaves decompiling to them |
-| `ffmpeg` | the frames of a video in the viewer and the quick view (`F3`, `Ctrl+Q`), and playing one without sound | video codecs carry patents, the libraries that decode them are LGPL or GPL, and no pure-Rust decoder is ready; without it a video opens as its bytes and `F11` still reads its container |
+| `ffmpeg` | the frames of a video in the viewer and the quick view (`F3`, `Ctrl+Q`), and playing one without sound | video codecs carry patents, the libraries that decode them are LGPL or GPL, and no pure-Rust decoder is ready; without it a video opens as its bytes and `Shift+F11` still reads its container |
 | `xdg-open` / `open` | opening a link in the browser | which browser is the desktop's choice, not fcmd's |
 | `journalctl` / `log` / `wevtutil` | *Commands → System log* | each system has one tool that knows its log |
 | `systemctl` / `launchctl` | the services panel | the service manager is the only thing that can start and stop a service |
@@ -702,15 +702,15 @@ A plugin is a folder in `fcmd-plugins/`, beside the settings (`fcmd --paths` say
 a `plugin.toml` in it. It is found at startup: nothing to register, nothing to build. It can
 bring **data** — themes, keymaps, `[[assoc]]` blocks, `[[decompile]]` rules, `[[mask-group]]`
 lists, all in the same words `fcmd.toml` uses — and **commands**: a `[[command]]` names a
-program in the plugin's folder, and `F11` lists the commands for the screen you are on — in the panels `Ctrl+Shift+F11` as
-well, which the key bar shows while both are held.
+program in the plugin's folder, and `Ctrl+Shift+F11` lists the commands for the screen you are on (not `F11`, which terminals and
+desktops take for full screen before it reaches the program).
 
-`F11` lists every command, those that can run where you are first. The others are greyed out
+`Ctrl+Shift+F11` lists every command, those that can run where you are first. The others are greyed out
 underneath, each saying why — another screen, a plugin turned off, or a condition its author
 wrote in `[command.when]`: a folder on this machine (`local`), files to act on (`files`), files
 matching some masks (`masks`), a name in this folder (`here`) or in it or a folder above
 (`inside`, `[".git"]` for anything about a repository). `Enter` on a grey row says the reason
-again and runs nothing. With no plugin installed, `F11` offers to open the plugins folder and
+again and runs nothing. With no plugin installed, `Ctrl+Shift+F11` offers to open the plugins folder and
 this page.
 
 A command runs as a program of its own, never inside fcmd, so a plugin that crashes crashes
@@ -752,7 +752,7 @@ off.
 *Options → Plugins configuration* lists every plugin found: `✓` for one that is on, `·` for
 one that is off, and `!` for one that did not load. `Enter` turns the one under the cursor on
 or off and writes it down at once (`[plugins] disabled` in `fcmd.toml`); its commands go grey
-in `F11`, or back, straight away, while the rest of what it brings — themes, keys, associations,
+in `Ctrl+Shift+F11`, or back, straight away, while the rest of what it brings — themes, keys, associations,
 decompilers, mask groups — is read at startup and changes at the next one. `F3` is its card:
 who wrote it, where it lives, what it brings, its commands, its columns, and anything said about it while
 loading — for one that did not load, why. Its own settings are its own files: `F3` names the

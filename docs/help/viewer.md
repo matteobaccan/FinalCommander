@@ -107,7 +107,7 @@ the film runs, and what it is: `00:12 / 02:00  H.264/AVC 1920×1080`.
 | `Home`, `End` | the first frame, the last one |
 | `Space` | play from this frame, and pause |
 | `F4` | on to the dump and the hex, where the keys turn pages again |
-| `F11` | the container: tracks, codecs, tags |
+| `Shift+F11` | the container: tracks, codecs, tags |
 
 The quick view (`Ctrl+Q`) shows the same frame, a tenth of the way in, as the cursor passes.
 
@@ -117,7 +117,7 @@ leave. Over a slow connection half blocks keep up where pixels do not (`viewer.p
 
 fcmd decodes no video itself. The frames come from **`ffmpeg`**, run as a program when it is
 on the `PATH` and never part of fcmd. Without it the viewer says that it is missing and what
-the file is, opens the file as its bytes as it always did, and `F11` still reads the
+the file is, opens the file as its bytes as it always did, and `Shift+F11` still reads the
 container; `Alt+F1` → *External programs* lists `ffmpeg`, and `F4` there installs it. A file
 that holds only sound — an `.m4a`, a `.mka` — is not a film and is not handed to it.
 
@@ -243,7 +243,7 @@ Over a disassembly `F7` searches the *instructions*, not the bytes: `call` finds
 `mov *, eax` every move into that register, and `*` stands for whatever lies between the pieces
 of the pattern.
 
-`F11` (or `Shift+F11`, which FAR's habits leave free) opens the structure of an executable: ELF, PE, Mach-O, `ar`, and the older families — NE,
+`Shift+F11` opens the structure of an executable: ELF, PE, Mach-O, `ar`, and the older families — NE,
 LE and LX, and the TE that UEFI firmware is made of — each header field with the
 raw bytes beside the meaning, the sections, the imports and exports, and the symbols — which
 then name the functions in the disassembly. `Enter` on an offset takes the bytes there.
@@ -297,7 +297,7 @@ The same key answers for the files that are not programs:
 - **music** — MP3, FLAC, Ogg Vorbis, Opus: the title, the artist, the album, the year, the
   track, the genre, whether there is a cover, and for FLAC and Ogg the stream and its length.
 
-`F11` shows no picture of the file. A video's frames are what `F3` itself shows (*Video*,
+`Shift+F11` shows no picture of the file. A video's frames are what `F3` itself shows (*Video*,
 above); for the text of a PDF or `ffprobe`'s own account of a film, set up a `[[decompile]]`
 rule (`pdftotext`, `ffprobe`) and press `Shift+F6`.
 
@@ -402,7 +402,7 @@ show: the objects nested, `inherited` and `inline` where they are, every propert
 value`, sets in `[ … ]`, lists in `( … )`, collections in `< … >` and binary data as hex. `F4`
 goes to the bytes, and back.
 
-**Programs.** `F11` on an `.exe`, `.dll` or `.bpl` built with Delphi or C++Builder has a
+**Programs.** `Shift+F11` on an `.exe`, `.dll` or `.bpl` built with Delphi or C++Builder has a
 *Delphi* part: which of the two built it, the packages it needs, how many units it holds and
 their names, and every form inside it by name and class. `Enter` on a form opens it as text,
 as if it were its own `.dfm`.

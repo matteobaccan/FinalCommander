@@ -6196,8 +6196,8 @@ timeout = 10
         });
         serve(&mut app);
 
-        // F11 lists it, with the plugin it came from beside it.
-        app.handle_input(Input::Key("F11".parse().unwrap()));
+        // Ctrl+Shift+F11 lists it, with the plugin it came from beside it.
+        app.handle_input(Input::Key("Ctrl+Shift+F11".parse().unwrap()));
         let crate::app::Mode::Pick(pick) = &app.mode else {
             panic!("{:?}", app.mode)
         };

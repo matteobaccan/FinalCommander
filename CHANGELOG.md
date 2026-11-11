@@ -24,6 +24,10 @@ Notable changes, newest first. The format follows
 
 ### Changed
 
+- **`F11` does nothing any more.** Terminals and desktops take it for full screen before it
+  reaches the program, so it worked for some people and silently not for others. The plugins'
+  commands are on `Ctrl+Shift+F11` and the viewer's structure pane on `Shift+F11`, which every
+  terminal passes through; the key bar no longer offers `F11`.
 - The diff's foot is two lines, the count and then the keys, so a narrow terminal no longer
   hides the keys.
 - The feature table was read against the sources of eighteen other file managers; its states

@@ -266,7 +266,7 @@ L'anteprima è il visualizzatore stesso, senza la sua cornice. Finché il fuoco 
 soltanto il cursore; dagli il fuoco con `Tab` e i suoi tasti sono quelli del visualizzatore:
 `F2` manda a capo, `F4` gira fra testo, dump, esadecimale, documento e tabella, `Shift+F4` è
 l'esadecimale e ritorno, `F5` disassembla, `F6` decompila, `F7` cerca, `F8` cambia la codifica,
-`F11` apre il pannello della struttura. La barra dei tasti lo dice finché ha il fuoco. Quello
+`Shift+F11` apre il pannello della struttura. La barra dei tasti lo dice finché ha il fuoco. Quello
 che scrivi va comunque alla riga di comando. E accanto a una lista di processi, di socket o di
 programmi installati l'anteprima tiene la scheda di quella riga — la stessa pagina che apre
 `F3` lì, che è più lunga del pannello e scorre.

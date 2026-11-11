@@ -29702,7 +29702,7 @@ impl App {
             (7, self.i18n.t("key-search")),
             (8, self.i18n.t("key-code")),
             (10, self.i18n.t("key-quit")),
-            (11, self.i18n.t("key-struct")),
+            (11, String::new()),
             (12, self.i18n.t("key-screens")),
         ]
     }
@@ -29790,7 +29790,7 @@ impl App {
                 (8, "key-service-stop"),
                 (9, "key-pulldown"),
                 (10, "key-quit"),
-                (11, "key-plugins"),
+                (11, ""),
                 (12, "key-screens"),
             ]
             .iter()
@@ -29818,7 +29818,7 @@ impl App {
                 (8, "key-git-discard"),
                 (9, "key-pulldown"),
                 (10, "key-quit"),
-                (11, "key-plugins"),
+                (11, ""),
                 (12, "key-screens"),
             ]),
             Some(":gitlog") => Some([
@@ -29832,7 +29832,7 @@ impl App {
                 (8, "key-git-branches"),
                 (9, "key-pulldown"),
                 (10, "key-quit"),
-                (11, "key-plugins"),
+                (11, ""),
                 (12, "key-screens"),
             ]),
             Some(":gitbranches") => Some([
@@ -29846,7 +29846,7 @@ impl App {
                 (8, "key-git-log"),
                 (9, "key-pulldown"),
                 (10, "key-quit"),
-                (11, "key-plugins"),
+                (11, ""),
                 (12, "key-screens"),
             ]),
             _ => None,
@@ -29878,7 +29878,7 @@ impl App {
                 (8, "key-ai-remove"),
                 (9, "key-pulldown"),
                 (10, "key-quit"),
-                (11, "key-plugins"),
+                (11, ""),
                 (12, "key-screens"),
             ]),
             Some(":aichat") => Some([
@@ -29892,7 +29892,7 @@ impl App {
                 (8, "key-ai-forget"),
                 (9, "key-pulldown"),
                 (10, "key-quit"),
-                (11, "key-plugins"),
+                (11, ""),
                 (12, "key-screens"),
             ]),
             _ => None,
@@ -29924,7 +29924,7 @@ impl App {
                 (8, "key-site-forget"),
                 (9, "key-pulldown"),
                 (10, "key-quit"),
-                (11, "key-plugins"),
+                (11, ""),
                 (12, "key-screens"),
             ]
             .iter()
@@ -29954,7 +29954,7 @@ impl App {
                 (8, self.i18n.t("key-code")),
                 (9, self.i18n.t("key-pulldown")),
                 (10, self.i18n.t("key-quit")),
-                (11, self.i18n.t("key-struct")),
+                (11, String::new()),
                 (12, self.i18n.t("key-screens")),
             ];
         }
@@ -29971,7 +29971,7 @@ impl App {
             (10, "key-quit"),
             // `F11` has opened the plugin commands since the plugins did, and the bar did
             // not say so: FAR writes `Plugin` there too.
-            (11, "key-plugins"),
+            (11, ""),
             (12, "key-screens"),
         ]
         .iter()

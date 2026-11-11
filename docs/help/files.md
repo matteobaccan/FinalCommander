@@ -415,7 +415,7 @@ letters instead of a mask and finds every name that has them in that order — `
 somewhere. The list comes best match first: letters side by side before letters scattered,
 the start of a word before the middle of one, a short name before a long one.
 
-**The metadata row** finds a file by what it says about itself — exactly what `F11` shows
+**The metadata row** finds a file by what it says about itself — exactly what `Shift+F11` shows
 you in the viewer: the camera and the date of a photograph, the artist and the album of a
 song, the author and the title of a PDF or an office document, the version of a program.
 Write `field=value`: `artist=bowie`, `model=canon`, `author=rossi`. Both sides are matched

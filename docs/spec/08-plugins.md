@@ -42,16 +42,16 @@ here = [".env.example"]           # one of these names is in this directory
 inside = [".git"]                 # …or in this directory or one above it
 ```
 
-`F11` lists **every** command, the ones that can run where one is standing first; the others
+`Ctrl+Shift+F11` lists **every** command, the ones that can run where one is standing first; the others
 follow under a rule, drawn in the menu's dim ink (`menu.dim.fg`) with the reason beside them:
 another scope ("only in the viewer"), a plugin turned off, or the first `when` condition that
 fails. `Enter` on a greyed-out row runs nothing and says the reason again. The point is that a
 plugin never looks missing only because the panel is somewhere it cannot work, and that the
 host — which can see the panel — says so before a program is started only to answer "nothing
 to do here". Everything but `inside` is read off what is already on the screen; `inside`
-looks for a name in the directories above a local one, a handful of lookups when `F11` opens.
+looks for a name in the directories above a local one, a handful of lookups when `Ctrl+Shift+F11` opens.
 A condition this version does not know is a warning at load and is ignored, so a plugin
-written for a later fcmd still loads. With no plugin at all `F11` is a list too: open the
+written for a later fcmd still loads. With no plugin at all `Ctrl+Shift+F11` is a list too: open the
 plugins folder (made if it is missing) or read the help at its *Plugins* heading.
 
 The host runs the program on the worker pool,
@@ -117,8 +117,8 @@ message as the reason. `Enter` flips one and writes `[plugins] disabled = ["id",
 configuration at once. A plugin that is off is still loaded and still listed — that is what
 lets it be turned on again from the same list — but nothing it brings is used: its themes,
 keymaps, `[[assoc]]`, `[[decompile]]` and `[[mask-group]]` blocks are not applied at startup,
-and its commands are greyed out in `F11`, saying where it was turned off. The commands are the one part that changes without a
-restart, because `F11` is built when it is opened; the data blocks are folded in at startup,
+and its commands are greyed out in `Ctrl+Shift+F11`, saying where it was turned off. The commands are the one part that changes without a
+restart, because `Ctrl+Shift+F11` is built when it is opened; the data blocks are folded in at startup,
 and the status line says which of the two a change touched.
 
 The data blocks are read with the configuration's own types and kept apart from what the file

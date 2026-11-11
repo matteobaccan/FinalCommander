@@ -431,7 +431,7 @@ deve solo esserci da qualche parte. L'elenco arriva con il risultato migliore pe
 lettere vicine prima di quelle sparse, l'inizio di una parola prima del mezzo, un nome corto
 prima di uno lungo.
 
-**La riga dei metadati** trova un file da quello che dice di sé — esattamente quello che `F11`
+**La riga dei metadati** trova un file da quello che dice di sé — esattamente quello che `Shift+F11`
 mostra nel visualizzatore: la fotocamera e la data di una fotografia, l'artista e l'album di
 una canzone, l'autore e il titolo di un PDF o di un documento d'ufficio, la versione di un
 programma. Scrivi `campo=valore`: `artist=bowie`, `model=canon`, `author=rossi`. Entrambi i

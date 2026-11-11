@@ -30,7 +30,7 @@ bytecode and the other architectures decoded in process.
 | `table` | a tabular file as columns: a header row, aligned columns, horizontal scroll | see §1.11 — one mode for CSV, TSV, JSONL and DBF, because what differs between them is the reader and not the screen |
 | `image` | a picture or a frame of a film, in real pixels or half blocks | see §1.14 — PNG, JPEG, GIF and BMP, decided by the file's first bytes; `F3` on a picture opens here and `F4` goes on to the bytes. §1.14a is the pixels, §1.15 the films |
 | `preview` | rendered content (markdown, PDF page, media info, archive listing) | pluggable, see §1.7 |
-| `structure` | a side pane that decodes what the file *is*: header fields, section and segment tables, imports and exports | `F11`, see §1.8; it rides alongside `hex` and `disasm` rather than replacing them |
+| `structure` | a side pane that decodes what the file *is*: header fields, section and segment tables, imports and exports | `Shift+F11`, see §1.8; it rides alongside `hex` and `disasm` rather than replacing them |
 
 Mode indicator in the status bar (`t`/`d`/`h`/`m`/`b`/`p`) plus encoding, position (offset, %,
 line) and file size. `F2` toggles wrap in text mode.
@@ -218,7 +218,7 @@ plain rather than coloured wrong.
 Nothing here circumvents a protection: it reads bytes the user can already read. What those
 bytes may be used for is the user's licence question, not the file manager's.
 
-### 1.8 Structure pane (`F11`)
+### 1.8 Structure pane (`Shift+F11`)
 
 The disassembler already parses a binary enough to find its architecture and entry point. The
 structure pane shows the rest of what the parse already knows, which is most of what someone
@@ -572,7 +572,7 @@ external programs panel, and named by the viewer when it is missing.
   viewer keeps the newest, the workers share it, and a worker fetching an older frame stops
   its `ffmpeg` and says nothing.
 - **Without `ffmpeg`** the viewer says so on the status line, with what the film is, and the
-  file stays what it opened as — `F11` still reads the container. The quick view says
+  file stays what it opened as — `Shift+F11` still reads the container. The quick view says
   nothing: it would say it for every film the cursor passed. A frame `ffmpeg` could not give
   is an error with `ffmpeg`'s own first line in it.
 - Only a file on this disk: a film on a server is fetched whole by `F3` first, as every file
