@@ -27,6 +27,25 @@ Notable changes, newest first. The format follows
 - **Block lines in the editor.** The lines the viewer draws down Pascal's blocks — `begin` …
   `end`, `try`, `case`, `repeat`, `asm`, a `class` or `record` with a body, a form's `object`s
   — are drawn in the editor too, in `syntax.guide`, and follow the text as it is typed.
+- **A copy that survives a crash.** A copy or a move keeps a journal while it runs, in
+  `fcmd-jobs/` beside the settings: what was asked and which files are finished. It is removed
+  when the job ends, so one still there at startup is a job that never got to its end. The
+  status line says so once, and `Alt+Shift+F6` — *Commands → Unfinished jobs* — lists them.
+  `Enter` goes on with one: finished files are passed over without a question, and the file it
+  was in the middle of continues from its `.fcmd-part`. `Del` discards one, with the
+  half-written part it names. A journal that cannot be read is reported and listed, never a
+  reason not to start, and a second copy of the program does not offer the jobs the first is
+  still running. Only the running job is remembered: one still waiting in the queue has to be
+  asked for again. `fcmd --paths` names the folder.
+- **A synchronisation saved under a name.** The synchronise dialog has a row for a name: with
+  one in it, the two folders and every answer are kept as a `[[sync]]` block of `fcmd.toml`.
+  `Ctrl+Alt+Y` — *Commands → Saved synchronisations*, and a *Saved…* button in the dialog —
+  lists them: `Enter` runs one on its own two folders wherever the panels are, `F4` opens its
+  dialog to change it, `Del` forgets it. The table still comes first and `F2` still starts it.
+- **A written report of a synchronisation.** A file named in the dialog's *Write a report of
+  the run to* gets a short text when the run ends: what was copied each way, what was taken
+  out on each side, what differed and was left alone, and what failed, row by row. A run that
+  breaks is written up where it broke. The status line says where the report is.
 - **Editor: replace in one dialog** (`Ctrl+F7`). What to look for, what to put there, text or
   regular expression, case, whole words and *Preserve style*, with two buttons: *Replace all*,
   which is one `Ctrl+Z`, and *Replace next*, which changes the hit under the cursor and selects
