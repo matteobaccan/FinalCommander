@@ -347,8 +347,6 @@ viewer-derived = { $producer } di { $name }
 
 key-save = Salva
 key-replace = Sostit
-editor-prompt-replace-from = Sostituisci:
-editor-prompt-replace-with = Con:
 editor-prompt-goto = Vai alla riga, oppure riga:colonna :
 editor-prompt-save-as = Salva come:
 editor-saved = { $name }: salvato, { $bytes } byte
@@ -1680,3 +1678,12 @@ undo-done =
 slow-drives = l'elenco dei dischi ha richiesto { $secs } s
 slow-drives-late = l'elenco dei dischi ha aspettato { $secs } s: { $drives } non hanno risposto in tempo e sono mostrati senza dettagli — un disco di rete con il server spento?
 slow-listing = leggere { $what } ha richiesto { $secs } s
+# editor search and undo (0.41)
+btn-find-all = Tutte le occorrenze
+btn-replace-all = Sostituisci tutto
+btn-replace-one = Sostituisci il prossimo
+editor-replace-title = Sostituisci
+editor-replace-style = Mantieni lo stile (foo → bar, Foo → Bar, FOO → BAR)
+editor-replace-groups = In un’espressione regolare $1 e { "${name}" } sono ciò che un gruppo ha catturato, $$ un dollaro
+editor-matches-title = Righe con `{ $query }`: { $count }
+editor-matches-hint = Scrivi per restringere · Invio: vai alla riga · Esc: indietro

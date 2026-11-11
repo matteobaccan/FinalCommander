@@ -347,8 +347,6 @@ viewer-derived = { $producer } для { $name }
 
 key-save = Запись
 key-replace = Замена
-editor-prompt-replace-from = Заменить:
-editor-prompt-replace-with = На:
 editor-prompt-goto = Перейти к строке или строка:столбец :
 editor-prompt-save-as = Сохранить как:
 editor-saved = { $name }: сохранено, { $bytes } байт
@@ -1665,3 +1663,12 @@ undo-done = возвращено на место: { $count }
 slow-drives = список дисков занял { $secs } с
 slow-drives-late = список дисков ждал { $secs } с: { $drives } не ответили вовремя и показаны без подробностей — сетевой диск без сервера?
 slow-listing = чтение { $what } заняло { $secs } с
+# editor search and undo (0.41)
+btn-find-all = Все совпадения
+btn-replace-all = Заменить все
+btn-replace-one = Заменить следующее
+editor-replace-title = Замена
+editor-replace-style = Сохранять стиль (foo → bar, Foo → Bar, FOO → BAR)
+editor-replace-groups = В регулярном выражении $1 и { "${name}" } — то, что захватила группа, $$ — знак доллара
+editor-matches-title = Строки с `{ $query }`: { $count }
+editor-matches-hint = Печатайте для отбора · Enter: перейти к строке · Esc: назад

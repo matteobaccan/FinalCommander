@@ -347,8 +347,6 @@ viewer-derived = { $producer } von { $name }
 
 key-save = Speich
 key-replace = Ersetz
-editor-prompt-replace-from = Ersetzen:
-editor-prompt-replace-with = Durch:
 editor-prompt-goto = Zu Zeile, oder Zeile:Spalte :
 editor-prompt-save-as = Speichern unter:
 editor-saved = { $name }: gespeichert, { $bytes } Bytes
@@ -1679,3 +1677,12 @@ undo-done =
 slow-drives = die Laufwerksliste brauchte { $secs } s
 slow-drives-late = die Laufwerksliste wartete { $secs } s: { $drives } antworteten nicht rechtzeitig und stehen ohne Angaben da — ein Netzlaufwerk ohne Server?
 slow-listing = { $what } zu lesen brauchte { $secs } s
+# editor search and undo (0.41)
+btn-find-all = Alle Treffer
+btn-replace-all = Alle ersetzen
+btn-replace-one = Nächsten ersetzen
+editor-replace-title = Ersetzen
+editor-replace-style = Schreibweise beibehalten (foo → bar, Foo → Bar, FOO → BAR)
+editor-replace-groups = In einem regulären Ausdruck stehen $1 und { "${name}" } für das, was eine Gruppe gefunden hat, $$ für ein Dollarzeichen
+editor-matches-title = Zeilen mit `{ $query }`: { $count }
+editor-matches-hint = Tippen zum Eingrenzen · Enter: zur Zeile · Esc: zurück

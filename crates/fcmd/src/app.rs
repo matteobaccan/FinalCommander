@@ -1252,8 +1252,6 @@ pub enum PromptKind {
     TableFilter,
     /// Offset or percentage for the viewer.
     ViewerGoto,
-    EditorReplaceFrom,
-    EditorReplaceWith,
     EditorGoto,
     /// The pattern of the lines to take out (`!` first: the lines to keep).
     EditorDeleteMatching,
@@ -2539,8 +2537,6 @@ pub struct App {
     viewer_under_prompt: Option<Box<Viewer>>,
     /// The editor, parked while one of its prompts or confirmations is open.
     editor_parked: Option<Box<Editor>>,
-    /// The replacement text waiting for its second prompt.
-    replace_from: Option<String>,
     /// The pair `Ins` in the replacements list is naming.
     replace_naming: Option<(String, String)>,
     /// AI keys typed in this session and not kept in the secrets file, by service name.
@@ -2948,7 +2944,6 @@ impl App {
             last_search: None,
             viewer_under_prompt: None,
             editor_parked: None,
-            replace_from: None,
             replace_naming: None,
             ai_tokens: std::collections::HashMap::new(),
             vault: None,
@@ -6601,28 +6596,6 @@ impl App {
                         }
                     }
                 }
-            }
-            PromptKind::EditorReplaceFrom => {
-                let from = prompt.text.trim().to_string();
-                if from.is_empty() {
-                    self.restore_editor();
-                    return;
-                }
-                self.replace_from = Some(from);
-                let title = self.i18n.t("editor-prompt-replace-with");
-                self.mode = Mode::Prompt(Prompt {
-                    kind: PromptKind::EditorReplaceWith,
-                    title,
-                    text: String::new(),
-                    secret: false,
-                    sources: Vec::new(),
-                });
-            }
-            PromptKind::EditorReplaceWith => {
-                let with = prompt.text.clone();
-                let from = self.replace_from.take().unwrap_or_default();
-                self.restore_editor();
-                self.run_editor_replace(&from, &with);
             }
             PromptKind::AiKey => {
                 let key = prompt.text.trim().to_string();
@@ -10478,6 +10451,7 @@ impl App {
                     self.search_mode.as_str(),
                     !self.search_case_insensitive,
                     self.search_whole_words,
+                    false,
                     &self.i18n,
                 );
                 self.form_over_viewer(form);
@@ -12483,19 +12457,141 @@ impl App {
         )));
     }
 
+    /// The editor's replace dialog answered: how to search goes into the editor, where the
+    /// next `Ctrl+F7`, `Shift+F7` and `Alt+Shift+F7` find it, and then one or all are replaced.
+    fn apply_editor_replace_form(&mut self, form: &Form, button: usize) {
+        // As typed, both of them: a space is a thing to look for and a thing to put there.
+        let what = form.text_raw("ereplace.what");
+        let with = form.text_raw("ereplace.with");
+        let regex = form.choice_value("ereplace.mode") == "regex";
+        let case_sensitive = form.toggle_value("ereplace.case");
+        let whole_words = form.toggle_value("ereplace.words");
+        let preserve_style = form.toggle_value("ereplace.style");
+        self.restore_editor();
+        let Some(editor) = self.mode.editor_mut() else {
+            return;
+        };
+        editor.search_mode = if regex {
+            SearchMode::Regex
+        } else {
+            SearchMode::Plain
+        };
+        editor.search_case_insensitive = !case_sensitive;
+        editor.search_whole_words = whole_words;
+        editor.replace_preserve_style = preserve_style;
+        if what.is_empty() {
+            return;
+        }
+        if button == 1 {
+            self.run_editor_replace_once(&what, &with);
+        } else {
+            self.run_editor_replace(&what, &with);
+        }
+    }
+
+    /// Keep a pair that ran, the newest first, for `Alt+Shift+F7`.
+    fn remember_replacement(&mut self, from: &str, with: &str) {
+        let line = format!("{from}{REPLACE_SEP}{with}");
+        let lines = self
+            .field_history
+            .entry(REPLACE_HISTORY.to_string())
+            .or_default();
+        lines.retain(|l| *l != line);
+        lines.insert(0, line);
+        lines.truncate(30);
+    }
+
+    /// Replace the hit the cursor is on, or the next one, and leave the one after it
+    /// selected: the dialog's second button, for going through a file one hit at a time.
+    fn run_editor_replace_once(&mut self, from: &str, with: &str) {
+        let (width, height) = self.editor_size;
+        let result = self.mode.editor_mut().map(|e| {
+            let done = e.replace_once(from, with);
+            e.scroll_into_view(height as usize, width as usize);
+            done
+        });
+        match result {
+            Some(Ok(true)) => {
+                self.remember_replacement(from, with);
+                let msg = self
+                    .i18n
+                    .t_args("editor-replaced", &[("count", 1i64.into())]);
+                self.set_status(msg);
+            }
+            Some(Ok(false)) => {
+                let msg = self
+                    .i18n
+                    .t_args("editor-not-found", &[("query", from.to_string().into())]);
+                self.set_error(msg);
+            }
+            Some(Err(e)) => self.set_error(e.to_string()),
+            None => {}
+        }
+    }
+
+    /// Every line the search matches, as a list: the line number and the line. `Enter` goes
+    /// to the one chosen, typing narrows the list, and `Shift+F7` afterwards goes on from
+    /// there as after any other search.
+    fn open_editor_matches(&mut self, query: &str) {
+        let Some(editor) = self.mode.editor_mut() else {
+            return;
+        };
+        let hits = match editor.matching_lines(query) {
+            Ok(hits) => hits,
+            Err(e) => {
+                self.set_error(e.to_string());
+                return;
+            }
+        };
+        if hits.is_empty() {
+            let msg = self
+                .i18n
+                .t_args("editor-not-found", &[("query", query.to_string().into())]);
+            self.set_error(msg);
+            return;
+        }
+        // The numbers line up, so the text of every row starts in the same column and the
+        // list reads as the file does.
+        let digits = (editor.buffer.len()).to_string().len();
+        let here = editor.cursor.line;
+        // The list opens on the first hit at or below the cursor: where a search would go.
+        let current = hits.iter().position(|h| h.line >= here).unwrap_or(0);
+        let rows: Vec<PickRow> = hits
+            .iter()
+            .enumerate()
+            .map(|(i, hit)| {
+                // Tabs would be drawn as something else by a list; a space each is enough
+                // to read the line by.
+                let text = editor.buffer.line(hit.line).replace('\t', " ");
+                PickRow::plain(
+                    format!("{:>digits$}: {}", hit.line + 1, text.trim_end()),
+                    format!("{}:{}:{}", hit.line, hit.start, hit.end),
+                    i == current,
+                )
+            })
+            .collect();
+        let title = self.i18n.t_args(
+            "editor-matches-title",
+            &[
+                ("count", (rows.len() as i64).into()),
+                ("query", query.to_string().into()),
+            ],
+        );
+        self.park_editor();
+        self.mode = Mode::Pick(Box::new(Pick::new(
+            PickKind::EditorMatches,
+            title,
+            rows,
+            self.active,
+        )));
+    }
+
     /// Replace in the editor, and remember the pair for `Alt+Shift+F7` (FAR's issue #282).
     fn run_editor_replace(&mut self, from: &str, with: &str) {
         let result = self.mode.editor_mut().map(|e| e.replace_all(from, with));
         match result {
             Some(Ok(count)) => {
-                let line = format!("{from}{REPLACE_SEP}{with}");
-                let lines = self
-                    .field_history
-                    .entry(REPLACE_HISTORY.to_string())
-                    .or_default();
-                lines.retain(|l| *l != line);
-                lines.insert(0, line);
-                lines.truncate(30);
+                self.remember_replacement(from, with);
                 let msg = self
                     .i18n
                     .t_args("editor-replaced", &[("count", (count as i64).into())]);
@@ -15632,6 +15728,11 @@ impl App {
                 editor.search_case_insensitive = !case_sensitive;
                 editor.search_whole_words = whole_words;
             }
+            // The third button of the editor's dialog: not the next one, all of them.
+            if button == 2 && form.buttons.len() == 4 {
+                self.open_editor_matches(&query);
+                return;
+            }
             let found = self
                 .mode
                 .editor_mut()
@@ -18446,6 +18547,10 @@ impl App {
             self.apply_search_form(&form, button);
             return;
         }
+        if form.kind == FormKind::EditorReplace {
+            self.apply_editor_replace_form(&form, button);
+            return;
+        }
         if form.kind == FormKind::Attributes {
             self.apply_attributes_form(&form);
             return;
@@ -20411,6 +20516,7 @@ impl App {
             PickKind::Git => return,
             PickKind::CharMap => return,
             PickKind::ReplaceTemplates => return,
+            PickKind::EditorMatches => return,
             PickKind::AiServices => return,
             PickKind::AiContext | PickKind::AiThreads | PickKind::StripMeta => return,
             PickKind::PluginsConfig => return,
@@ -20735,7 +20841,9 @@ impl App {
                 }
             }
             KeyCode::Esc | KeyCode::F(10)
-                if kind == PickKind::CharMap || kind == PickKind::ReplaceTemplates =>
+                if kind == PickKind::CharMap
+                    || kind == PickKind::ReplaceTemplates
+                    || kind == PickKind::EditorMatches =>
             {
                 self.mode = Mode::Normal;
                 self.restore_editor();
@@ -21516,6 +21624,20 @@ impl App {
                     self.run_editor_replace(&find, &with);
                 }
             }
+            PickKind::EditorMatches => {
+                self.restore_editor();
+                let mut parts = row.value.split(':').filter_map(|p| p.parse::<usize>().ok());
+                let (Some(line), Some(start), Some(end)) =
+                    (parts.next(), parts.next(), parts.next())
+                else {
+                    return;
+                };
+                let (width, height) = self.editor_size;
+                if let Some(editor) = self.mode.editor_mut() {
+                    editor.select_hit(fcmd_edit::Hit { line, start, end });
+                    editor.scroll_into_view(height as usize, width as usize);
+                }
+            }
             PickKind::CharMap => {
                 self.restore_editor();
                 if let Some(editor) = self.mode.editor_mut() {
@@ -21825,6 +21947,7 @@ impl App {
         editor.show_whitespace = cfg.show_whitespace;
         editor.cursor_after_match = cfg.cursor_after_match;
         editor.beyond_eol = cfg.beyond_eol;
+        editor.buffer.set_undo_depth(cfg.undo_depth);
         // The project's own `.editorconfig` wins over the settings, for this file only
         // (SPEC 05 §2.9). The line ending and the final newline are a new file's: an
         // existing file keeps the ones it has, so opening one never rewrites every line.
@@ -22376,17 +22499,28 @@ impl App {
                         )
                     })
                     .unwrap_or(("text", false, false));
-                let form = Form::search(&text, mode, case, words, &self.i18n);
+                let form = Form::search(&text, mode, case, words, true, &self.i18n);
                 self.park_editor();
                 self.mode = Mode::Form(Box::new(form));
                 return;
             }
             Command::EditorReplace => {
-                self.editor_prompt(
-                    PromptKind::EditorReplaceFrom,
-                    "editor-prompt-replace-from",
-                    String::new(),
+                let Some(editor) = self.mode.editor() else {
+                    return;
+                };
+                // The dialog opens on the last pair, because the usual second replacement
+                // is the first one with a letter changed.
+                let form = Form::editor_replace(
+                    editor.last_search.as_deref().unwrap_or_default(),
+                    editor.last_replace.as_deref().unwrap_or_default(),
+                    editor.search_mode == SearchMode::Regex,
+                    !editor.search_case_insensitive,
+                    editor.search_whole_words,
+                    editor.replace_preserve_style,
+                    &self.i18n,
                 );
+                self.park_editor();
+                self.mode = Mode::Form(Box::new(form));
                 return;
             }
             Command::EditorGoto => {
@@ -37874,6 +38008,250 @@ abcdefghij
         assert_eq!(e.buffer.line(0), "baz bar baz");
     }
 
+    /// Fill the editor's replace dialog the way typing into it would.
+    fn fill_replace(app: &mut App, what: &str, with: &str, regex: bool) {
+        let Mode::Form(form) = &mut app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        assert_eq!(form.kind, FormKind::EditorReplace);
+        form.set_text("ereplace.what", what.to_string());
+        form.set_text("ereplace.with", with.to_string());
+        for field in &mut form.fields {
+            if let crate::form::Field::Choice {
+                key,
+                options,
+                chosen,
+                ..
+            } = field
+            {
+                if *key == "ereplace.mode" {
+                    let want = if regex { "regex" } else { "text" };
+                    *chosen = options.iter().position(|(v, _)| v == want).unwrap();
+                }
+            }
+        }
+    }
+
+    /// Feature 6.4: `Ctrl+F7` asks what, with what and how in one dialog — whole words, the
+    /// capitals of what is replaced, and in a pattern what its groups caught.
+    #[test]
+    fn the_editors_replace_dialog_knows_whole_words_the_style_and_a_patterns_groups() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "offset set Set SET\nwidth=10\n").unwrap();
+        let mut app = editing_app(dir.path());
+        app.open_editor_on(&VPath::local(dir.path().join("a.txt")));
+
+        press(&mut app, "Ctrl+F7");
+        let mut buf = fcmd_ui::Buffer::new(100, 30);
+        crate::render::draw(&mut app, &mut buf);
+        let drawn = buf.to_text();
+        for words in [
+            "Search for",
+            "Replace with",
+            "Whole words only",
+            "Preserve style",
+            "${name}",
+            "Replace all",
+            "Replace next",
+        ] {
+            assert!(drawn.contains(words), "no `{words}` in\n{drawn}");
+        }
+
+        fill_replace(&mut app, "set", "put", false);
+        set_toggle(&mut app, "ereplace.words", true);
+        set_toggle(&mut app, "ereplace.style", true);
+        press(&mut app, "Enter");
+        let editor = app.mode.editor().expect("the editor is back");
+        assert_eq!(editor.buffer.line(0), "offset put Put PUT");
+        assert!(app.status.contains('3'), "{}", app.status);
+
+        // The dialog comes back as it was left, and a pattern's replacement can say `$1`.
+        press(&mut app, "Ctrl+F7");
+        match &app.mode {
+            Mode::Form(form) => {
+                assert_eq!(form.text_value("ereplace.what"), "set");
+                assert_eq!(form.text_value("ereplace.with"), "put");
+                assert!(form.toggle_value("ereplace.words"));
+                assert!(form.toggle_value("ereplace.style"));
+            }
+            other => panic!("{other:?}"),
+        }
+        fill_replace(&mut app, r"(\w+)=(?P<n>\d+)", "${n} is the $1 ($$)", true);
+        set_toggle(&mut app, "ereplace.words", false);
+        press(&mut app, "Enter");
+        let editor = app.mode.editor().expect("the editor is back");
+        assert_eq!(editor.buffer.line(1), "10 is the width ($)");
+
+        // A pattern that does not compile is said, and nothing is changed.
+        press(&mut app, "Ctrl+F7");
+        fill_replace(&mut app, "(unclosed", "x", true);
+        press(&mut app, "Enter");
+        assert!(app.status_error, "{}", app.status);
+        assert!(!app.status.is_empty());
+
+        // Both pairs that ran are in `Alt+Shift+F7`, the newest first.
+        press(&mut app, "Alt+Shift+F7");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list: {:?}", app.mode)
+        };
+        assert!(pick.rows[0].label.contains("is the"), "{:?}", pick.rows[0]);
+        assert!(
+            pick.rows[1].label.contains("set → put"),
+            "{:?}",
+            pick.rows[1]
+        );
+        press(&mut app, "Esc");
+
+        // Esc on the dialog changes nothing and gives the editor back.
+        press(&mut app, "Ctrl+F7");
+        press(&mut app, "Esc");
+        assert!(app.mode.editor().is_some(), "{:?}", app.mode);
+    }
+
+    /// The dialog's second button goes through a file one hit at a time: it replaces the one
+    /// selected and leaves the next selected, and each is a `Ctrl+Z` of its own.
+    #[test]
+    fn replace_next_takes_one_hit_and_selects_the_one_after_it() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "a a a\n").unwrap();
+        let mut app = editing_app(dir.path());
+        app.open_editor_on(&VPath::local(dir.path().join("a.txt")));
+        for expected in ["b a a", "b b a"] {
+            press(&mut app, "Ctrl+F7");
+            fill_replace(&mut app, "a", "b", false);
+            press(&mut app, "Shift+Tab"); // back round the ring: Cancel
+            press(&mut app, "Shift+Tab"); // Replace next
+            press(&mut app, "Enter");
+            let editor = app.mode.editor().expect("the editor is back");
+            assert_eq!(editor.buffer.line(0), expected);
+            assert!(editor.block.is_some(), "the next hit is selected");
+        }
+        press(&mut app, "Ctrl+Z");
+        assert_eq!(app.mode.editor().unwrap().buffer.line(0), "b a a");
+
+        // Nothing left to replace is said, not passed over in silence.
+        press(&mut app, "Ctrl+F7");
+        fill_replace(&mut app, "zzz", "b", false);
+        press(&mut app, "Shift+Tab");
+        press(&mut app, "Shift+Tab");
+        press(&mut app, "Enter");
+        assert!(app.status_error, "{}", app.status);
+        assert_eq!(app.mode.editor().unwrap().buffer.line(0), "b a a");
+    }
+
+    /// The third button of the editor's search dialog: every line with a hit, numbered, and
+    /// `Enter` goes to the one chosen.
+    #[test]
+    fn the_search_dialog_lists_every_matching_line_and_enter_goes_there() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("a.txt"),
+            "alpha\nbeta one\ngamma\n\tthe beta two\n",
+        )
+        .unwrap();
+        let mut app = editing_app(dir.path());
+        app.open_editor_on(&VPath::local(dir.path().join("a.txt")));
+
+        let list = |app: &mut App, query: &str| {
+            press(app, "F7");
+            match &mut app.mode {
+                Mode::Form(form) => {
+                    assert_eq!(form.buttons.len(), 4, "{:?}", form.buttons);
+                    form.set_text("search.what", query.to_string());
+                }
+                other => panic!("{other:?}"),
+            }
+            press(app, "Shift+Tab"); // back round the ring: Cancel
+            press(app, "Shift+Tab"); // All matches
+            press(app, "Enter");
+        };
+
+        list(&mut app, "beta");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list: {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::EditorMatches);
+        assert!(
+            pick.title.contains("beta") && pick.title.contains('2'),
+            "{}",
+            pick.title
+        );
+        let labels: Vec<&str> = pick.rows.iter().map(|r| r.label.as_str()).collect();
+        assert_eq!(labels, ["2: beta one", "4:  the beta two"]);
+        let mut buf = fcmd_ui::Buffer::new(100, 30);
+        crate::render::draw(&mut app, &mut buf);
+        let drawn = buf.to_text();
+        assert!(drawn.contains("4:  the beta two"), "{drawn}");
+        assert!(drawn.contains("go to the line"), "{drawn}");
+
+        press(&mut app, "Down");
+        press(&mut app, "Enter");
+        let editor = app.mode.editor().expect("the editor is back");
+        assert_eq!(editor.cursor, fcmd_edit::Position::new(3, 5));
+        assert_eq!(editor.block_text().as_deref(), Some("beta"));
+        // It was a search like any other: `Shift+F7` goes on from here, round to the top.
+        press(&mut app, "Shift+F7");
+        assert_eq!(app.mode.editor().unwrap().cursor.line, 1);
+
+        // The list opens on the first hit at or below the cursor, and Esc leaves it be.
+        press(&mut app, "Down");
+        list(&mut app, "beta");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list: {:?}", app.mode)
+        };
+        assert_eq!(pick.cursor, 1);
+        press(&mut app, "Esc");
+        let editor = app.mode.editor().expect("the editor is back");
+        assert_eq!(editor.cursor.line, 2);
+
+        // Nothing to list says so and stays in the editor.
+        list(&mut app, "zeta");
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.mode.editor().is_some(), "{:?}", app.mode);
+    }
+
+    /// Feature 6.3: a word typed is one `Ctrl+Z`, and `editor.undo_depth` is how many steps
+    /// are kept.
+    #[test]
+    fn a_burst_of_typing_is_one_ctrl_z_and_the_depth_comes_from_the_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "x\n").unwrap();
+        let mut app = editing_app(dir.path());
+        assert_eq!(app.cfg.editor.undo_depth, 1000);
+        app.cfg.set("editor.undo_depth", "2").unwrap();
+        app.open_editor_on(&VPath::local(dir.path().join("a.txt")));
+        assert_eq!(app.mode.editor().unwrap().buffer.undo_depth(), 2);
+
+        for c in ["h", "e", "y"] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Backspace");
+        press(&mut app, "Backspace");
+        assert_eq!(app.mode.editor().unwrap().buffer.line(0), "hx");
+        press(&mut app, "Ctrl+Z");
+        assert_eq!(
+            app.mode.editor().unwrap().buffer.line(0),
+            "heyx",
+            "both Backspace at once, and not the typing with them"
+        );
+        press(&mut app, "Ctrl+Z");
+        assert_eq!(app.mode.editor().unwrap().buffer.line(0), "x");
+
+        // Five steps — a letter, Enter, a letter, Enter, a letter — and room for two.
+        for key in ["a", "Enter", "b", "Enter", "c"] {
+            press(&mut app, key);
+        }
+        assert_eq!(app.mode.editor().unwrap().buffer.lines(), ["a", "b", "cx"]);
+        for _ in 0..4 {
+            press(&mut app, "Ctrl+Z");
+        }
+        assert_eq!(
+            app.mode.editor().unwrap().buffer.lines(),
+            ["a", "bx"],
+            "the older steps are out of reach"
+        );
+    }
+
     /// A key typed once is kept in fcmd's own encrypted file; after a restart the file's
     /// password opens it, and five minutes without a key forget that password again.
     #[test]
@@ -40387,10 +40765,15 @@ abcdefghij
 
         // Replace all: "let" → "const".
         press(&mut app, "Ctrl+F7");
+        // The dialog opens on what was last looked for; this replacement starts afresh.
+        match &mut app.mode {
+            Mode::Form(form) => form.set_text("ereplace.what", String::new()),
+            other => panic!("{other:?}"),
+        }
         for c in ["l", "e", "t"] {
             press(&mut app, c);
         }
-        press(&mut app, "Enter");
+        press(&mut app, "Down");
         for c in ["c", "o", "n", "s", "t"] {
             press(&mut app, c);
         }

@@ -288,6 +288,7 @@ impl Form {
             | FormKind::FilterSet
             | FormKind::SortGroup
             | FormKind::MaskGroup
+            | FormKind::EditorReplace
             | FormKind::Search => Vec::new(),
             FormKind::EditorSettings => vec![
                 choice(
@@ -599,6 +600,7 @@ impl Form {
             FormKind::Drives => "drives-title",
             FormKind::Sync => "sync-title",
             FormKind::Search => "search-title",
+            FormKind::EditorReplace => "editor-replace-title",
             FormKind::Link => "link-title",
             FormKind::Highlight => "hl-new",
             FormKind::FilterSet => "filter-new",
@@ -1997,6 +1999,7 @@ impl Form {
         mode: &str,
         case_sensitive: bool,
         whole_words: bool,
+        list: bool,
         i18n: &I18n,
     ) -> Form {
         let t = |id: &str| i18n.t(id);
@@ -2005,6 +2008,13 @@ impl Form {
             ("hex", t("search-mode-hex")),
             ("regex", t("search-mode-regex")),
         ];
+        // The editor has every line in memory, so it can also answer with all of them at
+        // once; the viewer reads a file a window at a time and has no such list to give.
+        let mut buttons = vec![t("btn-find-next"), t("btn-find-prev")];
+        if list {
+            buttons.push(t("btn-find-all"));
+        }
+        buttons.push(t("btn-cancel"));
         let fields = vec![
             Field::text("search.what", t("search-for"), what.to_string()),
             choice("search.mode", t("search-mode"), &modes, mode),
@@ -2020,8 +2030,66 @@ impl Form {
             cursor: 0,
             site: None,
             button: None,
-            buttons: vec![t("btn-find-next"), t("btn-find-prev"), t("btn-cancel")],
+            buttons,
         }
+    }
+
+    /// `Ctrl+F7` in the editor: what to replace, with what, and how. One dialog rather than
+    /// two prompts in a row, because the *how* — a pattern, whole words, the capitals — is
+    /// what decides whether a replacement across a whole file is safe to run.
+    pub fn editor_replace(
+        what: &str,
+        with: &str,
+        regex: bool,
+        case_sensitive: bool,
+        whole_words: bool,
+        preserve_style: bool,
+        i18n: &I18n,
+    ) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let modes = [
+            ("text", t("search-mode-text")),
+            ("regex", t("search-mode-regex")),
+        ];
+        let fields = vec![
+            Field::text("ereplace.what", t("search-for"), what.to_string()),
+            Field::text("ereplace.with", t("replace-with"), with.to_string()),
+            choice(
+                "ereplace.mode",
+                t("search-mode"),
+                &modes,
+                if regex { "regex" } else { "text" },
+            ),
+            Field::toggle("ereplace.case", t("search-case"), case_sensitive),
+            Field::toggle("ereplace.words", t("search-words"), whole_words),
+            Field::toggle("ereplace.style", t("editor-replace-style"), preserve_style),
+            Field::Separator,
+            Field::Dim(t("editor-replace-groups")),
+        ];
+        Form {
+            pages: Vec::new(),
+            page: 0,
+            kind: FormKind::EditorReplace,
+            title: t("editor-replace-title"),
+            fields,
+            cursor: 0,
+            site: None,
+            button: None,
+            buttons: vec![t("btn-replace-all"), t("btn-replace-one"), t("btn-cancel")],
+        }
+    }
+
+    /// A text row exactly as it was typed. `text_value` trims, which is right for a name or
+    /// a mask and wrong for a replacement: a space is something one replaces with.
+    pub fn text_raw(&self, want: &str) -> String {
+        for field in &self.fields {
+            if let Field::Text { key, value, .. } = field {
+                if *key == want {
+                    return value.clone();
+                }
+            }
+        }
+        String::new()
     }
 
     /// `Shift+F2`: where to put what is inside an archive.

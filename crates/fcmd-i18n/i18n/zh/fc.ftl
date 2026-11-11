@@ -347,8 +347,6 @@ viewer-derived = { $name } 的 { $producer }
 
 key-save = 保存
 key-replace = 替换
-editor-prompt-replace-from = 替换：
-editor-prompt-replace-with = 为：
 editor-prompt-goto = 跳到行，或 行:列 ：
 editor-prompt-save-as = 另存为：
 editor-saved = { $name }：已保存，{ $bytes } 字节
@@ -1617,3 +1615,12 @@ undo-done = { $count } 个名称已回到原处
 slow-drives = 驱动器列表用了 { $secs } 秒
 slow-drives-late = 驱动器列表等待了 { $secs } 秒：{ $drives } 未及时响应，显示时不含详情——网络驱动器的服务器不在线？
 slow-listing = 读取 { $what } 用了 { $secs } 秒
+# editor search and undo (0.41)
+btn-find-all = 全部匹配
+btn-replace-all = 全部替换
+btn-replace-one = 替换下一个
+editor-replace-title = 替换
+editor-replace-style = 保留大小写风格（foo → bar，Foo → Bar，FOO → BAR）
+editor-replace-groups = 在正则表达式中，$1 和 { "${name}" } 是分组捕获的内容，$$ 是美元符号
+editor-matches-title = 含 `{ $query }` 的行：{ $count }
+editor-matches-hint = 输入以筛选 · 回车：转到该行 · Esc：返回

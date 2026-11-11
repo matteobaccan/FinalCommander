@@ -60,6 +60,8 @@ pub enum FormKind {
     Link,
     /// Find text in what the viewer or the editor has open (SPEC 05 §1.4).
     Search,
+    /// Replace in the file the editor has open (SPEC 05 §2.4).
+    EditorReplace,
     /// One `[[highlight]]` group: its conditions and its two inks (SPEC 10 §3.11).
     Highlight,
     /// One `[[filter]]`: a name and the conditions, the highlight group's without the inks.
@@ -123,6 +125,8 @@ pub enum PickKind {
     PluginsConfig,
     /// The editor's replacements (`Alt+Shift+F7`): the named ones, then the recent pairs.
     ReplaceTemplates,
+    /// Every line of the edited file that a search matches: `Enter` goes to it.
+    EditorMatches,
     /// The `[[sort_group]]` bands, in the order they cut the listing (SPEC 02 §4).
     SortGroups,
     /// The named mask lists every mask field can use as `<name>` (SPEC 02 §5b).

@@ -355,8 +355,6 @@ viewer-derived = { $producer } of { $name }
 # Editor (F4)
 key-save = Save
 key-replace = Replac
-editor-prompt-replace-from = Replace:
-editor-prompt-replace-with = With:
 editor-prompt-goto = Go to line, or line:column :
 editor-prompt-save-as = Save as:
 editor-saved = { $name }: saved, { $bytes } bytes
@@ -1689,3 +1687,12 @@ undo-done =
 slow-drives = the drive list took { $secs } s
 slow-drives-late = the drive list waited { $secs } s: { $drives } did not answer in time and are shown without details — a network drive whose server is not there?
 slow-listing = reading { $what } took { $secs } s
+# editor search and undo (0.41)
+btn-find-all = All matches
+btn-replace-all = Replace all
+btn-replace-one = Replace next
+editor-replace-title = Replace
+editor-replace-style = Preserve style (foo → bar, Foo → Bar, FOO → BAR)
+editor-replace-groups = In a regular expression $1 and { "${name}" } are what a group caught, $$ a dollar
+editor-matches-title = Lines with `{ $query }`: { $count }
+editor-matches-hint = Type to narrow · Enter: go to the line · Esc: back

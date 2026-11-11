@@ -621,11 +621,12 @@ final-newline of the original preserved (`Eol::detect`, UTF-8/UTF-16LE/BE/CP1252
 carried over; save-as; reload; refusal to overwrite a file that changed on disk without a
 confirmation; read-only files opened and marked as such. Editing: insert, newline with
 auto-indent, backspace, delete, delete to end of line, delete word left, tab expansion, indent
-and outdent, delete / duplicate / move line, undo and redo grouped per command, stream blocks
+and outdent, delete / duplicate / move line, undo and redo grouped per command and per burst
+of typing with a depth that is a setting (§2.2g), stream blocks
 (`Shift+arrows`) and **column blocks** (`Alt+Shift+arrows`) with copy / cut / paste (a column
-paste pads short lines), select all, plain search with wrap, replace once and replace all (the search engine
-is the viewer's, so regex and case-insensitive matching are already there, waiting for a dialog
-that offers them), go to line or `line:col`, bookmarks 0–9, smart home, and horizontal scrolling with tabs and wide
+paste pads short lines), select all, search and replace as text or as a regular expression,
+with whole words, capture references, *preserve style* and a list of every matching line
+(§2.2h), go to line or `line:col`, bookmarks 0–9, smart home, and horizontal scrolling with tabs and wide
 characters counted in display columns. Since 0.31.0, `Alt+B` to the matching bracket, `Alt+J`
 to join the next line, `Alt+Shift+S` to sort the block's lines, `Alt+Shift+U` to drop the
 ones that repeat an earlier line (the first of each stays where it is, so the block need not be
@@ -635,9 +636,8 @@ blanks off — each one undo step. A stream block that ends at column 0 of a lin
 include that line.
 **Still to come**: the rope (today's buffer is a `Vec<String>` of lines — enough for the
 256 MiB open limit and far simpler to keep correct; it will be swapped for a rope when
-streaming edits of larger files land), typing-burst undo grouping, persistent-block mode, multi-caret, regex and
-capture-group replace, `.editorconfig`,
-macros, the buffer list (§2.3) and the external editor (§2.4).
+streaming edits of larger files land), persistent-block mode, multi-caret, replace inside a
+block only, macros, the buffer list (§2.3) and the external editor (§2.4).
 
 ### 2.1 Buffer
 
@@ -658,11 +658,11 @@ macros, the buffer list (§2.3) and the external editor (§2.4).
 | --- | --- |
 | Blocks | stream blocks (`Shift+arrows`) **and column blocks** (`Alt+Shift+arrows`) with the FAR semantics: typing replaces the block optionally, `Alt+I`/`Alt+U` indent/outdent, persistent-block mode copies/moves a block to the cursor (`Ctrl+Shift+P`/`Ctrl+Shift+M`) |
 | Multi-caret | derived from a column block or `Ctrl+D`-style "add next occurrence" (M3) |
-| Undo | grouped by typing burst (300 ms) and by command; configurable depth; redo; undo survives save |
+| Undo | grouped by typing burst and by command; configurable depth; redo; undo survives save — §2.2g, which also says why the burst is bounded by what was done and not by a 300 ms clock |
 | Clipboard | the system clipboard through the terminal (`OSC 52`, SPEC 06 §11) — a block copied or cut goes on it as well as on the editor's own, which is what `Ctrl+V` pastes from, because what the terminal holds cannot be read back; still owed: a ring of the last 10 blocks |
 | Indentation | detect per file (spaces vs tabs, width), auto-indent, smart home, trailing-space trim on save (opt-in), `.editorconfig` support |
 | Lines | duplicate, delete, move up/down, join, sort selected lines, unique, reverse, number |
-| Search/replace | shared engine with the viewer, plus **replace with capture groups**, replace-in-selection, count, and "preserve style" (match the case/separator convention of the replaced token — FAR's feature, re-implemented from the described behaviour) |
+| Search/replace | shared engine with the viewer, plus **replace with capture groups**, count, a list of every match, and "preserve style" (the capitals of the replaced token — FAR's feature, re-implemented from the described behaviour) — §2.2h. Still owed: replace-in-selection, and the separator half of preserve style (`foo_bar` → `foo-bar` conventions) |
 | Bookmarks | 0..9 per file, persisted in `history/editor.toml` along with the cursor position |
 | Syntax | shipped — see §2.5. Bracket matching and a rainbow option are still to come |
 | Big edits | search/replace across a whole file streams through the rope without materialising copies |
@@ -707,6 +707,75 @@ name — `[[editor.replace]]` blocks with `name`, `find` and `with` — and then
 pairs `Ctrl+F7` ran, newest first, kept with the dialogs' field histories in the state file.
 `Enter` runs one on the file as `Ctrl+F7` would; `Ins` on any row asks for a name and writes it
 into the settings; `Del` on a kept one removes it.
+
+### 2.2g Undo: bursts, commands and the depth
+
+One `Ctrl+Z` takes back one *step*, and a step is one of two things.
+
+- **A command**: everything one command changed, however many edits it is made of — a
+  replace-all, a pasted column block, a sorted block, a deleted line.
+- **A burst**: keys of one kind pressed one after the other. There are three kinds — a
+  character typed (`Tab` and a `Ctrl+Q` literal included), `Backspace`, and `Del` — and a key
+  joins the burst before it only when it is of the same kind *and* the cursor is exactly where
+  that burst left it. So a word typed is one step; typing and then rubbing out are two;
+  `Backspace` and then `Del` are two.
+
+Anything else ends a burst: any cursor movement (even away and back), `Enter`, any command,
+a search that moves the cursor, an undo or a redo, and typing over a block (the block's
+removal is a step of its own). FAR groups the same way.
+
+SPEC drafts said "300 ms": a pause ending a burst. It is not implemented, on purpose. The
+event loop is input-driven and keeps no timer (see `AGENTS.md`), a clock would make undo
+depend on how fast one types, and the boundaries above already fall where a pause usually
+does. A burst is therefore bounded by what was done, never by when.
+
+The mechanism lives in `fcmd-edit`: the editor decides whether a key *may* continue a burst
+(its kind and the cursor), the buffer decides whether the burst is still there to continue —
+any edit recorded outside a burst's own key closes it, so a command can never be folded into
+the typing before it. Redo puts the cursor where the last key of the burst left it. Text
+typed after an undo empties the redo list as soon as it is a step.
+
+`editor.undo_depth` (default 1000, 1 to 100 000) is how many steps a buffer keeps; the oldest
+are forgotten first. It is read when a file is opened and survives a reload from disk. Undo
+survives a save.
+
+### 2.2h Search and replace in the editor
+
+`F7` (`editor.search`) is the viewer's dialog (§1.4) with a third button, **All matches**;
+`Ctrl+F7` / `F8` (`editor.replace`) is a dialog of its own: *Search for*, *Replace with*,
+*As* (text or regular expression), *Case sensitive*, *Whole words only*, *Preserve style*,
+and the buttons **Replace all**, **Replace next**, **Cancel**. Both open on what was last
+looked for and how; the how is kept per open file. A search works line by line: no hit spans
+two lines.
+
+- **Whole words**: a hit counts only if the character right before it and the one right after
+  it are not word characters (a letter or digit of any script, or `_`). It is decided on the
+  hit's neighbours, not by wrapping the pattern in `\b…\b`, which would demand a word
+  character at each end of the hit and so never find `++` or `-x`. A hit refused for its
+  neighbours is retried one character further on, so an overlapping one that stands alone is
+  not lost.
+- **Capture references**: when the search is a regular expression the replacement is expanded
+  with the `regex` crate's syntax — `$1`, `${1}`, `${name}`, `$$` for a dollar; a reference to
+  a group that does not exist is empty. In a plain search the replacement is literal, dollars
+  included.
+- **Preserve style** (plain searches only): the replacement takes the capitals of what it
+  replaces. All lower case → lower-cased; all upper case (two letters or more) → upper-cased;
+  first cased letter a capital and the rest lower, which includes a single capital letter →
+  the replacement's first letter capitalised and the rest as typed; any other shape → as
+  typed. FAR's own rule also carries separators over (`foo_bar` ↔ `foo-bar` ↔ `fooBar`);
+  that half is not implemented.
+- **Replace all** is one undo step and reports the count. **Replace next** replaces the hit
+  that is selected — or finds the next one first — as one undo step, and leaves the following
+  hit selected. A block marked by hand is replaced as such, with the text as typed.
+- **All matches** opens a list with one row per matching line — the line number, right-aligned,
+  and the line — on the first hit at or below the cursor. The list filters as every list
+  does; `Enter` selects that line's first hit as a search would, so `Shift+F7` / `Alt+F7`
+  continue from it; `Esc` returns to the editor untouched. No hit at all is the same
+  "not found" message as a failed search.
+- An empty match (`^`, `$`, `x*`) can be replaced; it is not offered again right after a
+  non-empty hit, the rule the regex engine itself iterates by.
+
+The replacements of §2.2f run with the options the dialog was last set to.
 
 ### 2.2b Syntax highlighting
 

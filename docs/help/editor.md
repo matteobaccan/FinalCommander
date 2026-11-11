@@ -3,13 +3,46 @@
 Lines, with a block, undo over the whole session, and a save that writes a new file beside the
 old one and renames it over the top — so an interrupted save never leaves half a file.
 
-`F2` saves, `Shift+F2` saves under another name, `F7` opens the same search dialog the viewer
-has — text, hex or a regular expression, case, whole words, forwards or backwards — and
-`Ctrl+F7` replaces. Every replacement that ran is remembered, and `Alt+Shift+F7` lists them —
-the ones kept under a name first, then the recent ones — for `Enter` to run again without
-retyping a regular expression; `Ins` keeps a recent one under a name (it goes into
-`fcmd.toml` as an `[[editor.replace]]` block), `Del` forgets a kept one.
-`Ctrl+Z` and `Ctrl+Y` undo and redo. `F6` hands the file to the viewer at the same line.
+`F2` saves, `Shift+F2` saves under another name. `F6` hands the file to the viewer at the same
+line.
+
+`F7` opens the same search dialog the viewer has — text, hex or a regular expression, case,
+whole words, forwards or backwards — with one button more. **All matches** lists every line
+that has a hit, with its number: type to narrow the list, `Enter` goes to the line, and
+`Shift+F7` goes on from there like after any other search. *Whole words only* means the hit is
+not a piece of a longer word: no letter, digit or underscore stands right before it or right
+after it. That is true of `set` in `set = 1` and not in `offset`, and it works for something
+that is not a word at all, like `++`.
+
+`Ctrl+F7` replaces, and asks everything in one dialog: what to look for, what to put there,
+text or regular expression, case, whole words, and *Preserve style*.
+
+- In a **regular expression** the replacement can use what the groups caught: `$1` is the
+  first group, `${name}` a named one, `$$` a dollar. Write `${1}x` when a letter follows the
+  group, since `$1x` would be read as a group called `1x`. In a plain search a dollar is just
+  a dollar.
+- ***Preserve style*** gives a plain replacement the capitals of what it replaces: replacing
+  `foo` with `bar` turns `Foo` into `Bar` and `FOO` into `BAR` as well. Three shapes are
+  recognised — all lower case, all upper case, a capital first — and a word written any other
+  way (`fooBar`) gets the replacement exactly as you typed it. It only matters when the search
+  is not case sensitive.
+- **Replace all** does the whole file, says how many it changed, and is one `Ctrl+Z`.
+  **Replace next** changes the hit the cursor is on, or the next one, and selects the one
+  after it, for going through a file one hit at a time.
+
+The dialog opens on what you last looked for and how. Every replacement that ran is
+remembered, and `Alt+Shift+F7` lists them — the ones kept under a name first, then the recent
+ones — for `Enter` to run again without retyping a regular expression; `Ins` keeps a recent
+one under a name (it goes into `fcmd.toml` as an `[[editor.replace]]` block), `Del` forgets a
+kept one. One of these runs the way the dialog was last set: as text or as a pattern, with or
+without whole words.
+
+`Ctrl+Z` undoes and `Ctrl+Shift+Z` redoes. A run of typing is one step, as in FAR: the word
+you just typed goes with one `Ctrl+Z`, not letter by letter. So is a run of `Backspace`, and a
+run of `Del`. A step ends when you do something else — move the cursor, press `Enter`, give a
+command, or change from typing to deleting. The editor keeps the last 1000 steps of each file;
+`editor.undo_depth` in the settings (*Options → All settings*) changes that for the files
+opened afterwards.
 
 A column block is a rectangle rather than a run of lines, which is how a column of numbers is
 moved without touching what is beside it.

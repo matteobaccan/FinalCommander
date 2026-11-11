@@ -4,13 +4,48 @@ Righe, un blocco, annullamento su tutta la sessione, e un salvataggio che scrive
 accanto a quello vecchio e lo rinomina sopra — così un salvataggio interrotto non lascia mai
 mezzo file.
 
-`F2` salva, `Shift+F2` salva con un altro nome, `F7` apre lo stesso dialogo di ricerca che ha
-il visualizzatore — testo, esadecimale o espressione regolare, maiuscole, parole intere,
-avanti o indietro — e `Ctrl+F7` sostituisce. Ogni sostituzione eseguita viene ricordata, e
-`Alt+Shift+F7` le elenca — prima quelle tenute con un nome, poi le recenti — perché `Enter` le
-esegua di nuovo senza riscrivere un'espressione regolare; `Ins` tiene una recente con un nome
-(finisce in `fcmd.toml` come blocco `[[editor.replace]]`), `Del` dimentica una tenuta.
-`Ctrl+Z` e `Ctrl+Y` annullano e rifanno. `F6` passa il file al visualizzatore alla stessa riga.
+`F2` salva, `Shift+F2` salva con un altro nome. `F6` passa il file al visualizzatore alla
+stessa riga.
+
+`F7` apre lo stesso dialogo di ricerca che ha il visualizzatore — testo, esadecimale o
+espressione regolare, maiuscole, parole intere, avanti o indietro — con un pulsante in più.
+**Tutte le occorrenze** elenca ogni riga che ne contiene una, con il suo numero: scrivendo si
+restringe l'elenco, `Enter` va alla riga, e `Shift+F7` prosegue da lì come dopo qualsiasi
+altra ricerca. *Solo parole intere* vuol dire che ciò che si trova non è un pezzo di una
+parola più lunga: subito prima e subito dopo non c'è una lettera, una cifra o un trattino
+basso. Vale per `set` in `set = 1` e non in `offset`, e funziona anche per qualcosa che una
+parola non è, come `++`.
+
+`Ctrl+F7` sostituisce, e chiede tutto in un solo dialogo: che cosa cercare, che cosa mettere
+al suo posto, testo o espressione regolare, maiuscole, parole intere e *Mantieni lo stile*.
+
+- In un'**espressione regolare** la sostituzione può usare ciò che i gruppi hanno catturato:
+  `$1` è il primo gruppo, `${name}` uno con un nome, `$$` un dollaro. Si scrive `${1}x` quando
+  al gruppo segue una lettera, perché `$1x` verrebbe letto come un gruppo di nome `1x`. In una
+  ricerca di testo un dollaro è solo un dollaro.
+- ***Mantieni lo stile*** dà a una sostituzione di testo le maiuscole di ciò che sostituisce:
+  sostituendo `foo` con `bar` anche `Foo` diventa `Bar` e `FOO` diventa `BAR`. Le forme
+  riconosciute sono tre — tutto minuscolo, tutto maiuscolo, iniziale maiuscola — e una parola
+  scritta in un altro modo (`fooBar`) riceve la sostituzione esattamente come l'hai scritta.
+  Conta solo quando la ricerca non distingue le maiuscole.
+- **Sostituisci tutto** lavora su tutto il file, dice quante ne ha cambiate, ed è un solo
+  `Ctrl+Z`. **Sostituisci il prossimo** cambia l'occorrenza su cui sta il cursore, o la
+  successiva, e seleziona quella dopo: per scorrere un file un'occorrenza alla volta.
+
+Il dialogo si apre su ciò che hai cercato l'ultima volta, e come. Ogni sostituzione eseguita
+viene ricordata, e `Alt+Shift+F7` le elenca — prima quelle tenute con un nome, poi le recenti
+— perché `Enter` le esegua di nuovo senza riscrivere un'espressione regolare; `Ins` tiene una
+recente con un nome (finisce in `fcmd.toml` come blocco `[[editor.replace]]`), `Del` dimentica
+una tenuta. Una di queste viene eseguita come il dialogo era impostato l'ultima volta: come
+testo o come espressione, con o senza parole intere.
+
+`Ctrl+Z` annulla e `Ctrl+Shift+Z` rifà. Una serie di tasti battuti è un passo solo, come in
+FAR: la parola appena scritta se ne va con un `Ctrl+Z`, non lettera per lettera. Lo stesso
+vale per una serie di `Backspace` e per una serie di `Del`. Un passo finisce quando fai
+qualcos'altro — sposti il cursore, premi `Enter`, dai un comando, o passi dallo scrivere al
+cancellare. L'editor tiene gli ultimi 1000 passi di ogni file; `editor.undo_depth` nelle
+impostazioni (*Opzioni → Tutti i parametri*) cambia il numero per i file aperti da quel
+momento.
 
 Un blocco a colonne è un rettangolo invece di una sequenza di righe: è così che si sposta una
 colonna di numeri senza toccare quello che le sta accanto.

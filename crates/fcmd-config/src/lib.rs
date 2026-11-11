@@ -870,6 +870,10 @@ pub struct EditCfg {
     /// Take the spaces and tabs off the end of every line when the file is saved. Off by
     /// default: a save that changes lines nobody touched is a diff nobody asked for.
     pub trim_trailing: bool,
+    /// How many steps `Ctrl+Z` can take back in one file. A burst of typing is one step, so
+    /// a thousand is a long afternoon; the limit is there so that a file left open for days
+    /// does not keep every key ever pressed in it.
+    pub undo_depth: usize,
     /// Replacements kept under a name (`[[editor.replace]]`), offered by `Alt+Shift+F7`
     /// before the recent ones (FAR's issue #282).
     pub replace: Vec<ReplaceTemplate>,
@@ -895,6 +899,7 @@ impl Default for EditCfg {
             cursor_after_match: false,
             beyond_eol: false,
             trim_trailing: false,
+            undo_depth: 1000,
             replace: Vec::new(),
         }
     }
@@ -1980,6 +1985,11 @@ impl Config {
             "editor.cursor_after_match" => self.editor.cursor_after_match = parse_bool(value)?,
             "editor.beyond_eol" => self.editor.beyond_eol = parse_bool(value)?,
             "editor.trim_trailing" => self.editor.trim_trailing = parse_bool(value)?,
+            // One step at least, or `Ctrl+Z` does nothing; and a ceiling, because every
+            // step is kept in memory with the text it removed.
+            "editor.undo_depth" => {
+                self.editor.undo_depth = parse_usize(value)?.clamp(1, 100_000);
+            }
             "viewer.key_bar" => self.viewer.key_bar = parse_bool(value)?,
             "viewer.status_line" => self.viewer.status_line = parse_bool(value)?,
             "viewer.scrollbar" => self.viewer.scrollbar = parse_bool(value)?,
@@ -2264,6 +2274,26 @@ attrs = "-h"
             );
         }
         assert!(refused.is_empty(), "{refused:#?}");
+    }
+
+    #[test]
+    fn the_undo_depth_is_generous_by_default_and_kept_within_reason() {
+        let mut cfg = Config::default();
+        assert_eq!(cfg.editor.undo_depth, 1000);
+        assert!(cfg
+            .settings()
+            .iter()
+            .any(|(key, value)| key == "editor.undo_depth" && value == "1000"));
+        cfg.set("editor.undo_depth", "50").unwrap();
+        assert_eq!(cfg.editor.undo_depth, 50);
+        cfg.set("editor.undo_depth", "0").unwrap();
+        assert_eq!(cfg.editor.undo_depth, 1, "no undo at all is not a depth");
+        cfg.set("editor.undo_depth", "99999999").unwrap();
+        assert_eq!(cfg.editor.undo_depth, 100_000);
+        assert!(cfg.set("editor.undo_depth", "many").is_err());
+        // And from the file.
+        let cfg: Config = toml::from_str("[editor]\nundo_depth = 20\n").unwrap();
+        assert_eq!(cfg.editor.undo_depth, 20);
     }
 
     #[test]

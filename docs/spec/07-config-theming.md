@@ -75,7 +75,7 @@ auto_indent = true
 trim_trailing = false
 keep_eol = true
 max_open_size = "256MiB"
-undo_depth = 10000
+undo_depth = 1000                 # steps Ctrl+Z can take back per file (SPEC 05 §2.2g)
 # [[editor.replace]]              # a replacement kept by name, for Alt+Shift+F7
 # name = "trailing commas"
 # find = ",\\s*$"

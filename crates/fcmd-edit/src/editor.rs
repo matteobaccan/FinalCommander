@@ -68,6 +68,23 @@ pub enum EditorError {
     Search(String),
 }
 
+/// One hit of a search: the line it is on and the columns, in characters, it runs between.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Hit {
+    pub line: usize,
+    pub start: usize,
+    pub end: usize,
+}
+
+/// The kinds of key that are undone together when they come one after the other: typing a
+/// word and then rubbing half of it out are two things done, and so two steps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Burst {
+    Typing,
+    Backspace,
+    Delete,
+}
+
 /// The editor: a buffer, a cursor, a block, and the state the UI needs to draw and drive it.
 pub struct Editor {
     pub buffer: Buffer,
@@ -109,6 +126,12 @@ pub struct Editor {
     pub search_case_insensitive: bool,
     /// Only whole words count as a hit (FAR asks it in the dialog).
     pub search_whole_words: bool,
+    /// FAR's *preserve style*: a plain replacement takes the capitals of what it replaces,
+    /// so `foo` → `bar` also turns `Foo` into `Bar` and `FOO` into `BAR`.
+    pub replace_preserve_style: bool,
+    /// The last key of a burst and where it left the cursor. The next key continues the
+    /// burst only if it is of the same kind and the cursor has not been anywhere since.
+    burst: Option<(Burst, Position)>,
     /// What the file is being read as, and how much of it has been scanned so far.
     pub highlight: crate::Highlight,
 }
@@ -160,6 +183,8 @@ impl Editor {
             search_mode: SearchMode::Plain,
             search_case_insensitive: true,
             search_whole_words: false,
+            replace_preserve_style: false,
+            burst: None,
             highlight,
         }
     }
@@ -359,17 +384,37 @@ impl Editor {
 
     // ── editing ────────────────────────────────────────────────────────────────────────────
 
+    /// Run one key of a burst. Characters typed one after the other on a line are one undo
+    /// step, and so is a run of `Backspace` or of `Del`, as in FAR: nobody wants to press
+    /// `Ctrl+Z` eleven times for a word. A key of another kind, a command, or the cursor
+    /// having been anywhere else in between starts a new step. There is no clock in this —
+    /// the event loop keeps no timer, and what was done is a better boundary than when.
+    fn in_burst(
+        &mut self,
+        kind: Burst,
+        key: impl FnOnce(&mut Editor) -> Result<(), EditorError>,
+    ) -> Result<(), EditorError> {
+        let continues = self.burst == Some((kind, self.cursor));
+        self.buffer.begin_burst(self.cursor, continues);
+        let result = key(self);
+        // Also when the key failed: a burst left armed would swallow the next command.
+        self.buffer.end_burst(self.cursor);
+        self.burst = result.is_ok().then_some((kind, self.cursor));
+        result
+    }
+
     pub fn insert_char(&mut self, ch: char) -> Result<(), EditorError> {
         self.delete_block_if_any()?;
-        self.buffer.begin_group(self.cursor);
-        self.fill_to_cursor()?;
-        if ch == '\t' && self.expand_tabs {
-            let pad = self.tab_width - (self.display_col(self.cursor) % self.tab_width);
-            self.cursor = self.buffer.insert(self.cursor, &" ".repeat(pad))?;
-        } else {
-            self.cursor = self.buffer.insert(self.cursor, &ch.to_string())?;
-        }
-        Ok(())
+        self.in_burst(Burst::Typing, |e| {
+            e.fill_to_cursor()?;
+            if ch == '\t' && e.expand_tabs {
+                let pad = e.tab_width - (e.display_col(e.cursor) % e.tab_width);
+                e.cursor = e.buffer.insert(e.cursor, &" ".repeat(pad))?;
+            } else {
+                e.cursor = e.buffer.insert(e.cursor, &ch.to_string())?;
+            }
+            Ok(())
+        })
     }
 
     /// Insert a character exactly as it is, with none of the rules `insert_char` applies: a
@@ -377,10 +422,11 @@ impl Editor {
     /// This is what `Ctrl+Q` is for.
     pub fn insert_literal(&mut self, ch: char) -> Result<(), EditorError> {
         self.delete_block_if_any()?;
-        self.buffer.begin_group(self.cursor);
-        self.fill_to_cursor()?;
-        self.cursor = self.buffer.insert(self.cursor, &ch.to_string())?;
-        Ok(())
+        self.in_burst(Burst::Typing, |e| {
+            e.fill_to_cursor()?;
+            e.cursor = e.buffer.insert(e.cursor, &ch.to_string())?;
+            Ok(())
+        })
     }
 
     /// `Alt+/`: finish the word before the cursor with another word of the buffer that
@@ -512,10 +558,11 @@ impl Editor {
             let previous = self.cursor.line - 1;
             Position::new(previous, self.buffer.line_chars(previous))
         };
-        self.buffer.begin_group(self.cursor);
-        self.buffer.delete(Range::new(start, end))?;
-        self.cursor = start;
-        Ok(())
+        self.in_burst(Burst::Backspace, |e| {
+            e.buffer.delete(Range::new(start, end))?;
+            e.cursor = start;
+            Ok(())
+        })
     }
 
     pub fn delete_forward(&mut self) -> Result<(), EditorError> {
@@ -536,9 +583,10 @@ impl Editor {
         } else {
             return Ok(());
         };
-        self.buffer.begin_group(self.cursor);
-        self.buffer.delete(Range::new(start, end))?;
-        Ok(())
+        self.in_burst(Burst::Delete, |e| {
+            e.buffer.delete(Range::new(start, end))?;
+            Ok(())
+        })
     }
 
     pub fn delete_to_line_end(&mut self) -> Result<(), EditorError> {
@@ -919,6 +967,7 @@ impl Editor {
     }
 
     pub fn undo(&mut self) -> bool {
+        self.burst = None;
         match self.buffer.undo() {
             Some(cursor) => {
                 self.cursor = self.buffer.clamp(cursor);
@@ -930,6 +979,7 @@ impl Editor {
     }
 
     pub fn redo(&mut self) -> bool {
+        self.burst = None;
         match self.buffer.redo() {
             Some(cursor) => {
                 self.cursor = self.buffer.clamp(cursor);
@@ -1121,17 +1171,85 @@ impl Editor {
             SearchMode::Regex => query.to_string(),
             _ => regex::escape(query),
         };
-        // Whole words wraps whatever it is in boundaries, which is what makes looking for
-        // `set` in a file full of `offset` bearable.
-        let pattern = if self.search_whole_words {
-            format!(r"\b(?:{pattern})\b")
-        } else {
-            pattern
-        };
         regex::RegexBuilder::new(&pattern)
             .case_insensitive(self.search_case_insensitive)
             .build()
             .map_err(|e| EditorError::Search(e.to_string()))
+    }
+
+    /// Every hit of `re` in one line, as byte ranges, left to right and not overlapping.
+    ///
+    /// Whole words is decided here and not in the pattern. `\b…\b` round the pattern asks
+    /// for a word character on one side of each end, so it never finds `++` or `-x` at all;
+    /// what the box means is the other thing — that the hit is not *inside* a longer word,
+    /// which is a question about the two characters next to it. A hit refused for its
+    /// neighbours is tried again one character on, since a later start may stand alone.
+    fn hits_in(&self, re: &Regex, text: &str) -> Vec<(usize, usize)> {
+        let mut hits = Vec::new();
+        let mut from = 0;
+        // Where the last hit ended: an empty hit right against it is not another hit, which
+        // is the rule the regex engine itself follows when it iterates.
+        let mut last_end = None;
+        while from <= text.len() {
+            let Some(m) = re.find_at(text, from) else {
+                break;
+            };
+            let one_on = |at: usize| at + text[at..].chars().next().map_or(1, char::len_utf8);
+            let alone = !self.search_whole_words || stands_alone(text, m.start(), m.end());
+            if !alone || (m.is_empty() && last_end == Some(m.start())) {
+                from = one_on(m.start());
+                continue;
+            }
+            hits.push((m.start(), m.end()));
+            last_end = Some(m.end());
+            from = if m.is_empty() {
+                one_on(m.end())
+            } else {
+                m.end()
+            };
+        }
+        hits
+    }
+
+    /// What goes in place of the hit at `hit` (bytes of `text`).
+    ///
+    /// A regular expression's replacement may refer to what its groups caught — `$1`,
+    /// `${name}`, and `$$` for a dollar — which is the reason to search by pattern at all.
+    /// A plain search puts in the text as typed, dollars included, and with *preserve style*
+    /// gives it the capitals of what was found.
+    fn replacement_for(&self, re: &Regex, text: &str, hit: (usize, usize), with: &str) -> String {
+        if self.search_mode == SearchMode::Regex {
+            // The groups of the very hit being replaced: the search is run again from its
+            // start, and anything else it finds there is not what the user is looking at.
+            return match re.captures_at(text, hit.0) {
+                Some(caps) if caps.get(0).is_some_and(|m| (m.start(), m.end()) == hit) => {
+                    let mut out = String::new();
+                    caps.expand(with, &mut out);
+                    out
+                }
+                _ => with.to_string(),
+            };
+        }
+        if self.replace_preserve_style {
+            in_the_style_of(&text[hit.0..hit.1], with)
+        } else {
+            with.to_string()
+        }
+    }
+
+    /// Put the cursor on a hit and select it, the way every search leaves it.
+    pub fn select_hit(&mut self, hit: Hit) {
+        self.buffer.end_group(self.cursor);
+        self.cursor = if self.cursor_after_match {
+            Position::new(hit.line, hit.end)
+        } else {
+            Position::new(hit.line, hit.start)
+        };
+        self.block = Some(Block {
+            anchor: Position::new(hit.line, hit.start),
+            head: Position::new(hit.line, hit.end),
+            kind: BlockKind::Stream,
+        });
     }
 
     /// Find `query` from just after the cursor (or before it, going backwards).
@@ -1142,9 +1260,15 @@ impl Editor {
 
         // A match *at* the cursor counts — unless the block already covers it, which means a
         // previous find put us here and the user asked for the next one.
-        let on_a_hit = self
-            .block
-            .is_some_and(|b| b.kind == BlockKind::Stream && b.anchor == self.cursor);
+        let on_a_hit = self.block.is_some_and(|b| {
+            b.kind == BlockKind::Stream
+                && (b.anchor == self.cursor || (self.cursor_after_match && b.head == self.cursor))
+        });
+        // With the cursor left after the match, "here" is where the match began.
+        let here = match self.block {
+            Some(b) if on_a_hit => b.anchor.col,
+            _ => self.cursor.col,
+        };
 
         for step in 0..=lines {
             let line = if backwards {
@@ -1153,14 +1277,10 @@ impl Editor {
                 (self.cursor.line + step) % lines
             };
             let text = self.buffer.line(line);
-            let mut hits: Vec<(usize, usize)> = re
-                .find_iter(text)
-                .map(|m| {
-                    (
-                        text[..m.start()].chars().count(),
-                        text[..m.end()].chars().count(),
-                    )
-                })
+            let mut hits: Vec<(usize, usize)> = self
+                .hits_in(&re, text)
+                .into_iter()
+                .map(|(start, end)| (text[..start].chars().count(), text[..end].chars().count()))
                 .collect();
             if backwards {
                 hits.reverse();
@@ -1168,25 +1288,16 @@ impl Editor {
             for (start, end) in hits {
                 let is_current = line == self.cursor.line && step == 0;
                 let ok = if backwards {
-                    !is_current || end <= self.cursor.col
+                    !is_current || end <= here
                 } else if !is_current {
                     true
                 } else if on_a_hit {
-                    start > self.cursor.col
+                    start > here
                 } else {
-                    start >= self.cursor.col
+                    start >= here
                 };
                 if ok {
-                    self.cursor = if self.cursor_after_match {
-                        Position::new(line, end)
-                    } else {
-                        Position::new(line, start)
-                    };
-                    self.block = Some(Block {
-                        anchor: Position::new(line, start),
-                        head: Position::new(line, end),
-                        kind: BlockKind::Stream,
-                    });
+                    self.select_hit(Hit { line, start, end });
                     return Ok(true);
                 }
             }
@@ -1194,8 +1305,30 @@ impl Editor {
         Ok(false)
     }
 
+    /// The first hit on every line that has one, top to bottom: what the list of all
+    /// matches shows. One row per line, because a line is what the list has room to show
+    /// and `Shift+F7` walks the rest of it.
+    pub fn matching_lines(&mut self, query: &str) -> Result<Vec<Hit>, EditorError> {
+        let re = self.compile(query)?;
+        self.last_search = Some(query.to_string());
+        let mut found = Vec::new();
+        for line in 0..self.buffer.len() {
+            let text = self.buffer.line(line);
+            if let Some((start, end)) = self.hits_in(&re, text).into_iter().next() {
+                found.push(Hit {
+                    line,
+                    start: text[..start].chars().count(),
+                    end: text[..end].chars().count(),
+                });
+            }
+        }
+        Ok(found)
+    }
+
     /// Replace the current match (if the block holds one) and find the next.
     pub fn replace_once(&mut self, query: &str, with: &str) -> Result<bool, EditorError> {
+        let re = self.compile(query)?;
+        self.last_search = Some(query.to_string());
         self.last_replace = Some(with.to_string());
         let found = match self.block {
             Some(block) if block.kind == BlockKind::Stream && !block.range().is_empty() => true,
@@ -1204,8 +1337,31 @@ impl Editor {
         if !found {
             return Ok(false);
         }
-        self.delete_block_if_any()?;
-        self.insert_text(with)?;
+        // What is selected is a hit on one line when a search put it there, and then its
+        // groups and its capitals are known. A block the user marked by hand is replaced
+        // too, as it always was, by the text as typed.
+        let text = match self.block.map(|b| b.range()) {
+            Some(range) if range.start.line == range.end.line => {
+                let line = self.buffer.line(range.start.line);
+                let byte = |col: usize| line.char_indices().nth(col).map_or(line.len(), |(i, _)| i);
+                self.replacement_for(
+                    &re,
+                    line,
+                    (byte(range.start.col), byte(range.end.col)),
+                    with,
+                )
+            }
+            _ => with.to_string(),
+        };
+        // One step, not the two that typing over a block is: what is undone is a replacement.
+        if let Some(range) = self.block.take().map(|b| b.range()) {
+            self.buffer.begin_group(self.cursor);
+            self.buffer.delete(range)?;
+            self.cursor = self.buffer.insert(range.start, &text)?;
+            self.buffer.end_group(self.cursor);
+        }
+        // Leave the next one selected, so the same key goes through them one at a time.
+        self.find(query, false)?;
         Ok(true)
     }
 
@@ -1218,13 +1374,20 @@ impl Editor {
         self.buffer.begin_group(self.cursor);
         for line in 0..self.buffer.len() {
             let text = self.buffer.line(line).to_string();
-            let hits = re.find_iter(&text).count();
-            if hits == 0 {
+            let hits = self.hits_in(&re, &text);
+            if hits.is_empty() {
                 continue;
             }
-            let replaced = re.replace_all(&text, with).into_owned();
+            let mut replaced = String::with_capacity(text.len());
+            let mut done = 0;
+            for hit in &hits {
+                replaced.push_str(&text[done..hit.0]);
+                replaced.push_str(&self.replacement_for(&re, &text, *hit, with));
+                done = hit.1;
+            }
+            replaced.push_str(&text[done..]);
             self.buffer.set_line(line, &replaced)?;
-            count += hits;
+            count += hits.len();
         }
         self.buffer.end_group(self.cursor);
         self.cursor = self.buffer.clamp(self.cursor);
@@ -1351,7 +1514,9 @@ impl Editor {
         let Some(path) = self.path.clone() else {
             return Err(EditorError::NoPath);
         };
-        let buffer = Buffer::open(path.as_path())?;
+        let mut buffer = Buffer::open(path.as_path())?;
+        // The depth is a setting of the editor, not of the file that was just read again.
+        buffer.set_undo_depth(self.buffer.undo_depth());
         let cursor = self.cursor;
         self.buffer = buffer;
         self.cursor = self.buffer.clamp(cursor);
@@ -1387,6 +1552,44 @@ impl Editor {
             }
         }
         text
+    }
+}
+
+/// Is the text between `start` and `end` (bytes) a word of its own — with no letter, digit
+/// or underscore right before it or right after it?
+fn stands_alone(text: &str, start: usize, end: usize) -> bool {
+    let is_word = |c: char| c.is_alphanumeric() || c == '_';
+    !text[..start].chars().next_back().is_some_and(is_word)
+        && !text[end..].chars().next().is_some_and(is_word)
+}
+
+/// FAR's *preserve style*: `with`, wearing the capitals of `found`.
+///
+/// Three shapes are recognised and nothing cleverer: all lower case, all upper case, and a
+/// capital first with the rest lower. Anything else — `camelCase`, `mIxEd` — has no rule
+/// that would not be a guess, so the replacement goes in as it was typed. One capital
+/// letter on its own reads as "a capital first", not as "all capitals": replacing `x` by
+/// `value` should make `X` into `Value`, not `VALUE`.
+fn in_the_style_of(found: &str, with: &str) -> String {
+    let cased: Vec<char> = found
+        .chars()
+        .filter(|c| c.is_lowercase() || c.is_uppercase())
+        .collect();
+    let upper = cased.iter().filter(|c| c.is_uppercase()).count();
+    if cased.is_empty() {
+        with.to_string()
+    } else if upper == 0 {
+        with.to_lowercase()
+    } else if upper == cased.len() && cased.len() > 1 {
+        with.to_uppercase()
+    } else if upper == 1 && cased[0].is_uppercase() {
+        let mut chars = with.chars();
+        match chars.next() {
+            Some(first) => first.to_uppercase().chain(chars).collect(),
+            None => String::new(),
+        }
+    } else {
+        with.to_string()
     }
 }
 
@@ -1822,6 +2025,288 @@ mod tests {
         assert_eq!(count, 3);
         assert_eq!(e.buffer.to_text(), "X Y Y\nb Y\n");
         assert_eq!(e.replace_all("zzz", "!").unwrap(), 0);
+    }
+
+    #[test]
+    fn whole_words_refuses_a_hit_inside_a_longer_word() {
+        let mut e = editor("offset = set + reset_set; set\n");
+        e.search_whole_words = true;
+        assert!(e.find("set", false).unwrap());
+        assert_eq!(e.cursor, Position::new(0, 9), "not the one inside offset");
+        assert!(e.find("set", false).unwrap());
+        assert_eq!(
+            e.cursor,
+            Position::new(0, 26),
+            "nor the one after an underscore"
+        );
+        e.move_file_start(false);
+        assert_eq!(e.replace_all("set", "put").unwrap(), 2);
+        assert_eq!(e.buffer.line(0), "offset = put + reset_set; put");
+    }
+
+    #[test]
+    fn whole_words_also_finds_what_is_not_made_of_word_characters() {
+        // `\b++\b` finds nothing at all; the box means "not inside a longer word".
+        let mut e = editor("a ++ b; c++x; é+é\n");
+        e.search_whole_words = true;
+        assert_eq!(e.replace_all("++", "--").unwrap(), 1);
+        assert_eq!(e.buffer.line(0), "a -- b; c++x; é+é");
+        // An accented letter is a letter: `+` between two of them is not alone.
+        assert_eq!(e.replace_all("+", "#").unwrap(), 0);
+    }
+
+    #[test]
+    fn a_hit_refused_for_its_neighbours_does_not_hide_one_that_overlaps_it() {
+        let mut e = editor("xab ab\n");
+        e.search_mode = SearchMode::Regex;
+        e.search_whole_words = true;
+        // The `ab` inside `xab` is refused, and the search goes on to the one that is alone.
+        assert_eq!(e.replace_all("ab", "-").unwrap(), 1);
+        assert_eq!(e.buffer.line(0), "xab -");
+        // `a?b` first finds the `ab` inside `aab`; refusing it must not skip to the end.
+        let mut e = editor("aab ab\n");
+        e.search_mode = SearchMode::Regex;
+        e.search_whole_words = true;
+        assert_eq!(e.replace_all("a?b", "-").unwrap(), 1);
+        assert_eq!(e.buffer.line(0), "aab -");
+    }
+
+    #[test]
+    fn a_pattern_replacement_refers_to_what_its_groups_caught() {
+        let mut e = editor("width=10 height=20\n");
+        e.search_mode = SearchMode::Regex;
+        assert_eq!(
+            e.replace_all(r"(\w+)=(?P<n>\d+)", "${n}:$1 ($$)").unwrap(),
+            2
+        );
+        assert_eq!(e.buffer.line(0), "10:width ($) 20:height ($)");
+    }
+
+    #[test]
+    fn replacing_one_hit_of_a_pattern_uses_that_hits_groups_and_selects_the_next() {
+        let mut e = editor("a1 b2 c3\n");
+        e.search_mode = SearchMode::Regex;
+        assert!(e.replace_once(r"([a-z])(\d)", "$2$1").unwrap());
+        assert_eq!(e.buffer.line(0), "1a b2 c3");
+        let block = e.block.expect("the next hit is selected");
+        assert_eq!((block.anchor.col, block.head.col), (3, 5));
+        assert!(e.replace_once(r"([a-z])(\d)", "$2$1").unwrap());
+        assert_eq!(e.buffer.line(0), "1a 2b c3");
+        // One step each, so one undo takes back one replacement.
+        assert!(e.undo());
+        assert_eq!(e.buffer.line(0), "1a b2 c3");
+    }
+
+    #[test]
+    fn a_plain_replacement_keeps_its_dollars() {
+        let mut e = editor("price cost\n");
+        assert_eq!(e.replace_all("price", "$1 ${x} $$").unwrap(), 1);
+        assert_eq!(e.buffer.line(0), "$1 ${x} $$ cost");
+        assert!(e.replace_once("cost", "$0").unwrap());
+        assert_eq!(e.buffer.line(0), "$1 ${x} $$ $0");
+    }
+
+    #[test]
+    fn preserve_style_gives_the_replacement_the_capitals_of_what_it_replaces() {
+        let mut e = editor("foo Foo FOO fOO F\n");
+        e.replace_preserve_style = true;
+        assert_eq!(e.replace_all("foo", "bar").unwrap(), 4);
+        // All lower, a capital first, all upper — and a shape with no rule, as typed.
+        assert_eq!(e.buffer.line(0), "bar Bar BAR bar F");
+        // One capital letter on its own is a capital first, not shouting.
+        assert_eq!(e.replace_all("f", "value").unwrap(), 1);
+        assert_eq!(e.buffer.line(0), "bar Bar BAR bar Value");
+
+        // As typed means as typed: capitals in the replacement survive a mixed match.
+        let mut e = editor("fooBar foobar\n");
+        e.replace_preserve_style = true;
+        assert_eq!(e.replace_all("foobar", "newName").unwrap(), 2);
+        assert_eq!(e.buffer.line(0), "newName newname");
+
+        // Off, which is the default, nothing is touched.
+        let mut e = editor("Foo\n");
+        assert_eq!(e.replace_all("foo", "bar").unwrap(), 1);
+        assert_eq!(e.buffer.line(0), "bar");
+    }
+
+    #[test]
+    fn preserve_style_is_for_plain_text_and_leaves_a_pattern_alone() {
+        let mut e = editor("Foo\n");
+        e.replace_preserve_style = true;
+        e.search_mode = SearchMode::Regex;
+        assert_eq!(e.replace_all("f(o+)", "b$1").unwrap(), 1);
+        assert_eq!(e.buffer.line(0), "boo");
+    }
+
+    #[test]
+    fn the_list_of_matches_has_one_row_for_each_line_that_has_one() {
+        let mut e = editor("alpha beta\ngamma\nbeta beta\nBETA\n");
+        let hits = e.matching_lines("beta").unwrap();
+        assert_eq!(
+            hits,
+            vec![
+                Hit {
+                    line: 0,
+                    start: 6,
+                    end: 10
+                },
+                Hit {
+                    line: 2,
+                    start: 0,
+                    end: 4
+                },
+                Hit {
+                    line: 3,
+                    start: 0,
+                    end: 4
+                },
+            ]
+        );
+        e.select_hit(hits[1]);
+        assert_eq!(e.cursor, Position::new(2, 0));
+        // The list is a search like any other: the next one goes on from the row chosen.
+        assert!(e.find("beta", false).unwrap());
+        assert_eq!(e.cursor, Position::new(2, 5));
+        assert!(e.matching_lines("zeta").unwrap().is_empty());
+        assert!(
+            e.matching_lines("(unclosed").is_ok(),
+            "plain text, not a pattern"
+        );
+        e.search_mode = SearchMode::Regex;
+        assert!(e.matching_lines("(unclosed").is_err());
+    }
+
+    #[test]
+    fn an_empty_hit_can_be_replaced_too() {
+        let mut e = editor("one\ntwo\n");
+        e.search_mode = SearchMode::Regex;
+        assert_eq!(e.replace_all("^", "> ").unwrap(), 2);
+        assert_eq!(e.buffer.to_text(), "> one\n> two\n");
+        assert_eq!(e.replace_all("o*", "-").unwrap(), 10);
+        assert_eq!(e.buffer.line(0), "->- -n-e-");
+    }
+
+    #[test]
+    fn searching_again_goes_on_from_a_hit_the_cursor_was_left_after() {
+        let mut e = editor("ab ab ab\n");
+        e.cursor_after_match = true;
+        assert!(e.find("ab", false).unwrap());
+        assert_eq!(e.cursor, Position::new(0, 2));
+        assert!(e.find("ab", false).unwrap());
+        assert_eq!(e.cursor, Position::new(0, 5));
+        assert!(e.find("ab", true).unwrap());
+        assert_eq!(e.cursor, Position::new(0, 2), "and back to the one before");
+    }
+
+    fn type_in(e: &mut Editor, text: &str) {
+        for c in text.chars() {
+            e.insert_char(c).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_word_typed_is_undone_in_one_step() {
+        let mut e = editor("\n");
+        type_in(&mut e, "hello world");
+        assert_eq!(e.buffer.line(0), "hello world");
+        assert!(e.undo());
+        assert_eq!(e.buffer.line(0), "");
+        assert_eq!(e.cursor, Position::new(0, 0));
+        assert!(!e.undo(), "it was one step");
+        assert!(e.redo());
+        assert_eq!(e.buffer.line(0), "hello world");
+        assert_eq!(e.cursor, Position::new(0, 11));
+    }
+
+    #[test]
+    fn typing_and_rubbing_out_are_two_steps_and_so_are_backspace_and_del() {
+        let mut e = editor("\n");
+        type_in(&mut e, "abcdef");
+        e.backspace().unwrap();
+        e.backspace().unwrap();
+        assert_eq!(e.buffer.line(0), "abcd");
+        e.move_line_start(false);
+        e.delete_forward().unwrap();
+        e.delete_forward().unwrap();
+        assert_eq!(e.buffer.line(0), "cd");
+
+        assert!(e.undo());
+        assert_eq!(e.buffer.line(0), "abcd", "both Del went back together");
+        assert!(e.undo());
+        assert_eq!(e.buffer.line(0), "abcdef", "and both Backspace");
+        assert_eq!(e.cursor, Position::new(0, 6));
+        assert!(e.undo());
+        assert_eq!(e.buffer.line(0), "");
+    }
+
+    #[test]
+    fn backspace_straight_after_typing_does_not_join_the_typing() {
+        let mut e = editor("\n");
+        type_in(&mut e, "abc");
+        e.backspace().unwrap();
+        type_in(&mut e, "d");
+        assert_eq!(e.buffer.line(0), "abd");
+        assert!(e.undo());
+        assert_eq!(e.buffer.line(0), "ab");
+        assert!(e.undo());
+        assert_eq!(e.buffer.line(0), "abc");
+        assert!(e.undo());
+        assert_eq!(e.buffer.line(0), "");
+    }
+
+    #[test]
+    fn moving_away_and_back_breaks_a_burst() {
+        let mut e = editor("\n");
+        type_in(&mut e, "ab");
+        e.move_by(0, -1, false, BlockKind::Stream);
+        e.move_by(0, 1, false, BlockKind::Stream);
+        type_in(&mut e, "cd");
+        assert!(e.undo());
+        assert_eq!(e.buffer.line(0), "ab");
+        assert!(e.undo());
+        assert_eq!(e.buffer.line(0), "");
+    }
+
+    #[test]
+    fn a_new_line_and_a_command_each_break_a_burst() {
+        let mut e = editor("\n");
+        type_in(&mut e, "one");
+        e.insert_newline().unwrap();
+        type_in(&mut e, "two");
+        e.duplicate_line().unwrap();
+        type_in(&mut e, "!");
+        assert_eq!(e.buffer.to_text(), "one\ntwo\ntwo!\n");
+        // Back through them in order: the mark, the copy, the word, the Enter, the word.
+        for expected in ["one\ntwo\ntwo\n", "one\ntwo\n", "one\n\n", "one\n", "\n"] {
+            assert!(e.undo());
+            assert_eq!(e.buffer.to_text(), expected);
+        }
+        assert!(!e.undo());
+    }
+
+    #[test]
+    fn a_key_refused_by_a_read_only_buffer_leaves_no_burst_behind() {
+        let mut e = editor("x\ny\n");
+        e.buffer.read_only = true;
+        assert!(e.insert_char('a').is_err());
+        e.buffer.read_only = false;
+        e.delete_line().unwrap();
+        type_in(&mut e, "b");
+        assert!(e.undo());
+        assert_eq!(e.buffer.to_text(), "y\n", "the typing alone");
+        assert!(e.undo());
+        assert_eq!(e.buffer.to_text(), "x\ny\n");
+    }
+
+    #[test]
+    fn reloading_keeps_the_depth_the_editor_was_given() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.txt");
+        std::fs::write(&path, "one\n").unwrap();
+        let mut e = Editor::open(&path).unwrap();
+        e.buffer.set_undo_depth(7);
+        e.reload().unwrap();
+        assert_eq!(e.buffer.undo_depth(), 7);
     }
 
     #[test]

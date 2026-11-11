@@ -85,6 +85,14 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                     );
                     return None;
                 }
+                // A list opened from the editor — the matches of a search, the characters,
+                // the replacements kept — is drawn over it like the dialogs are. Without
+                // this arm the list was there and answered keys, and nobody could see it.
+                Mode::Pick(pick) => {
+                    let list = draw_pick(app, buf, screen, pick);
+                    app.layout.list = list;
+                    return None;
+                }
                 _ => return None,
             }
         }
@@ -1119,6 +1127,7 @@ fn draw_pick(
         crate::menu::PickKind::StripMeta => "strip-hint",
         crate::menu::PickKind::PluginsConfig => "plugins-config-hint",
         crate::menu::PickKind::ReplaceTemplates => "replace-tpl-hint",
+        crate::menu::PickKind::EditorMatches => "editor-matches-hint",
         crate::menu::PickKind::Jobs => "jobs-hint",
         // A history has three keys of its own, and a footer that does not name them is a
         // footer that keeps them secret.

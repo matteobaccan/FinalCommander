@@ -11,7 +11,7 @@ pub mod editorconfig;
 pub mod hex;
 pub mod highlight;
 
-pub use buffer::{Buffer, BufferError, Eol, Position, Range, MAX_OPEN};
-pub use editor::{BlockKind, Editor, SaveOutcome};
+pub use buffer::{Buffer, BufferError, Eol, Position, Range, MAX_OPEN, UNDO_DEPTH};
+pub use editor::{BlockKind, Editor, Hit, SaveOutcome};
 pub use hex::{Change, HexEdit, HexError, Pane};
 pub use highlight::Highlight;

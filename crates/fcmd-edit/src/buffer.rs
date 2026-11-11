@@ -124,6 +124,9 @@ pub enum BufferError {
 /// Files above this open read-only, rather than pulling a gigabyte into memory and pretending.
 pub const MAX_OPEN: u64 = 256 * 1024 * 1024;
 
+/// How many undo steps a buffer keeps unless it is told otherwise.
+pub const UNDO_DEPTH: usize = 1000;
+
 /// A text buffer: lines, the metadata needed to write them back unchanged, and undo history.
 #[derive(Debug, Clone)]
 pub struct Buffer {
@@ -140,6 +143,16 @@ pub struct Buffer {
     redo: Vec<Group>,
     /// Edits are grouped until this is taken; a burst of typing is one undo step.
     open_group: Option<Group>,
+    /// The open group is a burst — keys of one kind, one after the other — and not a command
+    /// in the middle of its edits. A burst stays open between keys, which is the whole point
+    /// of it, so it is also what anything else has to close before recording under its own
+    /// name: `Ctrl+Y` after a word was typed is two steps, not one.
+    burst_open: bool,
+    /// The burst's own key is being applied right now: only then do edits join it.
+    burst_armed: bool,
+    /// How many steps are kept. The oldest go first, so a file edited all day does not
+    /// keep every key of the morning in memory (`editor.undo_depth`).
+    undo_depth: usize,
     /// The lowest line changed since anybody last asked, or `usize::MAX` for none.
     ///
     /// Syntax highlighting remembers what it scanned, and a cache has to be told how far
@@ -171,6 +184,9 @@ impl Buffer {
             undo: Vec::new(),
             redo: Vec::new(),
             open_group: None,
+            burst_open: false,
+            burst_armed: false,
+            undo_depth: UNDO_DEPTH,
             touched: usize::MAX,
         }
     }
@@ -306,8 +322,12 @@ impl Buffer {
 
     // ── editing ────────────────────────────────────────────────────────────────────────────
 
-    /// Begin (or continue) an undo group. Typing bursts share one.
+    /// Begin an undo group for a command made of several edits, or continue the one it
+    /// already opened. A burst of typing left open is closed first: it is a step of its own.
     pub fn begin_group(&mut self, cursor: Position) {
+        if self.burst_open && !self.burst_armed {
+            self.close_group();
+        }
         if self.open_group.is_none() {
             self.open_group = Some(Group {
                 edits: Vec::new(),
@@ -317,16 +337,77 @@ impl Buffer {
         }
     }
 
+    /// Begin one key of a burst: a character typed, a `Backspace`, a `Del`. With `continues`
+    /// the key joins the burst that is still open, so the whole run is undone at once, as
+    /// FAR does; without it, or when something has closed the burst since, a new step
+    /// starts here. Whether two keys belong together is the editor's to say — it knows what
+    /// kind they are and where the cursor was; whether the burst is still there to be joined
+    /// is known only here, because any edit recorded in between has closed it.
+    pub fn begin_burst(&mut self, cursor: Position, continues: bool) {
+        if !(continues && self.burst_open && self.open_group.is_some()) {
+            self.close_group();
+            self.open_group = Some(Group {
+                edits: Vec::new(),
+                cursor_before: cursor,
+                cursor_after: cursor,
+            });
+        }
+        self.burst_open = true;
+        self.burst_armed = true;
+    }
+
+    /// The key of the burst is done; the burst stays open for the next one. The cursor is
+    /// kept now because nobody will be asked for it when something else closes the burst.
+    pub fn end_burst(&mut self, cursor: Position) {
+        if let Some(group) = &mut self.open_group {
+            group.cursor_after = cursor;
+        }
+        self.burst_armed = false;
+    }
+
     /// Close the current undo group: the next edit starts a new one.
     pub fn end_group(&mut self, cursor: Position) {
-        if let Some(mut group) = self.open_group.take() {
+        // A burst already knows where its last key left the cursor, and that is where redo
+        // has to put it — not wherever the movement that closed it has gone since.
+        if !self.burst_open {
+            if let Some(group) = &mut self.open_group {
+                group.cursor_after = cursor;
+            }
+        }
+        self.close_group();
+    }
+
+    /// Push the open group onto the history as it stands.
+    fn close_group(&mut self) {
+        self.burst_open = false;
+        self.burst_armed = false;
+        if let Some(group) = self.open_group.take() {
             if group.edits.is_empty() {
                 return;
             }
-            group.cursor_after = cursor;
             self.undo.push(group);
             self.redo.clear();
+            self.trim_history();
         }
+    }
+
+    /// Forget the oldest steps beyond the depth.
+    fn trim_history(&mut self) {
+        if self.undo.len() > self.undo_depth {
+            let excess = self.undo.len() - self.undo_depth;
+            self.undo.drain(..excess);
+        }
+    }
+
+    /// How many steps `undo` can take back; at least one, since an editor that cannot undo
+    /// the last key is not what anybody means by a small number here.
+    pub fn set_undo_depth(&mut self, depth: usize) {
+        self.undo_depth = depth.max(1);
+        self.trim_history();
+    }
+
+    pub fn undo_depth(&self) -> usize {
+        self.undo_depth
     }
 
     fn record(&mut self, edit: Edit, cursor: Position) {
@@ -442,6 +523,9 @@ impl Buffer {
 
     /// Redo one group.
     pub fn redo(&mut self) -> Option<Position> {
+        // Anything typed since the undo is a step of its own, and closing it empties the
+        // redo list: what was undone no longer fits the text that is there now.
+        self.close_group();
         let group = self.redo.pop()?;
         for edit in &group.edits {
             match edit {
@@ -757,6 +841,77 @@ mod tests {
         assert_eq!(buffer.line(0), "hello");
         buffer.undo();
         assert_eq!(buffer.line(0), "", "the whole burst should go at once");
+    }
+
+    #[test]
+    fn a_burst_stays_open_between_its_keys_and_closes_when_it_does_not_continue() {
+        let mut buffer = Buffer::from_text("");
+        for (i, c) in "ab".chars().enumerate() {
+            buffer.begin_burst(Position::new(0, i), i > 0);
+            buffer.insert(Position::new(0, i), &c.to_string()).unwrap();
+            buffer.end_burst(Position::new(0, i + 1));
+        }
+        // A key that does not continue: a step of its own.
+        buffer.begin_burst(Position::new(0, 2), false);
+        buffer.insert(Position::new(0, 2), "c").unwrap();
+        buffer.end_burst(Position::new(0, 3));
+        assert_eq!(buffer.line(0), "abc");
+        assert_eq!(buffer.undo(), Some(Position::new(0, 2)));
+        assert_eq!(buffer.line(0), "ab");
+        assert_eq!(buffer.undo(), Some(Position::new(0, 0)));
+        assert_eq!(buffer.line(0), "");
+        // Redo puts the cursor where the burst's last key left it.
+        assert_eq!(buffer.redo(), Some(Position::new(0, 2)));
+        assert_eq!(buffer.line(0), "ab");
+    }
+
+    #[test]
+    fn an_edit_that_is_not_the_bursts_own_closes_the_burst() {
+        let mut buffer = Buffer::from_text("x\ny\nz\n");
+        buffer.begin_burst(Position::new(0, 1), false);
+        buffer.insert(Position::new(0, 1), "a").unwrap();
+        buffer.end_burst(Position::new(0, 2));
+        // A command arrives while the burst is still open.
+        buffer.delete_line(1).unwrap();
+        buffer.end_group(Position::new(0, 2));
+        assert_eq!(buffer.to_text(), "xa\nz\n");
+        buffer.undo();
+        assert_eq!(buffer.to_text(), "xa\ny\nz\n", "only the command went back");
+        // And the burst cannot be joined again: it is history now.
+        buffer.begin_burst(Position::new(0, 2), true);
+        buffer.insert(Position::new(0, 2), "b").unwrap();
+        buffer.end_burst(Position::new(0, 3));
+        buffer.undo();
+        assert_eq!(buffer.line(0), "xa");
+    }
+
+    #[test]
+    fn the_history_keeps_only_as_many_steps_as_the_depth_allows() {
+        let mut buffer = Buffer::from_text("");
+        buffer.set_undo_depth(3);
+        for i in 0..5 {
+            buffer.insert(Position::new(0, i), "x").unwrap();
+            buffer.end_group(Position::new(0, i + 1));
+        }
+        let mut steps = 0;
+        while buffer.undo().is_some() {
+            steps += 1;
+        }
+        assert_eq!(steps, 3);
+        assert_eq!(
+            buffer.line(0),
+            "xx",
+            "the two oldest steps are out of reach"
+        );
+        // Narrowing the depth drops what no longer fits; zero still leaves one step.
+        buffer.insert(Position::new(0, 2), "y").unwrap();
+        buffer.end_group(Position::new(0, 3));
+        buffer.insert(Position::new(0, 3), "z").unwrap();
+        buffer.end_group(Position::new(0, 4));
+        buffer.set_undo_depth(0);
+        assert_eq!(buffer.undo_depth(), 1);
+        assert!(buffer.undo().is_some());
+        assert!(buffer.undo().is_none());
     }
 
     #[test]

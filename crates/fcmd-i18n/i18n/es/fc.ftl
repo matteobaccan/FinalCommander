@@ -347,8 +347,6 @@ viewer-derived = { $producer } de { $name }
 
 key-save = Guardar
 key-replace = Reempl
-editor-prompt-replace-from = Reemplazar:
-editor-prompt-replace-with = Por:
 editor-prompt-goto = Ir a la línea, o línea:columna :
 editor-prompt-save-as = Guardar como:
 editor-saved = { $name }: guardado, { $bytes } bytes
@@ -1679,3 +1677,12 @@ undo-done =
 slow-drives = la lista de unidades tardó { $secs } s
 slow-drives-late = la lista de unidades esperó { $secs } s: { $drives } no respondieron a tiempo y se muestran sin detalles — ¿una unidad de red sin servidor?
 slow-listing = leer { $what } tardó { $secs } s
+# editor search and undo (0.41)
+btn-find-all = Todas las coincidencias
+btn-replace-all = Sustituir todo
+btn-replace-one = Sustituir el siguiente
+editor-replace-title = Sustituir
+editor-replace-style = Conservar el estilo (foo → bar, Foo → Bar, FOO → BAR)
+editor-replace-groups = En una expresión regular $1 y { "${name}" } son lo que capturó un grupo, $$ un dólar
+editor-matches-title = Líneas con `{ $query }`: { $count }
+editor-matches-hint = Escribe para filtrar · Intro: ir a la línea · Esc: volver

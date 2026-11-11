@@ -208,8 +208,8 @@ something readable rather than only into instructions.
 | 6.2b | **Hex mode** (`F4` on a binary, `Ins` for insert/overwrite): byte editing with a patch list, the editor's own undo, and the same temp-file-and-rename save; in-place writing only when explicitly chosen | NEW | ✓ |
 | 6.2c | **Byte blocks** (`F3` marks, `F12` operates): write out, read in, fill, XOR with a key, copy or move from elsewhere, insert, delete — large ones through the job engine, each showing the resulting length first | NEW | ✓ |
 | 6.2d | **Inline assembler** (`F9`): one instruction, showing the bytes it produces, the instruction it replaces and whether the length changed, written into the patch list rather than to disk | NEW | ✓ |
-| 6.3 | Undo/redo grouped per command | FAR | ~ typing-burst grouping and a configurable depth |
-| 6.4 | Search/replace: plain search with wrap, replace once, replace all (the engine already does regex and case-insensitive; the dialog that exposes them is M2) | FAR | ~ whole word, capture references, "preserve style", a list of every match |
+| 6.3 | Undo/redo grouped per command and per burst of typing, `Backspace` or `Del`; the depth a setting (`editor.undo_depth`) | FAR | ✓ |
+| 6.4 | Search/replace: text or regular expression, case, whole words, wrap; replace next and replace all with capture references (`$1`, `${name}`) and "preserve style"; a list of every matching line | FAR | ~ replace inside a block only; the separator half of FAR's preserve style (`foo_bar` ↔ `fooBar`) |
 | 6.5 | Go to `line` or `line:column`, bookmarks 0..9 | FAR | ✓ and `Alt+B` to the matching bracket |
 | 6.6 | Keep the original encoding, EOL, BOM and final newline on save | FAR | ~ explicit conversion commands |
 | 6.7 | Syntax highlighting (tree-sitter), bracket matching, auto-indent, tabs/spaces policy, trailing-space trim | MTN2/NEW | ~ colouring for 25 languages and markups by a scanner of our own rather than tree-sitter, auto-indent, the three tab policies of `editor.tabs`, bracket matching (`Alt+B`), trailing blanks taken off (`Alt+Shift+T`, or at every save with `editor.trim_trailing`) |

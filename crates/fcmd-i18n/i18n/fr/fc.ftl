@@ -347,8 +347,6 @@ viewer-derived = { $producer } de { $name }
 
 key-save = Enreg
 key-replace = Rempl
-editor-prompt-replace-from = Remplacer :
-editor-prompt-replace-with = Par :
 editor-prompt-goto = Aller à la ligne, ou ligne:colonne :
 editor-prompt-save-as = Enregistrer sous :
 editor-saved = { $name } : enregistré, { $bytes } octets
@@ -1679,3 +1677,12 @@ undo-done =
 slow-drives = la liste des lecteurs a pris { $secs } s
 slow-drives-late = la liste des lecteurs a attendu { $secs } s : { $drives } n’ont pas répondu à temps et sont montrés sans détails — un lecteur réseau dont le serveur est absent ?
 slow-listing = lire { $what } a pris { $secs } s
+# editor search and undo (0.41)
+btn-find-all = Toutes les occurrences
+btn-replace-all = Tout remplacer
+btn-replace-one = Remplacer le suivant
+editor-replace-title = Remplacer
+editor-replace-style = Conserver le style (foo → bar, Foo → Bar, FOO → BAR)
+editor-replace-groups = Dans une expression régulière, $1 et { "${name}" } sont ce qu’un groupe a capturé, $$ un dollar
+editor-matches-title = Lignes avec `{ $query }` : { $count }
+editor-matches-hint = Tapez pour filtrer · Entrée : aller à la ligne · Échap : retour
