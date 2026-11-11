@@ -1,12 +1,18 @@
-//! Localisation: fluent catalogues compiled in, English as the always-present fallback.
+//! Localisation: Fluent catalogues compiled in, English as the always-present fallback.
+//!
+//! The catalogues are read by [`ftl`], our own reader for the part of Fluent they are written
+//! in, so the program carries no localisation library.
 //!
 //! Shipped languages: English, Italian, German, French, Spanish, Russian, Chinese
 //! (Simplified). See `docs/spec/07-config-theming.md` §5.
 
-use std::borrow::Cow;
+pub mod ftl;
 
-use fluent_bundle::{concurrent::FluentBundle, FluentArgs, FluentResource, FluentValue};
-use unic_langid::LanguageIdentifier;
+use ftl::Catalogue;
+pub use ftl::Value;
+
+/// The name the values had when the catalogues were read by the `fluent` crates.
+pub type FluentValue<'a> = Value<'a>;
 
 /// `(tag, endonym)` for every language compiled into the binary.
 pub const LANGUAGES: &[(&str, &str)] = &[
@@ -29,12 +35,10 @@ const CATALOGUES: &[(&str, &str)] = &[
     ("zh", include_str!("../i18n/zh/fc.ftl")),
 ];
 
-type Bundle = FluentBundle<FluentResource>;
-
 pub struct I18n {
     tag: String,
-    primary: Bundle,
-    fallback: Option<Bundle>,
+    primary: Catalogue,
+    fallback: Option<Catalogue>,
 }
 
 impl I18n {
@@ -42,11 +46,11 @@ impl I18n {
     /// Unknown tags fall back to English instead of failing.
     pub fn new(tag: &str) -> Self {
         let wanted = resolve_tag(tag);
-        let primary = bundle_for(&wanted).unwrap_or_else(|| bundle_for("en").expect("en builds"));
+        let primary = catalogue_for(&wanted).unwrap_or_else(|| catalogue_for("en").expect("en"));
         let fallback = if wanted == "en" {
             None
         } else {
-            bundle_for("en")
+            catalogue_for("en")
         };
         I18n {
             tag: wanted,
@@ -75,39 +79,16 @@ impl I18n {
     /// Look up a message. A missing id returns the id itself, so a typo is visible in the UI
     /// instead of producing an empty label.
     pub fn t(&self, id: &str) -> String {
-        self.format(id, None)
+        self.t_args(id, &[])
     }
 
     /// Look up a message with arguments: `t_args("msg-theme", &[("name", "matrix".into())])`.
-    pub fn t_args(&self, id: &str, args: &[(&str, FluentValue<'_>)]) -> String {
-        let mut fargs = FluentArgs::new();
-        for (k, v) in args {
-            fargs.set(*k, v.clone());
-        }
-        self.format(id, Some(&fargs))
-    }
-
-    fn format(&self, id: &str, args: Option<&FluentArgs<'_>>) -> String {
-        for bundle in [Some(&self.primary), self.fallback.as_ref()]
+    pub fn t_args(&self, id: &str, args: &[(&str, Value<'_>)]) -> String {
+        [Some(&self.primary), self.fallback.as_ref()]
             .into_iter()
             .flatten()
-        {
-            if let Some(msg) = bundle.get_message(id) {
-                if let Some(pattern) = msg.value() {
-                    let mut errors = vec![];
-                    let out = bundle.format_pattern(pattern, args, &mut errors);
-                    if errors.is_empty() {
-                        return out.into_owned();
-                    }
-                    // A broken pattern is a bug in our catalogue, not a reason to show nothing.
-                    return match out {
-                        Cow::Borrowed(s) => s.to_string(),
-                        Cow::Owned(s) => s,
-                    };
-                }
-            }
-        }
-        id.to_string()
+            .find_map(|c| c.format(id, args))
+            .unwrap_or_else(|| id.to_string())
     }
 }
 
@@ -117,15 +98,9 @@ impl Default for I18n {
     }
 }
 
-fn bundle_for(tag: &str) -> Option<Bundle> {
+fn catalogue_for(tag: &str) -> Option<Catalogue> {
     let src = CATALOGUES.iter().find(|(t, _)| *t == tag)?.1;
-    let langid: LanguageIdentifier = tag.parse().ok()?;
-    let resource = FluentResource::try_new(src.to_string()).ok()?;
-    let mut bundle = FluentBundle::new_concurrent(vec![langid]);
-    // Bidi isolation marks would show up as stray characters in a terminal cell grid.
-    bundle.set_use_isolating(false);
-    bundle.add_resource(resource).ok()?;
-    Some(bundle)
+    Some(Catalogue::parse(tag, src))
 }
 
 fn resolve_tag(tag: &str) -> String {

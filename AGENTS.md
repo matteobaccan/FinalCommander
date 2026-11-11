@@ -119,7 +119,9 @@ bug. The loop is input-driven and keeps no timer: anything that must happen on i
 
 - **i18n**: every user-visible string is a Fluent id in all seven catalogues. One test fails
   if an id is missing from a language, another if an id is never used. Plurals use the Fluent
-  selector (`{ $count -> [one] … *[other] … }`).
+  selector (`{ $count -> [one] … *[other] … }`). The catalogues are read by our own reader,
+  `crates/fcmd-i18n/src/ftl.rs`: no terms, attributes or functions — write a message with
+  those and it will show as text.
 - **Tests are sentences**: `a_junction_to_a_folder_sorts_with_the_folders`. A UI change gets a
   render-snapshot test (draw into a `Buffer`, assert on `to_text()`); anything touching the
   filesystem gets a `tempfile` test including the failure path; key handling gets a table.

@@ -547,13 +547,19 @@ hidden = "#808080"
 
 ## 5. Internationalisation
 
-- `fluent` catalogues per language in `i18n/<lang>/*.ftl`, compiled in, plus an override
-  directory so a translator can iterate without rebuilding (MTN2's approach).
+- Fluent catalogues per language in `i18n/<lang>/*.ftl`, compiled in, plus an override
+  directory so a translator can iterate without rebuilding (MTN2's approach). They are read by
+  our own reader (`fcmd-i18n/src/ftl.rs`, since 0.40) for the part of Fluent they are written
+  in: messages over one or more lines, `{ $var }`, string literals, and select expressions on
+  a word, a number or its CLDR plural category in each shipped language (Russian one, few,
+  many; Chinese none). Terms, attributes and functions are not read. When it replaced the
+  `fluent-bundle` crate it gave the same text for every message of every catalogue, with
+  numbers in every plural category and with text arguments.
 - Shipped languages: **English** (source), **Italian**, **German**, **French**, **Spanish**,
   **Russian**, **Chinese (Simplified, `zh-Hans`)**. Language is chosen in the settings or with
   `ui.language`/`--lang`; `auto` follows the OS locale and falls back to English. Adding a
   language means dropping an `i18n/<lang>/` directory next to the binary — no rebuild.
-- Rules: no string concatenation in code; plurals and gender through fluent; every message has
+- Rules: no string concatenation in code; plurals and gender through the select expression; every message has
   an id; `fcmd --i18n-lint` finds missing/unused ids in CI.
 - Russian and Chinese drive two requirements that are not optional: full Unicode input/display
   (no codepage assumptions anywhere) and correct double-width layout for CJK. Both are tested

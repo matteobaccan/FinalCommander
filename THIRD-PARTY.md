@@ -23,7 +23,6 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `chrono` | MIT OR Apache-2.0 | local-time formatting in panel columns |
 | `clap` | MIT OR Apache-2.0 | the command line |
 | `serde`, `toml` | MIT OR Apache-2.0 | configuration, keymaps and themes |
-| `fluent-bundle`, `unic-langid` | Apache-2.0 OR MIT | localisation catalogues |
 | `unicode-width` | MIT OR Apache-2.0 | correct double-width (CJK) layout |
 | `object` | MIT OR Apache-2.0 | reading ELF/PE/Mach-O structure for the disassembler |
 | `iced-x86` | MIT | x86 and x86-64 instruction decoding |
