@@ -116,7 +116,6 @@ Three findings that are not gaps against anybody:
 | Fonts and SVG drawn; HTML and RTF laid out | yazi, Total Commander, Double Commander | S as programs (`rsvg-convert`, `magick`); M in process | as programs | Would fall out of the row above |
 | Sound | Total Commander, Double Commander, nnn | S | **no** — decided with the video | |
 | A right margin in the editor; a ruler in the viewer | Midnight Commander | S | yes | The editor's line numbers are in (`Alt+N`) |
-| A block through a command; a file or a command's output inserted; a block written out | Midnight Commander, far2l | S | yes | The hex editor's blocks already do the file half |
 | A paragraph reflowed, wrap while typing, a block aligned; the case of a block; boxes drawn | Midnight Commander, FAR, far2l | S each | yes | FAR ships them as plugins (`align`, `autowrap`, `editcase`, `drawline`) |
 | The syntax chosen by hand | Midnight Commander, far2l | S | yes | For the file whose name says nothing |
 | Search while typing; the next occurrence of the word under the cursor | far2l | S | yes | |

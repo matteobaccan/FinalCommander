@@ -1252,6 +1252,31 @@ keys = ["Alt+N"]
 scope = "editor"
 cmd = "editor.line.numbers"
 
+# The block and the world outside the editor, which mcedit has under its own keys and FAR
+# leaves to plugins. Four letters beside the other block commands on `Alt+Shift`: `P` pipes
+# the block — or with nothing marked the whole file — through a command and puts what it
+# prints in its place; `O` puts a command's output in at the cursor; `I` reads a file in
+# there; `W` writes the block out to a file of its own.
+[[bind]]
+keys = ["Alt+Shift+P"]
+scope = "editor"
+cmd = "editor.block.pipe"
+
+[[bind]]
+keys = ["Alt+Shift+O"]
+scope = "editor"
+cmd = "editor.insert.output"
+
+[[bind]]
+keys = ["Alt+Shift+I"]
+scope = "editor"
+cmd = "editor.insert.file"
+
+[[bind]]
+keys = ["Alt+Shift+W"]
+scope = "editor"
+cmd = "editor.block.write"
+
 # ---------------------------------------------------------------- menus and dialogs (SPEC 10)
 [[bind]]
 keys = ["Alt+F1"]

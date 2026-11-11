@@ -987,6 +987,58 @@ the gutter, so a click on a number does nothing. A window with fewer than eight 
 for the text shows the text and no numbers. The editor does not wrap lines, so a row is
 always a line and every row has its number.
 
+### 2.2l A block through a command; a file or an output read in; a block written out
+
+Four commands, which mcedit has under keys of its own and FAR leaves to plugins. They sit on
+`Alt+Shift` with the other block commands.
+
+**`editor.block.pipe` (`Alt+Shift+P`)** asks for a command line and runs it with the marked
+stream block on its standard input; what it prints on standard output replaces the block and
+stays marked. With no block — or an empty one — the whole buffer is the input and is what is
+replaced, and the prompt's title says which of the two it is. A column block is refused
+before the prompt, because a rewritten text has no column to go back into.
+
+- The text is handed over with `\n` between lines whatever the file's end of line, in UTF-8
+  whatever its code page, and with a newline after the last line whether or not the block
+  ends with one — a filter reads lines. The answer has its `\r\n` turned into `\n`, and the
+  newline after its last line is taken off again when the input had none
+  (`fcmd_edit::editor::settle_output`), so a block that ends in the middle of a line still
+  does afterwards.
+- The command is a `Request::EditorPipe`, run on the worker pool through the shell the command
+  line uses (`run_pipe`), in the folder of the file being edited — the active panel's when
+  the buffer has no local file. Standard output and standard error are read apart: only the
+  first is the answer, and the second is the reason given when the command fails. The editor
+  is not blocked while it runs.
+- **Failure replaces nothing.** A command that cannot be started, ends with a status other
+  than zero, is ended by a signal, or prints more than 64 MiB comes back as an error
+  (`Event::EditorPiped` with `Err`), shown on the status line with what the command said,
+  and none of its output reaches the buffer.
+- **A stale answer replaces nothing.** The input is kept with the request; when the answer
+  comes, it is put in only if the editor still has the same file open and
+  `Editor::filter_input` still gives that very text. Otherwise the status line says the text
+  changed and the answer is dropped. An editor parked under a dialog still takes its answer.
+- The replacement is **one undo step** (`Editor::filter_replace`); after a whole-file filter
+  the cursor stays on the line it was on, clamped to the new text.
+
+**`editor.insert.output` (`Alt+Shift+O`)** runs a command the same way with nothing on its
+standard input and inserts its output at the cursor (`Editor::insert_at_cursor`), without the
+newline that ends its last line, as one undo step. A marked block is unmarked and not typed
+over. A command that prints nothing inserts nothing and says so.
+
+**`editor.insert.file` (`Alt+Shift+I`)** asks for a path — relative to the active panel's
+folder, `~` expanded — and inserts that file at the cursor, decoded as `F4` would decode it
+(`Buffer::open`: its own code page, byte order mark and line endings) and with its final
+newline if it has one. A file that cannot be read, is over the editor's open limit or is not
+on this machine is an error and inserts nothing.
+
+**`editor.block.write` (`Alt+Shift+W`)** asks for a path and writes the marked block there
+(`Editor::block_bytes`): the buffer's end of line and code page, no byte order mark. A column
+block is written as its rows. With nothing marked it says so and does not ask. An existing
+file is replaced, as save-as replaces one; the path of the file being edited is refused.
+
+Reading a file in and writing a block out are done where the key is handled, as the editor's
+own save is: both are one local file.
+
 ### 2.2b Syntax highlighting
 
 `fcmd-syntax` is a scanner, not a parser, and deliberately: it knows how a language writes a

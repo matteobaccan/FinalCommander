@@ -604,6 +604,14 @@ pub enum Command {
     EditorConvert,
     /// `Alt+N`: number the lines in a gutter, or stop (mcedit's key).
     EditorLineNumbers,
+    /// `Alt+Shift+P`: run the block, or the whole file, through a command and put what it prints in its place.
+    EditorPipe,
+    /// `Alt+Shift+O`: what a command prints, in at the cursor.
+    EditorInsertOutput,
+    /// `Alt+Shift+I`: a file read in at the cursor.
+    EditorInsertFile,
+    /// `Alt+Shift+W`: the marked block written to a file of its own.
+    EditorWriteBlock,
     // (more editor commands go above this line)
 }
 
@@ -911,6 +919,10 @@ impl Command {
             Command::EditorDeleteWordRight,
             Command::EditorToggleReadOnly,
             Command::EditorConvert,
+            Command::EditorWriteBlock,
+            Command::EditorInsertFile,
+            Command::EditorInsertOutput,
+            Command::EditorPipe,
             Command::EditorLineNumbers,
         ];
         for v in ViewMode::ALL {
@@ -1230,6 +1242,10 @@ impl Command {
             Command::EditorDeleteWordRight => "editor.delete.word.right".into(),
             Command::EditorToggleReadOnly => "editor.readonly.toggle".into(),
             Command::EditorConvert => "editor.convert".into(),
+            Command::EditorWriteBlock => "editor.block.write".into(),
+            Command::EditorInsertFile => "editor.insert.file".into(),
+            Command::EditorInsertOutput => "editor.insert.output".into(),
+            Command::EditorPipe => "editor.block.pipe".into(),
             Command::EditorLineNumbers => "editor.line.numbers".into(),
         }
     }
@@ -1526,6 +1542,10 @@ impl Command {
             ("editor.delete.word.right", _) => Command::EditorDeleteWordRight,
             ("editor.readonly.toggle", _) => Command::EditorToggleReadOnly,
             ("editor.convert", _) => Command::EditorConvert,
+            ("editor.block.write", _) => Command::EditorWriteBlock,
+            ("editor.insert.file", _) => Command::EditorInsertFile,
+            ("editor.insert.output", _) => Command::EditorInsertOutput,
+            ("editor.block.pipe", _) => Command::EditorPipe,
             ("editor.line.numbers", _) => Command::EditorLineNumbers,
             _ => return None,
         };

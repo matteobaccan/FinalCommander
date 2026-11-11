@@ -448,6 +448,16 @@ pub enum Request {
         line: String,
         cwd: std::path::PathBuf,
     },
+    /// Run a command line for the editor (SPEC 05 §2.2l): with `input`, that text on its
+    /// standard input, to be replaced by what the command prints; without, nothing to read
+    /// and the output to go in at the cursor. Only what it prints on standard output comes
+    /// back — what it says on the other one is the reason, when it fails.
+    EditorPipe {
+        id: u64,
+        line: String,
+        cwd: std::path::PathBuf,
+        input: Option<String>,
+    },
     /// Run a command line and bring back what it printed, line by line, to become a panel's
     /// rows rather than a screenful of text.
     Panelize {
@@ -1467,6 +1477,12 @@ pub enum Event {
         same: usize,
         failed: Vec<(std::path::PathBuf, String)>,
     },
+    /// What the editor's command printed, or why there is nothing to put in the buffer.
+    EditorPiped {
+        id: u64,
+        line: String,
+        result: Result<String, String>,
+    },
     /// What a panelize command printed: one line per path, as it printed them.
     Panelized {
         id: u64,
@@ -1668,6 +1684,21 @@ pub fn learn_rows() -> Vec<(&'static str, Vec<(String, String)>)> {
     ]
 }
 
+/// A command the editor has started and not yet heard from.
+///
+/// The command runs on a worker and the editor stays usable meanwhile, so the answer has to
+/// be able to tell whether it still belongs: `input` is the text that went to the command,
+/// and it replaces that text only if the buffer still holds it there.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct EditorPipe {
+    id: u64,
+    /// The file the editor had open, to know the answer from one for another file.
+    path: Option<VPath>,
+    /// What the command was given to filter, as the buffer held it; `None` when it was
+    /// given nothing and its output goes in at the cursor.
+    input: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PromptKind {
     /// What the directory's `descript.ion` should say about a file (FAR's `Ctrl+Z`). The
@@ -1692,6 +1723,14 @@ pub enum PromptKind {
     EditorGoto,
     /// The pattern of the lines to take out (`!` first: the lines to keep).
     EditorDeleteMatching,
+    /// The command the block — or the whole file — is run through (`Alt+Shift+P`).
+    EditorPipe,
+    /// The command whose output goes in at the cursor (`Alt+Shift+O`).
+    EditorInsertOutput,
+    /// The file to read in at the cursor (`Alt+Shift+I`).
+    EditorInsertFile,
+    /// Where to write the marked block (`Alt+Shift+W`).
+    EditorWriteBlock,
     /// An AI service's key, typed because its variable holds none.
     AiKey,
     /// Words for how the selected files should be renamed (`ai.rename`).
@@ -3252,6 +3291,8 @@ pub struct App {
     pub editor_size: (u16, u16),
     /// The decompilation we are waiting for, if any.
     decompile_id: Option<u64>,
+    /// The command the editor is waiting on, and what it was given (SPEC 05 §2.2l).
+    editor_pipe: Option<EditorPipe>,
     /// The netbox's site list and what is connected right now.
     pub sites: Vec<Site>,
     pub connected: Vec<String>,
@@ -3706,6 +3747,7 @@ impl App {
             ai_stopped: false,
             editor_size: (80, 20),
             decompile_id: None,
+            editor_pipe: None,
             sites,
             connected: Vec::new(),
             pending_connect: None,
@@ -5128,6 +5170,7 @@ impl App {
                 }
             }
             Event::JobDone { id, kind, outcome } => self.job_done(id, kind, outcome),
+            Event::EditorPiped { id, line, result } => self.editor_piped(id, &line, result),
             Event::Decompiled { id, tool, result } => {
                 if self.decompile_id != Some(id) {
                     return; // the viewer moved on
@@ -8265,6 +8308,26 @@ impl App {
                     }
                     Some(Err(e)) => self.set_error(e),
                     None => {}
+                }
+            }
+            PromptKind::EditorPipe | PromptKind::EditorInsertOutput => {
+                let line = prompt.text.trim().to_string();
+                let filter = prompt.kind == PromptKind::EditorPipe;
+                self.restore_editor();
+                self.editor_run_command(&line, filter);
+            }
+            PromptKind::EditorInsertFile | PromptKind::EditorWriteBlock => {
+                let raw = prompt.text.trim().to_string();
+                let write = prompt.kind == PromptKind::EditorWriteBlock;
+                self.restore_editor();
+                if raw.is_empty() {
+                    return;
+                }
+                let target = self.resolve_path(&raw);
+                if write {
+                    self.editor_write_block(&target);
+                } else {
+                    self.editor_insert_file(&target);
                 }
             }
             PromptKind::EditorGoto => {
@@ -26789,6 +26852,54 @@ impl App {
                 );
                 return;
             }
+            Command::EditorPipe => {
+                // Said before the question rather than after the answer: a command typed
+                // out for a column block would be a command typed for nothing.
+                let Some(editor) = self.mode.editor() else {
+                    return;
+                };
+                if editor.filter_input().is_none() {
+                    let m = self.i18n.t("editor-pipe-column");
+                    self.set_error(m);
+                    return;
+                }
+                let title = if editor.block.is_some_and(|b| !b.range().is_empty()) {
+                    "editor-prompt-pipe-block"
+                } else {
+                    "editor-prompt-pipe-file"
+                };
+                self.editor_prompt(PromptKind::EditorPipe, title, String::new());
+                return;
+            }
+            Command::EditorInsertOutput => {
+                self.editor_prompt(
+                    PromptKind::EditorInsertOutput,
+                    "editor-prompt-insert-output",
+                    String::new(),
+                );
+                return;
+            }
+            Command::EditorInsertFile => {
+                self.editor_prompt(
+                    PromptKind::EditorInsertFile,
+                    "editor-prompt-insert-file",
+                    String::new(),
+                );
+                return;
+            }
+            Command::EditorWriteBlock => {
+                if self.mode.editor().and_then(|e| e.block_bytes()).is_none() {
+                    let m = self.i18n.t("editor-no-block");
+                    self.set_error(m);
+                    return;
+                }
+                self.editor_prompt(
+                    PromptKind::EditorWriteBlock,
+                    "editor-prompt-write-block",
+                    String::new(),
+                );
+                return;
+            }
             _ => {}
         }
 
@@ -26989,6 +27100,250 @@ impl App {
         }
         if let Some(text) = error {
             self.set_error(text);
+        }
+    }
+
+    /// Start the command typed at `Alt+Shift+P` (`filter`) or `Alt+Shift+O`.
+    ///
+    /// It runs on a worker like every other command, in the folder of the file being edited,
+    /// and the editor is not held up for it. What it was given is kept, so that the answer
+    /// can be refused if the text has changed by the time it comes.
+    fn editor_run_command(&mut self, line: &str, filter: bool) {
+        if line.is_empty() {
+            return;
+        }
+        let Some(editor) = self.mode.editor() else {
+            return;
+        };
+        let input = if filter {
+            match editor.filter_input() {
+                Some(text) => Some(text),
+                None => {
+                    let m = self.i18n.t("editor-pipe-column");
+                    self.set_error(m);
+                    return;
+                }
+            }
+        } else {
+            None
+        };
+        let path = editor.path.clone();
+        // Beside the file when it is on this machine, since that is where a relative name
+        // in the command is expected to be looked for; a new file with no name yet, or a
+        // copy fetched from a server, runs where the panel is.
+        let beside = path
+            .as_ref()
+            .filter(|p| p.is_local() && self.remote_edit.is_none())
+            .and_then(|p| p.as_path().parent().map(|dir| dir.to_path_buf()))
+            .filter(|dir| dir.is_dir());
+        let cwd = beside.unwrap_or_else(|| {
+            let panel = &self.panel().cwd;
+            if panel.is_local() {
+                panel.as_path().to_path_buf()
+            } else {
+                std::env::temp_dir()
+            }
+        });
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        // A filter reads lines, and the last line of a block often has no newline after it:
+        // the command is given one, and `editor_piped` takes the one it answers with off.
+        let fed = input.as_ref().map(|text| {
+            if text.ends_with('\n') {
+                text.clone()
+            } else {
+                format!("{text}\n")
+            }
+        });
+        self.editor_pipe = Some(EditorPipe { id, path, input });
+        let m = self
+            .i18n
+            .t_args("editor-pipe-running", &[("command", line.into())]);
+        self.set_status(m);
+        self.requests.push(Request::EditorPipe {
+            id,
+            line: line.to_string(),
+            cwd,
+            input: fed,
+        });
+    }
+
+    /// The command has finished. Its output replaces what it was given, or goes in at the
+    /// cursor — and nothing at all changes when it failed, when it was given a text the
+    /// buffer no longer holds, or when the editor it was started from is gone.
+    fn editor_piped(&mut self, id: u64, line: &str, result: Result<String, String>) {
+        if self.editor_pipe.as_ref().map(|p| p.id) != Some(id) {
+            return;
+        }
+        let Some(pipe) = self.editor_pipe.take() else {
+            return;
+        };
+        let output = match result {
+            Ok(output) => output,
+            Err(why) => {
+                let m = self.i18n.t_args(
+                    "editor-pipe-failed",
+                    &[("command", line.into()), ("error", why.into())],
+                );
+                self.set_error(m);
+                return;
+            }
+        };
+        let (width, height) = self.editor_size;
+        // A dialog may be open over the editor by now; the editor is parked under it.
+        let editor = match &mut self.mode {
+            Mode::Editor(editor) => Some(editor),
+            _ => self.editor_parked.as_mut(),
+        };
+        let Some(editor) = editor.filter(|e| e.path == pipe.path) else {
+            let m = self
+                .i18n
+                .t_args("editor-pipe-gone", &[("command", line.into())]);
+            self.set_error(m);
+            return;
+        };
+        let name = editor.name();
+        let outcome = match &pipe.input {
+            Some(input) => {
+                if editor.filter_input().as_ref() != Some(input) {
+                    let m = self
+                        .i18n
+                        .t_args("editor-pipe-changed", &[("command", line.into())]);
+                    self.set_error(m);
+                    return;
+                }
+                let text = fcmd_edit::editor::settle_output(&output, input.ends_with('\n'));
+                editor.filter_replace(&text).map(|()| "editor-pipe-done")
+            }
+            None => {
+                let text = fcmd_edit::editor::settle_output(&output, false);
+                if text.is_empty() {
+                    let m = self
+                        .i18n
+                        .t_args("editor-pipe-empty", &[("command", line.into())]);
+                    self.set_status(m);
+                    return;
+                }
+                editor
+                    .insert_at_cursor(&text)
+                    .map(|()| "editor-pipe-inserted")
+            }
+        };
+        editor.scroll_into_view(height as usize, width as usize);
+        match outcome {
+            Ok(said) => {
+                let lines = output.lines().count() as i64;
+                let m = self
+                    .i18n
+                    .t_args(said, &[("command", line.into()), ("lines", lines.into())]);
+                self.set_status(m);
+            }
+            Err(e) => {
+                let m = self.i18n.t_args(
+                    "editor-failed",
+                    &[("name", name.into()), ("error", e.to_string().into())],
+                );
+                self.set_error(m);
+            }
+        }
+    }
+
+    /// `Alt+Shift+I`: a file read in at the cursor, as text — in whatever code page and with
+    /// whatever line endings it has, read the way `F4` would read it — and as one undo step.
+    fn editor_insert_file(&mut self, target: &VPath) {
+        if !target.is_local() {
+            let m = self.i18n.t("editor-insert-not-local");
+            self.set_error(m);
+            return;
+        }
+        let path = target.as_path();
+        let read = std::fs::metadata(path)
+            .map_err(|e| e.to_string())
+            .and_then(|meta| {
+                if meta.len() > fcmd_edit::MAX_OPEN {
+                    return Err(self.i18n.t("editor-insert-too-big"));
+                }
+                fcmd_edit::Buffer::open(path).map_err(|e| e.to_string())
+            });
+        let buffer = match read {
+            Ok(buffer) => buffer,
+            Err(why) => {
+                self.set_error(format!("{target}: {why}"));
+                return;
+            }
+        };
+        // The file as it is, its last newline included: read in at the start of a line, it
+        // leaves that line a line of its own.
+        let mut text = buffer.lines().join("\n");
+        if buffer.final_newline {
+            text.push('\n');
+        }
+        let (width, height) = self.editor_size;
+        let Some(editor) = self.mode.editor_mut() else {
+            return;
+        };
+        let name = editor.name();
+        match editor.insert_at_cursor(&text) {
+            Ok(()) => {
+                editor.scroll_into_view(height as usize, width as usize);
+                let m = self.i18n.t_args(
+                    "editor-file-inserted",
+                    &[
+                        ("name", target.display_name().into()),
+                        ("lines", (buffer.len() as i64).into()),
+                    ],
+                );
+                self.set_status(m);
+            }
+            Err(e) => {
+                let m = self.i18n.t_args(
+                    "editor-failed",
+                    &[("name", name.into()), ("error", e.to_string().into())],
+                );
+                self.set_error(m);
+            }
+        }
+    }
+
+    /// `Alt+Shift+W`: the marked block written to a file of its own, in the end of line and
+    /// the code page the file being edited is saved in. A file of that name is replaced, as
+    /// `Shift+F2` replaces one — except the file being edited, which a piece of itself
+    /// written over it would leave as that piece and nothing else.
+    fn editor_write_block(&mut self, target: &VPath) {
+        if !target.is_local() {
+            let m = self.i18n.t("editor-insert-not-local");
+            self.set_error(m);
+            return;
+        }
+        let Some(editor) = self.mode.editor() else {
+            return;
+        };
+        let Some(bytes) = editor.block_bytes() else {
+            let m = self.i18n.t("editor-no-block");
+            self.set_error(m);
+            return;
+        };
+        if editor.path.as_ref().map(|p| p.clone().normalised()) == Some(target.clone()) {
+            let m = self
+                .i18n
+                .t_args("editor-block-write-self", &[("name", editor.name().into())]);
+            self.set_error(m);
+            return;
+        }
+        match std::fs::write(target.as_path(), &bytes) {
+            Ok(()) => {
+                let m = self.i18n.t_args(
+                    "editor-block-written",
+                    &[
+                        ("size", fcmd_core::format_size(bytes.len() as u64).into()),
+                        ("name", target.display_name().into()),
+                    ],
+                );
+                self.set_status(m);
+                self.read_panel(0);
+                self.read_panel(1);
+            }
+            Err(e) => self.set_error(format!("{target}: {e}")),
         }
     }
 
@@ -44213,6 +44568,234 @@ abcdefghij
             panic!("the editor: {:?}", app.mode)
         };
         assert_eq!(e.buffer.line(1), "ok 2", "{}", app.status);
+    }
+
+    /// Type `text` into whatever prompt is in front and answer it.
+    fn answer_prompt(app: &mut App, text: &str) {
+        let Mode::Prompt(mut prompt) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            panic!("no prompt is in front")
+        };
+        prompt.text = text.into();
+        app.prompt_accept(prompt);
+    }
+
+    /// The editor's command, as the worker would answer it.
+    fn piped(app: &mut App, result: Result<&str, &str>) -> String {
+        let (id, line) = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::EditorPipe { id, line, .. } => Some((id, line)),
+                _ => None,
+            })
+            .expect("a command was started");
+        app.handle_event(Event::EditorPiped {
+            id,
+            line: line.clone(),
+            result: result.map(str::to_string).map_err(str::to_string),
+        });
+        line
+    }
+
+    /// `Alt+Shift+P` asks for a command and hands it the marked block — with a newline after
+    /// its last line, which a filter expects — and what comes back takes the block's place
+    /// as one undo step. A failure, or a text that changed meanwhile, replaces nothing.
+    #[test]
+    fn alt_shift_p_runs_the_block_through_a_command_and_replaces_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = editor_with_block(dir.path(), "b\na\ntail\n", 0, 2);
+        press(&mut app, "Alt+Shift+P");
+        assert!(
+            matches!(&app.mode, Mode::Prompt(p) if p.kind == PromptKind::EditorPipe),
+            "{:?}",
+            app.mode
+        );
+        answer_prompt(&mut app, "sort");
+        let asked = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::EditorPipe {
+                    id,
+                    line,
+                    cwd,
+                    input,
+                } => Some((id, line, cwd, input)),
+                _ => None,
+            })
+            .expect("the command was started");
+        assert_eq!(asked.1, "sort");
+        assert_eq!(asked.2, dir.path(), "beside the file");
+        assert_eq!(asked.3.as_deref(), Some("b\na\n"));
+        assert_eq!(editor_text(&app), "b\na\ntail\n", "nothing yet");
+        app.handle_event(Event::EditorPiped {
+            id: asked.0,
+            line: asked.1,
+            result: Ok("a\nb\n".into()),
+        });
+        assert_eq!(editor_text(&app), "a\nb\ntail\n", "{}", app.status);
+        assert!(!app.status_error, "{}", app.status);
+        press(&mut app, "Ctrl+Z");
+        assert_eq!(editor_text(&app), "b\na\ntail\n", "one step takes it back");
+
+        // The command fails: said, and the block is as it was.
+        press(&mut app, "Alt+Shift+P");
+        answer_prompt(&mut app, "false");
+        piped(&mut app, Err("exit status 1: no such thing"));
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.status.contains("no such thing"), "{}", app.status);
+        assert_eq!(editor_text(&app), "b\na\ntail\n");
+
+        // Something is typed while the command runs: its answer is for a text that is no
+        // longer there, and is not put in.
+        press(&mut app, "Alt+Shift+P");
+        answer_prompt(&mut app, "sort");
+        if let Mode::Editor(e) = &mut app.mode {
+            e.buffer
+                .insert(fcmd_edit::Position::new(0, 0), "z")
+                .unwrap();
+        }
+        piped(&mut app, Ok("a\nb\n"));
+        assert!(app.status_error, "{}", app.status);
+        assert_eq!(editor_text(&app), "zb\na\ntail\n");
+
+        // An answer nobody is waiting for is dropped.
+        app.handle_event(Event::EditorPiped {
+            id: 999_999,
+            line: "sort".into(),
+            result: Ok("gone".into()),
+        });
+        assert_eq!(editor_text(&app), "zb\na\ntail\n");
+    }
+
+    /// With nothing marked the whole file goes through the command; a column block is
+    /// refused before the question is asked; and an empty answer to the question runs
+    /// nothing.
+    #[test]
+    fn with_nothing_marked_the_whole_file_goes_through_the_command() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "b\na\n").unwrap();
+        let mut app = editing_app(dir.path());
+        app.open_editor_on(&VPath::local(dir.path().join("a.txt")));
+        app.take_requests();
+        press(&mut app, "Alt+Shift+P");
+        answer_prompt(&mut app, "");
+        assert!(app.take_requests().is_empty(), "no command, nothing run");
+        press(&mut app, "Alt+Shift+P");
+        answer_prompt(&mut app, "sort");
+        piped(&mut app, Ok("a\nb\n"));
+        assert_eq!(editor_text(&app), "a\nb\n", "{}", app.status);
+        press(&mut app, "Ctrl+Z");
+        assert_eq!(editor_text(&app), "b\na\n");
+
+        if let Mode::Editor(e) = &mut app.mode {
+            use fcmd_edit::{BlockKind, Position};
+            e.move_to(Position::new(0, 0), false, BlockKind::Column);
+            e.move_to(Position::new(1, 1), true, BlockKind::Column);
+        }
+        press(&mut app, "Alt+Shift+P");
+        assert!(app.status_error, "{}", app.status);
+        assert!(matches!(app.mode, Mode::Editor(_)), "{:?}", app.mode);
+    }
+
+    /// `Alt+Shift+O` puts what a command prints in at the cursor, without the newline its
+    /// last line ends with; a command that prints nothing changes nothing.
+    #[test]
+    fn alt_shift_o_inserts_what_a_command_prints_at_the_cursor() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "on  the day\n").unwrap();
+        let mut app = editing_app(dir.path());
+        app.open_editor_on(&VPath::local(dir.path().join("a.txt")));
+        app.take_requests();
+        for _ in 0..3 {
+            press(&mut app, "Right");
+        }
+        press(&mut app, "Alt+Shift+O");
+        answer_prompt(&mut app, "date");
+        let asked = app.take_requests();
+        assert!(
+            matches!(&asked[..], [Request::EditorPipe { input: None, .. }]),
+            "{asked:?}"
+        );
+        let Request::EditorPipe { id, line, .. } = &asked[0] else {
+            unreachable!()
+        };
+        app.handle_event(Event::EditorPiped {
+            id: *id,
+            line: line.clone(),
+            result: Ok("Monday\n".into()),
+        });
+        assert_eq!(editor_text(&app), "on Monday the day\n", "{}", app.status);
+        press(&mut app, "Ctrl+Z");
+        assert_eq!(editor_text(&app), "on  the day\n");
+
+        press(&mut app, "Alt+Shift+O");
+        answer_prompt(&mut app, "true");
+        piped(&mut app, Ok(""));
+        assert!(!app.status_error, "{}", app.status);
+        assert_eq!(editor_text(&app), "on  the day\n");
+    }
+
+    /// `Alt+Shift+I` reads a file in at the cursor, decoded the way the editor would open
+    /// it, and `Alt+Shift+W` writes the marked block out in the end of line of the file
+    /// being edited. A file that is not there is said; the file being edited is not written
+    /// over; with nothing marked there is nothing to write.
+    #[test]
+    fn a_file_is_read_in_at_the_cursor_and_a_block_is_written_out() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "top\r\nbottom\r\n").unwrap();
+        // The file read in is Windows-1252 with LF: it arrives as text, not as bytes.
+        std::fs::write(dir.path().join("part.txt"), b"caf\xe9\nbar\n").unwrap();
+        let mut app = editing_app(dir.path());
+        app.open_editor_on(&VPath::local(dir.path().join("a.txt")));
+        press(&mut app, "Down");
+        press(&mut app, "Alt+Shift+I");
+        assert!(matches!(&app.mode, Mode::Prompt(p) if p.kind == PromptKind::EditorInsertFile));
+        answer_prompt(&mut app, "part.txt");
+        assert!(!app.status_error, "{}", app.status);
+        let Mode::Editor(e) = &app.mode else {
+            panic!("the editor: {:?}", app.mode)
+        };
+        assert_eq!(e.buffer.lines(), ["top", "caf\u{e9}", "bar", "bottom"]);
+        press(&mut app, "Ctrl+Z");
+        let Mode::Editor(e) = &app.mode else {
+            panic!("the editor: {:?}", app.mode)
+        };
+        assert_eq!(e.buffer.lines(), ["top", "bottom"], "one step");
+
+        press(&mut app, "Alt+Shift+I");
+        answer_prompt(&mut app, "not-there.txt");
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.status.contains("not-there.txt"), "{}", app.status);
+
+        // Nothing marked: nothing to write, and no question.
+        press(&mut app, "Alt+Shift+W");
+        assert!(app.status_error && matches!(app.mode, Mode::Editor(_)));
+
+        if let Mode::Editor(e) = &mut app.mode {
+            use fcmd_edit::{BlockKind, Position};
+            e.move_to(Position::new(0, 0), false, BlockKind::Stream);
+            e.move_to(Position::new(1, 3), true, BlockKind::Stream);
+        }
+        press(&mut app, "Alt+Shift+W");
+        answer_prompt(&mut app, "a.txt");
+        assert!(app.status_error, "over itself: {}", app.status);
+        assert_eq!(
+            std::fs::read(dir.path().join("a.txt")).unwrap(),
+            b"top\r\nbottom\r\n"
+        );
+        press(&mut app, "Alt+Shift+W");
+        answer_prompt(&mut app, "out.txt");
+        assert!(!app.status_error, "{}", app.status);
+        assert_eq!(
+            std::fs::read(dir.path().join("out.txt")).unwrap(),
+            b"top\r\nbot",
+            "the file's own end of line"
+        );
+        // And somewhere that cannot be written is an error, with the editor still there.
+        press(&mut app, "Alt+Shift+W");
+        answer_prompt(&mut app, "no-such-folder/out.txt");
+        assert!(app.status_error && matches!(app.mode, Mode::Editor(_)));
     }
 
     /// `Alt+Shift+C` lists characters over the editor; typing narrows by the code, `Enter`

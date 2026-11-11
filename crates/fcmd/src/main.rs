@@ -1964,6 +1964,20 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                     // there.
                     archives.remember_password(&archive, &password);
                 }
+                // The editor's command (SPEC 05 §2.2l): on the pool like any other, with
+                // the block on its standard input when it is a filter.
+                Request::EditorPipe {
+                    id,
+                    line,
+                    cwd,
+                    input,
+                } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let result = run_pipe(&line, &cwd, input.as_deref());
+                        let _ = tx.send(Event::EditorPiped { id, line, result });
+                    });
+                }
                 // A command whose output is a list of paths rather than a screenful of
                 // text: it runs on the pool like any other, and what it printed comes back
                 // as lines (SPEC 02 §14).
@@ -2779,6 +2793,93 @@ fn run_interactive(line: &str, cwd: &std::path::Path) -> Option<i32> {
             Some(-1)
         }
     }
+}
+
+/// Run `line` through the user's shell for the editor: `input` on its standard input when
+/// there is one, and what it prints on standard output handed back as text.
+///
+/// The two outputs are kept apart here, unlike [`run_shell`], which shows a person what a
+/// command said: this one's output goes into a file somebody is writing, and a warning
+/// printed beside the result is not part of the result. What it said on standard error is
+/// the reason when it fails — and failing is ending with anything but zero, or printing more
+/// than a buffer should be handed at once. Nothing is handed back from a failure, so
+/// nothing of a half-finished answer can reach the buffer.
+fn run_pipe(line: &str, cwd: &std::path::Path, input: Option<&str>) -> Result<String, String> {
+    use std::io::{Read, Write};
+    use std::process::{Command, Stdio};
+    const MAX_OUTPUT: u64 = 64 * 1024 * 1024;
+
+    let shell = LINE_SHELL.read().map(|s| s.clone()).unwrap_or_default();
+    let (program, args) = fcmd_term::run_line_with(&shell, line);
+    let mut child = Command::new(program)
+        .args(args)
+        .current_dir(cwd)
+        .stdin(if input.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    // A thread writes and a thread reads the errors while this one reads the output: a
+    // filter that prints as it reads fills its pipe long before it has taken all of a large
+    // block, and whoever was still writing to it then would wait for ever.
+    let feeder = child
+        .stdin
+        .take()
+        .zip(input.map(str::to_owned))
+        .map(|(mut pipe, text)| {
+            std::thread::spawn(move || {
+                // A command that stops reading early (`head`) closes the pipe, which is
+                // not an error of ours.
+                let _ = pipe.write_all(text.as_bytes());
+            })
+        });
+    let errors = child.stderr.take().map(|pipe| {
+        std::thread::spawn(move || {
+            let mut said = Vec::new();
+            let _ = pipe.take(64 * 1024).read_to_end(&mut said);
+            said
+        })
+    });
+    let mut output = Vec::new();
+    if let Some(pipe) = child.stdout.take() {
+        let _ = pipe.take(MAX_OUTPUT + 1).read_to_end(&mut output);
+    }
+    let too_much = output.len() as u64 > MAX_OUTPUT;
+    if too_much {
+        // It is still printing into a pipe nobody reads any more.
+        let _ = child.kill();
+    }
+    let status = child.wait().map_err(|e| e.to_string())?;
+    if let Some(feeder) = feeder {
+        let _ = feeder.join();
+    }
+    let said = errors
+        .and_then(|reader| reader.join().ok())
+        .map(|bytes| String::from_utf8_lossy(&bytes).trim().to_string())
+        .unwrap_or_default();
+    if too_much {
+        return Err(format!(
+            "more than {} of output",
+            fcmd_core::format_size(MAX_OUTPUT)
+        ));
+    }
+    if !status.success() {
+        let how = match status.code() {
+            Some(code) => format!("exit status {code}"),
+            None => "ended by a signal".to_string(),
+        };
+        return Err(if said.is_empty() {
+            how
+        } else {
+            format!("{how}: {said}")
+        });
+    }
+    Ok(String::from_utf8_lossy(&output).into_owned())
 }
 
 fn run_shell(
@@ -6933,6 +7034,90 @@ dir_attr = "D"
         })
     }
 
+    /// Is there a POSIX shell to run a command line with? The tests that run one are for
+    /// what happens around the command, and say nothing on a machine that has none.
+    fn has_a_shell() -> bool {
+        // On Windows a command line goes to `cmd`, whatever else is installed.
+        !cfg!(windows)
+            && std::process::Command::new("sh")
+                .args(["-c", "exit 0"])
+                .status()
+                .is_ok_and(|s| s.success())
+    }
+
+    /// The editor's command really run: its input reaches it, only its standard output
+    /// comes back, a failure hands back its reason and nothing else, and it runs in the
+    /// folder it was told to.
+    #[test]
+    fn the_editors_command_is_fed_its_input_and_fails_without_an_answer() {
+        if !has_a_shell() || LINE_SHELL.read().is_ok_and(|s| !s.is_empty()) {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("here.txt"), "x").unwrap();
+        assert_eq!(
+            run_pipe("sort", dir.path(), Some("b\na\n")).as_deref(),
+            Ok("a\nb\n")
+        );
+        assert_eq!(
+            run_pipe("echo warning >&2; cat", dir.path(), Some("kept\n")).as_deref(),
+            Ok("kept\n"),
+            "what it says on standard error is not part of the answer"
+        );
+        assert_eq!(
+            run_pipe("ls", dir.path(), None).as_deref(),
+            Ok("here.txt\n"),
+            "in the folder it was given"
+        );
+        let failed = run_pipe("echo half; echo why >&2; exit 3", dir.path(), Some("x\n"));
+        assert_eq!(failed, Err("exit status 3: why".to_string()));
+        assert!(run_pipe("exit 2", dir.path(), None).is_err());
+        // A filter that stops reading before its input ends is not a failure of ours, and
+        // one given far more than a pipe holds does not hang.
+        let big = "line\n".repeat(200_000);
+        assert_eq!(
+            run_pipe("head -n 1", dir.path(), Some(&big)).as_deref(),
+            Ok("line\n")
+        );
+        assert_eq!(
+            run_pipe("cat", dir.path(), Some(&big)).map(|s| s.len()),
+            Ok(big.len())
+        );
+    }
+
+    /// The same through the editor's keys and the real worker: the block sorted by `sort`
+    /// is in the buffer, and a command that fails leaves the buffer alone.
+    #[test]
+    fn a_block_goes_through_a_real_command_and_comes_back() {
+        if !has_a_shell() || LINE_SHELL.read().is_ok_and(|s| !s.is_empty()) {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("list.txt");
+        std::fs::write(&file, "pear\napple\nfig\n").unwrap();
+        let mut app = app_on(dir.path(), dir.path());
+        app.start_on_edit(&file).unwrap();
+        serve(&mut app);
+        let text = |app: &App| app.mode.editor().expect("the editor").buffer.to_text();
+        for (command, after) in [
+            ("sort", "apple\nfig\npear\n"),
+            ("exit 4", "apple\nfig\npear\n"),
+            ("sort -r", "pear\nfig\napple\n"),
+        ] {
+            app.run(fcmd_cmd::Command::EditorPipe);
+            for c in command.chars() {
+                match c {
+                    ' ' => key(&mut app, "Space"),
+                    c => key(&mut app, &c.to_string()),
+                }
+            }
+            key(&mut app, "Enter");
+            serve(&mut app);
+            assert_eq!(text(&app), after, "{command}: {}", app.status);
+            assert_eq!(app.status_error, command.starts_with("exit"), "{command}");
+        }
+    }
+
     /// Serve every request the app has queued, from the real filesystem and through the real
     /// workers, so a test drives the same code the binary does.
     fn serve(app: &mut App) {
@@ -7351,6 +7536,17 @@ dir_attr = "D"
                         action,
                         result,
                     });
+                }
+                // The editor's command runs in the tests too: what it prints is what the
+                // buffer then holds.
+                Request::EditorPipe {
+                    id,
+                    line,
+                    cwd,
+                    input,
+                } => {
+                    let result = run_pipe(&line, &cwd, input.as_deref());
+                    app.handle_event(Event::EditorPiped { id, line, result });
                 }
                 // Panelize runs its command in the tests too: what it prints is what the
                 // panel then holds, and that is the whole of the feature.

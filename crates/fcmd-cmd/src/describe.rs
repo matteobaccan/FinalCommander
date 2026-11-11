@@ -372,6 +372,10 @@ impl Command {
             Command::EditorDeleteWordRight => "delete the word after the cursor",
             Command::EditorToggleReadOnly => "allow changes, or refuse them",
             Command::EditorConvert => "convert the end of line, the BOM or the code page",
+            Command::EditorWriteBlock => "write the block to a file",
+            Command::EditorInsertFile => "insert a file at the cursor",
+            Command::EditorInsertOutput => "insert what a command prints at the cursor",
+            Command::EditorPipe => "run the block, or the whole file, through a command",
             Command::EditorLineNumbers => "number the lines in the margin, or stop",
 
             Command::PluginCommands => "the commands the plugins provide",

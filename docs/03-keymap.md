@@ -223,6 +223,9 @@ indistinguishable in a TTY — see §9.
 | bookmarks set / go | Ctrl+Shift+0..9 / LeftCtrl+0..9 | — | Ctrl+Shift+0..9 / Alt+0..9 |
 | codepage toggle / menu | F8 / Shift+F8 | — | **Shift+F8**, a list that converts: the end of line, the byte order mark and the code page the file is saved in |
 | read-only lock | Ctrl+L | — | Ctrl+Alt+L |
+| the block through a command (the whole file with none marked) | — | Alt+U | **Alt+Shift+P** |
+| insert a command's output / a file at the cursor | — | Alt+U / Shift+F5 | **Alt+Shift+O** / **Alt+Shift+I** |
+| write the block to a file | — (Shift+F2 saves the file) | Ctrl+F | **Alt+Shift+W** |
 | line numbers in a margin | — | Alt+N | **Alt+N**, for the file in front; `editor.line_numbers` for every file |
 | rewrite the marked block (an AI's version, as a diff, applied on `Enter`) | — | — | **Ctrl+Alt+W** |
 | literal next key (char code) | Ctrl+Q | — | **Ctrl+Q** — a control character, or a tab where tabs are expanded |
@@ -240,7 +243,8 @@ delete line, Ctrl+Shift+D duplicate line, Alt+↑ / Alt+↓ move line, Alt+I / A
 outdent, Ctrl+K delete to end of line, Ctrl+Backspace delete word left, Ctrl+Alt+L read-only
 toggle, Shift+F8 convert the end of line, the BOM or the code page, Ctrl+Q literal next key,
 Ctrl+Shift+Ins append the block to the clipboard, Ctrl+N / Ctrl+E the first and last line on
-the screen, Alt+N line numbers. Movement, typing, Shift+arrows (stream block) and
+the screen, Alt+N line numbers, Alt+Shift+P the block through a command, Alt+Shift+O a command's
+output and Alt+Shift+I a file in at the cursor, Alt+Shift+W the block to a file. Movement, typing, Shift+arrows (stream block) and
 Alt+Shift+arrows (column block) are handled by the editor itself and are not bindable yet.
 
 ## 8b. Netbox (connections)

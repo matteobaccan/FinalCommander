@@ -246,6 +246,50 @@ block if there is one, in the whole file otherwise. Start the pattern with `!` t
 lines that match and take out the rest: `!ERROR` leaves the errors of a log. One `Ctrl+Z` puts
 them all back.
 
+# A block through a command, and files in and out
+
+Four keys on `Alt+Shift`, beside the other block commands, connect the text to the programs
+and files around it.
+
+| Key | What it does |
+| --- | --- |
+| `Alt+Shift+P` | runs the marked block through a command and puts what the command prints in its place |
+| `Alt+Shift+O` | puts what a command prints in at the cursor |
+| `Alt+Shift+I` | reads a file in at the cursor |
+| `Alt+Shift+W` | writes the marked block to a file |
+
+**`Alt+Shift+P`** asks for a command line — `sort -u`, `column -t`, `jq .`, `fmt -w 72`, a
+formatter — and gives it the block on its standard input. What it prints takes the block's
+place and stays marked, so the next command can be run on the result. With nothing marked the
+**whole file** goes through, and the question says so before you answer it. It is **one
+step**: a single `Ctrl+Z` brings back what was there.
+
+Nothing is replaced unless the command succeeded. If it ends with an error, the status line
+says which, with what the command itself said about it, and the text is as it was; what a
+command prints as warnings beside its result is not put in the file. The command runs in the
+folder of the file being edited, through the same shell the command line uses, and you can go
+on working while it runs: if the text it was given has changed by the time it answers, its
+answer is for something that is no longer there and is dropped, with a line saying so. A
+column block is refused — mark whole lines.
+
+**`Alt+Shift+O`** runs a command that is given nothing and puts its output where the cursor
+is: `date`, `ls`, `git log -3`. The newline a program ends its last line with is left out, so
+one line of output goes into the middle of a line without breaking it. A block that happens
+to be marked is left alone.
+
+**`Alt+Shift+I`** asks for a file and reads it in at the cursor, as text: in its own code page
+and with its own line endings, read the way `F4` would read it, and written, at the next save,
+the way the file you are editing is written. A name without a folder is looked for in the
+panel's folder.
+
+**`Alt+Shift+W`** asks for a name and writes the marked block there, with the end of line and
+in the code page of the file you are editing. A file of that name is replaced, as `Shift+F2`
+replaces one; the file you are editing is not, since a piece of it written over it would leave
+only that piece.
+
+The text goes to a command and comes back as UTF-8, whatever code page the file is saved in.
+Both the file and the block's target have to be on this machine.
+
 # Having a block rewritten
 
 Mark a block and press `Ctrl+Alt+W`: fcmd asks **what should become of it**, in words — `fix

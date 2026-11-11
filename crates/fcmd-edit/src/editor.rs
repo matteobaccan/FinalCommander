@@ -1156,6 +1156,56 @@ impl Editor {
         }
     }
 
+    /// What a command is given to filter (`Alt+Shift+P`): the marked block, or with nothing
+    /// marked the whole text, its lines parted by `\n` whatever the file's own ending is.
+    /// `None` for a column block, which has no shape a rewritten text could go back into.
+    pub fn filter_input(&self) -> Option<String> {
+        match self.block {
+            Some(block) if block.kind == BlockKind::Column => None,
+            Some(block) if !block.range().is_empty() => Some(self.buffer.text_in(block.range())),
+            _ => Some(self.buffer.lines().join("\n")),
+        }
+    }
+
+    /// Put `text` where [`Editor::filter_input`] was read from: over the block, which stays
+    /// marked on the new text, or over the whole buffer. **One** undo step either way, so a
+    /// single `Ctrl+Z` brings back what the command was given.
+    pub fn filter_replace(&mut self, text: &str) -> Result<(), EditorError> {
+        if self.block.is_some_and(|b| !b.range().is_empty()) {
+            self.replace_block(text)?;
+            return Ok(());
+        }
+        let was = self.cursor;
+        self.block = None;
+        self.buffer.begin_group(was);
+        let done = self
+            .buffer
+            .delete(Range::new(Position::default(), self.buffer.end()))
+            .and_then(|_| self.buffer.insert(Position::default(), text));
+        // The cursor stays on the line it was on, as near as the new text allows: a file
+        // run through a formatter is still being read at the same place.
+        self.cursor = self.clamp(was);
+        self.buffer.end_group(self.cursor);
+        done.map(|_| ()).map_err(Into::into)
+    }
+
+    /// `text` at the cursor, as one undo step, with the cursor left after it — a file or a
+    /// command's output read in. A marked block is unmarked and left alone: reading
+    /// something in is not typing over what is selected.
+    pub fn insert_at_cursor(&mut self, text: &str) -> Result<(), EditorError> {
+        self.block = None;
+        self.insert_text(text)
+    }
+
+    /// The marked block as the bytes a save would write for it: the file's own end of line
+    /// and code page, and no byte order mark — it is a piece of a file, not a file's start.
+    /// `None` when nothing is marked.
+    pub fn block_bytes(&self) -> Option<Vec<u8>> {
+        let text = self.block_text().filter(|t| !t.is_empty())?;
+        let text = text.replace('\n', self.buffer.eol.bytes());
+        Some(self.buffer.codepage.encode(&text))
+    }
+
     pub fn copy_block(&mut self) -> bool {
         match (self.block_text(), self.block) {
             (Some(text), Some(block)) => {
@@ -1720,6 +1770,18 @@ impl Editor {
     }
 }
 
+/// What a command printed, made ready to go into a buffer: its line endings turned into the
+/// buffer's own `\n`, and the newline a program ends its last line with taken off when
+/// `keep_last_newline` is false — which is when what it was given did not end with one, or
+/// when the text goes in at the cursor, where that newline would break the line in two.
+pub fn settle_output(output: &str, keep_last_newline: bool) -> String {
+    let mut text = output.replace("\r\n", "\n");
+    if !keep_last_newline && text.ends_with('\n') {
+        text.pop();
+    }
+    text
+}
+
 /// Is the text between `start` and `end` (bytes) a word of its own — with no letter, digit
 /// or underscore right before it or right after it?
 fn stands_alone(text: &str, start: usize, end: usize) -> bool {
@@ -1923,6 +1985,81 @@ mod tests {
 
     fn editor(text: &str) -> Editor {
         Editor::new(Buffer::from_text(text), None)
+    }
+
+    /// What a filter is given and where its answer goes: the block when one is marked, and
+    /// the block stays marked on the new text; the whole text when none is. Either way it is
+    /// one step to undo, and a column block is refused before anything runs.
+    #[test]
+    fn a_filter_takes_the_block_or_the_whole_text_and_is_one_undo_step() {
+        let mut e = editor("c\nb\na\ntail");
+        assert_eq!(e.filter_input().as_deref(), Some("c\nb\na\ntail"));
+        e.move_to(Position::new(0, 0), false, BlockKind::Stream);
+        e.move_to(Position::new(3, 0), true, BlockKind::Stream);
+        assert_eq!(e.filter_input().as_deref(), Some("c\nb\na\n"));
+        e.filter_replace("a\nb\nc\n").unwrap();
+        assert_eq!(e.buffer.to_text(), "a\nb\nc\ntail");
+        assert_eq!(e.block_text().as_deref(), Some("a\nb\nc\n"), "still marked");
+        assert!(e.undo());
+        assert_eq!(e.buffer.to_text(), "c\nb\na\ntail", "one step back");
+
+        // Nothing marked: the whole text, and the cursor kept on its line.
+        e.clear_block();
+        e.cursor = Position::new(2, 1);
+        e.filter_replace("one\ntwo").unwrap();
+        assert_eq!(e.buffer.to_text(), "one\ntwo");
+        assert_eq!(
+            e.cursor,
+            Position::new(1, 1),
+            "clamped onto the text there is"
+        );
+        assert!(e.undo());
+        assert_eq!(e.buffer.to_text(), "c\nb\na\ntail");
+
+        e.move_to(Position::new(0, 0), false, BlockKind::Column);
+        e.move_to(Position::new(1, 1), true, BlockKind::Column);
+        assert_eq!(
+            e.filter_input(),
+            None,
+            "a column has no shape to come back into"
+        );
+    }
+
+    /// A command ends its last line with a newline whether or not what it was given did.
+    #[test]
+    fn a_commands_output_loses_the_newline_it_was_not_given() {
+        assert_eq!(settle_output("a\r\nb\r\n", true), "a\nb\n");
+        assert_eq!(settle_output("a\nb\n", false), "a\nb");
+        assert_eq!(settle_output("a\n\n", false), "a\n", "only the last one");
+        assert_eq!(settle_output("", false), "");
+    }
+
+    /// Text read in at the cursor leaves a marked block alone and is one step to undo.
+    #[test]
+    fn text_read_in_at_the_cursor_does_not_type_over_the_block() {
+        let mut e = editor("alpha beta");
+        e.move_to(Position::new(0, 0), false, BlockKind::Stream);
+        e.move_to(Position::new(0, 5), true, BlockKind::Stream);
+        e.insert_at_cursor("X\nY").unwrap();
+        assert_eq!(e.buffer.to_text(), "alphaX\nY beta");
+        assert_eq!(e.cursor, Position::new(1, 1));
+        assert!(e.block.is_none());
+        assert!(e.undo());
+        assert_eq!(e.buffer.to_text(), "alpha beta");
+    }
+
+    /// A block written out is written the way the file is: its end of line and its code
+    /// page, and never a byte order mark.
+    #[test]
+    fn a_block_is_written_in_the_files_own_end_of_line_and_code_page() {
+        let mut e = editor("caf\u{e9}\nbar\nbaz");
+        assert_eq!(e.block_bytes(), None, "nothing marked");
+        e.buffer.eol = crate::Eol::Crlf;
+        e.buffer.codepage = fcmd_view::Codepage::Cp1252;
+        e.buffer.bom = true;
+        e.move_to(Position::new(0, 0), false, BlockKind::Stream);
+        e.move_to(Position::new(2, 0), true, BlockKind::Stream);
+        assert_eq!(e.block_bytes().as_deref(), Some(&b"caf\xe9\r\nbar\r\n"[..]));
     }
 
     #[test]

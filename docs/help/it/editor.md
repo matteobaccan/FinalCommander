@@ -257,6 +257,50 @@ se c'è, altrimenti in tutto il file. Comincia il pattern con `!` per tenere sol
 corrispondono e togliere le altre: `!ERROR` lascia gli errori di un log. Un solo `Ctrl+Z` le
 rimette tutte.
 
+# Un blocco attraverso un comando, e file dentro e fuori
+
+Quattro tasti su `Alt+Shift`, accanto agli altri comandi sui blocchi, collegano il testo ai
+programmi e ai file che gli stanno attorno.
+
+| Tasto | Che cosa fa |
+| --- | --- |
+| `Alt+Shift+P` | passa il blocco marcato attraverso un comando e mette al suo posto ciò che il comando stampa |
+| `Alt+Shift+O` | inserisce al cursore ciò che un comando stampa |
+| `Alt+Shift+I` | legge un file al cursore |
+| `Alt+Shift+W` | scrive il blocco marcato in un file |
+
+**`Alt+Shift+P`** chiede una riga di comando — `sort -u`, `column -t`, `jq .`, `fmt -w 72`, un
+formattatore — e le dà il blocco sullo standard input. Ciò che stampa prende il posto del
+blocco e resta marcato, così il comando successivo si può eseguire sul risultato. Senza nulla
+di marcato passa **tutto il file**, e la domanda lo dice prima che tu risponda. È **un solo
+passo**: un `Ctrl+Z` riporta ciò che c'era.
+
+Nulla viene sostituito se il comando non è riuscito. Se finisce con un errore, la riga di
+stato dice quale, con ciò che il comando stesso ha detto, e il testo resta com'era; gli avvisi
+che un comando stampa accanto al risultato non finiscono nel file. Il comando gira nella
+cartella del file in modifica, con la stessa shell della riga di comando, e intanto si può
+continuare a lavorare: se il testo che gli è stato dato è cambiato quando risponde, la
+risposta riguarda qualcosa che non c'è più e viene scartata, con una riga che lo dice. Un
+blocco a colonne è rifiutato: marca righe intere.
+
+**`Alt+Shift+O`** esegue un comando a cui non viene dato nulla e mette la sua uscita dove sta
+il cursore: `date`, `ls`, `git log -3`. Il ritorno a capo con cui un programma chiude l'ultima
+riga viene lasciato fuori, così una riga di uscita entra in mezzo a una riga senza spezzarla.
+Un blocco eventualmente marcato non viene toccato.
+
+**`Alt+Shift+I`** chiede un file e lo legge al cursore, come testo: nella sua tabella codici e
+con i suoi fine riga, letto come lo leggerebbe `F4`, e scritto, al prossimo salvataggio, come
+viene scritto il file che stai modificando. Un nome senza cartella viene cercato nella
+cartella del pannello.
+
+**`Alt+Shift+W`** chiede un nome e ci scrive il blocco marcato, con il fine riga e nella
+tabella codici del file che stai modificando. Un file con quel nome viene sostituito, come lo
+sostituisce `Shift+F2`; il file in modifica no, perché un suo pezzo scritto sopra di esso
+lascerebbe solo quel pezzo.
+
+Il testo va a un comando e ne torna in UTF-8, qualunque sia la tabella codici in cui il file è
+salvato. Sia il file sia la destinazione del blocco devono stare su questa macchina.
+
 # Far riscrivere un blocco
 
 Marca un blocco e premi `Ctrl+Alt+W`: fcmd chiede **che cosa deve diventare**, a parole —
