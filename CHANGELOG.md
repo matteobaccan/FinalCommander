@@ -53,9 +53,10 @@ Notable changes, newest first. The format follows
 ### Changed
 
 - **Delphi Dark 2027 is sharper.** Its page, its code and its comments were measured against a
-  screenshot of the IDE: the background has the IDE's touch of blue (`#2e2f33`), identifiers
-  are pure white instead of the light grey of the chrome, keywords a lighter cream and comments
-  the IDE's soft green instead of a yellow olive. The panels and dialogs keep their colours.
+  screenshot of the IDE: the background has the IDE's touch of blue (`#2e3034`), identifiers
+  are pure white instead of the light grey of the chrome, keywords a lighter cream, the cursor
+  line the IDE's near-black and comments its light green (`#bce784`, from its own colour
+  dialog) instead of a yellow olive. The panels and dialogs keep their colours.
 - **Extensions of any length line up, as in FAR.** The full view used to keep a column of
   four for the extension, so `dproj`, `manifest` or `deployproj` stayed in the name; now an
   extension sits at the right of the name field whatever its length, a short one starting

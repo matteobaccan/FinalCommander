@@ -8,13 +8,14 @@ variant = "dark"
 # row and a near-black blue line under the cursor. The rest of the screen — panels, menus,
 # dialogs — takes the IDE's own chrome: dark greys and its blue.
 #
-# The page and the code were measured against a screenshot of the IDE: a background with a
-# touch of blue in it (#2e2f33, not a neutral grey), identifiers in pure white rather than the
-# light grey of the chrome — most of what makes the IDE's code look sharp is that contrast —
-# and comments a soft green rather than a yellow olive.
+# The page and the code were measured against the IDE itself: a background with a touch of blue
+# in it (#2e3034, not a neutral grey) and a near-black line under the cursor (#08141c),
+# identifiers in pure white rather than the light grey of the chrome — most of what makes the
+# IDE's code look sharp is that contrast — and comments the light green its colour dialog gives
+# for the Dark setting (188, 231, 132), in italics.
 
 [palette]
-bg = "#2e2f33"
+bg = "#2e3034"
 chrome = "#252526"
 surface = "#2d2d30"
 border = "#4a4a4f"
@@ -23,11 +24,11 @@ code = "#ffffff"
 dim = "#808080"
 bright = "#ffffff"
 blue = "#1e4f7a"
-cursorline = "#0f1a24"
+cursorline = "#08141c"
 selection = "#7fa6f2"
 ink = "#101828"
 cream = "#f0dcbe"
-olive = "#96ae7a"
+olive = "#bce784"
 azure = "#6cb4e8"
 string = "#5a9be6"
 pink = "#e87bb0"
