@@ -1,4 +1,4 @@
-//! The site's own words, in the seven languages the program itself speaks.
+//! The site's own words, in seven of the languages the program itself speaks.
 //!
 //! Only the chrome and the landing page are here. The long documents — the help, the
 //! changelog, the survey of the other commanders — are the repository's own files and are in

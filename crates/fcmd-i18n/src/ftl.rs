@@ -205,8 +205,9 @@ fn plural(lang: &str, n: f64) -> &'static str {
     let i = abs.trunc() as u64;
     match lang {
         "zh" => "other",
-        // French counts 0 and 1, and their fractions, as one.
-        "fr" => {
+        // French counts 0 and 1, and their fractions, as one; so does Portuguese, by the
+        // rule CLDR gives for plain `pt`, which is Brazil's.
+        "fr" | "pt" => {
             if i < 2 {
                 "one"
             } else {
@@ -249,7 +250,33 @@ fn plural(lang: &str, n: f64) -> &'static str {
                 "many"
             }
         }
-        // English, Italian, German, Spanish: one is the whole number 1.
+        // Slovak: 1, then 2 to 4, and a fraction is a category of its own.
+        "sk" => {
+            if !whole {
+                "many"
+            } else if i == 1 {
+                "one"
+            } else if (2..=4).contains(&i) {
+                "few"
+            } else {
+                "other"
+            }
+        }
+        // Lithuanian: the last digit decides, except in the teens — 21 is one and 22 is
+        // few, while 10 to 20 are other, as 0 is.
+        "lt" => {
+            let teens = (11..=19).contains(&(i % 100));
+            if !whole {
+                "many"
+            } else if i % 10 == 1 && !teens {
+                "one"
+            } else if (2..=9).contains(&(i % 10)) && !teens {
+                "few"
+            } else {
+                "other"
+            }
+        }
+        // English, Italian, German, Spanish, Hungarian: one is the whole number 1.
         _ => {
             if whole && i == 1 {
                 "one"
@@ -580,6 +607,27 @@ mod tests {
         assert_eq!(cat("cs", 22.0), "other");
         assert_eq!(cat("cs", 0.0), "other");
         assert_eq!(cat("cs", 1.5), "many");
+        assert_eq!(cat("sk", 1.0), "one");
+        assert_eq!(cat("sk", 3.0), "few");
+        assert_eq!(cat("sk", 5.0), "other");
+        assert_eq!(cat("sk", 22.0), "other");
+        assert_eq!(cat("sk", 1.5), "many");
+        assert_eq!(cat("hu", 1.0), "one");
+        assert_eq!(cat("hu", 0.0), "other");
+        assert_eq!(cat("hu", 2.0), "other");
+        assert_eq!(cat("lt", 1.0), "one");
+        assert_eq!(cat("lt", 21.0), "one");
+        assert_eq!(cat("lt", 11.0), "other");
+        assert_eq!(cat("lt", 2.0), "few");
+        assert_eq!(cat("lt", 29.0), "few");
+        assert_eq!(cat("lt", 12.0), "other");
+        assert_eq!(cat("lt", 10.0), "other");
+        assert_eq!(cat("lt", 0.0), "other");
+        assert_eq!(cat("lt", 1.5), "many");
+        assert_eq!(cat("pt", 0.0), "one");
+        assert_eq!(cat("pt", 1.0), "one");
+        assert_eq!(cat("pt", 1.5), "one");
+        assert_eq!(cat("pt", 2.0), "other");
     }
 
     #[test]

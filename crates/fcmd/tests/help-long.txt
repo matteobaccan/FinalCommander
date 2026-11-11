@@ -24,7 +24,7 @@ Options:
           Keymap profile: a built-in one (far, mc) or a [[keymap]] block from the config file
 
       --lang <TAG>
-          Interface language: en, it, de, fr, es, ru, zh, or auto
+          Interface language: en, it, de, fr, es, ru, zh, uk, be, pl, cs, sk, hu, lt, pt, or auto
 
       --set <KEY=VALUE>
           Override a setting, e.g. --set panel.show_hidden=true

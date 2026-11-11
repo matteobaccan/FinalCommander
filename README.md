@@ -31,7 +31,7 @@ S3, a hex editor, a viewer that survives a four-gigabyte log, a database browser
 reader, a git front end, a chat window for your AI, and a *different* set of all of them on
 the other operating system you work on. **FinalCommander is one binary that does all of it,
 with the same keys, on Linux, macOS and Windows.** No installer, no runtime, no DLLs, no
-plugin tree to assemble: themes, keymaps, seven languages, the whole help and the manual are
+plugin tree to assemble: themes, keymaps, fifteen languages, the whole help and the manual are
 inside the file. `scp` it to a server and it works there too.
 
 ## Ten reasons to switch today
@@ -307,7 +307,7 @@ every key on the screen you are looking at does.
   checking against `known_hosts`, a jump host, port forwarding, a speed limit per server, and
   `s3://` panels with the credentials read from the environment or `~/.aws/credentials`.
   Passwords are kept, if you want, in the encrypted secrets file — never in the configuration.
-- **The program itself**: ten themes, seven interface languages switchable while it runs, two
+- **The program itself**: ten themes, fifteen interface languages switchable while it runs, two
   keymap profiles (FAR and mc) and your own on top, macros, the screens list (`F12`), a terminal
   of its own (`Ctrl+Alt+E`), plugins (`Ctrl+Shift+F11` for their commands, *Options → Plugins
   configuration* to turn them on and off), questions to an AI service of your choice, a help
@@ -425,7 +425,7 @@ crates/fcmd-s3       object storage: SigV4, listings, the S3 provider and a fake
 crates/fcmd-find     find by name and by content, as a walk the interface reads as it runs
 crates/fcmd-cmd      command vocabulary, keys, keymap profiles (far, mc)
 crates/fcmd-config   TOML configuration, discovery, overrides
-crates/fcmd-i18n     fluent catalogues for seven languages
+crates/fcmd-i18n     fluent catalogues for fifteen languages
 crates/fcmd-plug     the plugin tier: manifests, discovery, running a command
 crates/fcmd-ui       cell buffer, colours, themes, panel and chrome widgets
 crates/fcmd-tui      the terminal backend: input decoding and diffed painting
@@ -437,7 +437,7 @@ The last one is not part of the program — `fcmd` does not link it, and a relea
 build it. It reads this file, the changelog, the commander survey, the help chapters in
 `docs/help/` and the screenshots in `docs/shots/`, and writes the static site published at
 <https://matteobaccan.github.io/FinalCommander/> — ninety-odd pages, no framework, no fonts or
-scripts fetched from anywhere, in the seven languages the interface speaks. `cargo run -p
+scripts fetched from anywhere, in seven of the languages the interface speaks. `cargo run -p
 fcmd-site -- --out site` writes it locally, and the workflow builds it on every push and keeps
 it as the run's artifact. A push never publishes it: the site goes up with each release,
 built from the release's tag so that it describes the version one can download, or when
@@ -485,7 +485,7 @@ release it landed in.
 Why it is that way round, plainly:
 
 - Every feature here arrives as a whole: its section of the spec, its chapter of the help, its
-  entry in the changelog, its tests on three platforms, and its strings in seven languages. A
+  entry in the changelog, its tests on three platforms, and its strings in fifteen languages. A
   patch that changes the code alone is the smallest part of that work, and finishing it costs
   more than writing it from a good issue would.
 - The licensing is a minefield and only the maintainer can walk it. far2l, Midnight Commander,

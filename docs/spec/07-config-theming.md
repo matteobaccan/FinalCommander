@@ -618,7 +618,11 @@ hidden = "#808080"
   `fluent-bundle` crate it gave the same text for every message of every catalogue, with
   numbers in every plural category and with text arguments.
 - Shipped languages: **English** (source), **Italian**, **German**, **French**, **Spanish**,
-  **Russian**, **Chinese (Simplified, `zh-Hans`)**. Language is chosen in the settings or with
+  **Russian**, **Chinese (Simplified, `zh-Hans`)**, and since 0.42 **Ukrainian**,
+  **Belarusian**, **Polish**, **Czech**, **Slovak**, **Hungarian**, **Lithuanian** and
+  **Portuguese (Brazilian)** — fifteen, the thirteen FAR ships and two more. The words are FAR's
+  where FAR has them (`far/farlang.templ.m4`). The help pages exist in English and Italian; the
+  others show the English page with a line saying so. Language is chosen in the settings or with
   `ui.language`/`--lang`; `auto` follows the OS locale and falls back to English. Adding a
   language means dropping an `i18n/<lang>/` directory next to the binary — no rebuild.
 - Rules: no string concatenation in code; plurals and gender through the select expression; every message has

@@ -44,6 +44,12 @@ Notable changes, newest first. The format follows
   `editor.use_external` / `viewer.use_external` are FAR's *use the external editor for F4* /
   *viewer for F3*: the keys change places, and `Alt+F4`/`Alt+F3` open ours. In the editor and
   viewer settings dialogs, in All settings, and `--set`.
+- **Eight more interface languages**: Ukrainian, Belarusian, Polish, Czech, Slovak, Hungarian,
+  Lithuanian and Portuguese (Brazilian) — fifteen in all, the thirteen FAR ships and two more.
+  Every message is translated, with each language's plural rules; the words are FAR's where
+  FAR has them. In the language list, `ui.language` and `--lang`; the help pages show the
+  English text with a line saying so. Nobody who speaks them has read them yet: corrections
+  are welcome.
 - **Printing.** `Alt+F5` prints the marked files or the one under the cursor (after a question
   showing the command), the file in the viewer, and in the editor the block or the whole text
   as it is on the screen. `[print] command` names what runs — `{file}` once per file, or the

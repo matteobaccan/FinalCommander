@@ -1,7 +1,7 @@
 //! The generator for the project's web site.
 //!
 //! `cargo run -p fcmd-site -- --out site` writes a static site into `site/`: a landing page in
-//! each of the seven languages the program speaks, the README's own argument, the survey of the
+//! seven of the languages the program speaks, the README's own argument, the survey of the
 //! other commanders, the help pages that `F1` shows inside the program, and the changelog.
 //! `.github/workflows/pages.yml` runs it and publishes the result to GitHub Pages.
 //!

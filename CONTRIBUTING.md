@@ -9,7 +9,7 @@ Midnight Commander feature by feature (`docs/spec/09-roadmap.md` has the roadmap
 **Please do not open a pull request with new code.** Say what is missing or wrong in an
 **issue** — there is a form for each — and it will be built for you, as a whole: the spec
 section, the help chapter, the changelog entry, the tests on three platforms and the strings
-in seven languages. That last part is most of the work, and a patch to the code alone cannot
+in fifteen languages. That last part is most of the work, and a patch to the code alone cannot
 carry it.
 
 There is a licensing reason as well, and it is the harder one: far2l, Midnight Commander,

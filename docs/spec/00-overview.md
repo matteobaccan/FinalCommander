@@ -124,7 +124,7 @@ page the search started from. The chapters are searched as they are drawn, at th
 the dialog, so a line found is a line one can see.
 
 **The chapters are translated one at a time**, and the program is honest about which ones are.
-Each chapter's name is a message id in the seven catalogues, so an index is always in the
+Each chapter's name is a message id in the fifteen catalogues, so an index is always in the
 reader's language; the prose of a chapter lives in `docs/help/<file>.md` in English and in
 `docs/help/<lang>/<file>.md` where somebody has translated it. A chapter with no translation
 for the language in force is shown in English, with one line above it — in that language —

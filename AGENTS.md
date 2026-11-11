@@ -117,7 +117,7 @@ bug. The loop is input-driven and keeps no timer: anything that must happen on i
 
 ## Conventions that the tests enforce
 
-- **i18n**: every user-visible string is a Fluent id in all seven catalogues. One test fails
+- **i18n**: every user-visible string is a Fluent id in all fifteen catalogues. One test fails
   if an id is missing from a language, another if an id is never used. Plurals use the Fluent
   selector (`{ $count -> [one] … *[other] … }`). The catalogues are read by our own reader,
   `crates/fcmd-i18n/src/ftl.rs`: no terms, attributes or functions — write a message with
@@ -204,7 +204,10 @@ What the last few were about, newest first:
   type, reflow and inserts; disk usage as a treemap, binary compare and a unified diff saved as
   a patch; full-screen programs given the terminal (`[term] interactive`, `tty:`); `F11`
   unbound for `Shift+F11` and `Ctrl+Shift+F11`; the paste on Windows and the editor's leave
-  question fixed; and the feature table read against eighteen other file managers.
+  question fixed; printing with `Alt+F5` (`[print] command`); eight more interface languages
+  — uk, be, pl, cs, sk, hu, lt, pt, fifteen in all, worded after FAR's `farlang.templ.m4`,
+  not yet read by native speakers, help in English for them; and the feature table read
+  against eighteen other file managers.
 - **0.41.0** — released early on the author's word, the same day as 0.40.0, to gather what the
   roadmap had spread over 0.41–0.47: the editor's search, replace and undo, its conversions and
   the diff before overwriting; accented sorting; the `delphi-inspiration` theme; search and

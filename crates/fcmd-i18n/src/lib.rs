@@ -4,7 +4,8 @@
 //! in, so the program carries no localisation library.
 //!
 //! Shipped languages: English, Italian, German, French, Spanish, Russian, Chinese
-//! (Simplified). See `docs/spec/07-config-theming.md` §5.
+//! (Simplified), Ukrainian, Belarusian, Polish, Czech, Slovak, Hungarian, Lithuanian,
+//! Portuguese. See `docs/spec/07-config-theming.md` §5.
 
 pub mod ftl;
 
@@ -27,6 +28,10 @@ pub const LANGUAGES: &[(&str, &str)] = &[
     ("be", "Беларуская"),
     ("pl", "Polski"),
     ("cs", "Čeština"),
+    ("sk", "Slovenčina"),
+    ("hu", "Magyar"),
+    ("lt", "Lietuvių"),
+    ("pt", "Português"),
 ];
 
 const CATALOGUES: &[(&str, &str)] = &[
@@ -41,6 +46,10 @@ const CATALOGUES: &[(&str, &str)] = &[
     ("be", include_str!("../i18n/be/fc.ftl")),
     ("pl", include_str!("../i18n/pl/fc.ftl")),
     ("cs", include_str!("../i18n/cs/fc.ftl")),
+    ("sk", include_str!("../i18n/sk/fc.ftl")),
+    ("hu", include_str!("../i18n/hu/fc.ftl")),
+    ("lt", include_str!("../i18n/lt/fc.ftl")),
+    ("pt", include_str!("../i18n/pt/fc.ftl")),
 ];
 
 pub struct I18n {
@@ -173,9 +182,9 @@ mod tests {
     /// Every message in the catalogue is shown by something.
     ///
     /// The other way round — every id the code asks for exists — is the test above, and the
-    /// two together are what keeps a translation honest: a message nobody shows is seven
+    /// two together are what keeps a translation honest: a message nobody shows is fifteen
     /// translations of nothing, and it is how a catalogue grows a tail of text that no longer
-    /// matches the program. When this fails, either use the id or delete it from all seven.
+    /// matches the program. When this fails, either use the id or delete it from all of them.
     ///
     /// It reads the source tree, so an id built at run time rather than written as a literal
     /// would look unused. There are none today; if one appears, give it a literal somewhere
@@ -224,7 +233,7 @@ mod tests {
         }
         assert!(
             unused.is_empty(),
-            "messages nobody shows — use them or delete them from all seven catalogues:\n  {}",
+            "messages nobody shows — use them or delete them from every catalogue:\n  {}",
             unused.join("\n  ")
         );
     }
@@ -244,6 +253,8 @@ mod tests {
     fn locales_and_nonsense_resolve_sensibly() {
         assert_eq!(I18n::new("it_IT.UTF-8").tag(), "it");
         assert_eq!(I18n::new("zh-Hans-CN").tag(), "zh");
+        assert_eq!(I18n::new("pt_BR.UTF-8").tag(), "pt");
+        assert_eq!(I18n::new("sk-SK").tag(), "sk");
         assert_eq!(I18n::new("tlh").tag(), "en"); // Klingon is not shipped yet
         assert_eq!(I18n::new("").tag(), I18n::from_env().tag());
     }
@@ -258,5 +269,9 @@ mod tests {
     fn language_names_are_endonyms() {
         assert_eq!(I18n::new("ru").language_name(), "Русский");
         assert_eq!(I18n::new("zh").language_name(), "简体中文");
+        assert_eq!(I18n::new("sk").language_name(), "Slovenčina");
+        assert_eq!(I18n::new("hu").language_name(), "Magyar");
+        assert_eq!(I18n::new("lt").language_name(), "Lietuvių");
+        assert_eq!(I18n::new("pt").language_name(), "Português");
     }
 }

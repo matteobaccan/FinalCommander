@@ -120,7 +120,7 @@ const OPTS: &[Opt] = &[
     opt(
         "lang",
         &["TAG"],
-        "Interface language: en, it, de, fr, es, ru, zh, or auto.",
+        "Interface language: en, it, de, fr, es, ru, zh, uk, be, pl, cs, sk, hu, lt, pt, or auto.",
     ),
     Opt {
         repeat: true,
