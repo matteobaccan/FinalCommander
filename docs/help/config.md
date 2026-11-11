@@ -169,6 +169,55 @@ adding it to the `PATH`: the panel then says it is missing, and adding that fold
 `PATH` is the fix. *External programs* in the `F9` dialog of `Alt+F1`
 (`drives.panels.tools`) takes the row away; `Ctrl+7` there hides every panel row at once.
 
+# Pictures in real pixels
+
+`viewer.pixels` says how the viewer and the quick view draw a picture.
+It is a row of *Options → Viewer settings* (*Pictures*) and a line of *All settings*.
+
+| Value | What is drawn |
+| --- | --- |
+| `auto` | the default: real pixels in a terminal known to draw them, half blocks in every other |
+| `kitty` | kitty's graphics protocol, whatever the terminal says it is |
+| `iterm` | iTerm2's inline images |
+| `sixel` | sixel |
+| `off` | half blocks, always |
+
+What `auto` goes by is the environment the terminal gave the program — never a question put
+to the terminal, which could go unanswered and leave fcmd waiting, or be answered late into
+your typing:
+
+| Terminal | Recognised by | Drawn with |
+| --- | --- | --- |
+| kitty | `KITTY_WINDOW_ID`, or `TERM=xterm-kitty` | kitty |
+| Ghostty | `TERM=xterm-ghostty`, or `TERM_PROGRAM=ghostty` | kitty |
+| iTerm2 | `TERM_PROGRAM=iTerm.app` | iterm |
+| WezTerm | `TERM_PROGRAM=WezTerm` | iterm |
+| foot, mlterm, contour | `TERM` | sixel, when the size of a cell is known |
+| inside tmux, screen, zellij | `TMUX`, `STY`, `ZELLIJ`, `TERM=screen…` | half blocks |
+| anything else | — | half blocks |
+
+Four terminals draw pixels and cannot be vouched for from here, so they are yours to name:
+**Windows Terminal** from 1.22 draws `sixel` and does not say which version it is; **xterm**
+draws `sixel` only when started as a VT340 (`xterm -ti 340`); **VS Code**'s terminal draws
+`iterm` only with its own *Enable Images* setting on; **Konsole** draws `kitty`, but how much
+of that protocol depends on more than its version. A name that turns out wrong shows as a blank
+where the picture should be, or as a line of letters: set it back to `off`.
+
+kitty and iTerm2 are told how many cells a picture covers, so they need nothing more. Sixel is
+drawn pixel for pixel, so fcmd has to know **how large a cell is**. It asks the system — the
+terminal's own window size, from the kernel, not from the terminal — and where that says
+nothing it takes eight by sixteen, or the ten by twenty Windows Terminal always uses for
+sixel. `viewer.cell_width` and `viewer.cell_height` state it instead, for a terminal where a
+sixel picture comes out a different size from the frame left for it; both have to be set, and
+`0` is "ask".
+
+```toml
+[viewer]
+pixels = "sixel"     # auto | kitty | iterm | sixel | off
+cell_width = 9       # 0 = ask the system
+cell_height = 18
+```
+
 # What a copy keeps
 
 ```toml

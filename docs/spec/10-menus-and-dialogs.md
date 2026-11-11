@@ -349,6 +349,7 @@ one long line is not a preference.
 | Show the key bar | `viewer.key_bar` | Also `Ctrl+B`. The interface setting `ui.key_bar` still wins: somebody who turned the bar off everywhere did not mean "except here" |
 | Long lines | `viewer.wrap` | `off`, `char` or `word` — what `F2` and `Shift+F2` then change for this file |
 | Tab width | `viewer.tab_width` | Eight by default, which is what a terminal and `cat` do: a file that lined something up with tabs was written against that number |
+| Pictures | `viewer.pixels` | `auto`, `kitty`, `iterm`, `sixel` or `off` — how a picture is drawn (SPEC 05 §1.14a). `auto` is real pixels where the terminal is known to draw them and half blocks elsewhere |
 | Remember the position and the code page of each file | — | Dim: it wants the store the histories want |
 
 What each row gives back is a row of content, which is the point of taking it away. The

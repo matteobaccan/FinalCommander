@@ -137,8 +137,9 @@ impl Picture {
         out
     }
 
-    /// The average colour of the source rectangle one target pixel covers, over `bg`.
-    fn sample(&self, x: usize, y: usize, out_w: usize, out_h: usize, bg: [u8; 3]) -> [u8; 3] {
+    /// What one target pixel covers in the source: the premultiplied sums of its colours,
+    /// the sum of its alphas, and how many source pixels that was.
+    fn sums(&self, x: usize, y: usize, out_w: usize, out_h: usize) -> (u64, u64, u64, u64, u64) {
         let src_w = self.width as usize;
         let src_h = self.height as usize;
         let x0 = x * src_w / out_w;
@@ -161,6 +162,12 @@ impl Picture {
                 n += 1;
             }
         }
+        (r, g, b, a, n)
+    }
+
+    /// The average colour of the source rectangle one target pixel covers, over `bg`.
+    fn sample(&self, x: usize, y: usize, out_w: usize, out_h: usize, bg: [u8; 3]) -> [u8; 3] {
+        let (r, g, b, a, n) = self.sums(x, y, out_w, out_h);
         if n == 0 || a == 0 {
             return bg;
         }
@@ -173,6 +180,32 @@ impl Picture {
             ((colour * cover + u64::from(back) * (total - cover)) / total) as u8
         };
         [over(r, bg[0]), over(g, bg[1]), over(b, bg[2])]
+    }
+
+    /// The same average with its transparency kept: straight RGBA, for a drawing the
+    /// terminal composites itself (SPEC 05 §1.14a).
+    pub(crate) fn sample_rgba(&self, x: usize, y: usize, out_w: usize, out_h: usize) -> [u8; 4] {
+        let (r, g, b, a, n) = self.sums(x, y, out_w, out_h);
+        if n == 0 || a == 0 {
+            return [0, 0, 0, 0];
+        }
+        [(r / a) as u8, (g / a) as u8, (b / a) as u8, (a / n) as u8]
+    }
+
+    /// A picture from pixels already in memory: row-major RGBA, four bytes each. `None`
+    /// when the bytes are not `width × height` of them.
+    pub fn from_rgba(
+        width: u32,
+        height: u32,
+        format: &'static str,
+        pixels: Vec<u8>,
+    ) -> Option<Picture> {
+        (u64::from(width) * u64::from(height) * 4 == pixels.len() as u64).then_some(Picture {
+            width,
+            height,
+            format,
+            pixels,
+        })
     }
 }
 

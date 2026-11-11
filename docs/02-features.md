@@ -157,7 +157,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 5.9 | Filtered view: pipe the file through a command and view the output | MC | ✓ |
 | 5.18 | **Table mode**: one viewer mode for the tabular formats — a header row, aligned columns, horizontal scroll — with CSV/TSV, JSONL/NDJSON and DBF behind it | NEW (MTN2 has none either) | ✓ `Ctrl+F3` sorts by the column the view is on, `Ctrl+F7` keeps the rows that hold a text; a row cursor, `Ins` marks rows and `Ctrl+C` copies them as tab-separated text; the heading is guessed and `Ctrl+H` turns the guess round |
 | 5.21 | **Base64 decoded in the viewer** (`Alt+B`): the bare payload, PEM armour or a `data:` URI, shown as text or in the hex pane depending on what came out | NEW | ✓ |
-| 5.22 | **Pictures in the viewer**: `F3` on a PNG, JPEG, GIF or BMP draws it in half blocks, in any terminal; `F4` goes on to the bytes | TC/KRU (lister plugins) | ~ the kitty/iTerm2/sixel protocols |
+| 5.22 | **Pictures in the viewer**: `F3` on a PNG, JPEG, GIF or BMP draws it in real pixels where the terminal has them (kitty, iTerm2, sixel) and in half blocks in any other; `F4` goes on to the bytes | TC/KRU (lister plugins) | ✓ |
 | 5.19 | **DBF**: dBase III/IV and FoxPro tables in table mode — the typed header, fixed-length records read at an offset so a 2 GB table opens at once, the deleted flag, and the memo files beside it (`.dbt`, `.fpt`) | NEW | ✓ |
 | 5.10 | Chrome toggles (key bar, status line, scrollbar) and the viewer's own settings | FAR | ✓ |
 | 5.11 | **Disassembly** (`F5`): ELF/PE/Mach-O/raw recognition, sections and symbols, x86/x86-64 decoding with symbol headings, instruction-accurate scrolling, raw sweep for files over the parse limit | NEW | ✓ |

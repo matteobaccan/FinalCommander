@@ -21,6 +21,7 @@ pub mod nav;
 mod office;
 pub mod pdf;
 pub mod picture;
+pub mod pixels;
 pub mod search;
 pub mod source;
 pub mod strip;

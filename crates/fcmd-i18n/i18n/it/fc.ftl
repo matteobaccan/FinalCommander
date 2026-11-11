@@ -1759,3 +1759,11 @@ hex-replace-with = Sostituisci con
 btn-replace = Sostituisci
 hex-replace-ask = Sostituire { $was } a { $at } con { $with }?
 hex-replace-length = la sostituzione è lunga { $with } byte e la corrispondenza { $was }: sposterebbe tutto quello che segue — premi Ins per passare prima in inserimento
+
+# pixels and video (0.41)
+opt-viewer-pixels = Immagini
+opt-viewer-pixels-auto = pixel veri dove il terminale li disegna
+opt-viewer-pixels-kitty = protocollo grafico di kitty
+opt-viewer-pixels-iterm = immagini in linea di iTerm2
+opt-viewer-pixels-sixel = sixel
+opt-viewer-pixels-off = sempre mezzi blocchi

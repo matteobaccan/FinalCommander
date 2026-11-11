@@ -70,11 +70,29 @@ sempre.
 Un `.png`, un `.jpg`, un `.gif` o un `.bmp` si apre come immagine. Da lì `F4` prosegue verso il
 dump e l'esadecimale per le volte in cui sei venuto per i byte — il file resta un file.
 
-È disegnata a mezzi blocchi: una cella è alta circa il doppio di quanto è larga, quindi una
-cella con dentro `▀`, la metà di sopra di un colore e quella di sotto di un altro, sono due
-pixel quasi quadrati, e la finestra è una tela alta in pixel il doppio delle righe. È grossolana,
-e funziona in *qualunque* terminale — ed è per questo che viene prima dei protocolli di kitty,
-iTerm2 e sixel e non dopo.
+È disegnata a **pixel veri** dove il terminale ha un modo di riceverli, e a **mezzi blocchi**
+dappertutto altrove.
+
+I pixel veri arrivano con uno di tre protocolli: quello di **kitty** (kitty, Ghostty), le
+**immagini in linea di iTerm2** (iTerm2, WezTerm) e **sixel** (foot, mlterm, contour). fcmd
+riconosce quei terminali da quello che esportano nell'ambiente e non chiede mai a un terminale
+che cosa sa fare: una domanda a cui il terminale non risponde lascia il programma ad aspettare,
+e una a cui risponde tardi finisce battuta dentro quello che stai facendo in quel momento. Un
+terminale di cui non può garantire riceve i mezzi blocchi, e puoi dire tu diversamente —
+*Opzioni → Impostazioni del visualizzatore → Immagini*, oppure `viewer.pixels` in `fcmd.toml`:
+`sixel` per Windows Terminal dalla 1.22 e per `xterm -ti 340`, `iterm` per il terminale di VS
+Code con la sua impostazione delle immagini accesa, `kitty` per Konsole, `off` per i mezzi
+blocchi sempre. Dentro
+tmux, screen o zellij `auto` vuol dire mezzi blocchi. *Dove sta ogni cosa → Immagini a pixel
+veri* dice tutto.
+
+I mezzi blocchi sono quello che resta quando un modo così non c'è: una cella è alta circa il
+doppio di quanto è larga, quindi una cella con dentro `▀`, la metà di sopra di un colore e
+quella di sotto di un altro, sono due pixel quasi quadrati, e la finestra è una tela alta in
+pixel il doppio delle righe. È grossolana, e funziona in *qualunque* terminale. Un'immagine
+viene disegnata così per prima cosa, per l'attimo che serve a preparare i suoi pixel, e di
+nuovo ogni volta che un dialogo o un menu le passa sopra: un'immagine sta sopra il testo, e li
+coprirebbe.
 
 Decide quello che il file *è*, non come si chiama: un `.txt` che in realtà è un PNG si apre
 come immagine. Una fotografia viene rimpicciolita mantenendo la forma, e un'icona piccola resta

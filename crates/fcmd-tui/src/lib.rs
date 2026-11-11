@@ -98,6 +98,14 @@ pub struct Term {
     /// a terminal in mouse mode no longer lets the user select text with the mouse, and that
     /// is the user's own tool being taken away.
     mouse: bool,
+    /// The pictures on the screen after the last frame, each with the number kitty knows it
+    /// by (zero for the protocols that have no such thing).
+    shown: Vec<(Placement, u32)>,
+    /// The next number to give kitty for an image.
+    next_image: u32,
+    /// Set by [`Term::invalidate`]: the screen may no longer hold what `shown` says, so the
+    /// next frame takes every picture off and puts it on again.
+    forget_pictures: bool,
 }
 
 impl Term {
@@ -133,6 +141,9 @@ impl Term {
             raw: true,
             enhanced,
             mouse: false,
+            shown: Vec::new(),
+            next_image: 1,
+            forget_pictures: false,
         })
     }
 
@@ -145,6 +156,9 @@ impl Term {
             raw: false,
             enhanced: false,
             mouse: false,
+            shown: Vec::new(),
+            next_image: 1,
+            forget_pictures: false,
         }
     }
 
@@ -164,6 +178,9 @@ impl Term {
             raw: true,
             enhanced: false,
             mouse: false,
+            shown: Vec::new(),
+            next_image: 1,
+            forget_pictures: false,
         };
         (term, sink)
     }
@@ -178,10 +195,75 @@ impl Term {
 
     /// Paint the cells that differ from the previous frame.
     pub fn draw(&mut self, buf: &Buffer, cursor_at: Option<(u16, u16)>) -> io::Result<()> {
+        self.draw_with(buf, cursor_at, &[])
+    }
+
+    /// Paint the cells that differ from the previous frame, and the pictures that lie over
+    /// them (SPEC 05 §1.14a).
+    ///
+    /// A picture is not a cell and the diff knows nothing of it, so the two are kept apart
+    /// and made to agree by three rules:
+    ///
+    /// - **The cells under a picture are the caller's, and blank.** They are painted like any
+    ///   others, the picture is written after them, and from then on they do not change —
+    ///   so the diff never writes over the picture, which is what keeps it on the screen
+    ///   without sending it again every frame.
+    /// - **A picture that is gone is taken off.** kitty keeps an image until it is told to
+    ///   delete it, so it is told; sixel and iTerm2 keep theirs until text is written over
+    ///   it, so the cells it covered are forgotten from the previous frame and the diff
+    ///   writes every one of them again.
+    /// - **A picture whose cells were written is sent again**, where writing a cell erases
+    ///   what was drawn in it (sixel, iTerm2): after a resize, after another program had the
+    ///   screen, after anything was drawn across it.
+    ///
+    /// Nothing is ever asked of the terminal and nothing is expected back: kitty is told to
+    /// stay quiet (`q=2`), and the other two protocols have no answers to give.
+    pub fn draw_with(
+        &mut self,
+        buf: &Buffer,
+        cursor_at: Option<(u16, u16)>,
+        pictures: &[Placement],
+    ) -> io::Result<()> {
         if !self.raw {
             self.prev = buf.clone();
             return Ok(());
         }
+        if self.forget_pictures {
+            self.forget_pictures = false;
+            if self.shown.iter().any(|(p, _)| p.protocol == Pixels::Kitty) {
+                self.out.write_all(KITTY_DELETE_ALL.as_bytes())?;
+            }
+            self.shown.clear();
+        }
+        // What was on the screen and is not wanted any more, in this place, as it was.
+        let mut kept: Vec<(Placement, u32)> = Vec::new();
+        for (old, image) in std::mem::take(&mut self.shown) {
+            if pictures.contains(&old) {
+                kept.push((old, image));
+                continue;
+            }
+            if old.protocol == Pixels::Kitty {
+                self.out.write_all(kitty_delete(image).as_bytes())?;
+            }
+            // Another picture is about to be drawn over exactly these cells — the next frame
+            // of a film — and covers every pixel of this one: writing the cells blank in
+            // between would only make it blink.
+            if pictures.iter().any(|p| {
+                p.protocol == old.protocol
+                    && (p.x, p.y, p.cols, p.rows) == (old.x, old.y, old.cols, old.rows)
+            }) {
+                continue;
+            }
+            for y in old.y..old.y.saturating_add(old.rows) {
+                for x in old.x..old.x.saturating_add(old.cols) {
+                    if let Some(cell) = self.prev.cell_mut(x, y) {
+                        // A character no frame ever draws, so the diff finds the cell changed.
+                        cell.ch = '\0';
+                    }
+                }
+            }
+        }
+        let mut written = vec![false; pictures.len()];
         let changes = buf.diff(&self.prev);
         let mut last_style = None;
         let mut last_pos: Option<(u16, u16)> = None;
@@ -228,6 +310,54 @@ impl Term {
                 _ => 1,
             };
             last_pos = Some((x + advance, y));
+            for (i, p) in pictures.iter().enumerate() {
+                written[i] |= p.covers(x, y);
+            }
+        }
+        for (i, picture) in pictures.iter().enumerate() {
+            let at = kept.iter().position(|(old, _)| old == picture);
+            // kitty draws its images on a layer of their own: writing a cell does not touch
+            // one, so one already there stays, whatever happened underneath it.
+            let stays = match picture.protocol {
+                Pixels::Kitty => at.is_some(),
+                Pixels::Iterm | Pixels::Sixel => at.is_some() && !written[i],
+            };
+            if stays {
+                self.shown
+                    .push(kept[at.expect("it stays, so it was kept")].clone());
+                continue;
+            }
+            if let (Some(at), Pixels::Kitty) = (at, picture.protocol) {
+                self.out.write_all(kitty_delete(kept[at].1).as_bytes())?;
+            }
+            queue!(
+                self.out,
+                SetAttribute(Attribute::Reset),
+                cursor::MoveTo(picture.x, picture.y)
+            )?;
+            let image = match picture.protocol {
+                Pixels::Kitty => {
+                    let image = self.next_image;
+                    // Numbers are reused after sixteen million images; by then the first is
+                    // long deleted.
+                    self.next_image = self.next_image % 0x00ff_ffff + 1;
+                    self.out.write_all(
+                        kitty_image(&picture.data, image, picture.cols, picture.rows).as_bytes(),
+                    )?;
+                    image
+                }
+                Pixels::Iterm => {
+                    self.out.write_all(
+                        iterm_image(&picture.data, picture.cols, picture.rows).as_bytes(),
+                    )?;
+                    0
+                }
+                Pixels::Sixel => {
+                    self.out.write_all(&picture.data)?;
+                    0
+                }
+            };
+            self.shown.push((picture.clone(), image));
         }
         match cursor_at {
             Some((x, y)) => queue!(self.out, cursor::MoveTo(x, y), cursor::Show)?,
@@ -241,6 +371,7 @@ impl Term {
     /// Force a full repaint on the next draw (after a resize or an external program).
     pub fn invalidate(&mut self) {
         self.prev = Buffer::new(0, 0);
+        self.forget_pictures = true;
     }
 
     /// Ask the terminal for a font one step larger or smaller, or for the one it started with.
@@ -324,6 +455,12 @@ impl Term {
         if self.enhanced {
             let _ = queue!(self.out, PopKeyboardEnhancementFlags);
         }
+        // An image kitty was given is kitty's until it is deleted, and the screen it was on
+        // is about to be handed back.
+        if self.shown.iter().any(|(p, _)| p.protocol == Pixels::Kitty) {
+            let _ = self.out.write_all(KITTY_DELETE_ALL.as_bytes());
+        }
+        self.shown.clear();
         let _ = queue!(
             self.out,
             SetAttribute(Attribute::Reset),
@@ -350,8 +487,8 @@ pub fn clipboard_request(text: &str) -> String {
     format!("\x1b]52;c;{}\x1b\\", base64(text.as_bytes()))
 }
 
-/// Standard base64, which is what `OSC 52` carries. Twenty lines rather than a dependency:
-/// this is the only thing in the program that encodes any.
+/// Standard base64, which is what `OSC 52` carries, and what kitty and iTerm2 take a picture
+/// in. Twenty lines rather than a dependency.
 fn base64(bytes: &[u8]) -> String {
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
@@ -373,6 +510,201 @@ fn base64(bytes: &[u8]) -> String {
         }
     }
     out
+}
+
+// ── pictures in real pixels (SPEC 05 §1.14a) ───────────────────────────────────────────────
+
+/// The three ways a terminal takes a picture as pixels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Pixels {
+    /// kitty's graphics protocol: kitty, Ghostty, Konsole. A PNG in an `APC`, kept by the
+    /// terminal on a layer of its own until it is deleted.
+    Kitty,
+    /// iTerm2's inline images: iTerm2, WezTerm, VS Code's terminal. A PNG in `OSC 1337`.
+    Iterm,
+    /// Sixel: foot, mlterm, contour, `xterm -ti 340`, Windows Terminal from 1.22.
+    Sixel,
+}
+
+/// One picture on the screen: the cells it covers and what to send for them.
+///
+/// `data` is the image and nothing else — a PNG for kitty and iTerm2, which is wrapped in
+/// their escape sequences here, or a whole sixel string, which is sent as it is. Shared,
+/// because it is megabytes and the same bytes are handed over every frame the picture stays.
+#[derive(Debug, Clone)]
+pub struct Placement {
+    pub x: u16,
+    pub y: u16,
+    pub cols: u16,
+    pub rows: u16,
+    pub protocol: Pixels,
+    /// Which picture this is. Two placements with the same number in the same cells are the
+    /// same picture and are not sent twice; the bytes themselves are never compared.
+    pub id: u64,
+    pub data: std::sync::Arc<Vec<u8>>,
+}
+
+/// The same picture in the same place. The number stands for the bytes, which are megabytes
+/// and are asked about on every frame.
+impl PartialEq for Placement {
+    fn eq(&self, other: &Placement) -> bool {
+        (self.x, self.y, self.cols, self.rows, self.protocol, self.id)
+            == (
+                other.x,
+                other.y,
+                other.cols,
+                other.rows,
+                other.protocol,
+                other.id,
+            )
+    }
+}
+
+impl Placement {
+    fn covers(&self, x: u16, y: u16) -> bool {
+        x >= self.x
+            && x < self.x.saturating_add(self.cols)
+            && y >= self.y
+            && y < self.y.saturating_add(self.rows)
+    }
+}
+
+/// Take every image kitty holds off the screen and free it. `q=2`: say nothing back.
+const KITTY_DELETE_ALL: &str = "\x1b_Ga=d,d=A,q=2\x1b\\";
+
+/// Take one image off the screen and free it.
+pub fn kitty_delete(image: u32) -> String {
+    format!("\x1b_Ga=d,d=I,i={image},q=2\x1b\\")
+}
+
+/// A PNG as kitty's graphics protocol wants it: transmitted and shown in one go (`a=T`,
+/// `f=100`), stretched over `cols × rows` cells from where the cursor is, in pieces of at
+/// most 4096 characters of base64 as the protocol requires.
+///
+/// Two keys are there for our sake and not the picture's. `q=2` tells the terminal to send
+/// no answer, neither `OK` nor an error — an answer would arrive as input and be read as
+/// keys. `C=1` leaves the cursor where it was, so drawing a picture on the last row cannot
+/// scroll the screen.
+pub fn kitty_image(png: &[u8], image: u32, cols: u16, rows: u16) -> String {
+    let payload = base64(png);
+    let mut out = String::with_capacity(payload.len() + payload.len() / 4096 * 16 + 64);
+    let mut rest = payload.as_str();
+    let mut first = true;
+    loop {
+        // Base64 is ASCII, so any byte offset is a character boundary.
+        let (piece, tail) = rest.split_at(rest.len().min(4096));
+        let more = u8::from(!tail.is_empty());
+        if first {
+            out.push_str(&format!(
+                "\x1b_Ga=T,f=100,i={image},c={cols},r={rows},C=1,q=2,m={more};"
+            ));
+            first = false;
+        } else {
+            out.push_str(&format!("\x1b_Gm={more};"));
+        }
+        out.push_str(piece);
+        out.push_str("\x1b\\");
+        if tail.is_empty() {
+            break;
+        }
+        rest = tail;
+    }
+    out
+}
+
+/// A PNG as iTerm2's inline image: `OSC 1337 ; File = … : base64 BEL`, stretched over
+/// `cols × rows` cells from where the cursor is. The shape is not kept by the terminal
+/// because it was already settled here: the image is made to be exactly those cells.
+pub fn iterm_image(png: &[u8], cols: u16, rows: u16) -> String {
+    format!(
+        "\x1b]1337;File=inline=1;size={};width={cols};height={rows};preserveAspectRatio=0:{}\x07",
+        png.len(),
+        base64(png)
+    )
+}
+
+/// Which protocol the terminal we are in is known to draw, from the environment alone.
+///
+/// The terminal is never asked. Asking means writing a query and reading the answer off the
+/// keyboard's own channel: a terminal that does not answer leaves the program waiting, and
+/// one that answers late types its answer into whatever has the focus by then. So this
+/// reads what the terminal said about itself before the program started — the variables it
+/// exports — and says yes only to the ones known to draw what they are sent. Everything
+/// else gets `None`, which is half blocks, which work everywhere; `viewer.pixels` is there
+/// for the reader who knows better than the environment does.
+///
+/// `cell_known` is whether the size of a cell in pixels was learnt from the system. Sixel
+/// is drawn pixel for pixel, so without it the picture's size on screen would be a guess,
+/// and a wrong guess draws over the rows beside it: sixel is then not chosen.
+pub fn pixels_from_env(var: impl Fn(&str) -> Option<String>, cell_known: bool) -> Option<Pixels> {
+    let var = |name: &str| var(name).filter(|v| !v.is_empty());
+    let term = var("TERM").unwrap_or_default();
+    let program = var("TERM_PROGRAM").unwrap_or_default();
+    // A multiplexer draws the screen itself and passes on what it understands, which is
+    // not this.
+    if var("TMUX").is_some()
+        || var("STY").is_some()
+        || var("ZELLIJ").is_some()
+        || term.starts_with("screen")
+        || term.starts_with("tmux")
+    {
+        return None;
+    }
+    if var("KITTY_WINDOW_ID").is_some() || term == "xterm-kitty" {
+        return Some(Pixels::Kitty);
+    }
+    if term == "xterm-ghostty" || program.eq_ignore_ascii_case("ghostty") {
+        return Some(Pixels::Kitty);
+    }
+    // WezTerm draws all three; iTerm2's is the one it has on without being configured.
+    if program == "iTerm.app" || program == "WezTerm" {
+        return Some(Pixels::Iterm);
+    }
+    let sixel = term.starts_with("foot")
+        || term == "mlterm"
+        || term.starts_with("contour")
+        || program.eq_ignore_ascii_case("contour");
+    if sixel && cell_known {
+        return Some(Pixels::Sixel);
+    }
+    // Not decided here, on purpose: Konsole draws kitty's images, but not all of the
+    // protocol in every version, and which parts cannot be told from a version number; VS
+    // Code's terminal draws iTerm2's images only with a setting of its own turned on;
+    // Windows Terminal draws sixel from 1.22 and does not say which version it is; xterm
+    // draws sixel only when started as a VT340. Each is a value of `viewer.pixels` away.
+    None
+}
+
+/// What `viewer.pixels` asks for, given what the environment suggested for `auto`.
+pub fn pixels_setting(setting: &str, auto: Option<Pixels>) -> Option<Pixels> {
+    match setting.trim() {
+        "kitty" => Some(Pixels::Kitty),
+        "iterm" => Some(Pixels::Iterm),
+        "sixel" => Some(Pixels::Sixel),
+        "auto" => auto,
+        _ => None,
+    }
+}
+
+/// The size of one cell in pixels, if the system knows it.
+///
+/// Read from the terminal's window size — an `ioctl` on the terminal's own device, answered
+/// by the kernel and never by the terminal — so it cannot hang and nothing comes back on
+/// the input. Many terminals fill the pixel fields in and some leave them zero; Windows has
+/// no such call. `None` is all of those.
+pub fn cell_pixels() -> Option<(u16, u16)> {
+    let size = terminal::window_size().ok()?;
+    cell_of(size.width, size.height, size.columns, size.rows)
+}
+
+/// A window of `width × height` pixels holding `cols × rows` cells: how large one cell is.
+fn cell_of(width: u16, height: u16, cols: u16, rows: u16) -> Option<(u16, u16)> {
+    if cols == 0 || rows == 0 {
+        return None;
+    }
+    let cell = (width / cols, height / rows);
+    // A cell under four pixels is a device that reported something other than pixels.
+    (cell.0 >= 4 && cell.1 >= 4).then_some(cell)
 }
 
 pub fn install_panic_hook() {
@@ -806,5 +1138,295 @@ mod tests {
             },
             detect_depth()
         );
+    }
+
+    // ── pictures in real pixels ────────────────────────────────────────────────────────────
+
+    fn env(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
+        let pairs: Vec<(String, String)> = pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        move |name| {
+            pairs
+                .iter()
+                .find(|(k, _)| k == name)
+                .map(|(_, v)| v.clone())
+        }
+    }
+
+    #[test]
+    fn the_terminal_is_recognised_by_what_it_exports_and_never_asked() {
+        type Case<'a> = (&'a [(&'a str, &'a str)], Option<Pixels>);
+        let table: &[Case] = &[
+            (&[("TERM", "xterm-kitty")], Some(Pixels::Kitty)),
+            (
+                &[("TERM", "xterm-256color"), ("KITTY_WINDOW_ID", "3")],
+                Some(Pixels::Kitty),
+            ),
+            (&[("TERM", "xterm-ghostty")], Some(Pixels::Kitty)),
+            (
+                &[("TERM", "xterm-256color"), ("TERM_PROGRAM", "ghostty")],
+                Some(Pixels::Kitty),
+            ),
+            (
+                &[("TERM", "xterm-256color"), ("TERM_PROGRAM", "iTerm.app")],
+                Some(Pixels::Iterm),
+            ),
+            (
+                &[("TERM", "xterm-256color"), ("TERM_PROGRAM", "WezTerm")],
+                Some(Pixels::Iterm),
+            ),
+            (&[("TERM", "foot")], Some(Pixels::Sixel)),
+            (&[("TERM", "foot-extra")], Some(Pixels::Sixel)),
+            (&[("TERM", "mlterm")], Some(Pixels::Sixel)),
+            (&[("TERM", "contour")], Some(Pixels::Sixel)),
+            // The ones that cannot be told from here stay on half blocks: Konsole (how much
+            // of kitty's protocol it draws depends on more than its version), VS Code (its
+            // images are a setting of its own), Windows Terminal (no version), a plain
+            // xterm, the Linux console, and nothing at all.
+            (
+                &[("TERM", "xterm-256color"), ("KONSOLE_VERSION", "230804")],
+                None,
+            ),
+            (
+                &[("TERM", "xterm-256color"), ("TERM_PROGRAM", "vscode")],
+                None,
+            ),
+            (&[("TERM", "xterm-256color"), ("WT_SESSION", "abc")], None),
+            (&[("TERM", "xterm-256color")], None),
+            (&[("TERM", "linux")], None),
+            (&[], None),
+            // An empty variable is an unset one.
+            (&[("TERM", "xterm-256color"), ("KITTY_WINDOW_ID", "")], None),
+        ];
+        for (vars, want) in table {
+            assert_eq!(pixels_from_env(env(vars), true), *want, "{vars:?}");
+        }
+    }
+
+    #[test]
+    fn a_multiplexer_in_between_means_half_blocks() {
+        for vars in [
+            &[("TERM", "xterm-kitty"), ("TMUX", "/tmp/tmux-0/default,1,0")][..],
+            &[("TERM", "screen-256color"), ("KITTY_WINDOW_ID", "1")],
+            &[("TERM", "tmux-256color"), ("TERM_PROGRAM", "iTerm.app")],
+            &[("TERM", "foot"), ("STY", "1234.pts-0.host")],
+            &[("TERM", "xterm-kitty"), ("ZELLIJ", "0")],
+        ] {
+            assert_eq!(pixels_from_env(env(vars), true), None, "{vars:?}");
+        }
+    }
+
+    #[test]
+    fn sixel_is_not_chosen_without_knowing_how_large_a_cell_is() {
+        assert_eq!(pixels_from_env(env(&[("TERM", "foot")]), false), None);
+        // The two that are told how many cells to cover do not need it.
+        assert_eq!(
+            pixels_from_env(env(&[("TERM", "xterm-kitty")]), false),
+            Some(Pixels::Kitty)
+        );
+        assert_eq!(cell_of(1280, 800, 160, 50), Some((8, 16)));
+        assert_eq!(
+            cell_of(0, 0, 80, 24),
+            None,
+            "a terminal that left them zero"
+        );
+        assert_eq!(cell_of(1280, 800, 0, 0), None);
+    }
+
+    #[test]
+    fn the_setting_overrides_what_the_environment_suggests() {
+        assert_eq!(
+            pixels_setting("auto", Some(Pixels::Kitty)),
+            Some(Pixels::Kitty)
+        );
+        assert_eq!(pixels_setting("auto", None), None);
+        assert_eq!(pixels_setting("off", Some(Pixels::Kitty)), None);
+        assert_eq!(pixels_setting("sixel", None), Some(Pixels::Sixel));
+        assert_eq!(
+            pixels_setting("iterm", Some(Pixels::Kitty)),
+            Some(Pixels::Iterm)
+        );
+        assert_eq!(pixels_setting(" kitty ", None), Some(Pixels::Kitty));
+        // A word it does not know is half blocks, which cannot go wrong.
+        assert_eq!(pixels_setting("pixels please", Some(Pixels::Kitty)), None);
+    }
+
+    #[test]
+    fn a_small_picture_is_one_kitty_command_that_asks_for_no_answer() {
+        // Three bytes are four characters of base64 and no padding.
+        assert_eq!(
+            kitty_image(b"abc", 7, 10, 4),
+            "\x1b_Ga=T,f=100,i=7,c=10,r=4,C=1,q=2,m=0;YWJj\x1b\\"
+        );
+        assert_eq!(kitty_delete(7), "\x1b_Ga=d,d=I,i=7,q=2\x1b\\");
+    }
+
+    #[test]
+    fn a_large_picture_goes_to_kitty_in_pieces_of_4096() {
+        // 6 000 bytes are 8 000 characters: one whole piece and the rest.
+        let sent = kitty_image(&[0u8; 6000], 1, 80, 24);
+        let pieces: Vec<&str> = sent.split_terminator("\x1b\\").collect();
+        assert_eq!(pieces.len(), 2);
+        let (head, first) = pieces[0].split_once(';').unwrap();
+        assert_eq!(head, "\x1b_Ga=T,f=100,i=1,c=80,r=24,C=1,q=2,m=1");
+        assert_eq!(first.len(), 4096);
+        let (head, last) = pieces[1].split_once(';').unwrap();
+        assert_eq!(
+            head, "\x1b_Gm=0",
+            "only the first piece says what the image is"
+        );
+        assert_eq!(last.len(), 8000 - 4096);
+        assert!(sent.ends_with("\x1b\\"));
+    }
+
+    #[test]
+    fn a_picture_for_iterm_says_its_size_in_bytes_and_in_cells() {
+        assert_eq!(
+            iterm_image(b"abcd", 12, 5),
+            "\x1b]1337;File=inline=1;size=4;width=12;height=5;preserveAspectRatio=0:YWJjZA==\x07"
+        );
+    }
+
+    fn placement(protocol: Pixels, id: u64, data: &[u8]) -> Placement {
+        Placement {
+            x: 2,
+            y: 1,
+            cols: 4,
+            rows: 2,
+            protocol,
+            id,
+            data: std::sync::Arc::new(data.to_vec()),
+        }
+    }
+
+    fn blank(w: u16, h: u16) -> Buffer {
+        let theme = Theme::default_theme();
+        let mut buf = Buffer::new(w, h);
+        buf.clear(Style::new(theme.color("panel.fg"), theme.color("panel.bg")));
+        buf
+    }
+
+    fn text_of(sink: &std::sync::Arc<std::sync::Mutex<Vec<u8>>>) -> String {
+        let text = String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
+        sink.lock().unwrap().clear();
+        text
+    }
+
+    #[test]
+    fn a_picture_is_written_after_the_cells_and_not_again_while_nothing_changes() {
+        let (mut term, sink) = Term::capturing();
+        let buf = blank(10, 4);
+        let sixel = placement(Pixels::Sixel, 1, b"\x1bPq#0~~\x1b\\");
+        term.draw_with(&buf, None, std::slice::from_ref(&sixel))
+            .unwrap();
+        let first = text_of(&sink);
+        // The cursor is put on the picture's corner (rows and columns count from one on the
+        // wire), then the picture, and it comes after the last cell.
+        let at = first
+            .find("\x1b[2;3H\x1bPq#0~~\x1b\\")
+            .expect("the picture");
+        assert!(at > first.rfind(' ').expect("the cells"), "{first:?}");
+
+        // The same frame again: no cell changed, so neither is the picture sent.
+        term.draw_with(&buf, None, std::slice::from_ref(&sixel))
+            .unwrap();
+        assert!(!text_of(&sink).contains("\x1bPq"));
+
+        // A cell beside it changes: still not sent. A cell under it: sent again, because
+        // writing a cell erased that part of it.
+        let mut beside = buf.clone();
+        beside.set(8, 3, 'x', Style::default());
+        term.draw_with(&beside, None, std::slice::from_ref(&sixel))
+            .unwrap();
+        assert!(!text_of(&sink).contains("\x1bPq"));
+        let mut under = beside.clone();
+        under.set(3, 2, 'y', Style::default());
+        term.draw_with(&under, None, &[sixel]).unwrap();
+        assert!(text_of(&sink).contains("\x1bPq"));
+    }
+
+    #[test]
+    fn a_picture_that_is_gone_has_its_cells_written_again() {
+        let (mut term, sink) = Term::capturing();
+        let buf = blank(10, 4);
+        term.draw_with(&buf, None, &[placement(Pixels::Iterm, 1, b"png")])
+            .unwrap();
+        assert!(text_of(&sink).contains("\x1b]1337;File=inline=1;size=3;width=4;height=2;"));
+        // The same cells, no picture: nothing differs in the buffer, and yet the eight cells
+        // it covered are written, because that is the only thing that takes it off.
+        term.draw_with(&buf, None, &[]).unwrap();
+        let after = text_of(&sink);
+        assert_eq!(after.matches(' ').count(), 8, "{after:?}");
+        assert!(after.contains("\x1b[2;3H") && after.contains("\x1b[3;3H"));
+        // And once is enough.
+        term.draw_with(&buf, None, &[]).unwrap();
+        assert_eq!(text_of(&sink).matches(' ').count(), 0);
+    }
+
+    #[test]
+    fn kitty_is_told_to_delete_an_image_and_keeps_one_through_a_cell_being_written() {
+        let (mut term, sink) = Term::capturing();
+        let buf = blank(10, 4);
+        let one = placement(Pixels::Kitty, 1, b"abc");
+        term.draw_with(&buf, None, std::slice::from_ref(&one))
+            .unwrap();
+        assert!(text_of(&sink).contains("\x1b_Ga=T,f=100,i=1,c=4,r=2,C=1,q=2,m=0;YWJj"));
+
+        // kitty's image is on a layer of its own: a cell written under it changes nothing.
+        let mut under = buf.clone();
+        under.set(3, 2, 'y', Style::default());
+        term.draw_with(&under, None, &[one]).unwrap();
+        assert!(!text_of(&sink).contains("\x1b_G"));
+
+        // Another picture in the same cells — the next frame of a film: the old one is
+        // deleted by its number, the new one gets the next, and the cells in between are
+        // not written blank.
+        let two = placement(Pixels::Kitty, 2, b"abd");
+        term.draw_with(&under, None, &[two]).unwrap();
+        let swap = text_of(&sink);
+        assert!(swap.contains("\x1b_Ga=d,d=I,i=1,q=2\x1b\\"), "{swap:?}");
+        assert!(swap.contains("\x1b_Ga=T,f=100,i=2,"), "{swap:?}");
+        assert_eq!(swap.matches(' ').count(), 0, "{swap:?}");
+
+        // No picture at all: deleted, and the cells written.
+        term.draw_with(&under, None, &[]).unwrap();
+        let gone = text_of(&sink);
+        assert!(gone.contains("\x1b_Ga=d,d=I,i=2,q=2\x1b\\"));
+        assert_eq!(
+            gone.matches(' ').count(),
+            7,
+            "all but the one with a letter in it"
+        );
+    }
+
+    #[test]
+    fn after_the_screen_was_someone_elses_every_picture_is_sent_again() {
+        let (mut term, sink) = Term::capturing();
+        let buf = blank(10, 4);
+        let one = placement(Pixels::Kitty, 1, b"abc");
+        term.draw_with(&buf, None, std::slice::from_ref(&one))
+            .unwrap();
+        text_of(&sink);
+        // A resize, or a program that ran on this screen: what is on it is not known.
+        term.invalidate();
+        term.draw_with(&buf, None, &[one]).unwrap();
+        let again = text_of(&sink);
+        assert!(again.starts_with("\x1b_Ga=d,d=A,q=2\x1b\\"), "{again:?}");
+        assert!(again.contains("\x1b_Ga=T,f=100,i=2,"));
+        // Leaving the terminal takes the images with it.
+        term.restore();
+        assert!(text_of(&sink).contains("\x1b_Ga=d,d=A,q=2\x1b\\"));
+    }
+
+    #[test]
+    fn a_frame_without_pictures_writes_no_graphics_at_all() {
+        let (mut term, sink) = Term::capturing();
+        term.draw(&blank(10, 4), None).unwrap();
+        term.invalidate();
+        term.draw(&blank(10, 4), None).unwrap();
+        let text = text_of(&sink);
+        assert!(!text.contains("\x1b_G") && !text.contains("\x1bP") && !text.contains("1337"));
     }
 }

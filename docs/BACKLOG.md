@@ -47,7 +47,7 @@ says what the decision stands on.
 
 | Item | Where | What is left |
 | --- | --- | --- |
-| Pictures | `F3` on an image | The kitty, iTerm2 and sixel protocols for real pixels where the terminal has them; half blocks stay the fallback (feature 5.22). |
+| Pictures | `F3` on an image | What is left after the real pixels (feature 5.22): decoding a picture off the drawing thread, as its scaling and encoding already are; `auto` recognising Windows Terminal, `xterm -ti 340` and VS Code, which today have to be named in `viewer.pixels` because their environment does not say enough; real pixels through tmux's passthrough; kitty's and iTerm2's protocols looked at in those terminals — they are tested by their bytes, and only sixel against a real terminal (xterm). The thumbnail view and the photo-marking slideshow are their own rows below. |
 | Video | `F3`, `Ctrl+Q` on a video | **Decided (11 November 2026): only through `ffmpeg` on the machine, by the rule for external programs** — run as a program, never linked, listed in the external programs panel, and the viewer saying what to install when it is missing. Today the viewer reads the container (`F11`: duration, resolution, codec, tracks) and decodes nothing, on purpose: the codecs carry patents, the complete libraries are LGPL/GPL, and no pure-Rust H.264/HEVC decoder is mature. The road that fits is the one `.rar` already takes — `ffmpeg` on the machine, run as a program and never linked — in two steps: (1) still frames drawn in half blocks like a picture, `PgUp`/`PgDn` to step through the film, with time, duration and codec on a line, and the quick view showing the frame at 10%; (2) playback at the terminal's size, 10–15 frames a second, `Space` to pause, no sound — a coloured preview rather than a film until the real-pixel protocols above are in. Without `ffmpeg`, the viewer says which program to install, as it does for `7z`. |
 | Following a branch | `Enter` on a `call` | The jumped-from stack shown on the screen, and a virtual address in `Alt+F8` (feature 5.16). |
 | More than one file in the editor | `F4` | Several files open at once, each a screen of its own today through `F12` (feature 6.1). |
@@ -148,8 +148,8 @@ cannot be, kept so the question is not asked again.
 | Verifying a signature | — | Saying whether an Authenticode or a Mach-O signature is valid, not only who it names | Needs the machine's trust store and the hash of the image; 0.38.0 reads and names, and says "not verified" |
 | HEIC/HEIF and TIFF/RAW EXIF | Opus | The EXIF of a phone's HEIC and a camera's raw file | The TIFF reader is there; HEIF keeps EXIF in an `iloc` item |
 | Image conversion | Opus | Converting and resizing images from the panel | Through a program on the machine, as `7z` is |
-| Photo marking, slideshow | Opus, Wikipedia | Step through pictures full screen and mark the keepers | Real pixels first: *Pictures* above |
-| Thumbnail view | Wikipedia, Opus | A panel view of pictures instead of names | Real pixels first |
+| Photo marking, slideshow | Opus, Wikipedia | Step through pictures full screen and mark the keepers | The real pixels it waited for are in (feature 5.22); this is the next step |
+| Thumbnail view | Wikipedia, Opus | A panel view of pictures instead of names | The real pixels are in; wants many small placements at once, which the backend's list already allows |
 | Export or print a listing | Opus, Wikipedia | A folder's listing written out as text, CSV or HTML, or printed | Panelize goes the other way |
 | Tab labels from the path | TabLabelizer | A tab named after its shortened full path, with a maximum length and aliases | Today the folder's name, or one given by hand |
 | Cut and paste of files | superfile, Explorer | `Ctrl+X`/`Ctrl+C` on files, `Ctrl+V` in another folder, inside the program | Not the system clipboard (*The files themselves on the clipboard* above) |

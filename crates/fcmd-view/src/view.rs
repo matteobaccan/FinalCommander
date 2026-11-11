@@ -213,6 +213,13 @@ const BASE64_MIN: usize = 16;
 /// biggest picture a form carries as text and is read in a moment.
 const SYNTAX_LOOKBACK: u64 = 1024 * 1024;
 
+/// A number no other picture in this process has. One counter for every viewer, so the quick
+/// view's picture and the viewer's can share a cache of what was encoded for the screen.
+fn next_picture_serial() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 pub struct Viewer {
     source: Box<dyn Source>,
     pub path: VPath,
@@ -253,7 +260,11 @@ pub struct Viewer {
     pub tab_width: usize,
     /// The decoded picture, once it has been asked for: `None` = not looked yet,
     /// `Some(Err(…))` = looked and it is not one, or is one this cannot read (SPEC 05 §1.14).
-    picture: Option<Result<crate::picture::Picture, String>>,
+    picture: Option<Result<std::sync::Arc<crate::picture::Picture>, String>>,
+    /// Which picture that is, out of every one this process has held: a new number for each
+    /// decode and each frame, so what was encoded for the screen from one picture is never
+    /// drawn for another (SPEC 05 §1.14a).
+    picture_serial: u64,
     /// How large a picture file this viewer will decode. [`PICTURE_LIMIT`] for the one `F3`
     /// opens, where the reader asked for this file and will wait for it; much smaller for the
     /// quick view, where the cursor walks a directory of photographs and every step would
@@ -387,6 +398,7 @@ impl Viewer {
             show_scrollbar: false,
             tab_width: TAB_WIDTH,
             picture: None,
+            picture_serial: 0,
             picture_limit: PICTURE_LIMIT,
             binary: None,
             show_structure: false,
@@ -1668,10 +1680,11 @@ impl Viewer {
     /// A file is read whole here, which is the one place the viewer does that for something
     /// it did not generate: a picture has no "first screenful", and the limit on how large
     /// one may be is [`crate::picture::MAX_PIXELS`] rather than a count of rows.
-    fn decode_picture(&mut self) -> &Result<crate::picture::Picture, String> {
+    fn decode_picture(&mut self) -> &Result<std::sync::Arc<crate::picture::Picture>, String> {
         if self.picture.is_none() {
-            let decoded = self.decode_picture_now();
+            let decoded = self.decode_picture_now().map(std::sync::Arc::new);
             self.picture = Some(decoded);
+            self.picture_serial = next_picture_serial();
         }
         self.picture.as_ref().expect("just filled in")
     }
@@ -1747,6 +1760,13 @@ impl Viewer {
         }
         self.set_mode(Mode::Image);
         true
+    }
+
+    /// The picture itself and its number, for whoever encodes it for the screen on another
+    /// thread: shared, never copied, because a photograph is two hundred megabytes of it.
+    pub fn picture_shared(&mut self) -> Option<(u64, std::sync::Arc<crate::picture::Picture>)> {
+        let picture = self.decode_picture().as_ref().ok()?.clone();
+        Some((self.picture_serial, picture))
     }
 
     /// Is this a file the base64 decoder can read whole (SPEC 05 §1.13)?

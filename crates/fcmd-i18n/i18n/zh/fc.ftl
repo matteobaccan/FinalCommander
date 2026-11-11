@@ -1696,3 +1696,11 @@ hex-replace-with = 替换为
 btn-replace = 替换
 hex-replace-ask = 将 { $at } 处的 { $was } 替换为 { $with }？
 hex-replace-length = 替换内容长 { $with } 字节，而匹配内容长 { $was } 字节：这会移动其后的所有内容 — 请先按 Ins 切换到插入模式
+
+# pixels and video (0.41)
+opt-viewer-pixels = 图片
+opt-viewer-pixels-auto = 终端支持时使用真实像素
+opt-viewer-pixels-kitty = kitty 图形协议
+opt-viewer-pixels-iterm = iTerm2 内嵌图像
+opt-viewer-pixels-sixel = sixel
+opt-viewer-pixels-off = 始终使用半块字符

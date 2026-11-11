@@ -89,6 +89,8 @@ pub enum Request {
         how: fcmd_view::strip::Strip,
         backup: PathBuf,
     },
+    /// Scale and encode a picture for the terminal's own pixels (SPEC 05 §1.14a).
+    Pixels(crate::pixels::Ask),
     /// Run a `sql:` query on a database, its rows written as CSV for the viewer.
     SqlQuery {
         db: std::path::PathBuf,
@@ -941,6 +943,11 @@ pub enum Event {
         removed: usize,
         untouched: usize,
         errors: Vec<String>,
+    },
+    /// A picture encoded for the terminal, or `None` where the encoder had nothing to give.
+    Pixels {
+        key: crate::pixels::Key,
+        drawn: Option<crate::pixels::Drawn>,
     },
     /// A language model's answer, written into a Markdown file, or why there is none.
     AiDone {
@@ -2772,6 +2779,9 @@ pub struct App {
     pub quick_why: Option<String>,
     /// The quick view's drawing area, so a page scroll in it is a page of what is on screen.
     pub quick_size: (u16, u16),
+    /// Pictures drawn as real pixels: what is encoded, what is asked for, what this frame
+    /// places (SPEC 05 §1.14a). Half blocks until the loop says which protocol to use.
+    pub pixels: crate::pixels::Screen,
     /// The last sum, so the calculator opens on it.
     pub last_calc: String,
     /// What the plugins provide (SPEC 08 §1): `F11` lists these.
@@ -3104,6 +3114,7 @@ impl App {
             quick_of: None,
             quick_why: None,
             quick_size: (40, 20),
+            pixels: crate::pixels::Screen::default(),
             last_calc: String::new(),
             plugin_commands,
             plugin_dim: Vec::new(),
@@ -3369,6 +3380,7 @@ impl App {
             Event::DupesFound { panel, found } => self.dupes_found(panel, found),
             Event::GitDone { panel, result } => self.git_done(panel, result),
             Event::TextReady { result } => self.git_done(self.active, result.map(GitOut::Text)),
+            Event::Pixels { key, drawn } => self.pixels.arrived(key, drawn),
             Event::StripDone {
                 done,
                 removed,

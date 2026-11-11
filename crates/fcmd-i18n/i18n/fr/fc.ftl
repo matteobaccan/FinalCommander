@@ -1758,3 +1758,11 @@ hex-replace-with = Remplacer par
 btn-replace = Remplacer
 hex-replace-ask = Remplacer { $was } en { $at } par { $with } ?
 hex-replace-length = le remplacement fait { $with } octets et la correspondance { $was } : cela décalerait tout ce qui suit — appuyez d'abord sur Inser pour passer en mode insertion
+
+# pixels and video (0.41)
+opt-viewer-pixels = Images
+opt-viewer-pixels-auto = vrais pixels là où le terminal les dessine
+opt-viewer-pixels-kitty = protocole graphique de kitty
+opt-viewer-pixels-iterm = images en ligne d'iTerm2
+opt-viewer-pixels-sixel = sixel
+opt-viewer-pixels-off = toujours des demi-blocs

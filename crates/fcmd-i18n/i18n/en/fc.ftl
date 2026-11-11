@@ -1768,3 +1768,11 @@ hex-replace-with = Replace with
 btn-replace = Replace
 hex-replace-ask = Replace { $was } at { $at } with { $with }?
 hex-replace-length = the replacement is { $with } bytes long and the match { $was }: that would move everything after it — press Ins for insert mode first
+
+# pixels and video (0.41)
+opt-viewer-pixels = Pictures
+opt-viewer-pixels-auto = real pixels where the terminal draws them
+opt-viewer-pixels-kitty = kitty graphics protocol
+opt-viewer-pixels-iterm = iTerm2 inline images
+opt-viewer-pixels-sixel = sixel
+opt-viewer-pixels-off = half blocks always

@@ -374,6 +374,20 @@ impl Form {
                     &[("2", "2".into()), ("4", "4".into()), ("8", "8".into())],
                     &cfg.viewer.tab_width.to_string(),
                 ),
+                // How a picture is drawn. `auto` is the terminal's own answer, read from its
+                // environment; the names are for one the environment cannot vouch for.
+                choice(
+                    "viewer.pixels",
+                    t("opt-viewer-pixels"),
+                    &[
+                        ("auto", t("opt-viewer-pixels-auto")),
+                        ("kitty", t("opt-viewer-pixels-kitty")),
+                        ("iterm", t("opt-viewer-pixels-iterm")),
+                        ("sixel", t("opt-viewer-pixels-sixel")),
+                        ("off", t("opt-viewer-pixels-off")),
+                    ],
+                    cfg.viewer.pixels_kind(),
+                ),
                 Field::Separator,
                 Field::toggle(
                     "viewer.remember",

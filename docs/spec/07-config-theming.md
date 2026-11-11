@@ -66,6 +66,9 @@ wipe_passes = 1
 wrap = "off"                    # off | char | word
 tab_width = 8
 remember = true                 # open a file where it was left (SPEC 05 §1.12)
+pixels = "auto"                 # auto | kitty | iterm | sixel | off (SPEC 05 §1.14a)
+cell_width = 0                  # a cell's size in pixels, for sixel; 0 asks the system
+cell_height = 0
 detect_dump = true
 max_line = 10000
 

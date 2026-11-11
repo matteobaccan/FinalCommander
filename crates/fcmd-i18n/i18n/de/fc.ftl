@@ -1758,3 +1758,11 @@ hex-replace-with = Ersetzen durch
 btn-replace = Ersetzen
 hex-replace-ask = { $was } bei { $at } durch { $with } ersetzen?
 hex-replace-length = der Ersatz ist { $with } Bytes lang und der Treffer { $was }: das würde alles dahinter verschieben — zuerst mit Einfg in den Einfügemodus wechseln
+
+# pixels and video (0.41)
+opt-viewer-pixels = Bilder
+opt-viewer-pixels-auto = echte Pixel, wo das Terminal sie zeichnet
+opt-viewer-pixels-kitty = kitty-Grafikprotokoll
+opt-viewer-pixels-iterm = iTerm2-Inline-Bilder
+opt-viewer-pixels-sixel = Sixel
+opt-viewer-pixels-off = immer Halbblöcke

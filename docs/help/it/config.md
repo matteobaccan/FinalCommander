@@ -173,6 +173,56 @@ nessun'altra parte. L'installatore di 7-Zip per Windows, per esempio, mette `7z.
 è aggiungere quella cartella al `PATH`. *Programmi esterni* nel dialogo `F9` di `Alt+F1`
 (`drives.panels.tools`) toglie la riga; `Ctrl+7` lì nasconde tutte le righe dei pannelli.
 
+# Immagini a pixel veri
+
+`viewer.pixels` dice come il visualizzatore e la vista rapida disegnano un'immagine. È una riga di *Opzioni → Impostazioni del visualizzatore* (*Immagini*)
+e una riga di *Tutte le impostazioni*.
+
+| Valore | Cosa viene disegnato |
+| --- | --- |
+| `auto` | il predefinito: pixel veri in un terminale che si sa che li disegna, mezzi blocchi in tutti gli altri |
+| `kitty` | il protocollo grafico di kitty, qualunque cosa il terminale dica di essere |
+| `iterm` | le immagini in linea di iTerm2 |
+| `sixel` | sixel |
+| `off` | mezzi blocchi, sempre |
+
+`auto` si basa sull'ambiente che il terminale ha dato al programma — mai su una domanda fatta
+al terminale, che potrebbe restare senza risposta e lasciare fcmd ad aspettare, o ricevere la
+risposta tardi, in mezzo a quello che stai scrivendo:
+
+| Terminale | Riconosciuto da | Disegnato con |
+| --- | --- | --- |
+| kitty | `KITTY_WINDOW_ID`, oppure `TERM=xterm-kitty` | kitty |
+| Ghostty | `TERM=xterm-ghostty`, oppure `TERM_PROGRAM=ghostty` | kitty |
+| iTerm2 | `TERM_PROGRAM=iTerm.app` | iterm |
+| WezTerm | `TERM_PROGRAM=WezTerm` | iterm |
+| foot, mlterm, contour | `TERM` | sixel, quando la dimensione di una cella è nota |
+| dentro tmux, screen, zellij | `TMUX`, `STY`, `ZELLIJ`, `TERM=screen…` | mezzi blocchi |
+| qualunque altro | — | mezzi blocchi |
+
+Quattro terminali disegnano i pixel e da qui non si può garantire per loro, quindi sta a te
+nominarli: **Windows Terminal** dalla 1.22 disegna `sixel` e non dice che versione è; **xterm**
+disegna `sixel` solo se avviato come VT340 (`xterm -ti 340`); il terminale di **VS Code**
+disegna `iterm` solo con la sua impostazione *Enable Images* accesa; **Konsole** disegna
+`kitty`, ma quanto di quel protocollo dipende da più cose che dalla sua versione. Un nome che si rivela sbagliato si
+vede come un vuoto dove dovrebbe esserci l'immagine, o come una riga di lettere: rimettilo a
+`off`.
+
+A kitty e a iTerm2 viene detto quante celle copre un'immagine, e non serve altro. Sixel è
+disegnato pixel per pixel, quindi fcmd deve sapere **quanto è grande una cella**. Lo chiede al
+sistema — la dimensione della finestra del terminale, dal kernel, non dal terminale — e dove
+quello non dice niente prende otto per sedici, oppure il dieci per venti che Windows Terminal
+usa sempre per sixel. `viewer.cell_width` e `viewer.cell_height` lo dichiarano al suo posto,
+per un terminale in cui un'immagine sixel esce di una dimensione diversa dalla cornice che le
+è stata lasciata; vanno impostati tutti e due, e `0` vuol dire "chiedi".
+
+```toml
+[viewer]
+pixels = "sixel"     # auto | kitty | iterm | sixel | off
+cell_width = 9       # 0 = chiedi al sistema
+cell_height = 18
+```
+
 # Cosa conserva una copia
 
 ```toml

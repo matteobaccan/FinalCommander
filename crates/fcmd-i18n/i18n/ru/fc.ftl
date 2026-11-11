@@ -1744,3 +1744,11 @@ hex-replace-with = Заменить на
 btn-replace = Заменить
 hex-replace-ask = Заменить { $was } по адресу { $at } на { $with }?
 hex-replace-length = замена длиной { $with } байт, а найденное — { $was }: всё, что дальше, сдвинулось бы — сначала включите режим вставки клавишей Ins
+
+# pixels and video (0.41)
+opt-viewer-pixels = Изображения
+opt-viewer-pixels-auto = настоящие пиксели там, где терминал их рисует
+opt-viewer-pixels-kitty = графический протокол kitty
+opt-viewer-pixels-iterm = встроенные изображения iTerm2
+opt-viewer-pixels-sixel = sixel
+opt-viewer-pixels-off = всегда полублоки

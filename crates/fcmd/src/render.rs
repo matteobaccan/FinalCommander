@@ -6,6 +6,24 @@ use crate::panel as fcmd_panel;
 
 /// Draw a whole frame. Returns where the text cursor should sit, if anywhere.
 pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
+    // A picture drawn as real pixels lies on top of the cells, so it can only be placed
+    // where nothing else was drawn. Whether anything was is known when the frame is whole:
+    // if a dialog or a menu crossed a picture, the frame is drawn once more with every
+    // picture in half blocks, which sit under whatever is put over them (SPEC 05 §1.14a).
+    app.pixels.begin(false);
+    let mut cursor = draw_frame(app, buf);
+    if !app.pixels.settle(buf) {
+        app.pixels.begin(true);
+        cursor = draw_frame(app, buf);
+    }
+    for ask in app.pixels.take_asks() {
+        app.requests.push(crate::app::Request::Pixels(ask));
+    }
+    cursor
+}
+
+/// One whole frame into the buffer.
+fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     let (w, h) = (buf.width(), buf.height());
     // Where things end up is recorded as they are drawn, for the mouse to read afterwards.
     // Cleared first, so that what is not on the screen this frame cannot be clicked.
@@ -2004,29 +2022,44 @@ fn block_columns(editor: &fcmd_edit::Editor, line: usize) -> Option<(usize, usiz
 /// The viewer, full screen: name and status on the top line, content, key bar at the bottom.
 /// The quick view (`Ctrl+Q`): the viewer's own rows, inside a panel's frame, on whatever the
 /// other panel's cursor is on.
-/// A picture, painted into `area` in half blocks (SPEC 05 §1.14). Does nothing unless the
-/// viewer is in that mode, so the callers can ask without checking first.
+/// A picture, painted into `area`: in real pixels where the terminal draws them and they are
+/// ready (SPEC 05 §1.14a), in half blocks otherwise (§1.14). Does nothing unless the viewer
+/// is in that mode, so the callers can ask without checking first.
 ///
 /// Both of them paint it the same way — the viewer across `F3`'s whole window, the quick view
 /// inside the passive panel's frame — and they differ only in the colour a transparent pixel
-/// is mixed with, which is whatever that window is drawn in.
+/// is mixed with, which is whatever that window is drawn in and so follows from which of the
+/// two it is.
 fn paint_picture(
+    pixels: &mut crate::pixels::Screen,
+    slot: crate::pixels::Slot,
     viewer: &mut fcmd_view::Viewer,
     theme: &fcmd_ui::Theme,
     buf: &mut Buffer,
     area: Rect,
     base: Style,
-    bg_key: &str,
 ) -> bool {
     if viewer.mode != fcmd_view::Mode::Image {
         return false;
     }
+    let bg_key = match slot {
+        crate::pixels::Slot::Viewer => "viewer.bg",
+        crate::pixels::Slot::Quick => "panel.bg",
+    };
     let under = match theme.color(bg_key) {
         fcmd_ui::Color::Rgb(r, g, b) => [r, g, b],
         // A theme written in palette colours has no bytes to mix a transparent pixel with,
         // so the picture is composited onto black.
         _ => [0, 0, 0],
     };
+    // Real pixels where the terminal draws them and they are ready; the cells are then
+    // the picture's, and the terminal backend is handed the image (SPEC 05 §1.14a).
+    if pixels.place(slot, viewer, buf, area, under, base) {
+        return true;
+    }
+    // Half blocks otherwise — and in a terminal that draws pixels, in the cells the pixels
+    // take, so the picture does not change size when they arrive or a dialog covers them.
+    let area = pixels.window(viewer, buf, area);
     let cells = viewer.picture_cells(area.w, area.h, under);
     // Centred, as every picture viewer draws one: the window is almost never the shape of
     // the picture, and a picture in the corner looks like a mistake.
@@ -2098,7 +2131,15 @@ fn draw_quick_view(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
     // A picture is painted rather than written, here as in the viewer: without this the
     // quick view of a `.png` is an empty frame, because a picture has no rows of text.
     let body = Rect::new(inner.x + 1, inner.y, inner.w.saturating_sub(1), inner.h);
-    let drew = paint_picture(viewer, &app.theme, buf, body, base, "panel.bg");
+    let drew = paint_picture(
+        &mut app.pixels,
+        crate::pixels::Slot::Quick,
+        viewer,
+        &app.theme,
+        buf,
+        body,
+        base,
+    );
 
     // The name on the frame's foot, as a panel's totals are, so the preview itself is all
     // the room the rows get.
@@ -2689,7 +2730,15 @@ fn draw_viewer(app: &mut App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer) 
     if rows.is_empty() && viewer.mode != fcmd_view::Mode::Image {
         buf.put_str(0, body.y, &app.i18n.t("viewer-empty"), base, body.w);
     }
-    paint_picture(viewer, &app.theme, buf, body, base, "viewer.bg");
+    paint_picture(
+        &mut app.pixels,
+        crate::pixels::Slot::Viewer,
+        viewer,
+        &app.theme,
+        buf,
+        body,
+        base,
+    );
 
     if let Some(at) = pane {
         draw_structure(app, viewer, buf, at);
@@ -8046,5 +8095,188 @@ third line
         assert!(out.contains("sftp://mb@host.example:22/srv/www"), "{out}");
         // Split into the name field and the extension column, as the full view draws it.
         assert!(out.contains("index") && out.contains("html"), "{out}");
+    }
+
+    // ── pictures in real pixels (SPEC 05 §1.14a) ───────────────────────────────────────────
+
+    /// The environment of a terminal, for the tests that choose a protocol from one.
+    fn terminal(pairs: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
+        move |name| {
+            pairs
+                .iter()
+                .find(|(k, _)| *k == name)
+                .map(|(_, v)| v.to_string())
+        }
+    }
+
+    /// Serve the pictures the app asked to have encoded, as the loop's workers do.
+    fn encode_pictures(app: &mut App) -> usize {
+        let mut served = 0;
+        for request in app.take_requests() {
+            if let crate::app::Request::Pixels(ask) = request {
+                let drawn = crate::pixels::encode(&ask);
+                app.handle_event(Event::Pixels {
+                    key: ask.key,
+                    drawn,
+                });
+                served += 1;
+            }
+        }
+        served
+    }
+
+    #[test]
+    fn with_pixels_off_a_picture_is_half_blocks_even_in_a_terminal_that_draws_them() {
+        let (_dir, mut app) = app_with_viewer("sunset.bmp", &sample_bmp(64, 48));
+        app.cfg.viewer.pixels = "off".into();
+        // kitty itself, with a cell size the system reported: everything `auto` would need.
+        let (protocol, cell) = crate::pixels_for(
+            &app.cfg.viewer,
+            Some((8, 16)),
+            terminal(&[("TERM", "xterm-kitty"), ("KITTY_WINDOW_ID", "1")]),
+        );
+        assert_eq!(protocol, None);
+        app.pixels.configure(protocol, cell);
+
+        let out = frame(&mut app, 80, 24);
+        assert!(
+            out.contains('▀'),
+            "the picture is drawn in half blocks:\n{out}"
+        );
+        assert!(app.pixels.placements().is_empty());
+        assert_eq!(
+            encode_pictures(&mut app),
+            0,
+            "and nothing is asked of a worker"
+        );
+    }
+
+    #[test]
+    fn the_setting_and_the_terminal_decide_the_protocol_and_the_size_of_a_cell() {
+        let mut cfg = Config::default().viewer;
+        let kitty = &[("TERM", "xterm-kitty")];
+        let foot = &[("TERM", "foot")];
+        let wt = &[("TERM", "xterm-256color"), ("WT_SESSION", "1")];
+        let plain = &[("TERM", "xterm-256color")];
+        use fcmd_tui::Pixels;
+        // `auto`, the default: what the terminal is known to draw.
+        assert_eq!(
+            crate::pixels_for(&cfg, Some((9, 18)), terminal(kitty)),
+            (Some(Pixels::Kitty), (9, 18))
+        );
+        assert_eq!(
+            crate::pixels_for(&cfg, None, terminal(kitty)),
+            (Some(Pixels::Kitty), (8, 16)),
+            "kitty is told the cells, so a cell of unknown size is no obstacle"
+        );
+        assert_eq!(
+            crate::pixels_for(&cfg, Some((9, 18)), terminal(foot)),
+            (Some(Pixels::Sixel), (9, 18))
+        );
+        assert_eq!(
+            crate::pixels_for(&cfg, None, terminal(foot)).0,
+            None,
+            "sixel is not guessed at"
+        );
+        assert_eq!(
+            crate::pixels_for(&cfg, Some((9, 18)), terminal(plain)).0,
+            None
+        );
+        assert_eq!(crate::pixels_for(&cfg, Some((9, 18)), terminal(wt)).0, None);
+        // Asked for by name, in a terminal the environment cannot vouch for. Windows
+        // Terminal draws sixel on cells of ten by twenty whatever its font is.
+        cfg.pixels = "sixel".into();
+        assert_eq!(
+            crate::pixels_for(&cfg, Some((9, 18)), terminal(wt)),
+            (Some(Pixels::Sixel), (10, 20))
+        );
+        assert_eq!(
+            crate::pixels_for(&cfg, None, terminal(plain)),
+            (Some(Pixels::Sixel), (8, 16))
+        );
+        // And what the configuration states about a cell beats everything.
+        cfg.cell_width = 7;
+        cfg.cell_height = 15;
+        assert_eq!(
+            crate::pixels_for(&cfg, Some((9, 18)), terminal(wt)),
+            (Some(Pixels::Sixel), (7, 15))
+        );
+    }
+
+    #[test]
+    fn where_the_terminal_draws_pixels_the_picture_is_placed_once_it_is_encoded() {
+        let (_dir, mut app) = app_with_viewer("sunset.bmp", &sample_bmp(640, 480));
+        let (protocol, cell) = crate::pixels_for(
+            &app.cfg.viewer,
+            Some((8, 16)),
+            terminal(&[("TERM", "xterm-kitty")]),
+        );
+        app.pixels.configure(protocol, cell);
+
+        // The first frame cannot wait for the encoder: half blocks, and one ask.
+        let out = frame(&mut app, 80, 24);
+        assert!(out.contains('▀'), "{out}");
+        assert!(app.pixels.placements().is_empty());
+        assert_eq!(encode_pictures(&mut app), 1);
+
+        // The next has the pixels: the cells are blank, and the backend gets the picture.
+        // The body is 80×22 cells of 8×16, which is 640×352 pixels: the height is what runs
+        // out, so the picture is 469 pixels across — 59 cells — and all 22 rows.
+        let mut buf = Buffer::new(80, 24);
+        draw(&mut app, &mut buf);
+        assert!(!buf.to_text().contains('▀'), "{}", buf.to_text());
+        let placed = app.pixels.placements().to_vec();
+        assert_eq!(placed.len(), 1);
+        let p = &placed[0];
+        assert_eq!((p.cols, p.rows), (59, 22));
+        assert_eq!((p.x, p.y), (10, 1));
+        assert_eq!(p.protocol, fcmd_tui::Pixels::Kitty);
+        assert!(p.data.starts_with(b"\x89PNG"));
+        assert_eq!(
+            encode_pictures(&mut app),
+            0,
+            "encoded once, not once a frame"
+        );
+
+        // The same picture on the next frame is the same placement, which is what lets the
+        // backend leave it alone.
+        draw(&mut app, &mut buf);
+        assert_eq!(app.pixels.placements(), &placed[..]);
+
+        // A dialog across it — `F7`, the search — and the picture is half blocks again
+        // under the dialog, because an image would lie on top of it. They are drawn in the
+        // cells the pixels had, so the picture blurs where it stands.
+        press(&mut app, "F7");
+        draw(&mut app, &mut buf);
+        assert!(app.pixels.placements().is_empty());
+        assert!(buf.to_text().contains('▀'), "{}", buf.to_text());
+        // The dialog closes and the pixels are back, with nothing encoded again.
+        press(&mut app, "Esc");
+        draw(&mut app, &mut buf);
+        assert_eq!(app.pixels.placements().len(), 1);
+        assert_eq!(encode_pictures(&mut app), 0);
+
+        // Leaving the viewer leaves nothing placed.
+        press(&mut app, "Esc");
+        draw(&mut app, &mut buf);
+        assert!(app.pixels.placements().is_empty());
+    }
+
+    #[test]
+    fn the_quick_view_draws_a_picture_in_pixels_too() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("sunset.bmp"), sample_bmp(64, 48)).unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.pixels.configure(Some(fcmd_tui::Pixels::Sixel), (8, 16));
+        press(&mut app, "Down");
+        press(&mut app, "Ctrl+Q");
+        let mut buf = Buffer::new(100, 30);
+        draw(&mut app, &mut buf);
+        assert_eq!(encode_pictures(&mut app), 1);
+        draw(&mut app, &mut buf);
+        let placed = app.pixels.placements();
+        assert_eq!(placed.len(), 1);
+        assert!(placed[0].x >= 50, "in the other panel: {:?}", placed[0]);
+        assert!(placed[0].data.starts_with(b"\x1bP0;1;0q"));
     }
 }

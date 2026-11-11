@@ -64,11 +64,26 @@ turns the first screen back into the source for good.
 A `.png`, a `.jpg`, a `.gif` or a `.bmp` opens as the picture. `F4` goes on from there to the
 dump and the hex for the times you came for the bytes — the file is still a file.
 
-It is drawn in half blocks: a cell is about twice as tall as it is wide, so one holding `▀`
-with the top half one colour and the bottom another is two pixels that are nearly square, and
-the window is a canvas twice as tall in pixels as it is in rows. It is coarse, and it works in
-every terminal there is — which is why it comes before kitty's, iTerm2's and sixel's protocols
-rather than after them.
+It is drawn in **real pixels** where the terminal has a way to take them, and in **half
+blocks** everywhere else.
+
+Real pixels come by one of three protocols: **kitty's** (kitty, Ghostty), **iTerm2's inline
+images** (iTerm2, WezTerm) and **sixel** (foot, mlterm, contour). fcmd knows those terminals
+by what they export in the environment and never asks one what it can do: a question a
+terminal does not answer leaves a program waiting, and one it answers late is typed into
+whatever you are doing by then. A terminal it cannot vouch for gets half blocks, and you can
+say otherwise — *Options → Viewer settings → Pictures*, or `viewer.pixels` in `fcmd.toml`:
+`sixel` for Windows Terminal 1.22 or later and for `xterm -ti 340`, `iterm` for VS Code's
+terminal with its own image setting on, `kitty` for Konsole, `off` for half blocks always.
+Inside tmux, screen or zellij `auto` means half blocks. *Where things are kept → Pictures in
+real pixels* has the whole of it.
+
+Half blocks are what is left when there is no such way: a cell is about twice as tall as it is
+wide, so one holding `▀` with the top half one colour and the bottom another is two pixels
+that are nearly square, and the window is a canvas twice as tall in pixels as it is in rows.
+It is coarse, and it works in every terminal there is. A picture is drawn in them first, for
+the moment its pixels take to prepare, and again whenever a dialog or a menu is drawn across
+it: an image lies on top of the text, and would cover them.
 
 What the file *is* decides, not what it is called: a `.txt` that is really a PNG opens as the
 picture. A photograph is fitted into the window keeping its shape and a small icon is left at

@@ -1006,6 +1006,19 @@ pub struct ViewCfg {
     /// FAR has this and so do we. It is a setting because somebody who reads log files all
     /// day wants every one to open at the end rather than where they stopped last week.
     pub remember: bool,
+    /// How a picture is drawn: `auto`, `kitty`, `iterm`, `sixel` or `off` (SPEC 05 §1.14a).
+    ///
+    /// `auto` draws real pixels where the terminal is known to — decided from what it
+    /// exports in the environment, never by asking it — and half blocks everywhere else.
+    /// The three names are for a terminal the environment cannot vouch for (Windows Terminal
+    /// from 1.22 and `xterm -ti 340` draw `sixel`, VS Code draws `iterm` with its own
+    /// setting on); `off` is half blocks always.
+    pub pixels: String,
+    /// The width of one cell in pixels, for scaling a picture to the cells it covers. Zero
+    /// asks the system and falls back to eight.
+    pub cell_width: u16,
+    /// The height of one cell in pixels. Zero asks the system and falls back to sixteen.
+    pub cell_height: u16,
 }
 
 impl Default for ViewCfg {
@@ -1015,6 +1028,9 @@ impl Default for ViewCfg {
             status_line: true,
             scrollbar: false,
             remember: true,
+            pixels: "auto".into(),
+            cell_width: 0,
+            cell_height: 0,
             wrap: "off".into(),
             // The same eight `fcmd_view::TAB_WIDTH` has. This crate does not depend on the
             // viewer, so the number is written twice and a test compares the two.
@@ -1024,6 +1040,23 @@ impl Default for ViewCfg {
 }
 
 impl ViewCfg {
+    /// How a picture is drawn. Anything the setting does not name is `off`: half blocks
+    /// cannot go wrong, and a protocol sent to a terminal that does not draw it can.
+    pub fn pixels_kind(&self) -> &str {
+        match self.pixels.trim() {
+            "auto" => "auto",
+            "kitty" => "kitty",
+            "iterm" => "iterm",
+            "sixel" => "sixel",
+            _ => "off",
+        }
+    }
+
+    /// The size of a cell the configuration states, when it states both halves of it.
+    pub fn cell_pixels(&self) -> Option<(u16, u16)> {
+        (self.cell_width > 0 && self.cell_height > 0).then_some((self.cell_width, self.cell_height))
+    }
+
     /// The wrap a file opens with. Anything the setting does not name is `off`, because a
     /// viewer that wrapped when it was told something it did not understand would be worse
     /// than one that did not wrap.
@@ -2126,6 +2159,17 @@ impl Config {
             "viewer.tab_width" => {
                 self.viewer.tab_width = parse_usize(value)?.clamp(1, 16);
             }
+            "viewer.pixels" => {
+                let value = value.trim();
+                if !matches!(value, "auto" | "kitty" | "iterm" | "sixel" | "off") {
+                    return Err(format!("`{value}` is not auto, kitty, iterm, sixel or off"));
+                }
+                self.viewer.pixels = value.to_string();
+            }
+            // A cell is a few pixels to a few dozen; 64 leaves room for a display nobody
+            // has built yet and still refuses a typing mistake.
+            "viewer.cell_width" => self.viewer.cell_width = parse_usize(value)?.min(64) as u16,
+            "viewer.cell_height" => self.viewer.cell_height = parse_usize(value)?.min(64) as u16,
             "term.shell" => self.term.shell = value.to_string(),
             "term.scrollback" => self.term.scrollback = parse_usize(value)?,
             "term.subshell" => self.term.subshell = parse_bool(value)?,
@@ -2612,6 +2656,23 @@ both_ways = true
         assert_eq!(whole.viewer.wrap, "word");
         assert!(whole.set("viewer.tab_width", "4").is_ok());
         assert_eq!(whole.viewer.tab_width, 4);
+        // How pictures are drawn: five words and nothing else.
+        assert_eq!(whole.viewer.pixels_kind(), "auto");
+        assert!(whole.set("viewer.pixels", "bitmap").is_err());
+        for word in ["kitty", "iterm", "sixel", "off", "auto"] {
+            assert!(whole.set("viewer.pixels", word).is_ok());
+            assert_eq!(whole.viewer.pixels_kind(), word);
+        }
+        // A file written by hand with a word nobody knows is half blocks, not a guess.
+        whole.viewer.pixels = "sixels".into();
+        assert_eq!(whole.viewer.pixels_kind(), "off");
+        // A cell's size counts only when both halves are given.
+        assert_eq!(whole.viewer.cell_pixels(), None);
+        assert!(whole.set("viewer.cell_width", "10").is_ok());
+        assert_eq!(whole.viewer.cell_pixels(), None);
+        assert!(whole.set("viewer.cell_height", "20").is_ok());
+        assert_eq!(whole.viewer.cell_pixels(), Some((10, 20)));
+        assert!(whole.set("viewer.cell_height", "tall").is_err());
     }
 
     #[test]

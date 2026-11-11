@@ -17,6 +17,7 @@ mod history;
 mod hit;
 mod menu;
 mod panel;
+mod pixels;
 mod proccard;
 mod prompt;
 mod queue;
@@ -1093,6 +1094,9 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
     let mut cancels: [Option<CancelToken>; 2] = [None, None];
     let (mut w, mut h) = term.size();
     let mut buf = Buffer::new(w, h);
+    // How large a cell is in pixels, as the system knows it: asked of the kernel, never of
+    // the terminal, and again whenever the window changes size — a new font is a new cell.
+    let mut cell = fcmd_tui::cell_pixels();
 
     loop {
         let (nw, nh) = term.size();
@@ -1100,9 +1104,13 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
             (w, h) = (nw, nh);
             buf.resize(w, h);
             term.invalidate();
+            cell = fcmd_tui::cell_pixels();
         }
+        // Read again each time round, so a change in the settings counts from the next frame.
+        let (protocol, size) = pixels_for(&app.cfg.viewer, cell, |name| std::env::var(name).ok());
+        app.pixels.configure(protocol, size);
         let cursor = render::draw(&mut app, &mut buf);
-        term.draw(&buf, cursor)?;
+        term.draw_with(&buf, cursor, app.pixels.placements())?;
 
         // The shell a command line runs in is the configured one, read again each time round
         // so a change in the settings counts from the next command.
@@ -1907,6 +1915,16 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         }
                     });
                 }
+                Request::Pixels(ask) => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let drawn = pixels::encode(&ask);
+                        let _ = tx.send(Event::Pixels {
+                            key: ask.key,
+                            drawn,
+                        });
+                    });
+                }
                 Request::StripMeta { files, how, backup } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || {
@@ -2349,6 +2367,32 @@ fn run_job(
 /// The shell the command line's commands run in: `term.shell`, or the session's own when it
 /// is empty. One for the process, since every worker that runs a line wants the same.
 static LINE_SHELL: std::sync::RwLock<String> = std::sync::RwLock::new(String::new());
+
+/// How pictures are drawn in this terminal, and how large a cell is taken to be: what
+/// `viewer.pixels` asks for, with `auto` answered from the environment (SPEC 05 §1.14a).
+///
+/// The size of a cell is, in order: what the configuration states, Windows Terminal's fixed
+/// ten by twenty when sixel is drawn in it, what the system reported, and eight by sixteen.
+/// `auto` chooses sixel only where one of the first three is known, because sixel is drawn
+/// pixel for pixel and a guessed cell would put the picture over its neighbours.
+fn pixels_for(
+    cfg: &fcmd_config::ViewCfg,
+    learnt: Option<(u16, u16)>,
+    var: impl Fn(&str) -> Option<String>,
+) -> (Option<fcmd_tui::Pixels>, (u16, u16)) {
+    let stated = cfg.cell_pixels();
+    let auto = fcmd_tui::pixels_from_env(&var, stated.or(learnt).is_some());
+    let protocol = fcmd_tui::pixels_setting(cfg.pixels_kind(), auto);
+    let windows_terminal = var("WT_SESSION").is_some_and(|v| !v.is_empty());
+    let cell = stated
+        .or(
+            (protocol == Some(fcmd_tui::Pixels::Sixel) && windows_terminal)
+                .then_some(pixels::WINDOWS_TERMINAL_CELL),
+        )
+        .or(learnt)
+        .unwrap_or(pixels::DEFAULT_CELL);
+    (protocol, cell)
+}
 
 fn set_line_shell(shell: &str) {
     if let Ok(mut s) = LINE_SHELL.write() {
@@ -6846,6 +6890,15 @@ dir_attr = "D"
                         panel,
                         root,
                         branch,
+                    });
+                }
+                // Encoded where it is asked, so a test sees the picture placed on the next
+                // frame, as the screen does a moment later.
+                Request::Pixels(ask) => {
+                    let drawn = pixels::encode(&ask);
+                    app.handle_event(Event::Pixels {
+                        key: ask.key,
+                        drawn,
                     });
                 }
                 Request::DirSize { .. }

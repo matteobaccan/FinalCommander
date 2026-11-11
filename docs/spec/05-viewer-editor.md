@@ -28,7 +28,7 @@ bytecode and the other architectures decoded in process.
 | `hex` | offset + hex + ASCII/decoded pane | bytes-per-row adjustable (the arrows, since sideways means nothing else in a dump) in **blocks of eight** — 8, 16, 24, 32, 40, 48, 56, 64, the group the dump already draws a gap between — the widest the window can hold, and jumps aligned to the width |
 | `markdown` | Markdown laid out to be read: the marks off, headings ruled, lists bulleted, tables drawn | **Implemented** (`Shift+F2`, and in `Shift+F4`'s ring). The one mode that reads the whole file, because a table's columns cannot be laid out from the part of it on screen: limited to 4 MiB, over which the file stays its source and says so. Every rendered line carries the `(offset, sub)` pair of the source line it came from, so scrolling, the bookmarks and the search need no line index. A search here searches what is on screen, not the marks behind it. |
 | `table` | a tabular file as columns: a header row, aligned columns, horizontal scroll | see §1.11 — one mode for CSV, TSV, JSONL and DBF, because what differs between them is the reader and not the screen |
-| `image` | a picture, drawn in half blocks | see §1.14 — PNG, JPEG, GIF and BMP, decided by the file's first bytes; `F3` on a picture opens here and `F4` goes on to the bytes |
+| `image` | a picture, in real pixels or half blocks | see §1.14 — PNG, JPEG, GIF and BMP, decided by the file's first bytes; `F3` on a picture opens here and `F4` goes on to the bytes. §1.14a is the pixels |
 | `preview` | rendered content (markdown, PDF page, media info, archive listing) | pluggable, see §1.7 |
 | `structure` | a side pane that decodes what the file *is*: header fields, section and segment tables, imports and exports | `F11`, see §1.8; it rides alongside `hex` and `disasm` rather than replacing them |
 
@@ -420,9 +420,8 @@ is two pixels that are each very nearly square. A window of `cols × rows` cells
 canvas of `cols × 2·rows` pixels. It works in **every** terminal there is, which is the reason
 to do it this way before anything else: the graphics protocols — kitty's, iTerm2's, sixel —
 put real pixels on the screen and are worth having, but each works in some terminals and not
-others, and a picture one cannot see at all is worse than one made of blocks. They are the
-next step, not the first one, and nothing in the drawing has to change for them: the picture
-is decoded the same way either way.
+others, and a picture one cannot see at all is worse than one made of blocks. They are
+§1.14a, and half blocks stay underneath them as what is drawn whenever they cannot be.
 
 - **The file decides, not the name.** PNG, JPEG, GIF and BMP are recognised by their first
   bytes. A `.txt` that is really a PNG opens as the picture and a `.png` that is really a
@@ -445,6 +444,96 @@ is decoded the same way either way.
 
 The decoding is `image` with `default-features = false` — the four formats a commander
 actually opens, no research formats, no `rayon`, no C. The drawing is ours.
+
+### 1.14a Real pixels: kitty, iTerm2, sixel
+
+Where the terminal can take a picture as pixels, the picture mode sends it one. Three
+protocols cover what is in use: **kitty's graphics protocol** (kitty, Ghostty, Konsole),
+**iTerm2's inline images** (iTerm2, WezTerm, VS Code's terminal) and **sixel** (foot, mlterm,
+contour, `xterm -ti 340`, Windows Terminal from 1.22).
+
+**The setting.** `viewer.pixels = "auto" | "kitty" | "iterm" | "sixel" | "off"`, `auto` by
+default; a row of the viewer settings dialog (SPEC 10 §3.6) and of the settings browser.
+
+**`auto` never asks the terminal.** Asking means writing a query and reading the answer off
+the keyboard's own channel: a terminal that does not answer leaves the program waiting, and
+one that answers late types its answer into whatever has the focus by then. So `auto` reads
+what the terminal exported before the program started and says yes only to what is known to
+draw what it is sent (`fcmd_tui::pixels_from_env`):
+
+| Environment | Protocol |
+| --- | --- |
+| `TMUX`, `STY` or `ZELLIJ` set, or `TERM` starting `screen` or `tmux` | none — a multiplexer draws the screen itself |
+| `KITTY_WINDOW_ID` set, or `TERM=xterm-kitty` | kitty |
+| `TERM=xterm-ghostty`, or `TERM_PROGRAM=ghostty` | kitty |
+| `TERM_PROGRAM=iTerm.app` or `WezTerm` | iTerm2 |
+| `TERM` starting `foot` or `contour`, or `mlterm` | sixel, and only when the size of a cell is known |
+| anything else | none |
+
+Deliberately not decided: Windows Terminal (it draws sixel from 1.22 and exports no version),
+xterm (sixel only as a VT340), VS Code (iTerm2's images only with a setting of its own on),
+Konsole (kitty's protocol, but how much of it is not told by `KONSOLE_VERSION`).
+Each is a value of the setting away, and a wrong `auto` there would be a blank where a
+picture was.
+
+**The size of a cell.** kitty and iTerm2 are told how many cells an image covers and scale it
+themselves; sixel is drawn pixel for pixel, so the size of a cell in pixels decides whether a
+picture fits the cells left for it. In order: `viewer.cell_width` × `viewer.cell_height` when
+both are set; ten by twenty for sixel in Windows Terminal, which draws sixel on a VT340's
+cells whatever its font; what the system reports for the terminal's window (`TIOCGWINSZ`,
+answered by the kernel — not a terminal query; nothing on Windows); eight by sixteen. It is
+read again when the window changes size.
+
+**Scaling and encoding** (`fcmd_view::pixels`). The picture is fitted to the window by the
+same two rules as the half blocks — down keeping its shape, never up — at the cells' size in
+pixels, and drawn onto a canvas of exactly the whole cells it covers, centred. For kitty and
+iTerm2 the canvas is a PNG with transparent padding, compressed quickly rather than well. For
+sixel it is composited over the window's own colour and encoded by our own encoder: a palette
+of 256 chosen by median cut over a five-bit-a-channel histogram, Floyd–Steinberg error
+diffusion onto it, run-length encoding, raster attributes stating the size. A picture with
+256 colours or fewer keeps exactly those and is not dithered. The encoder is deterministic:
+the same picture is the same bytes. All of this runs on a worker (`Request::Pixels`,
+`Event::Pixels`), keyed by the picture, the window, the cell and the protocol, and is done
+once per key.
+
+**On the wire** (`fcmd-tui`). kitty: `ESC _ G a=T,f=100,i=<n>,c=<cols>,r=<rows>,C=1,q=2,m=<more> ;
+<base64> ESC \` in pieces of at most 4096 characters — `q=2` so the terminal sends nothing
+back, `C=1` so the cursor does not move — and `a=d,d=I,i=<n>` to delete. iTerm2: `ESC ] 1337 ;
+File=inline=1;size=<bytes>;width=<cols>;height=<rows>;preserveAspectRatio=0 : <base64> BEL`.
+Sixel: `ESC P 0;1;0 q "1;1;<w>;<h> … ESC \`.
+
+**Living with the cell buffer.** A picture is not a cell and the diff-based painter knows
+nothing of it. Each frame carries a list of *placements* — the cells, the protocol, the
+picture's number, the bytes — handed to `Term::draw_with` beside the buffer:
+
+- The cells under a placement are **blank cells of the window's colour** in the buffer. They
+  are painted like any others, the picture is written after them, and since they do not
+  change between frames the diff never writes over it. A picture is sent once, not once a
+  frame.
+- A placement that is **gone or changed** is taken off: kitty is told to delete the image;
+  for sixel and iTerm2 the cells it covered are forgotten from the previous frame, so the
+  diff writes every one of them again, which is what erases it. Where another picture takes
+  exactly the same cells, the cells are not written in between.
+- A placement whose cells **were written this frame** is sent again for sixel and iTerm2,
+  where writing a cell erases what was drawn in it. kitty keeps its images on a layer of
+  their own and needs nothing.
+- After `invalidate()` — a resize, another program on the screen — every picture is taken
+  off and sent again, and leaving the terminal deletes kitty's.
+- **Anything drawn across a picture puts it back in half blocks.** While a frame is drawn,
+  the cells of a placement hold a private mark; a dialog, a menu or its shadow replaces or
+  recolours some of them, and if at the end one cell of a placement is not as it was marked
+  the whole frame is drawn again with no placements. An image lies on top of the text and
+  would cover what was put there; half blocks lie under it.
+- Sixel and iTerm2 leave the cursor below the image, and a cursor pushed off the last row
+  scrolls the screen: for them a picture never takes the last row.
+
+**Half blocks are always there.** They are what is drawn with no protocol, while a picture's
+pixels are being encoded, under a dialog, and in every test and every screenshot — drawn in
+the cells the pixels will take, so a picture sharpens where it stands rather than changing
+size.
+
+Tested against a real terminal: sixel in xterm (VT340 mode). kitty's and iTerm2's are tested
+by the bytes they are sent.
 
 ### 1.11 Table mode: the tabular formats
 
@@ -610,8 +699,7 @@ Rules: every preview runs in a task with a timeout and a memory cap; failures de
 or hex, never block; results are cached by (path, size, mtime, geometry). Quick-view panel uses
 the same pipeline at lower priority. The block-character renderer this promised is built and is
 §1.14 — it is not a preview rule but a view of its own, because a picture one opened with `F3`
-is the file and not a preview of it. The kitty, iTerm2 and sixel protocols are the step after
-it, and change nothing below the drawing.
+is the file and not a preview of it. The kitty, iTerm2 and sixel protocols are §1.14a.
 
 ## 2. Editor (`F4`)
 
