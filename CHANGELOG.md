@@ -8,6 +8,25 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Line numbers in the editor**: `Alt+N` numbers the lines of the file in front in a margin,
+  and `editor.line_numbers` (a row of the editor settings) is what every file opens with.
+- **A block through a command**: `Alt+Shift+P` runs the marked block — or the whole file with
+  nothing marked — through a shell command and puts what it prints in its place, as one
+  `Ctrl+Z`. A command that fails replaces nothing and says why.
+- **In and out of the editor**: `Alt+Shift+O` inserts a command's output at the cursor,
+  `Alt+Shift+I` a file, and `Alt+Shift+W` writes the block to a file in the end of line and
+  code page of the file being edited.
+- **The case of a block**: `Alt+C` — upper, lower, title, toggle — on the block, a column
+  block's columns, or the word under the cursor.
+- **The syntax chosen by hand**: `Alt+Shift+Y` lists the languages for a file whose name says
+  nothing; the choice is remembered per file.
+- **Search as you type**: `Ctrl+S` goes to the first hit at every key; `↓`/`↑` walk the hits,
+  `Enter` stays, `Esc` goes back to where it began. `Ctrl+F3` / `Ctrl+Shift+F3` go to the next
+  and previous occurrence of the word under the cursor.
+- **A paragraph to a width**: `Alt+P` asks a width and reflows the paragraph, or every
+  paragraph of the block, keeping its indent.
+- **Inserted at the cursor**: `Ctrl+F5` the date and time, `Ctrl+F` the file's path,
+  `Alt+Shift+F` its name. `Alt+F9` in the editor lists the commands that are not on the key bar.
 - **The wastebasket as a panel.** A *Wastebasket* row in `Alt+F1`/`Alt+F2`
   (`drives.panels.trash`) and *Commands → Wastebasket* list what was thrown away: name, the
   folder it was in, size, and when. `F5` puts back what is selected; where something already
