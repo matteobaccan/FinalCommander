@@ -3029,8 +3029,8 @@ fn draw_diff(app: &App, view: &fcmd_view::Diff, buf: &mut Buffer, screen: Rect) 
     if inner.h < 3 || inner.w < 20 {
         return;
     }
-    // A row at the top for the two names, and one at the foot for the keys and the count.
-    let rows_h = inner.h.saturating_sub(2) as usize;
+    // A row at the top for the two names, and two at the foot: the count, and the keys.
+    let rows_h = inner.h.saturating_sub(3) as usize;
     // Each side: a line number, a space, and the text. The middle column is one character.
     let side_w = (inner.w.saturating_sub(1) / 2).max(8);
     // The number, then `-`, `+` or a blank, then a space: the sign is what a unified diff
@@ -3057,7 +3057,62 @@ fn draw_diff(app: &App, view: &fcmd_view::Diff, buf: &mut Buffer, screen: Rect) 
     buf.put_str(inner.x, inner.y, &names, dim, inner.w);
 
     let top = inner.y + 1;
-    for (i, row) in view.window(rows_h as u16).iter().enumerate() {
+    // The unified layout: one column the width of the screen, each line with its number in
+    // the left file and in the right, then the sign and the text. What went is red, what
+    // came is green, and the part of a changed line that differs is marked on both of its
+    // lines, as it is on both of its sides in the other layout.
+    let lines = if view.unified {
+        view.unified_window(rows_h as u16)
+    } else {
+        &[]
+    };
+    let wide = (inner.w as usize).saturating_sub(14).max(4);
+    for (i, line) in lines.iter().enumerate() {
+        let y = top + i as u16;
+        let (left_no, right_no, text, mark) = view.line(line);
+        let style = match line.sign {
+            '-' => removed,
+            '+' => added,
+            _ => base,
+        };
+        let number = |n: Option<usize>| match n {
+            Some(n) => format!("{n:>5}"),
+            None => " ".repeat(5),
+        };
+        buf.put_str(inner.x, y, &number(left_no), dim, 5);
+        buf.put_str(inner.x + 6, y, &number(right_no), dim, 5);
+        let sign_style = if line.sign == ' ' { dim } else { style.bold() };
+        buf.put_str(inner.x + 12, y, &format!("{} ", line.sign), sign_style, 2);
+        let from = view.col.min(text.len());
+        let from = (from..=text.len())
+            .find(|at| text.is_char_boundary(*at))
+            .unwrap_or(text.len());
+        let shown: String = text[from..].chars().take(wide).collect();
+        if line.sign != ' ' {
+            buf.fill(Rect::new(inner.x + 14, y, wide as u16, 1), ' ', style);
+        }
+        buf.put_str(inner.x + 14, y, &shown, style, wide as u16);
+        if !mark.is_empty() && mark.end > from {
+            let start = mark.start.max(from);
+            let before = text[from..start].chars().count();
+            let part: String = text[start..mark.end].chars().take(wide).collect();
+            if before < wide {
+                buf.put_str(
+                    inner.x + 14 + before as u16,
+                    y,
+                    &part,
+                    inner_mark,
+                    (wide - before) as u16,
+                );
+            }
+        }
+    }
+    let rows = if view.unified {
+        &[]
+    } else {
+        view.window(rows_h as u16)
+    };
+    for (i, row) in rows.iter().enumerate() {
         let y = top + i as u16;
         // What each side of this row is: the left side of a row that is not the same on both
         // is what went away, the right side what came.
@@ -3158,15 +3213,23 @@ fn draw_diff(app: &App, view: &fcmd_view::Diff, buf: &mut Buffer, screen: Rect) 
         None if app.ai_rewrite_shown() => "diff-hint-rewrite",
         None => "diff-hint",
     });
+    // The count, and under it the keys: a row each, so a narrow terminal cuts the end of
+    // the keys rather than showing none of them.
     let y = inner.y + inner.h - 1;
-    buf.put_str(inner.x, y, &foot, dim, inner.w);
-    // The keys go at the right end, where there is room for them.
-    let room = inner.w as usize;
-    let used = foot.chars().count() + 2;
-    let want = keys.chars().count();
-    if room > used + want {
-        buf.put_str(inner.x + (room - want) as u16, y, &keys, dim, want as u16);
-    }
+    buf.put_str(
+        inner.x,
+        y - 1,
+        &fcmd_ui::truncate_cols(&foot, inner.w as usize),
+        base,
+        inner.w,
+    );
+    buf.put_str(
+        inner.x,
+        y,
+        &fcmd_ui::truncate_cols(&keys, inner.w as usize),
+        dim,
+        inner.w,
+    );
 }
 
 /// Two files that are not text, byte against byte (SPEC 05 §3a).

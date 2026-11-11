@@ -350,6 +350,19 @@ there whole — and once written the `*` goes, so a second `F2` has nothing to d
 `Esc` with something unwritten says so and leaves at the next press, which is how a screen with
 no dialog of its own asks whether you meant it.
 
+`U` shows the same comparison as one column instead of two, the way a patch reads: a line both
+files have once, with its number in each, and a difference as the lines that went, `-` and
+red, followed by the lines that came, `+` and green. Everything else is the same screen —
+`Alt+↓`, `F5`, `F2`, the three keys below — and `U` again puts the two columns back.
+
+`Shift+F2` saves the comparison as a patch: a unified diff with three lines of context around
+each change, the kind `patch` and `git apply` take. It asks for a name, offering the right
+file's with `.diff` after it; a name with no folder in front lands in the active panel's
+folder, and `Esc` at the question comes back to the comparison. What is saved is what is on
+the screen, so differences taken across with `F5` are in it, and with blanks or case ignored
+the patch is one to read rather than to apply. Two files that are the same have no patch, and
+the key says so.
+
 Three keys change what counts as a difference, and each lines the two files up again at once:
 `W` ignores blanks, `C` ignores case, `E` ignores how the lines end. Line endings start from
 what the comparison dialog was last told, so the two agree about what "the same" means — the

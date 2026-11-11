@@ -112,7 +112,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 3.12 | Split / combine files; checksum create & verify (`.md5`, `.sha1`, `.sha256`, `.sfv`) | TC/KRU | ✓ split and combine in Total Commander's `.001` and `.crc`, checksums in all four formats |
 | 3.13 | Apply command to each selected file (`Ctrl+G` style), with `%`-macros | FAR | ✓ |
 | 3.14 | Compare directories (by name/size/date/content), synchronise directories with preview and one-way/two-way modes | TC/KRU | ✓ |
-| 3.15 | Compare files by content (internal diff viewer, side-by-side, word-level) | MC/KRU | ~ a unified view |
+| 3.15 | Compare files by content (internal diff viewer, side-by-side or unified, word-level; two binaries byte against byte; saved as a patch) | MC/KRU | ✓ |
 | 3.16 | Change encoding / line endings in bulk (CRLF↔LF, codepage recode) | MC | ✓ |
 | 3.17 | File descriptions/comments (`descript.ion`, `files.bbs`) | FAR | ✓ |
 | 3.18 | Undo for destructive operations where the FS allows (trash-based) | NEW | ✓ `Ctrl+Alt+Z` undoes the last copy (to the wastebasket), move, delete to the wastebasket and new folder, the last twenty remembered (SPEC 03 §14) |

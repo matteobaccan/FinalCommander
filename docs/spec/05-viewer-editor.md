@@ -1252,8 +1252,10 @@ the line — `-` on the left of a removed or changed row, `+` on the right of an
 one — then the text; a line that exists on one side only has a number on that side and nothing
 on the other. The colours are the diff's own (`syntax.removed` and `syntax.added`, 0.39.0): red
 on the left side of a row that differs, green on the right, the changed part in the selection's
-colours on top. The foot line says which hunk of how many is under the cursor, the lines
-removed and added (a changed row counts one of each), and the keys. `Alt+↓` and
+colours on top. Two lines at the foot: the first says which hunk of how many is under the
+cursor and the lines removed and added (a changed row counts one of each), the second the
+keys — a line of their own since 0.45, so a narrow terminal cuts the end of the keys rather
+than showing none of them. `Alt+↓` and
 `Alt+↑` are the hunks, which is the key one presses forty times; the plain arrows, `PgUp`,
 `PgDn`, `Home` and `End` are the rows, `←` and `→` scroll both columns sideways together, and
 `Tab` changes which column is the one being read. `F1` opens the written chapter, `Esc`, `F3`
@@ -1282,8 +1284,42 @@ one has to answer twice an hour.
 **It is a screen**, so `F12` lists it with the viewers and editors and one steps away from it
 and back.
 
-Still to come, and deliberately not in the first cut: a unified view, which is a second layout
-of the same rows.
+### 3b. The unified layout, and the comparison saved as a patch (0.45)
+
+**`U`** draws the same rows as one column and `U` again as two. It is a second layout and not
+a second alignment (`Diff::unified`, `Diff::unified_window`): a row both files have is one
+line carrying both its numbers, and a run of rows that differ is every line the left file
+loses, `-` and red, followed by every line the right file brings, `+` and green — the order
+`diff -u` writes a hunk in. A changed line's differing part is marked on both of its lines.
+The position stays a row of the two-column view, so the hunks, `F5`, `F2`, `S` on git's diff
+and the three ignore keys act on the same place in either layout and changing layout does not
+move the reader; inside a run, whose `n` rows are between `n` and `2n` lines, each row is
+given a line spread evenly through them, so scrolling by rows passes every line. The numbers
+take five columns each, then the sign, then the text over the rest of the width; `←` and `→`
+scroll it.
+
+**`Shift+F2`** — "save as", as in the editor — writes the comparison as a unified diff
+(`Diff::patch`): `--- left` and `+++ right` with the names the screen shows, then each hunk
+under `@@ -a,n +b,m @@` with three lines of context (`diff::CONTEXT`), two changes whose
+contexts touch sharing a hunk, a side with no lines in a hunk named by the line before it,
+every line exactly as its file has it, and `\ No newline at end of file` after a last line
+that has none — including the case where the text of the last line is the same and only one
+file ends it, which is a change of its own. Checked against GNU `patch`: applied to the left
+file it gives the right one.
+
+It asks for a name in a prompt, offering the right file's name with `.diff` after it
+(`changes.diff` for git's diff, which has no file of its own on that side); a relative name is
+taken in the active panel's folder. The diff is set aside while the question is on the screen
+and comes back when it is answered or left. The file is written through
+`fcmd_jobs::replace_file`, the door `F2` writes a merge through: beside the name and renamed
+over it. On this disk only; a name on a server or in an archive is refused.
+
+What is saved is the alignment on screen. Merges not yet written are in it, since the patch
+is of the two sides as they now stand; and with blanks or case ignored, a line the screen
+calls the same is context in the left file's spelling — a patch to read, as `diff -uw` makes
+one, not one that applies. Two files that do not differ have no patch, and the key says so
+without asking for a name. In the comparison a save opens over the editor (§2.2j) and in a
+model's proposed rewrite (§2.10) the key is refused with the others that write.
 
 ### 3a. Two files that are not text (0.45)
 

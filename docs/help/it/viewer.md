@@ -368,6 +368,20 @@ quello che c'era — e appena scritto il `*` va via, così un secondo `F2` non h
 e lo dice. `Esc` con qualcosa non scritto lo dice e se ne va alla pressione dopo, che è il modo
 in cui una schermata senza un dialogo proprio ti chiede se hai fatto sul serio.
 
+`U` mostra lo stesso confronto in una colonna sola invece di due, come si legge una patch: una
+riga che hanno entrambi i file una volta, con il suo numero in ciascuno, e una differenza come
+le righe andate via, `-` e rosse, seguite da quelle arrivate, `+` e verdi. Tutto il resto è la
+stessa schermata — `Alt+↓`, `F5`, `F2`, i tre tasti qui sotto — e un altro `U` rimette le due
+colonne.
+
+`Shift+F2` salva il confronto come patch: un diff unificato con tre righe di contesto attorno
+a ogni modifica, quello che `patch` e `git apply` accettano. Chiede un nome, proponendo quello
+del file di destra con `.diff` in fondo; un nome senza cartella davanti finisce nella cartella
+del pannello attivo, ed `Esc` alla domanda torna al confronto. Si salva ciò che è sullo
+schermo, quindi le differenze portate di là con `F5` ci sono, e con spazi o maiuscole ignorati
+la patch è da leggere più che da applicare. Due file uguali non hanno patch, e il tasto lo
+dice.
+
 Tre tasti cambiano cosa conta come differenza, e ognuno riallinea subito i due file: `W` ignora
 gli spazi, `C` ignora le maiuscole, `E` ignora come finiscono le righe. I fine riga partono da
 quello che è stato detto l'ultima volta al dialogo del confronto, così i due sono d'accordo su
@@ -393,7 +407,7 @@ piede dice quale differenza di quante è sullo schermo, l'offset della prima e q
 sono diversi in tutto.
 
 `Alt+↓` e `Alt+↑` vanno da una differenza alla successiva — una differenza è una sequenza di
-byte diversi — e le frecce, `PgUp`, `PgDn`, `Home` e `End` si muovono per righe. Due file con
+byte diversi — e le frecce, `PgSu`, `PgGiù`, `Home` e `Fine` si muovono per righe. Due file con
 gli stessi byte lo dicono, con la loro lunghezza. Qui non si unisce e non si scrive nulla: per
 cambiare un byte, `F4` sul file è l'editor esadecimale. Il confronto è per posizione, come fa
 `cmp`, quindi un byte inserito all'inizio rende diverso tutto ciò che segue.

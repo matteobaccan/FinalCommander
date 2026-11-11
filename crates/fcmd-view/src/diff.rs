@@ -56,6 +56,23 @@ impl Row {
     }
 }
 
+/// One line of the unified layout: a row of the two columns, or one side of it.
+///
+/// The unified layout is a second way of drawing the same rows, not a second alignment: a
+/// line both files have is one line, and a run of rows that differ is every line the left
+/// file loses followed by every line the right one brings, as `diff -u` writes a hunk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Line {
+    /// `' '`, `'-'` or `'+'`: what a unified diff puts in front of the line.
+    pub sign: char,
+    /// The row of the two columns this line is, or is one side of.
+    pub row: usize,
+}
+
+/// How many lines of context a saved patch carries around each change, which is what `diff
+/// -u` and git write and what `patch` expects to find its place by.
+pub const CONTEXT: usize = 3;
+
 /// Two files, lined up.
 #[derive(Debug)]
 pub struct Diff {
@@ -66,6 +83,12 @@ pub struct Diff {
     rows: Vec<Row>,
     /// The first row of each hunk — a run of rows that are not `Same` — for `Alt+↑↓`.
     hunks: Vec<usize>,
+    /// The same rows as one column, for the unified layout, and where in it each row starts.
+    lines: Vec<Line>,
+    line_of_row: Vec<usize>,
+    /// One column rather than two (`U`). The position, the hunks and a merge are the rows'
+    /// either way, so the two layouts are two views of one place.
+    pub unified: bool,
     pub ignore: Ignore,
     /// First visible row.
     pub top: usize,
@@ -129,6 +152,9 @@ impl Diff {
             right: split(right_bytes),
             rows: Vec::new(),
             hunks: Vec::new(),
+            lines: Vec::new(),
+            line_of_row: Vec::new(),
+            unified: false,
             ignore,
             top: 0,
             col: 0,
@@ -189,6 +215,7 @@ impl Diff {
         }
         self.pair_up();
         self.find_hunks();
+        self.lay_unified();
         let last = self.rows.len().saturating_sub(1);
         self.top = self.top.min(last);
     }
@@ -258,8 +285,173 @@ impl Diff {
         }
     }
 
+    /// The rows again as one column. A run of rows that differ becomes the left file's lines
+    /// of it and then the right file's, so a run of `n` rows is between `n` and `2n` lines;
+    /// each of its rows is given a place spread evenly through those lines, which is what
+    /// lets the position stay a row while the screen scrolls through every line.
+    fn lay_unified(&mut self) {
+        self.lines.clear();
+        self.line_of_row.clear();
+        self.line_of_row.resize(self.rows.len(), 0);
+        let mut at = 0;
+        while at < self.rows.len() {
+            if self.rows[at].kind == Side::Same {
+                self.line_of_row[at] = self.lines.len();
+                self.lines.push(Line { sign: ' ', row: at });
+                at += 1;
+                continue;
+            }
+            let end = self.rows[at..]
+                .iter()
+                .position(|r| r.kind == Side::Same)
+                .map_or(self.rows.len(), |n| at + n);
+            let first = self.lines.len();
+            for row in at..end {
+                if self.rows[row].left_no.is_some() {
+                    self.lines.push(Line { sign: '-', row });
+                }
+            }
+            for row in at..end {
+                if self.rows[row].right_no.is_some() {
+                    self.lines.push(Line { sign: '+', row });
+                }
+            }
+            let (rows, lines) = (end - at, self.lines.len() - first);
+            for n in 0..rows {
+                self.line_of_row[at + n] = first + n * lines / rows;
+            }
+            at = end;
+        }
+    }
+
     pub fn rows(&self) -> &[Row] {
         &self.rows
+    }
+
+    /// The lines of the unified layout on screen, given the height: from the line the top
+    /// row is at.
+    pub fn unified_window(&self, height: u16) -> &[Line] {
+        let from = self
+            .line_of_row
+            .get(self.top)
+            .copied()
+            .unwrap_or(self.lines.len());
+        let end = (from + height as usize).min(self.lines.len());
+        &self.lines[from.min(end)..end]
+    }
+
+    /// What a line of the unified layout shows: its number in each file, its text, and on a
+    /// changed line the part that differs.
+    pub fn line(
+        &self,
+        line: &Line,
+    ) -> (Option<usize>, Option<usize>, &str, std::ops::Range<usize>) {
+        let row = &self.rows[line.row];
+        let changed = row.kind == Side::Changed;
+        match line.sign {
+            '-' => (
+                row.left_no,
+                None,
+                &row.left,
+                if changed {
+                    row.left_inner.clone()
+                } else {
+                    0..0
+                },
+            ),
+            '+' => (
+                None,
+                row.right_no,
+                &row.right,
+                if changed {
+                    row.right_inner.clone()
+                } else {
+                    0..0
+                },
+            ),
+            _ => (row.left_no, row.right_no, &row.left, 0..0),
+        }
+    }
+
+    /// The whole comparison as a unified diff, the kind `patch` and `git apply` take: the
+    /// two names, then each hunk with [`CONTEXT`] lines around it, the lines exactly as the
+    /// files have them. `None` when the two files do not differ, which is a patch of nothing.
+    ///
+    /// It is written from the alignment on screen, so with blanks or case ignored a line the
+    /// screen calls the same is context here in the left file's spelling: a patch to read,
+    /// as `diff -uw` makes one, rather than one that turns the left file into the right.
+    pub fn patch(&self) -> Option<String> {
+        // Each line as it will be written, with whether it is the last of a file that does
+        // not end in a newline — which a patch has to say, or applying it would add one.
+        struct Out<'a> {
+            sign: char,
+            text: &'a str,
+            bare: bool,
+        }
+        let mut out: Vec<Out> = Vec::with_capacity(self.lines.len() + 1);
+        for line in &self.lines {
+            let (left_no, right_no, text, _) = self.line(line);
+            let left_bare = !self.left_final_eol && left_no == Some(self.left.len());
+            let right_bare = !self.right_final_eol && right_no == Some(self.right.len());
+            match line.sign {
+                // The last line of both, where only one file ends it with a newline: the
+                // text is the same and the files are not, so it is a change of its own.
+                ' ' if left_bare != right_bare => {
+                    out.push(Out {
+                        sign: '-',
+                        text,
+                        bare: left_bare,
+                    });
+                    out.push(Out {
+                        sign: '+',
+                        text: &self.rows[line.row].right,
+                        bare: right_bare,
+                    });
+                }
+                sign => out.push(Out {
+                    sign,
+                    text,
+                    bare: if sign == '+' { right_bare } else { left_bare },
+                }),
+            }
+        }
+        let changed: Vec<usize> = (0..out.len()).filter(|i| out[*i].sign != ' ').collect();
+        if changed.is_empty() {
+            return None;
+        }
+        let mut text = format!("--- {}\n+++ {}\n", self.left_name, self.right_name);
+        let mut at = 0;
+        while at < changed.len() {
+            // A hunk runs on for as long as the next change is close enough for the two
+            // contexts to touch.
+            let mut last = at;
+            while last + 1 < changed.len() && changed[last + 1] - changed[last] <= 2 * CONTEXT {
+                last += 1;
+            }
+            let from = changed[at].saturating_sub(CONTEXT);
+            let to = (changed[last] + CONTEXT + 1).min(out.len());
+            let count = |lines: &[Out], skip: char| lines.iter().filter(|l| l.sign != skip).count();
+            let (left_len, right_len) = (count(&out[from..to], '+'), count(&out[from..to], '-'));
+            // A side with no lines in the hunk is named by the line before it, as diff does.
+            let start = |before: usize, len: usize| if len == 0 { before } else { before + 1 };
+            text.push_str(&format!(
+                "@@ -{},{} +{},{} @@\n",
+                start(count(&out[..from], '+'), left_len),
+                left_len,
+                start(count(&out[..from], '-'), right_len),
+                right_len
+            ));
+            for line in &out[from..to] {
+                text.push(line.sign);
+                text.push_str(line.text);
+                text.push('\n');
+                if line.bare {
+                    text.push_str("\\ No newline at end of file\n");
+                }
+            }
+            at = last + 1;
+        }
+        Some(text)
     }
 
     /// How many rows the view has, which is not either file's line count: a line only one
@@ -523,6 +715,89 @@ mod tests {
         );
         d.to_start();
         assert!(d.hunk_patch().is_none(), "a line both have is no hunk");
+    }
+
+    /// The unified layout is the same rows as one column: a line both have once, and a run
+    /// of rows that differ as what went and then what came.
+    #[test]
+    fn the_unified_layout_is_what_went_and_then_what_came() {
+        let mut d = diff("a\nb\nc\nd\n", "a\nB\nC\nd\ne\n");
+        let shown = |d: &Diff| -> Vec<String> {
+            d.unified_window(100)
+                .iter()
+                .map(|l| {
+                    let (left, right, text, _) = d.line(l);
+                    let no = |n: Option<usize>| n.map_or("-".to_string(), |n| n.to_string());
+                    format!("{} {} {}{}", no(left), no(right), l.sign, text)
+                })
+                .collect()
+        };
+        assert_eq!(
+            shown(&d),
+            ["1 1  a", "2 - -b", "3 - -c", "- 2 +B", "- 3 +C", "4 4  d", "- 5 +e"]
+        );
+        // The part of a changed line that differs is marked on each of its two lines.
+        let lines = d.unified_window(100).to_vec();
+        assert_eq!(d.line(&lines[1]).3, 0..1);
+        assert_eq!(d.line(&lines[3]).3, 0..1);
+        assert_eq!(d.line(&lines[0]).3, 0..0);
+        // The position is still a row: the second hunk starts at the line that adds `e`.
+        assert!(d.next_hunk());
+        assert!(d.next_hunk());
+        assert_eq!(shown(&d), ["- 5 +e"]);
+        // And the second row of the first hunk is half way through its four lines.
+        d.top = 2;
+        assert_eq!(shown(&d)[0], "- 2 +B");
+    }
+
+    /// The comparison saved as a patch: the names, three lines of context, two changes close
+    /// together in one hunk and one far away in its own.
+    #[test]
+    fn the_comparison_is_written_as_a_unified_diff() {
+        let left: String = (1..=20).map(|n| format!("line {n}\n")).collect();
+        let right = left
+            .replace("line 2\n", "line two\n")
+            .replace("line 5\n", "")
+            .replace("line 18\n", "line 18\nline 18 and a half\n");
+        let d = diff(&left, &right);
+        assert_eq!(
+            d.patch().unwrap(),
+            "--- left\n+++ right\n\
+             @@ -1,8 +1,7 @@\n line 1\n-line 2\n+line two\n line 3\n line 4\n-line 5\n line 6\n line 7\n line 8\n\
+             @@ -16,5 +15,6 @@\n line 16\n line 17\n line 18\n+line 18 and a half\n line 19\n line 20\n"
+        );
+        assert!(
+            diff("same\n", "same\n").patch().is_none(),
+            "nothing to save"
+        );
+    }
+
+    /// The edges a patch has to get right: a file that was empty, a file that becomes empty,
+    /// and a last line with no newline after it — on one side, or on both.
+    #[test]
+    fn a_patch_says_what_an_empty_file_and_a_missing_newline_are() {
+        assert_eq!(
+            diff("", "a\nb\n").patch().unwrap(),
+            "--- left\n+++ right\n@@ -0,0 +1,2 @@\n+a\n+b\n"
+        );
+        assert_eq!(
+            diff("a\n", "").patch().unwrap(),
+            "--- left\n+++ right\n@@ -1,1 +0,0 @@\n-a\n"
+        );
+        assert_eq!(
+            diff("a\nb", "a\nc").patch().unwrap(),
+            "--- left\n+++ right\n@@ -1,2 +1,2 @@\n a\n-b\n\\ No newline at end of file\n+c\n\\ No newline at end of file\n"
+        );
+        // The same text, and only one of the two ends it with a newline.
+        assert_eq!(
+            diff("a\nb", "a\nb\n").patch().unwrap(),
+            "--- left\n+++ right\n@@ -1,2 +1,2 @@\n a\n-b\n\\ No newline at end of file\n+b\n"
+        );
+        // A context line that is the last of both files, neither ending it.
+        assert_eq!(
+            diff("x\nb", "y\nb").patch().unwrap(),
+            "--- left\n+++ right\n@@ -1,2 +1,2 @@\n-x\n+y\n b\n\\ No newline at end of file\n"
+        );
     }
 
     /// `F5`: the focused side takes the other one's version of the hunk at the top. Three

@@ -1704,6 +1704,8 @@ pub enum PromptKind {
     HexXor,
     /// Where to write the marked bytes.
     HexWrite,
+    /// `Shift+F2` on the diff: the name of the file the comparison is saved to as a patch.
+    DiffSave,
     /// A file to read into the buffer at the cursor.
     HexRead,
     /// How many bytes to insert at the cursor.
@@ -3032,6 +3034,9 @@ pub struct App {
     /// Has an `Esc` already said there is something unwritten? The second one leaves anyway,
     /// which is how a screen with no dialog of its own asks "are you sure".
     diff_warned: bool,
+    /// The diff, while the name of the patch to save it as is being asked for: the question
+    /// takes the screen, and answering or leaving it puts the comparison back as it was.
+    diff_parked: Option<Box<fcmd_view::Diff>>,
     /// The diff on screen is the one a save opened, between the file on disk and the editor
     /// parked underneath: closing it asks the save's question again instead of leaving.
     editor_diff: bool,
@@ -3558,6 +3563,7 @@ impl App {
             diff_git: None,
             diff_paths: None,
             diff_warned: false,
+            diff_parked: None,
             editor_diff: false,
             attr_seed_mode: None,
             services: Vec::new(),
@@ -6919,6 +6925,17 @@ impl App {
                     error = Some("diff-no-hunk-here");
                 }
             }
+            // `Shift+F2`, which is "save as" wherever this program saves: the comparison
+            // itself, as a unified diff, under a name that is asked for. It is the two files
+            // as they stand on the screen, merges included.
+            KeyCode::F(2) if key.mods.contains(Mods::SHIFT) => {
+                if view.identical() {
+                    error = Some("diff-patch-nothing");
+                } else {
+                    self.ask_diff_patch_name();
+                    return;
+                }
+            }
             // And the only thing that puts a merge on the disk.
             KeyCode::F(2) => {
                 if view.edited() {
@@ -6993,6 +7010,15 @@ impl App {
                     error = Some("diff-no-hunk-here");
                 }
             }
+            // The same rows as one column, the way a patch reads, and back.
+            KeyCode::Char('u') | KeyCode::Char('U') => {
+                view.unified = !view.unified;
+                message = Some(if view.unified {
+                    "diff-unified-on"
+                } else {
+                    "diff-unified-off"
+                });
+            }
             KeyCode::Char('w') | KeyCode::Char('W') => {
                 view.ignore.whitespace = !view.ignore.whitespace;
                 view.align();
@@ -7032,6 +7058,69 @@ impl App {
         }
         if let Some(sides) = write {
             self.write_diff(sides);
+        }
+    }
+
+    /// `Shift+F2` on the diff: ask what the patch is to be called.
+    ///
+    /// The name offered is the right file's with `.diff` after it — the *after* is what a
+    /// patch is named for — and a name with no folder in front of it lands in the active
+    /// panel's folder, as every other name typed into this program does.
+    fn ask_diff_patch_name(&mut self) {
+        let offered = match &self.diff_paths {
+            Some((_, right)) => format!("{}.diff", right.display_name()),
+            None => "changes.diff".to_string(),
+        };
+        if let Mode::Diff(view) = std::mem::replace(&mut self.mode, Mode::Normal) {
+            self.diff_parked = Some(view);
+        }
+        let title = self.i18n.t("diff-patch-title");
+        self.mode = Mode::Prompt(Prompt::new(PromptKind::DiffSave, title, offered));
+    }
+
+    /// The comparison is back in front, after the question asked over it.
+    fn restore_diff(&mut self) {
+        if let Some(view) = self.diff_parked.take() {
+            self.mode = Mode::Diff(view);
+        }
+    }
+
+    /// Write the comparison on screen as a unified diff (SPEC 05 §3b).
+    ///
+    /// Through the same door as a merge: beside the name and renamed over it, so a patch
+    /// that replaces an older one is whole or is the older one. On this disk only — a patch
+    /// is a small file one makes to send somewhere, and sending it is the panels' work.
+    fn save_diff_patch(&mut self, name: &str) {
+        if name.is_empty() {
+            return;
+        }
+        let Some(patch) = self.mode.diff().and_then(|view| view.patch()) else {
+            let m = self.i18n.t("diff-patch-nothing");
+            self.set_error(m);
+            return;
+        };
+        let path = self.resolve_path(name);
+        if !path.is_local() || path.in_container() {
+            let m = self
+                .i18n
+                .t_args("diff-not-here", &[("name", path.to_string().into())]);
+            self.set_error(m);
+            return;
+        }
+        match fcmd_jobs::replace_file(path.as_path(), patch.as_bytes()) {
+            Ok(()) => {
+                let m = self.i18n.t_args(
+                    "diff-patch-saved",
+                    &[
+                        ("name", path.display_name().into()),
+                        ("lines", (patch.lines().count() as i64).into()),
+                    ],
+                );
+                self.set_status(m);
+                self.read_panel(0);
+                self.read_panel(1);
+            }
+            Err(e) => self.set_error(format!("{path}: {e}")),
         }
     }
 
@@ -7311,6 +7400,8 @@ impl App {
                 // A question asked over the hex editor goes back to it when it is dismissed:
                 // changing one's mind about a fill byte must not drop unsaved patches.
                 self.restore_hex();
+                // And the comparison a patch was to be saved from is back as it was.
+                self.restore_diff();
             }
             KeyCode::Enter => {
                 self.mode = Mode::Normal;
@@ -7543,6 +7634,11 @@ impl App {
                 let text = prompt.text.trim().to_string();
                 self.restore_hex();
                 self.assemble_at_cursor(&text);
+            }
+            PromptKind::DiffSave => {
+                let name = prompt.text.trim().to_string();
+                self.restore_diff();
+                self.save_diff_patch(&name);
             }
             PromptKind::HexFill
             | PromptKind::HexXor
@@ -42180,6 +42276,98 @@ five
         assert!(view.identical());
         assert_eq!(view.hunks(), 0);
         assert_eq!(app.status, app.i18n.t("diff-same"));
+    }
+
+    /// `U` shows the same comparison as one column and back, and `Shift+F2` saves it as a
+    /// unified diff under the name that is asked for — through the question and back to the
+    /// comparison, whether the question was answered or left.
+    #[test]
+    fn the_diff_goes_unified_and_is_saved_as_a_patch() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), b"one\ntwo\nthree\n").unwrap();
+        std::fs::write(dir.path().join("b.txt"), b"one\n2\nthree\nfour\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        let cwd = app.panels[0].cwd.clone();
+        press(&mut app, "Down");
+        press(&mut app, "Tab");
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "Ctrl+Shift+D");
+        assert!(!app.mode.diff().expect("the diff").unified);
+
+        press(&mut app, "u");
+        assert!(app.mode.diff().expect("the diff").unified);
+        assert_eq!(app.status, app.i18n.t("diff-unified-on"));
+        let mut buf = fcmd_ui::Buffer::new(80, 24);
+        crate::render::draw(&mut app, &mut buf);
+        let text = buf.to_text();
+        let lines: Vec<&str> = text
+            .lines()
+            .filter(|l| l.contains("- two") || l.contains("+ 2") || l.contains("+ four"))
+            .collect();
+        assert_eq!(lines.len(), 3, "one line each, under one another:\n{text}");
+        assert!(lines[0].contains("    2       - two"), "{text}");
+        assert!(lines[1].contains("          2 + 2"), "{text}");
+        assert!(
+            text.contains("    3     3   three"),
+            "both numbers on a line both have"
+        );
+
+        // The question offers the right file's name, and `Esc` comes back to the diff.
+        press(&mut app, "Shift+F2");
+        let Mode::Prompt(prompt) = &app.mode else {
+            panic!("no question: {:?}", app.mode)
+        };
+        assert_eq!(prompt.text, "b.txt.diff");
+        press(&mut app, "Esc");
+        assert!(app.mode.diff().is_some_and(|d| d.unified), "{:?}", app.mode);
+        assert!(!cwd.join("b.txt.diff").as_path().exists());
+
+        press(&mut app, "Shift+F2");
+        clear_prompt(&mut app);
+        type_text(&mut app, "change.patch");
+        press(&mut app, "Enter");
+        assert!(
+            app.mode.diff().is_some(),
+            "back on the diff: {:?}",
+            app.mode
+        );
+        assert!(!app.status_error, "{}", app.status);
+        assert!(app.status.contains("change.patch"), "{}", app.status);
+        let saved = std::fs::read_to_string(cwd.join("change.patch").as_path()).unwrap();
+        let (left, right) = (cwd.join("a.txt"), cwd.join("b.txt"));
+        assert_eq!(
+            saved,
+            format!("--- {left}\n+++ {right}\n@@ -1,3 +1,4 @@\n one\n-two\n+2\n three\n+four\n")
+        );
+
+        // A name in a folder that is not there is refused, and the diff is still in front.
+        press(&mut app, "Shift+F2");
+        clear_prompt(&mut app);
+        type_text(&mut app, "no-such-folder/x.diff");
+        press(&mut app, "Enter");
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.mode.diff().is_some());
+
+        press(&mut app, "u");
+        assert!(!app.mode.diff().expect("the diff").unified);
+        assert_eq!(app.status, app.i18n.t("diff-unified-off"));
+    }
+
+    /// Two files that are the same have no patch, and `Shift+F2` says so without asking for
+    /// a name.
+    #[test]
+    fn two_equal_files_have_no_patch_to_save() {
+        let dir = tempfile::tempdir().unwrap();
+        let (a, b) = (dir.path().join("a.txt"), dir.path().join("b.txt"));
+        std::fs::write(&a, b"same\n").unwrap();
+        std::fs::write(&b, b"same\n").unwrap();
+        let mut app = app();
+        app.open_diff_on(VPath::local(&a), VPath::local(&b));
+        press(&mut app, "Shift+F2");
+        assert!(app.mode.diff().is_some(), "{:?}", app.mode);
+        assert!(app.status_error);
+        assert_eq!(app.status, app.i18n.t("diff-patch-nothing"));
     }
 
     /// Two files that are not text are compared byte against byte: the key opens the screen
