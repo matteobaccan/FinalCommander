@@ -415,6 +415,13 @@ pub enum Request {
         /// Where to put the output instead of the user screen (`run:file<command`).
         into: Option<std::path::PathBuf>,
     },
+    /// Run a command line with the terminal given to it, for a program that takes the whole
+    /// screen: the loop hands the terminal over, waits, and takes it back.
+    Interactive {
+        id: u64,
+        line: String,
+        cwd: std::path::PathBuf,
+    },
     /// Write these files again with another code page, or another line ending, or both
     /// (SPEC 03 §13).
     Recode {
@@ -16998,6 +17005,7 @@ impl App {
                     .map(|p| p.as_path().to_path_buf());
                 self.run_shell(command, into);
             }
+            Prefix::Tty(command) => self.run_shell_with(command, None, true),
         }
     }
 
@@ -17021,8 +17029,32 @@ impl App {
         self.set_error(msg);
     }
 
+    /// The line to give the terminal to, if this one should have it: when its program is one
+    /// of `[term] interactive`. (`tty:` gives it to any line; see `run_shell`.)
+    pub(crate) fn interactive_line(&self, line: &str) -> Option<String> {
+        let line = line.trim();
+        let first = line.split_whitespace().next()?.trim_matches('"');
+        let name = first
+            .rsplit(['/', '\\'])
+            .next()
+            .unwrap_or(first)
+            .to_ascii_lowercase();
+        let name = name.strip_suffix(".exe").unwrap_or(&name);
+        self.cfg
+            .term
+            .interactive
+            .iter()
+            .any(|program| program.eq_ignore_ascii_case(name))
+            .then(|| line.to_string())
+    }
+
     /// Hand a line to the user's shell, off the UI thread.
     fn run_shell(&mut self, line: String, into: Option<std::path::PathBuf>) {
+        self.run_shell_with(line, into, false)
+    }
+
+    /// [`App::run_shell`], or with the terminal given to the line whatever it runs (`tty:`).
+    fn run_shell_with(&mut self, line: String, into: Option<std::path::PathBuf>, tty: bool) {
         if self.shell.is_some() {
             let msg = self.i18n.t("cmd-busy");
             self.set_error(msg);
@@ -17036,6 +17068,25 @@ impl App {
         }
         let id = self.next_job_id;
         self.next_job_id += 1;
+        // A program that takes the whole screen is given the terminal, not a pipe: caught,
+        // its screen is noise in the user screen and its keys never reach it, so it looks
+        // hung. `tty:` gives it to a line whatever it runs.
+        if into.is_none() {
+            let given = match tty {
+                true => Some(line.trim().to_string()).filter(|l| !l.is_empty()),
+                false => self.interactive_line(&line),
+            };
+            if let Some(line) = given {
+                self.shell = Some((id, line.clone()));
+                self.start_user_screen(&line);
+                self.requests.push(Request::Interactive {
+                    id,
+                    line,
+                    cwd: cwd.as_path().to_path_buf(),
+                });
+                return;
+            }
+        }
         self.shell = Some((id, line.clone()));
         // The heading goes up now, not when the command ends: what it prints arrives line by
         // line and has to have somewhere to land.
@@ -36927,9 +36978,10 @@ mod tests {
     // ── what to run for a kind of file (SPEC 06 §5) ─────────────────────────────────────────
 
     /// The command line a key asked to run, if it asked for one.
+    /// The line a command was run with, caught or given the terminal (a `less` is the second).
     fn shell_line(app: &mut App) -> Option<String> {
         app.take_requests().into_iter().find_map(|r| match r {
-            Request::Shell { line, .. } => Some(line),
+            Request::Shell { line, .. } | Request::Interactive { line, .. } => Some(line),
             _ => None,
         })
     }
@@ -40439,6 +40491,58 @@ run = ["echo one", "echo two", "echo three"]
             Some("c.rs"),
             "the file under the cursor"
         );
+    }
+
+    /// A program that takes the whole screen is given the terminal rather than a pipe: caught,
+    /// another fcmd started from this one drew into the user screen and never got a key.
+    /// `tty:` gives it to any line; everything else is still run with its output kept.
+    #[test]
+    fn a_full_screen_program_is_given_the_terminal() {
+        let mut a = app();
+        a.cfg.term.subshell = false;
+        let run = |a: &mut App, line: &str| {
+            a.requests.clear();
+            type_text(a, line);
+            press(a, "Enter");
+            let requests = a.take_requests();
+            // What it ran as, and how; the run is then over, as the loop would say.
+            let found = requests.iter().find_map(|r| match r {
+                Request::Interactive { id, line, .. } => Some((*id, line.clone(), true)),
+                Request::Shell { id, line, .. } => Some((*id, line.clone(), false)),
+                _ => None,
+            });
+            if let Some((id, line, _)) = &found {
+                a.handle_event(Event::ShellDone {
+                    id: *id,
+                    line: line.clone(),
+                    output: String::new(),
+                    status: Some(0),
+                });
+                a.mode = Mode::Normal;
+            }
+            found.map(|(_, line, given)| (line, given))
+        };
+        assert_eq!(run(&mut a, "fcmd"), Some(("fcmd".into(), true)));
+        assert_eq!(
+            run(&mut a, "c:\\tools\\fcmd.exe --view a.txt"),
+            Some(("c:\\tools\\fcmd.exe --view a.txt".into(), true)),
+            "by its name, wherever it is"
+        );
+        assert_eq!(
+            run(&mut a, "vim notes.txt"),
+            Some(("vim notes.txt".into(), true))
+        );
+        assert_eq!(
+            run(&mut a, "tty:myapp --tui"),
+            Some(("myapp --tui".into(), true))
+        );
+        assert_eq!(run(&mut a, "ls -l"), Some(("ls -l".into(), false)));
+        // However the name is spelled.
+        assert!(a.interactive_line("C:\\Tools\\FCMD.EXE").is_some());
+        assert!(a.interactive_line("/usr/bin/Vim x").is_some());
+        // And the list is the configuration's: emptied, a program is caught like any other.
+        a.cfg.term.interactive = vec![];
+        assert_eq!(run(&mut a, "fcmd"), Some(("fcmd".into(), false)));
     }
 
     /// With the panels off, `Enter` on an empty line acts on nothing: there is no row on the

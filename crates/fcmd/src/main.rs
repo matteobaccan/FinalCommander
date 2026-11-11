@@ -1232,9 +1232,12 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
 
     // Terminal input lives on its own thread: `read` blocks.
     let input_tx = tx.clone();
+    // And a way to make it let go, for a program given the terminal (`Request::Interactive`).
+    let handover = fcmd_tui::Handover::default();
+    let reader = handover.clone();
     std::thread::spawn(move || {
         let (raw_tx, raw_rx) = mpsc::channel::<Input>();
-        std::thread::spawn(move || fcmd_tui::read_input_loop(raw_tx));
+        std::thread::spawn(move || fcmd_tui::read_input_loop_with(raw_tx, &reader));
         while let Ok(input) = raw_rx.recv() {
             if input_tx.send(Event::Input(input)).is_err() {
                 return;
@@ -1459,6 +1462,21 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                             output,
                             status,
                         });
+                    });
+                }
+                Request::Interactive { id, line, cwd } => {
+                    // On this thread, not a worker: the terminal is the loop's, and nothing
+                    // is drawn or read until the program gives it back.
+                    handover.give_away();
+                    let mouse = term.hand_over();
+                    let status = run_interactive(&line, &cwd);
+                    let _ = term.take_back(mouse);
+                    handover.take_back();
+                    let _ = tx.send(Event::ShellDone {
+                        id,
+                        line,
+                        output: String::new(),
+                        status,
                     });
                 }
                 Request::KillProcess { side, pid, name } => {
@@ -2735,6 +2753,21 @@ fn set_line_shell(shell: &str) {
     if let Ok(mut s) = LINE_SHELL.write() {
         if *s != shell {
             *s = shell.to_string();
+        }
+    }
+}
+
+/// Run a line with the terminal given to it: the program reads the keyboard and draws on the
+/// screen itself, and what it prints is not kept — it was on the screen, where it belongs.
+fn run_interactive(line: &str, cwd: &std::path::Path) -> Option<i32> {
+    use std::process::Command;
+    let shell = LINE_SHELL.read().map(|s| s.clone()).unwrap_or_default();
+    let (program, args) = fcmd_term::run_line_with(&shell, line);
+    match Command::new(program).args(args).current_dir(cwd).status() {
+        Ok(status) => status.code(),
+        Err(e) => {
+            eprintln!("{line}: {e}");
+            Some(-1)
         }
     }
 }
@@ -7420,6 +7453,7 @@ dir_attr = "D"
                 | Request::StripMeta { .. }
                 | Request::OpenUrl { .. }
                 | Request::Shell { .. }
+                | Request::Interactive { .. }
                 | Request::Decompile { .. }
                 | Request::Connect { .. }
                 | Request::Disconnect { .. }

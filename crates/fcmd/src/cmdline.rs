@@ -357,6 +357,9 @@ pub enum Prefix {
     AiFollow(String),
     /// `ai! what to do` — one shell command, put on the command line and not run.
     AiCommand(String),
+    /// `tty:command` — run it with the terminal given to it, for a program that takes the
+    /// whole screen and is not in `[term] interactive`.
+    Tty(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -469,6 +472,7 @@ pub fn parse(line: &str) -> Parsed {
                 "whereis" => return Parsed::Prefix(Prefix::WhereIs(rest)),
                 "sql" => return Parsed::Prefix(Prefix::Sql(rest)),
                 "ai" => return Parsed::Prefix(Prefix::Ai(rest)),
+                "tty" => return Parsed::Prefix(Prefix::Tty(rest)),
                 "run" => {
                     let (into, command) = match rest.split_once('<') {
                         Some((file, cmd)) => {

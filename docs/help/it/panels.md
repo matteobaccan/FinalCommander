@@ -203,6 +203,12 @@ riga di comando è quella di PowerShell: le sue pipe, i suoi cmdlet, le sue virg
 `term.subshell`* spegne del tutto la shell tenuta viva, e `term.follow_cwd` spegne solo
 l'inseguimento.
 
+Un programma che prende tutto lo schermo — un altro `fcmd`, `far`, `mc`, `vim`, `nano`,
+`less`, `htop`, `ssh`, `python` — riceve il terminale per tutto il tempo in cui gira, come FAR
+cede la console, e i pannelli tornano quando finisce: catturato come gli altri comandi non
+vedrebbe mai un tasto. L'elenco è `[term] interactive` in `fcmd.toml`; `tty:comando` dà il
+terminale a qualsiasi altra riga.
+
 *Sinistra* / *Destra* → *Code page dei nomi…* legge i nomi di questo pannello in una code page
 scelta. Ogni pannello parte da *come li dà il sistema*, che su Linux e macOS vuol dire che i
 byte vengono presi come UTF-8 — e un nome che non è UTF-8 esce pieno di caratteri di

@@ -31,6 +31,12 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **Another fcmd started from the command line looked hung.** A command's output was caught for
+  the user screen and the keyboard stayed with this fcmd, so a program that takes the whole
+  screen drew into a pipe and never got a key. Such programs are now given the terminal while
+  they run, the way FAR gives the console away, and the panels come back when they end: `fcmd`,
+  `far`, `mc`, `vim`, `nvim`, `vi`, `nano`, `less`, `more`, `htop`, `top`, `ssh`, `python`, by
+  default, in `[term] interactive`; `tty:command` gives the terminal to any other line.
 - **The question over the editor had no buttons.** Leaving a changed file with `Esc` asked
   "Leave and lose them?" with no answers drawn under it; it now shows them, as every other
   question does.

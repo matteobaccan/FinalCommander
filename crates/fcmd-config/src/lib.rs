@@ -863,6 +863,12 @@ pub struct TermCfg {
     /// The panel follows the shell: a `cd` typed at the command line moves the panel too, and
     /// moving the panel moves the shell. The reason the shell is kept at all.
     pub follow_cwd: bool,
+    /// Programs that take the whole terminal — an editor, a pager, `top`, `ssh`, another
+    /// commander — and so are given it while they run, the way FAR gives the console away,
+    /// rather than having their output caught for the user screen. Compared with the first
+    /// word of the line, its directory and `.exe` taken off, without regard to case. A line
+    /// that starts with `!` is given the terminal whatever its program.
+    pub interactive: Vec<String>,
 }
 
 impl Default for TermCfg {
@@ -872,6 +878,12 @@ impl Default for TermCfg {
             scrollback: fcmd_term::SCROLLBACK,
             subshell: true,
             follow_cwd: true,
+            interactive: [
+                "fcmd", "far", "mc", "vim", "nvim", "vi", "nano", "less", "more", "htop", "top",
+                "ssh", "python", "python3",
+            ]
+            .map(String::from)
+            .to_vec(),
         }
     }
 }

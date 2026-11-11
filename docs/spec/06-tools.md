@@ -636,6 +636,7 @@ to reach the viewer, the editor and the clipboard from a command line or a macro
 | `clip:<file>` | put its contents on the clipboard (and `clip:` with no argument clears it) |
 | `link:<target> <name>` | create a link |
 | `run:<file><command>` | run a command and send its output to a file, the screen, or nowhere |
+| `tty:<command>` | run it with the terminal given to it, for a full-screen program not in `[term] interactive` |
 | `ai:[name:] <question>` | ask a language model; the answer opens in the viewer (§14) |
 | `sql:<statement>` | query the SQLite database the panel is in or the cursor is on, and view the rows as a table (SPEC 04 §4b) |
 

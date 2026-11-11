@@ -192,6 +192,12 @@ quoting. *Options → All parameters
 → `term.subshell`* turns the kept shell off altogether, and `term.follow_cwd` turns off only
 the following.
 
+A program that takes the whole screen — another `fcmd`, `far`, `mc`, `vim`, `nano`, `less`,
+`htop`, `ssh`, `python` — is given the terminal while it runs, the way FAR gives the console
+away, and the panels come back when it ends: caught like other commands, it would never see a
+key. The list is `[term] interactive` in `fcmd.toml`; `tty:command` gives the terminal to any
+other line.
+
 *Left* / *Right* → *Names code page…* reads the names in this panel in a chosen code page.
 Every panel starts at *as the system gives them*, which on Linux and macOS means the bytes are
 taken as UTF-8 — and a name that is not UTF-8 comes out full of replacement characters. That

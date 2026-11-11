@@ -444,6 +444,43 @@ impl Term {
         self.mouse
     }
 
+    /// Give the terminal back to the shell for a program that takes all of it (an editor, a
+    /// pager, another commander): the screen as the shell left it, a cursor, no raw mode.
+    /// [`Term::take_back`] undoes it.
+    pub fn hand_over(&mut self) -> bool {
+        let mouse = self.mouse;
+        self.restore();
+        mouse
+    }
+
+    /// Take the terminal again after [`Term::hand_over`], and draw everything afresh: what is
+    /// on the screen now is whatever the program left.
+    pub fn take_back(&mut self, mouse: bool) -> io::Result<()> {
+        terminal::enable_raw_mode()?;
+        queue!(
+            self.out,
+            EnterAlternateScreen,
+            EnableBracketedPaste,
+            cursor::Hide
+        )?;
+        if self.enhanced {
+            let _ = queue!(
+                self.out,
+                PushKeyboardEnhancementFlags(
+                    KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                        | KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES
+                )
+            );
+        }
+        self.out.flush()?;
+        self.raw = true;
+        if mouse {
+            let _ = self.set_mouse(true);
+        }
+        self.invalidate();
+        Ok(())
+    }
+
     pub fn restore(&mut self) {
         if !self.raw {
             return;
@@ -730,7 +767,57 @@ pub fn install_panic_hook() {
 /// Read terminal events forever, forwarding them as [`Input`]. Runs on its own thread because
 /// `crossterm::event::read` blocks.
 pub fn read_input_loop(tx: Sender<Input>) {
+    read_input_loop_with(tx, &Handover::default())
+}
+
+/// Whether the keyboard is ours. While a program has been given the terminal, the reader
+/// must not take its keys: it stops reading, says it has stopped, and waits to be given the
+/// keyboard back.
+#[derive(Clone, Default)]
+pub struct Handover {
+    away: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    stopped: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl Handover {
+    /// Stop reading the keyboard, and return once the reader has (or after half a second,
+    /// when it has not said so: a reader stuck in a read is one that will not take a key the
+    /// program gets first anyway).
+    pub fn give_away(&self) {
+        use std::sync::atomic::Ordering;
+        self.away.store(true, Ordering::SeqCst);
+        let deadline = std::time::Instant::now() + Duration::from_millis(500);
+        while !self.stopped.load(Ordering::SeqCst) && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// Read the keyboard again.
+    pub fn take_back(&self) {
+        self.away.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// [`read_input_loop`], with a way to stop it reading while the terminal is someone else's.
+pub fn read_input_loop_with(tx: Sender<Input>, handover: &Handover) {
+    use std::sync::atomic::Ordering;
     loop {
+        if handover.away.load(Ordering::SeqCst) {
+            handover.stopped.store(true, Ordering::SeqCst);
+            std::thread::sleep(Duration::from_millis(10));
+            continue;
+        }
+        handover.stopped.store(false, Ordering::SeqCst);
+        // Asked with a timeout rather than read outright, so a hand-over is noticed within a
+        // moment instead of after the next key — which would be the program's key.
+        match event::poll(Duration::from_millis(50)) {
+            Ok(false) => continue,
+            Ok(true) => {}
+            Err(_) => {
+                let _ = tx.send(Input::Eof);
+                return;
+            }
+        }
         let event = match event::read() {
             Ok(event) => event,
             Err(_) => {
