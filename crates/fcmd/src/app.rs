@@ -23552,7 +23552,9 @@ impl App {
             PickKind::Frecent => {
                 // Best first, and without the folder the panel is already in: nobody
                 // opens a list of places to go in order to stay.
-                let here = self.panels[side].cwd.to_string();
+                // In the form the visits are kept in, or on Windows `/home` and `\home`
+                // would be two places and the one the panel is in would be offered.
+                let here = self.panels[side].cwd.normalised().to_string();
                 let rows: Vec<PickRow> = self
                     .visits
                     .ranked(crate::history::now())
