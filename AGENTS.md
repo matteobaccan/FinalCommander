@@ -373,7 +373,8 @@ never shipped half. Issues come first whenever one is open, and a red CI before 
   against its specs once more, the way 0.37.0 did.
 
 Settled on 11 November 2026: video only through `ffmpeg`, accented sorting yes, no Lua and no
-macro conditions, no cipher for hex blocks. Still open: tags and ratings — where they live.
+macro conditions, no cipher for hex blocks; tags and ratings parked in the backlog, with the
+study of where they would live. Nothing is open.
 
 Dependencies keep their rule: Renovate's pull requests are merged when green and the gate
 passes on top, and never cut a release alone. `object` 0.41 and `reqwest` 0.13 are ports, not

@@ -34,6 +34,7 @@ says what the decision stands on.
 | --- | --- | --- |
 | File attributes | `Ctrl+A` | FAR's *System properties* button, which hands the file to the shell's own property sheet; the NTFS compressed and encrypted bits; and a picker for the owner row, which takes a name or a number and completes neither. |
 | The files themselves on the clipboard | `Ctrl+Shift+C`/`X` | No terminal can be asked to carry a file — `OSC 52` carries text. This is window-system work, and it is what `fcmd-platform` would be for. |
+| Extended attributes on copy | `F5`, `F6` | A copy does not carry a file's extended attributes (xattrs), so tags set by the Finder or Dolphin are lost when fcmd copies the file. Reading and writing them belongs in `fcmd-platform`; `operations.preserve` would name them. |
 | Descriptions | `Ctrl+Z` | Writing one *inside* an archive, which is a rebuild of the archive rather than a write to a file. |
 | Formats through a program on the machine | `Enter` on a `.rar`, `.iso`, `.cab`… | A selection extracted through the job engine, with the bar counting bytes as they land; `Test` on `Alt+F6`; a table for RARLAB's `rar`, verified on a machine that has it (`docs/05-multiarc.md` §10). Writing is not on this list: it is decided against (§9). |
 | `cab` read here | `Enter` | Read through `7z` today, so not on a machine without it. `cpio` and `rpm` went the same way in 0.30.0; `cab` is the one of the three that wants a crate (`docs/05-multiarc.md` §9). |
@@ -139,7 +140,7 @@ cannot be, kept so the question is not asked again.
 
 | Item | Seen in | What it is | Note |
 | --- | --- | --- | --- |
-| Tags, labels, ratings | Opus, File Ninja, Tabbles | Free tags, coloured labels, star ratings and status icons on files, as columns, filters and sort keys | Where they live is the question: a sidecar like `descript.ion`, xattrs, or our own database |
+| Tags, labels, ratings | Opus, File Ninja, Tabbles | Free tags, coloured labels, star ratings and status icons on files, as columns, filters and sort keys | **Parked by the author (11 November 2026): not now.** The study, for when it comes back: extended attributes in Dolphin's (`user.xdg.tags`, `user.baloo.rating`) and the Finder's formats on Linux and macOS, a `descript.ion`-like sidecar on Windows and wherever xattrs are missing, optionally XMP `Rating` inside pictures; no database of our own, which breaks the moment a file moves outside the program. About a release of work. |
 | Saved searches as folders | File Ninja, Opus, Wikipedia | A search kept under a name, re-run when opened: a "smart folder" that stays current | Same as *Find file → saving and loading a search* above, made a panel |
 | Indexed search | Opus, File Ninja | Asking an index — Everything and Windows Search, Spotlight (`mdfind`), `plocate` — instead of walking | A source for `Alt+F7`, run as a program |
 | Search on metadata | Wikipedia | EXIF, ID3, document properties as search conditions | Needs the readers the viewer's `F11` already has |
