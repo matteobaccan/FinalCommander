@@ -13,6 +13,20 @@ Notable changes, newest first. The format follows
   editor (`F4`) take Delphi Dark 2027's page, white code, cream keywords, green comments and
   block lines. It inherits from `far` and changes nothing else.
 
+- **The editor converts the end of line, the byte order mark and the code page** (`Shift+F8`).
+  The list shows how the file is written now — LF, CRLF or CR; a mark or none; the code page —
+  and `Enter` on a row writes it another way. A conversion touches no line: it is one `Ctrl+Z`,
+  the file becomes modified, and `F2` is what puts it on the disk. A code page that has no byte
+  for one of the file's characters is refused rather than saved with a `?` in its place, and a
+  mark is only offered where there is one, UTF-8 and UTF-16. The status line says `BOM` when
+  the file starts with one.
+- **What changed on disk, before saving over it.** When a file was written by something else
+  while it was open, `F2` now asks with four answers instead of two: *Overwrite*, *Reload*,
+  *What changed* and *Cancel*. *What changed* opens the side-by-side diff between the file on
+  disk and the text in the editor, unsaved edits included, and closing it asks again.
+- **Block lines in the editor.** The lines the viewer draws down Pascal's blocks — `begin` …
+  `end`, `try`, `case`, `repeat`, `asm`, a `class` or `record` with a body, a form's `object`s
+  — are drawn in the editor too, in `syntax.guide`, and follow the text as it is typed.
 - **Editor: replace in one dialog** (`Ctrl+F7`). What to look for, what to put there, text or
   regular expression, case, whole words and *Preserve style*, with two buttons: *Replace all*,
   which is one `Ctrl+Z`, and *Replace next*, which changes the hit under the cursor and selects
