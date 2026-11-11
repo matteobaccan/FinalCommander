@@ -952,6 +952,84 @@ impl Editor {
         Ok(Some(gone))
     }
 
+    /// `Alt+P`: the paragraph the cursor is in — or every paragraph of the marked block —
+    /// laid out again so that no line is wider than `width` columns, which is mcedit's
+    /// *format paragraph* and what FAR leaves to its `align` plugin.
+    ///
+    /// A paragraph is a run of lines with something on them; an empty line parts two and is
+    /// kept. Its words are put back with one space between them, as many to a line as fit,
+    /// and every line gets the indent the paragraph's first line had — so a paragraph of a
+    /// list or of an indented comment stays where it was. A word longer than the width has
+    /// a line to itself rather than being cut. One undo step; `false` when the cursor is on
+    /// an empty line and nothing is marked.
+    pub fn reflow(&mut self, width: usize) -> Result<bool, EditorError> {
+        let blank = |text: &str| text.trim().is_empty();
+        let (top, bottom) = match self.block_lines() {
+            Some(lines) => lines,
+            None => {
+                let here = self.cursor.line;
+                if blank(self.buffer.line(here)) {
+                    return Ok(false);
+                }
+                let mut top = here;
+                while top > 0 && !blank(self.buffer.line(top - 1)) {
+                    top -= 1;
+                }
+                let mut bottom = here;
+                while bottom + 1 < self.buffer.len() && !blank(self.buffer.line(bottom + 1)) {
+                    bottom += 1;
+                }
+                (top, bottom)
+            }
+        };
+        let before: Vec<String> = (top..=bottom)
+            .map(|i| self.buffer.line(i).to_string())
+            .collect();
+        let mut after: Vec<String> = Vec::with_capacity(before.len());
+        let mut at = 0;
+        while at < before.len() {
+            if blank(&before[at]) {
+                after.push(String::new());
+                at += 1;
+                continue;
+            }
+            let end = (at..before.len())
+                .find(|&i| blank(&before[i]))
+                .unwrap_or(before.len());
+            let first = &before[at];
+            let indent = &first[..first.len() - first.trim_start().len()];
+            let indent_cols = fcmd_view::view::expand_tabs(indent, self.tab_width)
+                .chars()
+                .count();
+            let mut line = String::new();
+            let mut cols = 0;
+            for word in before[at..end].iter().flat_map(|l| l.split_whitespace()) {
+                let word_cols = unicode_width::UnicodeWidthStr::width(word);
+                if !line.is_empty() && cols + 1 + word_cols > width {
+                    after.push(std::mem::take(&mut line));
+                }
+                if line.is_empty() {
+                    line.push_str(indent);
+                    cols = indent_cols;
+                } else {
+                    line.push(' ');
+                    cols += 1;
+                }
+                line.push_str(word);
+                cols += word_cols;
+            }
+            after.push(line);
+            at = end;
+        }
+        if after != before {
+            self.replace_lines(top, bottom, &after)?;
+        }
+        // The block's ends are positions in the text as it was.
+        self.block = None;
+        self.cursor = self.clamp(Position::new(top, 0));
+        Ok(true)
+    }
+
     /// Take out every line that matches `pattern`, or with `keep` every line that does not —
     /// vim's `:g/re/d` and `:v/re/d` (FAR's issue #10). Over the block when there is one, the
     /// whole file otherwise; one undo step. A file left with nothing is one empty line.
@@ -2333,6 +2411,51 @@ mod tests {
         assert_eq!(e.cursor, Position::new(0, 0), "so the cursor stays");
         e.cursor = Position::new(1, 1);
         assert_eq!(e.find_word(false), None, "no word here");
+    }
+
+    /// A paragraph is laid out again to a width: as many words to a line as fit, the first
+    /// line's indent on every line, the paragraphs either side left alone. A block may hold
+    /// several, and the empty lines between them stay.
+    #[test]
+    fn a_paragraph_is_laid_out_again_to_a_width_and_keeps_its_indent() {
+        let mut e = editor("before\n\n  one two three\nfour\n  five   six\n\nafter stays as it is");
+        e.cursor = Position::new(3, 0);
+        assert!(e.reflow(12).unwrap());
+        assert_eq!(
+            e.buffer.to_text(),
+            "before\n\n  one two\n  three four\n  five six\n\nafter stays as it is"
+        );
+        assert_eq!(e.cursor, Position::new(2, 0));
+        assert!(e.undo());
+        assert_eq!(
+            e.buffer.to_text(),
+            "before\n\n  one two three\nfour\n  five   six\n\nafter stays as it is",
+            "one step"
+        );
+        // Wide enough, it is one line; a word wider than the width has a line to itself.
+        e.cursor = Position::new(2, 0);
+        assert!(e.reflow(80).unwrap());
+        assert_eq!(e.buffer.line(2), "  one two three four five six");
+        let mut e = editor("a extraordinarily b");
+        assert!(e.reflow(5).unwrap());
+        assert_eq!(e.buffer.to_text(), "a\nextraordinarily\nb");
+
+        // On an empty line with nothing marked there is no paragraph.
+        let mut e = editor("a b\n\nc d");
+        e.cursor = Position::new(1, 0);
+        assert!(!e.reflow(1).unwrap());
+        assert_eq!(e.buffer.to_text(), "a b\n\nc d");
+        // A block over both: each is laid out, and the line between them is kept.
+        e.select_all();
+        assert!(e.reflow(1).unwrap());
+        assert_eq!(e.buffer.to_text(), "a\nb\n\nc\nd");
+        assert!(e.block.is_none());
+        assert!(e.undo());
+        assert_eq!(
+            e.buffer.to_text(),
+            "a b\n\nc d",
+            "one step for the whole block"
+        );
     }
 
     /// What a filter is given and where its answer goes: the block when one is marked, and

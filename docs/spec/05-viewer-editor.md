@@ -1086,6 +1086,42 @@ left as it is. Title case puts a capital on the first letter or digit after anyt
 neither, and small letters after it; an apostrophe inside a word does not start another
 (`don't` → `Don't`). Toggle swaps each letter that has a case.
 
+### 2.2o A paragraph to a width (`Alt+P`)
+
+`editor.reflow` asks for a width in columns — 8 to 1000; an empty answer is the width last
+used in this session, 72 to begin with, and the prompt's title names it — and lays out again
+(`Editor::reflow`) the paragraph the cursor is in: the lines around it up to the nearest
+blank line each way. With a block marked it is every paragraph among the block's lines, the
+blank lines between them kept. mcedit's *format paragraph*; FAR leaves it to `align`.
+
+The words of a paragraph, split at whitespace, are joined with one space and filled greedily
+into lines no wider than the width, counted in display columns with the indent's tabs
+expanded. Every line gets the leading whitespace of the paragraph's first line. A word wider
+than what is left has a line to itself and is never cut. One undo step, nothing recorded when
+the text comes out the same; the block is unmarked and the cursor goes to the paragraph's
+first line. On a blank line with no block there is nothing to lay out, and the status line
+says so. Something that is not a width is an error and changes nothing.
+
+Not done: wrapping while typing, justification, and a comment's leader (`// `, `# `) carried
+onto the lines it makes.
+
+### 2.2p The date, the name and the path (feature 6.8)
+
+`editor.insert.date` (`Ctrl+F5`) inserts the local date and time as `YYYY-MM-DD HH:MM` at the
+cursor; `editor.insert.name` (`Alt+Shift+F`) the name of the file being edited and
+`editor.insert.path` (`Ctrl+F`, FAR's key) its full path — for a copy fetched from a server,
+the name and the address it has there rather than the temporary file's. Each is
+`Editor::insert_at_cursor`: one undo step, a marked block left alone. A buffer with no path
+has no name to insert and says so. The format of the date is not a setting.
+
+### 2.2q The editor's own list of commands (`Alt+F9`)
+
+`F9` in the editor is the menu bar, whose menus are the panels'. `editor.tools` is the
+editor's own list: the commands of §2.2k–§2.2p and of §2.2b's choice of syntax, in four
+groups parted by rules, each row its label and the key the keymap in use binds it to
+(`Keymap::key_for`). `Enter` runs the row's command as its key would, with the editor back in
+front first; the list narrows as one types.
+
 ### 2.2b Syntax highlighting
 
 `fcmd-syntax` is a scanner, not a parser, and deliberately: it knows how a language writes a

@@ -300,6 +300,37 @@ stands right after. Accented letters follow their own rules — `é` becomes `É
 Each of the four is also a command of its own — `editor.case.upper`, `editor.case.lower`,
 `editor.case.title`, `editor.case.toggle` — with no key until you give it one in the keymap.
 
+# A paragraph to a width
+
+`Alt+P` lays the paragraph the cursor is in out again so that no line is wider than a number
+of columns — mcedit's key for it. It asks the width, and `Enter` alone takes the last one
+used, which starts at 72. A paragraph is the lines around the cursor up to the nearest empty
+line each way. Its words are put back with one space between them, as many to a line as fit,
+and every line gets the indent the paragraph's first line had, so an indented paragraph stays
+indented. A word longer than the width has a line to itself; nothing is ever cut.
+
+With a block marked, every paragraph in the block is laid out and the empty lines between
+them stay. It is one `Ctrl+Z` either way. On an empty line with nothing marked there is no
+paragraph, and it says so.
+
+# The date, and the name of the file
+
+| Key | What goes in at the cursor |
+| --- | --- |
+| `Ctrl+F5` | the date and time, as `2026-11-11 17:42` |
+| `Alt+Shift+F` | the name of the file you are editing |
+| `Ctrl+F` | its whole path — FAR's key for it; for a file opened from a server, the address it has there |
+
+Each is one `Ctrl+Z`. A new file that has not been saved has no name yet, and says so.
+
+# The list of commands (`Alt+F9`)
+
+The key bar has room for twelve keys and the editor has many more. `Alt+F9` lists the ones
+described in the sections above — searching as you type, the word under the cursor, the block
+through a command and out to a file, its case, the paragraph, what can be inserted, line
+numbers, the language — each with the key that does it. Type to narrow the list, `Enter` runs
+the row, `Esc` goes back. `F9` alone is still the menu bar, as everywhere.
+
 # A block through a command, and files in and out
 
 Four keys on `Alt+Shift`, beside the other block commands, connect the text to the programs

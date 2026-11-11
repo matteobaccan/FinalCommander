@@ -234,6 +234,10 @@ indistinguishable in a TTY — see §9.
 | rewrite the marked block (an AI's version, as a diff, applied on `Enter`) | — | — | **Ctrl+Alt+W** |
 | literal next key (char code) | Ctrl+Q | — | **Ctrl+Q** — a control character, or a tab where tabs are expanded |
 | insert name of current file | Shift+Enter / Ctrl+Shift+Enter (other panel) | — | same |
+| insert the path / the name of the file being edited | Ctrl+F | — | **Ctrl+F** / **Alt+Shift+F** |
+| insert the date and time | — | from the menu | **Ctrl+F5** |
+| lay a paragraph out to a width | — (`align` plugin) | Alt+P | **Alt+P**, the width asked |
+| the editor's commands, as a list with their keys | F9 (the editor's own menu) | F9 | **Alt+F9**; `F9` is the menu bar |
 | duplicate line | Ctrl+Shift+D (via block) | — | Ctrl+Shift+D |
 | move line up / down | Alt+↑ / Alt+↓ (via block) | — | Alt+↑ / Alt+↓ |
 | reload from disk | Ctrl+Shift+R | — | Ctrl+R |
@@ -250,7 +254,9 @@ Ctrl+Shift+Ins append the block to the clipboard, Ctrl+N / Ctrl+E the first and 
 the screen, Alt+N line numbers, Alt+Shift+P the block through a command, Alt+Shift+O a command's
 output and Alt+Shift+I a file in at the cursor, Alt+Shift+W the block to a file, Alt+C the case
 of the block, Alt+Shift+Y the syntax, Ctrl+S search as you type, Ctrl+F3 / Ctrl+Shift+F3 the
-next and the previous place the word under the cursor is written. Movement, typing, Shift+arrows (stream block) and
+next and the previous place the word under the cursor is written, Alt+P a paragraph to a width,
+Ctrl+F5 the date and time, Ctrl+F the file's path and Alt+Shift+F its name, Alt+F9 the list of
+the editor's commands. Movement, typing, Shift+arrows (stream block) and
 Alt+Shift+arrows (column block) are handled by the editor itself and are not bindable yet.
 
 ## 8b. Netbox (connections)

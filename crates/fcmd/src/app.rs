@@ -1736,6 +1736,8 @@ pub enum PromptKind {
     EditorDeleteMatching,
     /// What to find in the editor, looked for at every key (`Ctrl+S`).
     EditorIncSearch,
+    /// How wide the paragraph should be laid out (`Alt+P`); nothing is the last width.
+    EditorReflow,
     /// The command the block — or the whole file — is run through (`Alt+Shift+P`).
     EditorPipe,
     /// The command whose output goes in at the cursor (`Alt+Shift+O`).
@@ -3308,6 +3310,8 @@ pub struct App {
     editor_pipe: Option<EditorPipe>,
     /// Where the editor was when `Ctrl+S` began a search, for `Esc` to go back to.
     editor_isearch: Option<EditorIsearch>,
+    /// The width `Alt+P` last laid a paragraph out to, offered again by its question.
+    editor_reflow_width: usize,
     /// The netbox's site list and what is connected right now.
     pub sites: Vec<Site>,
     pub connected: Vec<String>,
@@ -3764,6 +3768,7 @@ impl App {
             decompile_id: None,
             editor_pipe: None,
             editor_isearch: None,
+            editor_reflow_width: 72,
             sites,
             connected: Vec::new(),
             pending_connect: None,
@@ -8351,6 +8356,26 @@ impl App {
                 if prompt.text.is_empty() {
                     if let (Some(began), Some(editor)) = (began, self.mode.editor_mut()) {
                         editor.last_search = began.last_search;
+                    }
+                }
+            }
+            PromptKind::EditorReflow => {
+                let text = prompt.text.trim().to_string();
+                self.restore_editor();
+                let width = if text.is_empty() {
+                    Some(self.editor_reflow_width)
+                } else {
+                    text.parse::<usize>()
+                        .ok()
+                        .filter(|w| (8..=1000).contains(w))
+                };
+                match width {
+                    Some(width) => self.editor_reflow(width),
+                    None => {
+                        let m = self
+                            .i18n
+                            .t_args("editor-reflow-bad-width", &[("width", text.into())]);
+                        self.set_error(m);
                     }
                 }
             }
@@ -26949,6 +26974,27 @@ impl App {
                 self.open_editor_syntax();
                 return;
             }
+            Command::EditorTools => {
+                self.open_editor_tools();
+                return;
+            }
+            Command::EditorReflow => {
+                // The width is asked each time and the last one is the answer to `Enter`
+                // alone: typing over a number already in the field would mean rubbing it
+                // out first.
+                let title = self.i18n.t_args(
+                    "editor-prompt-reflow",
+                    &[("width", (self.editor_reflow_width as i64).into())],
+                );
+                self.park_editor();
+                self.mode =
+                    Mode::Prompt(Prompt::new(PromptKind::EditorReflow, title, String::new()));
+                return;
+            }
+            Command::EditorInsertDate | Command::EditorInsertName | Command::EditorInsertPath => {
+                self.editor_insert_fact(cmd);
+                return;
+            }
             Command::EditorCase => {
                 self.open_editor_case();
                 return;
@@ -27227,6 +27273,151 @@ impl App {
         }
     }
 
+    /// `Alt+F9`: the editor's commands that have no place on the key bar, as a list with
+    /// the key of each beside it — where one looks for the thing done twice a month, and
+    /// learns its key by the third time. `F9` itself is the menu bar, which is the panels'.
+    fn open_editor_tools(&mut self) {
+        if self.mode.editor().is_none() {
+            return;
+        }
+        let groups: [&[(Command, &str)]; 4] = [
+            &[
+                (Command::EditorSearchIncremental, "editor-tool-isearch"),
+                (Command::EditorWordNext, "editor-tool-word-next"),
+                (Command::EditorWordPrev, "editor-tool-word-prev"),
+            ],
+            &[
+                (Command::EditorPipe, "editor-tool-pipe"),
+                (Command::EditorWriteBlock, "editor-tool-write-block"),
+                (Command::EditorCase, "editor-tool-case"),
+                (Command::EditorReflow, "editor-tool-reflow"),
+            ],
+            &[
+                (Command::EditorInsertFile, "editor-tool-insert-file"),
+                (Command::EditorInsertOutput, "editor-tool-insert-output"),
+                (Command::EditorInsertDate, "editor-tool-insert-date"),
+                (Command::EditorInsertName, "editor-tool-insert-name"),
+                (Command::EditorInsertPath, "editor-tool-insert-path"),
+            ],
+            &[
+                (Command::EditorLineNumbers, "editor-tool-line-numbers"),
+                (Command::EditorSyntax, "editor-tool-syntax"),
+            ],
+        ];
+        let labels: Vec<Vec<(Command, String)>> = groups
+            .iter()
+            .map(|group| {
+                group
+                    .iter()
+                    .map(|(cmd, label)| (*cmd, self.i18n.t(label)))
+                    .collect()
+            })
+            .collect();
+        let widest = labels
+            .iter()
+            .flatten()
+            .map(|(_, label)| unicode_width::UnicodeWidthStr::width(label.as_str()))
+            .max()
+            .unwrap_or(0);
+        let mut rows: Vec<PickRow> = Vec::new();
+        for group in labels {
+            if !rows.is_empty() {
+                rows.push(PickRow::rule());
+            }
+            for (cmd, label) in group {
+                // The key the keymap in use gives it, which is not always the built-in one.
+                let key = self
+                    .keymap
+                    .key_for(cmd)
+                    .map(|k| k.to_string())
+                    .unwrap_or_default();
+                let pad = widest - unicode_width::UnicodeWidthStr::width(label.as_str());
+                rows.push(PickRow::plain(
+                    format!("{label}{}  {key}", " ".repeat(pad)),
+                    format!("run:{}", cmd.id()),
+                    false,
+                ));
+            }
+        }
+        self.park_editor();
+        let title = self.i18n.t("editor-tools-title");
+        let pick = Pick::new(PickKind::EditorChoice, title, rows, self.active);
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
+    /// `Alt+P`, answered: lay the paragraph out again to `width` columns.
+    fn editor_reflow(&mut self, width: usize) {
+        let (window, height) = self.editor_size;
+        let Some(editor) = self.mode.editor_mut() else {
+            return;
+        };
+        let name = editor.name();
+        let outcome = editor.reflow(width);
+        editor.scroll_into_view(height as usize, window as usize);
+        match outcome {
+            Ok(true) => {
+                self.editor_reflow_width = width;
+                let m = self
+                    .i18n
+                    .t_args("editor-reflowed", &[("width", (width as i64).into())]);
+                self.set_status(m);
+            }
+            Ok(false) => {
+                let m = self.i18n.t("editor-no-paragraph");
+                self.set_error(m);
+            }
+            Err(e) => {
+                let m = self.i18n.t_args(
+                    "editor-failed",
+                    &[("name", name.into()), ("error", e.to_string().into())],
+                );
+                self.set_error(m);
+            }
+        }
+    }
+
+    /// The date and time, the file's name or its whole path, in at the cursor (feature
+    /// 6.8). The date is the local one, written `2026-11-11 17:42` — the order that sorts
+    /// and that nobody reads two ways. The path of a file fetched from a server is the
+    /// one it has there, not the temporary copy's.
+    fn editor_insert_fact(&mut self, what: Command) {
+        let Some(editor) = self.mode.editor() else {
+            return;
+        };
+        let text = match what {
+            Command::EditorInsertDate => {
+                Some(fcmd_ui::widgets::format_mtime(std::time::SystemTime::now()))
+            }
+            Command::EditorInsertName => editor.path.as_ref().map(|_| match &self.remote_edit {
+                Some(edit) => edit.remote.display_name(),
+                None => editor.name(),
+            }),
+            _ => editor.path.as_ref().map(|path| match &self.remote_edit {
+                Some(edit) => edit.remote.to_string(),
+                None => path.to_string(),
+            }),
+        };
+        let Some(text) = text else {
+            let m = self.i18n.t("editor-no-name-yet");
+            self.set_error(m);
+            return;
+        };
+        let (width, height) = self.editor_size;
+        let Some(editor) = self.mode.editor_mut() else {
+            return;
+        };
+        let name = editor.name();
+        let outcome = editor.insert_at_cursor(&text);
+        editor.scroll_into_view(height as usize, width as usize);
+        if let Err(e) = outcome {
+            let m = self.i18n.t_args(
+                "editor-failed",
+                &[("name", name.into()), ("error", e.to_string().into())],
+            );
+            self.set_error(m);
+        }
+    }
+
     /// How many rows the search-as-you-type box takes off the foot of the editor's text.
     pub const ISEARCH_ROWS: u16 = 3;
 
@@ -27367,7 +27558,8 @@ impl App {
         self.mode = Mode::Pick(Box::new(pick));
     }
 
-    /// A row of one of the editor's short lists was chosen: `syntax:<name>`, `case:<which>`.
+    /// A row of one of the editor's short lists was chosen: `syntax:<name>`, `case:<which>`,
+    /// `run:<command>`.
     fn editor_choice(&mut self, what: &str) {
         let Some((kind, value)) = what.split_once(':') else {
             return;
@@ -27377,6 +27569,12 @@ impl App {
             "case" => {
                 if let Some(case) = fcmd_edit::Case::parse(value) {
                     self.editor_change_case(case);
+                }
+            }
+            // A row of `Alt+F9`: the command it names, as its key would run it.
+            "run" => {
+                if let Some(cmd) = Command::parse(value) {
+                    self.run(cmd);
                 }
             }
             _ => {}
@@ -45271,6 +45469,164 @@ abcdefghij
         press(&mut app, "Ctrl+End");
         press(&mut app, "Ctrl+F3");
         assert!(!app.status.is_empty(), "no word on an empty line");
+    }
+
+    /// `Alt+P` asks how wide and lays the paragraph out again; `Enter` alone takes the last
+    /// width, which starts at 72. A width that is not one is said, and so is an empty line.
+    #[test]
+    fn alt_p_lays_the_paragraph_out_again_to_the_width_asked() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("a.txt"),
+            "one two three four five six seven\n\nnext\n",
+        )
+        .unwrap();
+        let mut app = editing_app(dir.path());
+        app.open_editor_on(&VPath::local(dir.path().join("a.txt")));
+        press(&mut app, "Alt+P");
+        let Mode::Prompt(prompt) = &app.mode else {
+            panic!("the width is asked: {:?}", app.mode)
+        };
+        assert_eq!(prompt.kind, PromptKind::EditorReflow);
+        assert!(prompt.title.contains("72"), "{}", prompt.title);
+        answer_prompt(&mut app, "14");
+        assert_eq!(
+            editor_text(&app),
+            "one two three\nfour five six\nseven\n\nnext\n",
+            "{}",
+            app.status
+        );
+        press(&mut app, "Ctrl+Z");
+        assert_eq!(
+            editor_text(&app),
+            "one two three four five six seven\n\nnext\n"
+        );
+        // `Enter` alone: the width last used.
+        press(&mut app, "Alt+P");
+        let Mode::Prompt(prompt) = &app.mode else {
+            panic!("the width is asked: {:?}", app.mode)
+        };
+        assert!(prompt.title.contains("14"), "{}", prompt.title);
+        answer_prompt(&mut app, "");
+        assert_eq!(
+            editor_text(&app),
+            "one two three\nfour five six\nseven\n\nnext\n"
+        );
+        press(&mut app, "Ctrl+Z");
+        for bad in ["wide", "3", "100000"] {
+            press(&mut app, "Alt+P");
+            answer_prompt(&mut app, bad);
+            assert!(app.status_error, "{bad}: {}", app.status);
+        }
+        assert_eq!(
+            editor_text(&app),
+            "one two three four five six seven\n\nnext\n"
+        );
+        press(&mut app, "Down");
+        press(&mut app, "Alt+P");
+        answer_prompt(&mut app, "20");
+        assert!(app.status_error, "an empty line: {}", app.status);
+    }
+
+    /// `Ctrl+F` puts the path of the file being edited in at the cursor, `Alt+Shift+F` its
+    /// name and `Ctrl+F5` the date and time; a file with no name yet has neither to give.
+    #[test]
+    fn the_name_the_path_and_the_date_go_in_at_the_cursor() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = VPath::local(dir.path().join("notes.txt"));
+        std::fs::write(file.as_path(), "\n").unwrap();
+        let mut app = editing_app(dir.path());
+        app.open_editor_on(&file);
+        press(&mut app, "Alt+Shift+F");
+        assert_eq!(editor_text(&app), "notes.txt\n", "{}", app.status);
+        press(&mut app, "Ctrl+Z");
+        press(&mut app, "Ctrl+F");
+        assert_eq!(editor_text(&app), format!("{file}\n"));
+        press(&mut app, "Ctrl+Z");
+        press(&mut app, "Ctrl+F5");
+        let text = editor_text(&app);
+        let stamp = text.trim_end();
+        // `2026-11-11 17:42`: sixteen characters, digits where digits go.
+        assert_eq!(stamp.len(), 16, "{stamp:?}");
+        for (at, c) in stamp.chars().enumerate() {
+            match at {
+                4 | 7 => assert_eq!(c, '-', "{stamp:?}"),
+                10 => assert_eq!(c, ' ', "{stamp:?}"),
+                13 => assert_eq!(c, ':', "{stamp:?}"),
+                _ => assert!(c.is_ascii_digit(), "{stamp:?}"),
+            }
+        }
+        press(&mut app, "Ctrl+Z");
+        assert_eq!(editor_text(&app), "\n", "each was one step");
+
+        // A new file has no name to insert, and says so; the date it still has.
+        press(&mut app, "Esc");
+        app.open_new_editor();
+        if let Mode::Editor(e) = &mut app.mode {
+            e.path = None;
+        }
+        press(&mut app, "Ctrl+F");
+        assert!(app.status_error, "{}", app.status);
+        press(&mut app, "Alt+Shift+F");
+        assert!(app.status_error, "{}", app.status);
+        press(&mut app, "Ctrl+F5");
+        assert_eq!(editor_text(&app).trim_end().len(), 16);
+    }
+
+    /// `Alt+F9` lists the editor's commands with the key of each, and `Enter` on a row
+    /// runs it as its key would; every row names a command that exists and has a key.
+    #[test]
+    fn alt_f9_lists_the_editors_commands_and_runs_the_one_chosen() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "x\n").unwrap();
+        let mut app = editing_app(dir.path());
+        app.open_editor_on(&VPath::local(dir.path().join("a.txt")));
+        press(&mut app, "Alt+F9");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list: {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::EditorChoice);
+        let rows: Vec<&PickRow> = pick.rows.iter().filter(|r| !r.separator).collect();
+        assert_eq!(rows.len(), 14);
+        for row in &rows {
+            let id = row.value.strip_prefix("run:").expect("a command");
+            let cmd = Command::parse(id).unwrap_or_else(|| panic!("{id} is no command"));
+            let key = app
+                .keymap
+                .key_for(cmd)
+                .unwrap_or_else(|| panic!("{id} has no key"))
+                .to_string();
+            assert!(
+                row.label.ends_with(&key),
+                "{:?} does not say {key}",
+                row.label
+            );
+        }
+        // Typing narrows it, as in every list: `numb` leaves the line numbers.
+        for c in "numb".chars() {
+            press(&mut app, &c.to_string());
+        }
+        press(&mut app, "Enter");
+        assert!(
+            app.mode.editor().expect("the editor back").line_numbers,
+            "{:?}",
+            app.mode
+        );
+        // A row that asks something opens its question over the editor.
+        press(&mut app, "Alt+F9");
+        for c in "paragr".chars() {
+            press(&mut app, &c.to_string());
+        }
+        press(&mut app, "Enter");
+        assert!(
+            matches!(&app.mode, Mode::Prompt(p) if p.kind == PromptKind::EditorReflow),
+            "{:?}",
+            app.mode
+        );
+        press(&mut app, "Esc");
+        press(&mut app, "Alt+F9");
+        press(&mut app, "Esc");
+        assert!(matches!(app.mode, Mode::Editor(_)), "{:?}", app.mode);
     }
 
     /// `Alt+C` lists the four cases over the editor and `Enter` applies the one under the

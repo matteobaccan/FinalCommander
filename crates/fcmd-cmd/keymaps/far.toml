@@ -1284,6 +1284,38 @@ keys = ["Alt+C"]
 scope = "editor"
 cmd = "editor.case"
 
+# The paragraph laid out again to a width that is asked: mcedit's key for *format paragraph*.
+[[bind]]
+keys = ["Alt+P"]
+scope = "editor"
+cmd = "editor.reflow"
+
+# The name of the file being edited, in at the cursor: `Ctrl+F` is FAR's own key for the
+# full name, and the name alone takes the same letter beside the other block commands. The
+# date and time on `Ctrl+F5`, the key that reads the clock in Notepad with `Ctrl` added:
+# `F5` alone is the key bar's.
+[[bind]]
+keys = ["Ctrl+F"]
+scope = "editor"
+cmd = "editor.insert.path"
+
+[[bind]]
+keys = ["Alt+Shift+F"]
+scope = "editor"
+cmd = "editor.insert.name"
+
+[[bind]]
+keys = ["Ctrl+F5"]
+scope = "editor"
+cmd = "editor.insert.date"
+
+# The editor's commands that are not on the key bar, as a list with their keys. `F9` is the
+# menu bar, here as everywhere; this is the editor's own, one key away from it.
+[[bind]]
+keys = ["Alt+F9"]
+scope = "editor"
+cmd = "editor.tools"
+
 # Search as you type: the cursor goes to the first hit at every key, the arrows walk the
 # others, `Enter` stays and `Esc` goes back to where it began. Emacs' key for it, far2l's
 # idea; `F7` is still the dialog, and decides how this one searches.

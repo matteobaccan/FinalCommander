@@ -116,10 +116,9 @@ Three findings that are not gaps against anybody:
 | Fonts and SVG drawn; HTML and RTF laid out | yazi, Total Commander, Double Commander | S as programs (`rsvg-convert`, `magick`); M in process | as programs | Would fall out of the row above |
 | Sound | Total Commander, Double Commander, nnn | S | **no** — decided with the video | |
 | A right margin in the editor; a ruler in the viewer | Midnight Commander | S | yes | The editor's line numbers are in (`Alt+N`) |
-| A paragraph reflowed, wrap while typing, a block aligned; boxes drawn | Midnight Commander, FAR, far2l | S each | yes | FAR ships them as plugins (`align`, `autowrap`, `drawline`). The case of a block is in (`Alt+C`) |
+| Wrap while typing, a block aligned or justified; boxes drawn | Midnight Commander, FAR, far2l | S each | yes | FAR ships them as plugins (`align`, `autowrap`, `drawline`). The case of a block (`Alt+C`) and a paragraph laid out to a width (`Alt+P`) are in |
 | Git's changes in the editor's margin | far2l | M | yes | The git panel and blame are in |
 | Spell check | Midnight Commander | M | as a program (`aspell`, `hunspell`) | |
-| Name, path and date inserted | Midnight Commander, FAR | S | yes | Feature 6.8 |
 | A scratchpad kept between runs | far2l | S | yes | |
 
 ### Tools, the shell and extending it

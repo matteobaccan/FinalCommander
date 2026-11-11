@@ -313,6 +313,39 @@ Ognuna delle quattro è anche un comando a sé — `editor.case.upper`, `editor.
 `editor.case.title`, `editor.case.toggle` — senza tasto finché non gliene dai uno nella mappa
 dei tasti.
 
+# Un paragrafo a una larghezza
+
+`Alt+P` reimpagina il paragrafo in cui sta il cursore in modo che nessuna riga superi un certo
+numero di colonne: è il tasto di mcedit. Chiede la larghezza, e il solo `Invio` prende
+l'ultima usata, che parte da 72. Un paragrafo sono le righe attorno al cursore fino alla riga
+vuota più vicina in ciascuna direzione. Le sue parole vengono rimesse con uno spazio tra
+l'una e l'altra, quante ne stanno in una riga, e ogni riga prende il rientro che aveva la
+prima riga del paragrafo, così un paragrafo rientrato resta rientrato. Una parola più lunga
+della larghezza sta su una riga da sola; nulla viene mai tagliato.
+
+Con un blocco marcato viene reimpaginato ogni paragrafo del blocco e le righe vuote tra l'uno
+e l'altro restano. In entrambi i casi è un solo `Ctrl+Z`. Su una riga vuota senza nulla di
+marcato non c'è un paragrafo, e lo dice.
+
+# La data, e il nome del file
+
+| Tasto | Che cosa entra al cursore |
+| --- | --- |
+| `Ctrl+F5` | la data e l'ora, come `2026-11-11 17:42` |
+| `Alt+Shift+F` | il nome del file che stai modificando |
+| `Ctrl+F` | il suo percorso completo — il tasto di FAR; per un file aperto da un server, l'indirizzo che ha lì |
+
+Ognuno è un solo `Ctrl+Z`. Un file nuovo non ancora salvato non ha ancora un nome, e lo dice.
+
+# L'elenco dei comandi (`Alt+F9`)
+
+La barra dei tasti ha posto per dodici tasti e l'editor ne ha molti di più. `Alt+F9` elenca
+quelli descritti nelle sezioni qui sopra — cercare mentre si scrive, la parola sotto il
+cursore, il blocco attraverso un comando e fuori in un file, maiuscole e minuscole, il
+paragrafo, ciò che si può inserire, i numeri di riga, il linguaggio — ognuno con il tasto che
+lo fa. Scrivi per restringere l'elenco, `Invio` esegue la riga, `Esc` torna indietro. `F9` da
+solo resta la barra dei menu, come ovunque.
+
 # Un blocco attraverso un comando, e file dentro e fuori
 
 Quattro tasti su `Alt+Shift`, accanto agli altri comandi sui blocchi, collegano il testo ai

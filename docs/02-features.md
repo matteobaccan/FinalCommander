@@ -221,7 +221,7 @@ something readable rather than only into instructions.
 | 6.5 | Go to `line` or `line:column`, bookmarks 0..9 | FAR | ✓ and `Alt+B` to the matching bracket |
 | 6.6 | Keep the original encoding, EOL, BOM and final newline on save; `Shift+F8` converts the end of line, the BOM and the code page, each one undo step | FAR | ✓ |
 | 6.7 | Syntax highlighting (tree-sitter), bracket matching, auto-indent, tabs/spaces policy, trailing-space trim | MTN2/NEW | ~ colouring for 25 languages and markups by a scanner of our own rather than tree-sitter, auto-indent, the three tab policies of `editor.tabs`, bracket matching (`Alt+B`), trailing blanks taken off (`Alt+Shift+T`, or at every save with `editor.trim_trailing`) |
-| 6.8 | Insert file name / path / current date, character by code, macros | FAR | ~ a character from a list filtered by its code (`Alt+Shift+C`); the name, path and date are not there yet |
+| 6.8 | Insert file name / path / current date, character by code, macros | FAR | ~ the name (`Alt+Shift+F`), the path (`Ctrl+F`), the date and time (`Ctrl+F5`), a character from a list filtered by its code (`Alt+Shift+C`); a date format of one's own |
 | 6.9 | External editor delegation (`$EDITOR`, per-type associations, `editor.external` / `viewer.external` with `{file}` and `{line}`, and FAR's *use the external editor for F4*) | all | ✓ |
 | 6.10 | LSP-lite: completion/diagnostics for the open file (optional plugin) | NEW | ✗ M4 |
 | 6.11 | **Atomic save** (`name.fcmd-tmp` + rename, permissions carried over) and a save-as prompt | NEW | ✓ |
@@ -232,10 +232,12 @@ something readable rather than only into instructions.
 | 6.16 | Word completion from the words of the file, nearest first, cycling (`Alt+/`) | FAR (EditorCompletion)/emacs | ✓ |
 | 6.17 | A marked block rewritten by a language model from an instruction in words: the model's version shown as a diff against the block, applied on `Enter` as one undo step | NEW | ✓ `Ctrl+Alt+W` (SPEC 05 §2.10) |
 | 6.18 | Line numbers in a margin, per file (`Alt+N`) and as a setting (`editor.line_numbers`) | MC | ✓ (SPEC 05 §2.2k) |
+| 6.19 | The block — or the whole file — run through a shell command and replaced by its output as one undo step, nothing replaced on failure; a command's output or a file inserted at the cursor; the block written to a file | MC/far2l | ✓ `Alt+Shift+P/O/I/W` (SPEC 05 §2.2l) |
 | 6.20 | The case of the block, a column block or the word under the cursor: upper, lower, title, toggle | FAR (`editcase`)/MC | ✓ `Alt+C` (SPEC 05 §2.2m) |
 | 6.21 | The syntax chosen by hand from the highlighter's languages, remembered per file | MC/far2l | ✓ `Alt+Shift+Y` (SPEC 05 §2.2b) |
 | 6.22 | Search as you type, the cursor on the first hit at every key and `Esc` back to where it began; the next and the previous occurrence of the word under the cursor | far2l | ✓ `Ctrl+S`, `Ctrl+F3` / `Ctrl+Shift+F3` (SPEC 05 §2.2n) |
-| 6.19 | The block — or the whole file — run through a shell command and replaced by its output as one undo step, nothing replaced on failure; a command's output or a file inserted at the cursor; the block written to a file | MC/far2l | ✓ `Alt+Shift+P/O/I/W` (SPEC 05 §2.2l) |
+| 6.23 | A paragraph, or every paragraph of the block, laid out again to a width that is asked, the first line's indent kept | MC/FAR (`align`) | ~ `Alt+P` (SPEC 05 §2.2o); wrapping while typing and justification |
+| 6.24 | The editor's commands that are not on the key bar as a list with their keys | MC/FAR (the editor's menu) | ✓ `Alt+F9` (SPEC 05 §2.2q) |
 
 ## 7. Tools & dialogs
 

@@ -604,7 +604,8 @@ pub enum Command {
     EditorConvert,
     /// `Alt+N`: number the lines in a gutter, or stop (mcedit's key).
     EditorLineNumbers,
-    /// `Alt+Shift+P`: run the block, or the whole file, through a command and put what it prints in its place.
+    /// `Alt+Shift+P`: run the block, or the whole file, through a command and put what it
+    /// prints in its place.
     EditorPipe,
     /// `Alt+Shift+O`: what a command prints, in at the cursor.
     EditorInsertOutput,
@@ -630,7 +631,17 @@ pub enum Command {
     EditorWordNext,
     /// `Ctrl+Shift+F3`: the place before this one where the word under the cursor is written.
     EditorWordPrev,
-    // (more editor commands go above this line)
+    /// `Alt+P`: the paragraph laid out again to a width that is asked (mcedit's key).
+    EditorReflow,
+    /// `Ctrl+F5`: the date and time, in at the cursor.
+    EditorInsertDate,
+    /// `Alt+Shift+F`: the name of the file being edited, in at the cursor.
+    EditorInsertName,
+    /// `Ctrl+F`: the whole path of the file being edited, in at the cursor (FAR's key).
+    EditorInsertPath,
+    /// `Alt+F9`: the editor's commands that are not on the key bar, as a list with their
+    /// keys.
+    EditorTools,
 }
 
 impl Command {
@@ -937,6 +948,11 @@ impl Command {
             Command::EditorDeleteWordRight,
             Command::EditorToggleReadOnly,
             Command::EditorConvert,
+            Command::EditorTools,
+            Command::EditorInsertPath,
+            Command::EditorInsertName,
+            Command::EditorInsertDate,
+            Command::EditorReflow,
             Command::EditorWordPrev,
             Command::EditorWordNext,
             Command::EditorSearchIncremental,
@@ -1269,6 +1285,11 @@ impl Command {
             Command::EditorDeleteWordRight => "editor.delete.word.right".into(),
             Command::EditorToggleReadOnly => "editor.readonly.toggle".into(),
             Command::EditorConvert => "editor.convert".into(),
+            Command::EditorTools => "editor.tools".into(),
+            Command::EditorInsertPath => "editor.insert.path".into(),
+            Command::EditorInsertName => "editor.insert.name".into(),
+            Command::EditorInsertDate => "editor.insert.date".into(),
+            Command::EditorReflow => "editor.reflow".into(),
             Command::EditorWordPrev => "editor.word.prev".into(),
             Command::EditorWordNext => "editor.word.next".into(),
             Command::EditorSearchIncremental => "editor.search.incremental".into(),
@@ -1578,6 +1599,11 @@ impl Command {
             ("editor.delete.word.right", _) => Command::EditorDeleteWordRight,
             ("editor.readonly.toggle", _) => Command::EditorToggleReadOnly,
             ("editor.convert", _) => Command::EditorConvert,
+            ("editor.tools", _) => Command::EditorTools,
+            ("editor.insert.path", _) => Command::EditorInsertPath,
+            ("editor.insert.name", _) => Command::EditorInsertName,
+            ("editor.insert.date", _) => Command::EditorInsertDate,
+            ("editor.reflow", _) => Command::EditorReflow,
             ("editor.word.prev", _) => Command::EditorWordPrev,
             ("editor.word.next", _) => Command::EditorWordNext,
             ("editor.search.incremental", _) => Command::EditorSearchIncremental,
