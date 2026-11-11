@@ -916,6 +916,27 @@ directory: an association for `*.zip` would stop that, so archives are checked f
 cursor, plus the desktop, and runs the one chosen. It is the way to use the `view` command of
 a block without rebinding anything.
 
+# Printing
+
+`Alt+F5` prints the files that are marked, or the one under the cursor, after a question that
+shows the command it is about to run. The same key prints the file in the viewer, and in the
+editor the block — or, with no block, the whole text as it is on the screen, saved or not.
+Nothing leaves the screen you are on: the line at the bottom says when the printer has it, or
+why it does not.
+
+What runs is `[print] command` in the configuration. Left empty it is the system's own: `lp`,
+or `lpr` where there is no `lp`, and Notepad's `/p` on Windows. `{file}` in it stands for one
+file, and the command is then run once for each; a command without it gets all the files after
+it:
+
+```toml
+[print]
+command = "lpr -P office"
+# command = "pr -h {file} {file} | lp"
+```
+
+Only a file on this machine can be printed: copy one off a server first.
+
 # The system log
 
 *Commands → System log* opens the latest entries of the system's log in the viewer —

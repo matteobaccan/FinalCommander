@@ -337,6 +337,9 @@ marcato non c'è un paragrafo, e lo dice.
 
 Ognuno è un solo `Ctrl+Z`. Un file nuovo non ancora salvato non ha ancora un nome, e lo dice.
 
+`Alt+F5` stampa il blocco, o tutto il testo quando non ce n'è — quello che è sullo schermo, non
+quello salvato l'ultima volta.
+
 # L'elenco dei comandi (`Alt+F9`)
 
 La barra dei tasti ha posto per dodici tasti e l'editor ne ha molti di più. `Alt+F9` elenca

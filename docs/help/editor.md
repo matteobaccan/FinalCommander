@@ -323,6 +323,9 @@ paragraph, and it says so.
 
 Each is one `Ctrl+Z`. A new file that has not been saved has no name yet, and says so.
 
+`Alt+F5` prints the block, or the whole text when there is none — what is on the screen, not
+what was last saved.
+
 # The list of commands (`Alt+F9`)
 
 The key bar has room for twelve keys and the editor has many more. `Alt+F9` lists the ones

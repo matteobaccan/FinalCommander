@@ -135,6 +135,12 @@ pub enum Request {
     OpenUrl {
         url: String,
     },
+    /// Send files to the printer with the command `[print] command` names (or the system's
+    /// own), off the screen: what the user sees stays, and the answer is a status line.
+    Print {
+        line: String,
+        cwd: std::path::PathBuf,
+    },
     /// Walk every file under `root` for the branch view (SPEC 02 §3d).
     Branch {
         panel: usize,
@@ -1477,6 +1483,11 @@ pub enum Event {
         same: usize,
         failed: Vec<(std::path::PathBuf, String)>,
     },
+    /// The print command ended: sent, or why not.
+    Printed {
+        line: String,
+        result: Result<String, String>,
+    },
     /// What the editor's command printed, or why there is nothing to put in the buffer.
     EditorPiped {
         id: u64,
@@ -2143,6 +2154,8 @@ pub enum ConfirmAction {
     DiscardEdits,
     /// The same, for the hex editor: its buffer is bytes, not lines.
     DiscardHex,
+    /// Send the files under the cursor or marked to the printer, with this command line.
+    Print { line: String },
     /// Save over a file that changed on disk since it was opened.
     OverwriteChanged,
     /// Write the editor's copy over a remote file that changed on the server.
@@ -2240,6 +2253,7 @@ impl ConfirmAction {
             ConfirmAction::Undo => "btn-undo",
             ConfirmAction::GitDiscard { .. } => "btn-discard",
             ConfirmAction::KillProcess { .. } => "btn-kill",
+            ConfirmAction::Print { .. } => "btn-print",
         }
     }
 
@@ -5192,6 +5206,19 @@ impl App {
             }
             Event::JobDone { id, kind, outcome } => self.job_done(id, kind, outcome),
             Event::EditorPiped { id, line, result } => self.editor_piped(id, &line, result),
+            Event::Printed { line, result } => match result {
+                Ok(_) => {
+                    let m = self.i18n.t("print-sent");
+                    self.set_status(m);
+                }
+                Err(why) => {
+                    let m = self.i18n.t_args(
+                        "print-failed",
+                        &[("line", line.into()), ("error", why.into())],
+                    );
+                    self.set_error(m);
+                }
+            },
             Event::Decompiled { id, tool, result } => {
                 if self.decompile_id != Some(id) {
                     return; // the viewer moved on
@@ -6123,6 +6150,7 @@ impl App {
                     ConfirmAction::TrashClash { side, items } => {
                         self.trash_clash_answer(side, items, OnClash::Overwrite)
                     }
+                    ConfirmAction::Print { line } => self.send_to_printer(line),
                     ConfirmAction::DiscardHex => {
                         self.hex_parked = None;
                         self.leave_screen();
@@ -12514,6 +12542,9 @@ impl App {
                 self.open_trash_panel(side);
             }
             Command::ToolTrashEmpty => self.ask_trash_empty(),
+            Command::FilePrint => self.ask_print(),
+            Command::ViewerPrint if self.mode.viewer().is_some() => self.print_viewer(),
+            Command::EditorPrint if self.mode.editor().is_some() => self.print_editor(),
             Command::ToolAi => self.open_ai_services(),
             Command::ToolSysLog => {
                 let m = self.i18n.t("syslog-reading");
@@ -21102,6 +21133,131 @@ impl App {
     /// `F7` in the wastebasket, and *Commands → Empty the wastebasket*: everything in it,
     /// for good. *Cancel* is the button that is lit: this is the one question here whose
     /// answer cannot be taken back by any key.
+    /// The command line that prints `files`: `[print] command` when it is set, else the
+    /// system's own (`lp`, then `lpr`; Notepad's `/p` on Windows). `{file}` in the template
+    /// takes one file at a time; a template without it gets the names after it.
+    fn print_line(&self, files: &[std::path::PathBuf]) -> Option<String> {
+        let set = self.cfg.print.command.trim();
+        let template = if !set.is_empty() {
+            set.to_string()
+        } else if cfg!(windows) {
+            "notepad /p {file}".to_string()
+        } else if fcmd_arc::which("lp").is_some() {
+            "lp {file}".to_string()
+        } else if fcmd_arc::which("lpr").is_some() {
+            "lpr {file}".to_string()
+        } else {
+            return None;
+        };
+        let quoted: Vec<String> = files
+            .iter()
+            .map(|f| crate::expand::quote(&f.to_string_lossy()))
+            .collect();
+        Some(if template.contains("{file}") {
+            quoted
+                .iter()
+                .map(|q| template.replace("{file}", q))
+                .collect::<Vec<_>>()
+                .join(" && ")
+        } else {
+            format!("{template} {}", quoted.join(" "))
+        })
+    }
+
+    /// Hand a print line to the pool: the screen stays where it is.
+    fn send_to_printer(&mut self, line: String) {
+        let cwd = match self.panel().cwd.is_local() {
+            true => self.panel().cwd.as_path().to_path_buf(),
+            false => std::env::temp_dir(),
+        };
+        let m = self.i18n.t("print-sending");
+        self.set_status(m);
+        self.requests.push(Request::Print { line, cwd });
+    }
+
+    /// `Alt+F5` in the panels: print the files marked, or the one under the cursor, after
+    /// saying which and with what.
+    fn ask_print(&mut self) {
+        let sources = self.sum_sources();
+        if sources.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        if sources.iter().any(|p| !p.is_local() || p.in_container()) {
+            let m = self.i18n.t("print-local-only");
+            self.set_error(m);
+            return;
+        }
+        let files: Vec<std::path::PathBuf> =
+            sources.iter().map(|p| p.as_path().to_path_buf()).collect();
+        let Some(line) = self.print_line(&files) else {
+            let m = self.i18n.t("print-no-command");
+            self.set_error(m);
+            return;
+        };
+        let what = self.sources_label(&sources);
+        self.mode = Mode::Confirm(Confirm {
+            title: self.i18n.t("print-title"),
+            lines: vec![
+                self.i18n.t_args("print-body", &[("what", what.into())]),
+                line.clone(),
+            ],
+            action: ConfirmAction::Print { line },
+            button: 0,
+        });
+    }
+
+    /// `Alt+F5` in the viewer: the file being read, as it is on disk.
+    fn print_viewer(&mut self) {
+        let Some(path) = self
+            .mode
+            .viewer()
+            .map(|v| v.path.clone())
+            .filter(|p| p.is_local())
+        else {
+            let m = self.i18n.t("print-local-only");
+            self.set_error(m);
+            return;
+        };
+        match self.print_line(&[path.as_path().to_path_buf()]) {
+            Some(line) => self.send_to_printer(line),
+            None => {
+                let m = self.i18n.t("print-no-command");
+                self.set_error(m);
+            }
+        }
+    }
+
+    /// `Alt+F5` in the editor: the block when there is one, else the whole text — what is on
+    /// the screen, saved or not, written to a temporary file the printer reads.
+    fn print_editor(&mut self) {
+        let Some(editor) = self.mode.editor() else {
+            return;
+        };
+        let bytes = editor
+            .block_bytes()
+            .unwrap_or_else(|| editor.buffer.to_bytes());
+        let name = editor.name();
+        let dir = Self::fetch_dir().join("print");
+        let file = dir.join(if name.is_empty() {
+            "text.txt".into()
+        } else {
+            name
+        });
+        if let Err(e) = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&file, bytes)) {
+            self.set_error(format!("{}: {e}", file.display()));
+            return;
+        }
+        match self.print_line(&[file]) {
+            Some(line) => self.send_to_printer(line),
+            None => {
+                let m = self.i18n.t("print-no-command");
+                self.set_error(m);
+            }
+        }
+    }
+
     fn ask_trash_empty(&mut self) {
         if !fcmd_jobs::wastebasket::SUPPORTED {
             let m = self.i18n.t("trash-closed");
@@ -27034,6 +27190,10 @@ impl App {
                 self.editor_prompt(PromptKind::EditorPipe, title, String::new());
                 return;
             }
+            Command::EditorPrint => {
+                self.print_editor();
+                return;
+            }
             Command::EditorInsertOutput => {
                 self.editor_prompt(
                     PromptKind::EditorInsertOutput,
@@ -28287,6 +28447,10 @@ impl App {
         let favourites = self.codepage_favourites();
         if cmd == Command::ViewerCodepageList {
             self.open_codepages();
+            return;
+        }
+        if cmd == Command::ViewerPrint {
+            self.print_viewer();
             return;
         }
         // On a film the keys that turn pages step through it instead (SPEC 05 §1.15).
@@ -32024,6 +32188,8 @@ fn keybar_label(cmd: Command) -> Option<&'static str> {
         Command::AppSetupSave => "key-save",
         Command::PanelSortGroups => "key-group",
         Command::PanelSelectedFirst => "key-selup",
+        // Alt
+        Command::FilePrint => "key-print",
         // Ctrl
         Command::PanelToggle(Side::Left) | Command::PanelDrive(Side::Left) => "key-left",
         Command::PanelToggle(Side::Right) | Command::PanelDrive(Side::Right) => "key-right",
@@ -53704,5 +53870,115 @@ abcdefghij
             assert!(rows.iter().any(|(k, _)| k == key), "{key} is not listed");
         }
         assert!(app.cfg.set("viewer.use_external", "perhaps").is_err());
+    }
+
+    // ── printing (Alt+F5) ──────────────────────────────────────────────────────────────────
+
+    fn print_requests(app: &mut App) -> Vec<String> {
+        app.take_requests()
+            .into_iter()
+            .filter_map(|r| match r {
+                Request::Print { line, .. } => Some(line),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn alt_f5_asks_before_printing_and_says_with_what() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), b"one\n").unwrap();
+        let mut app = editing(dir.path(), "a.txt");
+        app.cfg.print.command = "myprint --tray 2".into();
+        press(&mut app, "Alt+F5");
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("a question first: {:?}", app.status)
+        };
+        assert!(confirm.lines.iter().any(|l| l.contains("myprint --tray 2")));
+        assert!(
+            print_requests(&mut app).is_empty(),
+            "nothing before the answer"
+        );
+        press(&mut app, "Enter");
+        let lines = print_requests(&mut app);
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert!(lines[0].starts_with("myprint --tray 2 "), "{}", lines[0]);
+        assert!(lines[0].contains("a.txt"), "{}", lines[0]);
+        // The answer comes back as a status line, and a failure says why.
+        app.handle_event(Event::Printed {
+            line: lines[0].clone(),
+            result: Err("exit status 1: no printer".into()),
+        });
+        assert!(
+            app.status_error && app.status.contains("no printer"),
+            "{}",
+            app.status
+        );
+        app.handle_event(Event::Printed {
+            line: lines[0].clone(),
+            result: Ok(String::new()),
+        });
+        assert!(!app.status_error, "{}", app.status);
+    }
+
+    #[test]
+    fn a_print_template_with_a_file_in_it_runs_once_per_file() {
+        let app = app();
+        let mut app = app;
+        app.cfg.print.command = "pr {file} | lp".into();
+        let line = app
+            .print_line(&["/x/a".into(), "/x/b".into()])
+            .expect("a line");
+        assert_eq!(line, "pr /x/a | lp && pr /x/b | lp");
+    }
+
+    #[test]
+    fn printing_is_refused_for_a_file_that_is_not_on_this_machine() {
+        let mut app = app();
+        app.cfg.print.command = "lp".into();
+        app.panels[0].cwd = VPath::remote(fcmd_core::Scheme::Sftp, "mb@host", "/srv");
+        app.panel_mut().cursor_to(2);
+        app.run(Command::FilePrint);
+        assert!(app.status_error, "{}", app.status);
+        assert!(print_requests(&mut app).is_empty());
+    }
+
+    #[test]
+    fn the_editor_prints_what_is_on_the_screen_not_what_was_saved() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("notes.txt"), b"saved\n").unwrap();
+        let mut app = editing(dir.path(), "notes.txt");
+        app.cfg.print.command = "lp".into();
+        press(&mut app, "F4");
+        assert!(app.mode.editor().is_some());
+        type_text(&mut app, "unsaved ");
+        press(&mut app, "Alt+F5");
+        // Still in the editor: printing is not leaving it.
+        assert!(app.mode.editor().is_some());
+        let lines = print_requests(&mut app);
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        let file = lines[0].trim_start_matches("lp ").trim_matches(['"', '\'']);
+        let text = std::fs::read_to_string(file).unwrap();
+        assert_eq!(text, "unsaved saved\n");
+        // The file on disk is untouched.
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("notes.txt")).unwrap(),
+            "saved\n"
+        );
+    }
+
+    #[test]
+    fn the_viewer_prints_the_file_it_is_reading_and_stays_open() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("read.txt"), b"text\n").unwrap();
+        let mut app = editing(dir.path(), "read.txt");
+        app.cfg.print.command = "lpr -P office".into();
+        press(&mut app, "F3");
+        assert!(app.mode.viewer().is_some());
+        press(&mut app, "Alt+F5");
+        assert!(app.mode.viewer().is_some());
+        let lines = print_requests(&mut app);
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert!(lines[0].starts_with("lpr -P office ") && lines[0].contains("read.txt"));
     }
 }

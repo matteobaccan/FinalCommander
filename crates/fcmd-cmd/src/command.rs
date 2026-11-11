@@ -609,6 +609,13 @@ pub enum Command {
     EditorPipe,
     /// `Alt+Shift+O`: what a command prints, in at the cursor.
     EditorInsertOutput,
+    /// `Alt+F5`: print the file under the cursor, or the selected ones, with the system's
+    /// print program.
+    FilePrint,
+    /// `Alt+F5` in the viewer: print the file being read.
+    ViewerPrint,
+    /// `Alt+F5` in the editor: print the marked block, or the whole text as it stands.
+    EditorPrint,
     /// `Alt+Shift+I`: a file read in at the cursor.
     EditorInsertFile,
     /// `Alt+Shift+W`: the marked block written to a file of its own.
@@ -965,6 +972,9 @@ impl Command {
             Command::EditorWriteBlock,
             Command::EditorInsertFile,
             Command::EditorInsertOutput,
+            Command::FilePrint,
+            Command::ViewerPrint,
+            Command::EditorPrint,
             Command::EditorPipe,
             Command::EditorLineNumbers,
         ];
@@ -1302,6 +1312,9 @@ impl Command {
             Command::EditorWriteBlock => "editor.block.write".into(),
             Command::EditorInsertFile => "editor.insert.file".into(),
             Command::EditorInsertOutput => "editor.insert.output".into(),
+            Command::FilePrint => "file.print".into(),
+            Command::ViewerPrint => "viewer.print".into(),
+            Command::EditorPrint => "editor.print".into(),
             Command::EditorPipe => "editor.block.pipe".into(),
             Command::EditorLineNumbers => "editor.line.numbers".into(),
         }
@@ -1616,6 +1629,9 @@ impl Command {
             ("editor.block.write", _) => Command::EditorWriteBlock,
             ("editor.insert.file", _) => Command::EditorInsertFile,
             ("editor.insert.output", _) => Command::EditorInsertOutput,
+            ("file.print", _) => Command::FilePrint,
+            ("viewer.print", _) => Command::ViewerPrint,
+            ("editor.print", _) => Command::EditorPrint,
             ("editor.block.pipe", _) => Command::EditorPipe,
             ("editor.line.numbers", _) => Command::EditorLineNumbers,
             _ => return None,

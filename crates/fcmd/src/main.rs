@@ -2356,6 +2356,13 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                     });
                 }
                 Request::OpenUrl { url } => open_url(&url),
+                Request::Print { line, cwd } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let result = run_pipe(&line, &cwd, None);
+                        let _ = tx.send(Event::Printed { line, result });
+                    });
+                }
                 Request::Branch {
                     panel,
                     root,
@@ -7659,6 +7666,8 @@ dir_attr = "D"
                 | Request::Trash { .. }
                 | Request::StripMeta { .. }
                 | Request::OpenUrl { .. }
+                // Nor a printer: the tests look at the line the request carries.
+                | Request::Print { .. }
                 | Request::Shell { .. }
                 | Request::Interactive { .. }
                 | Request::Decompile { .. }

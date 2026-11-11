@@ -949,6 +949,15 @@ pub struct FindCfg {
     pub index: String,
 }
 
+/// `[print]`: how a file is printed (`Alt+F5`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PrintCfg {
+    /// The command line that prints one file, with `{file}` for it. Empty is the system's
+    /// own: `lp`, else `lpr`, on Linux and macOS, and Notepad's `/p` on Windows.
+    pub command: String,
+}
+
 /// `[editor]`: how the editor behaves. The viewer's own settings are still to come.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -1986,6 +1995,7 @@ pub struct Config {
     pub arc: ArcCfg,
     pub term: TermCfg,
     pub find: FindCfg,
+    pub print: PrintCfg,
     pub editor: EditCfg,
     pub viewer: ViewCfg,
     /// `[[site]]` blocks: the netbox's site list.
@@ -2270,6 +2280,7 @@ impl Config {
             "viewer.cell_width" => self.viewer.cell_width = parse_usize(value)?.min(64) as u16,
             "viewer.cell_height" => self.viewer.cell_height = parse_usize(value)?.min(64) as u16,
             "find.index" => self.find.index = value.trim().to_string(),
+            "print.command" => self.print.command = value.trim().to_string(),
             "term.shell" => self.term.shell = value.to_string(),
             "term.scrollback" => self.term.scrollback = parse_usize(value)?,
             "term.subshell" => self.term.subshell = parse_bool(value)?,

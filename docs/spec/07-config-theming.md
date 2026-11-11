@@ -382,6 +382,19 @@ prompt = "$p$r$g "
 index = ""
 ```
 
+## 2c-sexies. `[print]`
+
+```toml
+[print]
+# What Alt+F5 runs to print the files under the cursor or marked, the file in the viewer, or
+# the editor's text (its block, when there is one). {file} takes one quoted file at a time and
+# the line is run once for each; a command without it gets the files after it.
+# ""  the system's own: lp, else lpr; Notepad's /p on Windows
+#   command = "lpr -P office"
+#   command = "pr -h {file} {file} | lp"
+command = ""
+```
+
 ## 2c-bis. `[drives]`
 
 Which columns the change-drive dialog shows and which drives it lists (SPEC 10 §4.3). FAR keeps

@@ -15,7 +15,7 @@ handles itself while you have marked none.
 `F7` opens the search dialog: what to look for, whether it is plain text, a run of hex
 bytes or a regular expression, whether case matters, whether only whole words count — and
 then *Find next* or *Find previous*, because they are the same question asked twice.
-`Shift+F7` and `Alt+F7` repeat it forwards and backwards without asking again. `F6` hands the file to the editor at the same place.
+`Shift+F7` and `Alt+F7` repeat it forwards and backwards without asking again. `F6` hands the file to the editor at the same place. `Alt+F5` prints it (see *Printing* in the files chapter).
 
 `Shift+F` follows the file as it grows, the way `tail -f` does: once a second the viewer looks,
 and when something has been written it shows the new end. Scroll back to read and it leaves

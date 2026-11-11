@@ -960,6 +960,26 @@ controllati per primi.
 più il desktop, ed esegue quello scelto. È il modo di usare il comando `view` di un blocco senza
 riassegnare niente.
 
+# Stampare
+
+`Alt+F5` stampa i file marcati, o quello sotto il cursore, dopo una domanda che mostra il comando
+che sta per eseguire. Lo stesso tasto stampa il file nel visualizzatore, e nell'editor il blocco
+— o, senza blocco, tutto il testo com'è sullo schermo, salvato o no. Non si lascia lo schermo
+in cui sei: la riga in basso dice quando la stampante l'ha preso, o perché no.
+
+Quello che viene eseguito è `[print] command` nella configurazione. Vuoto, è quello del sistema:
+`lp`, o `lpr` dove `lp` non c'è, e il `/p` di Notepad su Windows. `{file}` sta per un file, e il
+comando viene allora eseguito una volta per ciascuno; un comando senza riceve tutti i file dopo
+di sé:
+
+```toml
+[print]
+command = "lpr -P office"
+# command = "pr -h {file} {file} | lp"
+```
+
+Si può stampare solo un file su questa macchina: da un server copialo prima.
+
 # Il log di sistema
 
 *Comandi → Log di sistema* apre le ultime voci del log del sistema nel visualizzatore —

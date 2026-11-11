@@ -44,6 +44,11 @@ Notable changes, newest first. The format follows
   `editor.use_external` / `viewer.use_external` are FAR's *use the external editor for F4* /
   *viewer for F3*: the keys change places, and `Alt+F4`/`Alt+F3` open ours. In the editor and
   viewer settings dialogs, in All settings, and `--set`.
+- **Printing.** `Alt+F5` prints the marked files or the one under the cursor (after a question
+  showing the command), the file in the viewer, and in the editor the block or the whole text
+  as it is on the screen. `[print] command` names what runs — `{file}` once per file, or the
+  files after it — and left empty it is `lp`, else `lpr`, and Notepad's `/p` on Windows. The
+  screen stays; the status line says when the printer has it, or why not.
 - **Disk usage of a whole tree, as a map.** `Tab` in the `Alt+Shift+F3` list measures
   everything under the folder once, in the background (progress on screen, `Esc` stops it), and
   draws it as a treemap in the terminal's cells: each rectangle as large as its share, in the

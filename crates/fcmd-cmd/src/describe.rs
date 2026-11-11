@@ -389,6 +389,9 @@ impl Command {
             Command::EditorWriteBlock => "write the block to a file",
             Command::EditorInsertFile => "insert a file at the cursor",
             Command::EditorInsertOutput => "insert what a command prints at the cursor",
+            Command::FilePrint => "print the file under the cursor, or the selected files",
+            Command::ViewerPrint => "print the file being viewed",
+            Command::EditorPrint => "print the marked block, or the whole text as it stands",
             Command::EditorPipe => "run the block, or the whole file, through a command",
             Command::EditorLineNumbers => "number the lines in the margin, or stop",
 

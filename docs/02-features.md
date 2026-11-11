@@ -269,6 +269,7 @@ something readable rather than only into instructions.
 | 7.24 | Replace across the selected files, as a job whose confirmation is its own dry run: text, pattern or hex bytes | Hiew | ✓ `Ctrl+Shift+R` (`tool.replace`) |
 | 7.25 | Command palette: every command in one list that narrows as it is typed into | TC (command browser)/DC/Marta/ForkLift | ✗ `app.palette` is in the vocabulary and on `Ctrl+Shift+P`, and answers that it is not implemented; `F9`, `F1` and *All settings* (9.8) are what there is |
 | 7.26 | A secrets file of the program's own: keys and servers' passwords encrypted under one password, forgotten after five idle minutes | TC (master password) | ✓ `fcmd-secrets.vault` |
+| 7.27 | Print the files under the cursor or marked, the file in the viewer, the editor's block or text | FAR (Print)/TC/MC | ✓ `Alt+F5` with `[print] command` (SPEC 07 §2c-sexies) |
 
 ## 8. Shell & terminal integration
 

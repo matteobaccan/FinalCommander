@@ -18,7 +18,7 @@ segnato, e le cinque che il programma gestisce da sé fin quando non ne segni ne
 cosa cercare, se è testo semplice, una sequenza di byte esadecimali o un'espressione regolare,
 se contano le maiuscole, se contano solo le parole intere — e poi *Trova successivo* o *Trova
 precedente*, perché sono la stessa domanda fatta due volte. `Shift+F7` e `Alt+F7` la ripetono
-avanti e indietro senza richiedere niente. `F6` passa il file all'editor nello stesso punto.
+avanti e indietro senza richiedere niente. `F6` passa il file all'editor nello stesso punto. `Alt+F5` lo stampa (vedi *Stampare* nel capitolo sui file).
 
 `Shift+F` segue il file mentre cresce, come `tail -f`: una volta al secondo il visualizzatore
 guarda, e quando è stato scritto qualcosa mostra la nuova fine. Se torni indietro a leggere ti

@@ -1657,3 +1657,21 @@ cmd = "ai.rewrite"
 keys = ["Ctrl+Alt+Z"]
 scope = "panel"
 cmd = "file.undo"
+
+# Printing, on FAR's key for it. Through the system's print program — `lp` or `lpr`, Notepad's
+# `/p` on Windows — or `[print] command`: the panels print the file under the cursor or the
+# selection, the viewer the file it shows, the editor its marked block or the text as it stands.
+[[bind]]
+keys = ["Alt+F5"]
+scope = "panel"
+cmd = "file.print"
+
+[[bind]]
+keys = ["Alt+F5"]
+scope = "viewer"
+cmd = "viewer.print"
+
+[[bind]]
+keys = ["Alt+F5"]
+scope = "editor"
+cmd = "editor.print"
