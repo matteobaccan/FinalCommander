@@ -1042,6 +1042,7 @@ key-ai-edit = Правка
 key-ai-new = Новый
 key-ai-remove = Убрать
 key-ai-forget = Убрать
+key-ai-threads = История
 hex-needs-a-file = у этого буфера нет файла, откуда читать байты
 hex-save-first = сначала сохраните: редакторы не могут передать друг другу несохранённые правки
 
@@ -1377,17 +1378,34 @@ ai-row-conversation = разговор
 ai-session-title = ИИ: { $name } · { $model } — файлов в контексте: { $files }
 ai-context-added = Файлов в контексте: { $count }
 ai-context-nothing = Нечего добавить: в контекст попадают только файлы с этого диска
-ai-context-removed = Убрано из контекста
 ai-command-ready = команда в строке — прочитайте её, прежде чем нажать Enter
 ai-commit-question = Напиши сообщение коммита для подготовленных изменений.
 ai-staged-diff = подготовленный diff
 ai-send-diff = Подготовленный diff уходит на { $host }
 ai-send-files = Файлов: { $count }, { $size } — будут отправлены на { $host } вместе с вопросом.
 ai-asking = Спрашиваю { $name }…
-ai-busy = { $name } думает… { $secs } с
+ai-busy = { $name } думает… { $secs } с · Esc прерывает
 ai-conversation-new = Новый разговор: следующий вопрос его начнёт.
 ai-live-empty = Напишите вопрос в командной строке: он уйдёт к { $name }, а разговор появится здесь.
 ai-failed = ИИ не ответил: { $why }
+ai-stopped = остановлено: вопрос к { $name } отброшен, ничего не записано
+ai-context-title = Файлы в контексте
+ai-context-all = Все
+ai-context-dropped = { $count ->
+        [one] { $count } файл убран из контекста
+        [few] { $count } файла убраны из контекста
+       *[other] { $count } файлов убрано из контекста
+    }
+ai-context-hint = Enter или Del: убрать из контекста — файл остаётся на диске · Esc
+ai-threads-title = Разговоры
+ai-threads-hint = Enter: продолжить этот разговор · Esc
+ai-thread-resumed = продолжаем { $name }
+ai-next-estimate = следующий ≈ { $tokens }
+ai-next-over = следующий ≈ { $tokens }, больше, чем вмещает модель
+ai-send-estimate = Всего около { $tokens } токенов, вместе с разговором.
+ai-send-estimate-of = Всего около { $tokens } токенов, вместе с разговором, из { $max }, которые вмещает модель.
+ai-send-over = Всего около { $tokens } токенов: больше { $max }, которые вмещает модель, начало может быть обрезано. F8 убирает файл.
+ai-send-question = Вопрос уходит на { $host }.
 btn-send = Отправить
 
 ## Git (SPEC 06 §15).

@@ -76,6 +76,8 @@ pub enum Request {
         /// A key typed in this session, when the service's variable does not hold one.
         token: Option<String>,
         dir: std::path::PathBuf,
+        /// `Esc` while it is out: the question is dropped and nothing comes back.
+        cancel: CancelToken,
     },
     /// Undo what is not a job: names back from the wastebasket, an empty folder removed.
     Undo {
@@ -2528,6 +2530,10 @@ pub struct App {
     pub ai_busy: Option<(String, std::time::Instant)>,
     /// What has come of the answer so far, while it is still being written.
     pub ai_streamed: String,
+    /// What stops the question that is out, and whether one was stopped and its answer, if
+    /// it still arrives, is to be dropped.
+    pub ai_cancel: Option<CancelToken>,
+    pub ai_stopped: bool,
     /// Size of the editor's text area, from the last frame.
     pub editor_size: (u16, u16),
     /// The decompilation we are waiting for, if any.
@@ -2910,6 +2916,8 @@ impl App {
             ai_probing: None,
             ai_busy: None,
             ai_streamed: String::new(),
+            ai_cancel: None,
+            ai_stopped: false,
             editor_size: (80, 20),
             decompile_id: None,
             sites,
@@ -3244,6 +3252,11 @@ impl App {
                 }
             }
             Event::AiDone { result } => {
+                self.ai_cancel = None;
+                // The answer to a question `Esc` stopped, come back before the stop did.
+                if std::mem::take(&mut self.ai_stopped) {
+                    return;
+                }
                 self.ai_busy = None;
                 self.ai_streamed.clear();
                 if let Some(s) = self.ai_session.as_mut() {
@@ -10588,6 +10601,10 @@ impl App {
             Command::FileMkdir if self.panel().temp_origin() == Some(":ai") => {
                 self.open_ai_form(None)
             }
+            // In an AI conversation `F7` is the conversations kept so far, to go on with one.
+            Command::FileMkdir if self.panel().temp_origin() == Some(":aichat") => {
+                self.open_ai_threads()
+            }
             Command::FileMkdir => {
                 let title = self.i18n.t("prompt-mkdir");
                 self.mode = Mode::Prompt(Prompt {
@@ -11561,6 +11578,12 @@ impl App {
                 }
                 let m = self.i18n.t("compare-contents-stopped");
                 self.set_status(m);
+                true
+            }
+            // And out of a question to a language model that is taking too long, or was the
+            // wrong one: nothing more is shown of it, and no answer file is written.
+            KeyCode::Esc if self.ai_busy.is_some() => {
+                self.stop_ai();
                 true
             }
             // And out of a checksum run, which reads just as many bytes.
@@ -13232,6 +13255,15 @@ impl App {
             ),
             None => self.i18n.t_args("ai-send-diff", &[("host", host.into())]),
         };
+        // No files at all: only the question, and the dialog is there for its size.
+        let head = if names.is_empty() && bytes == Some(0) {
+            self.i18n.t_args(
+                "ai-send-question",
+                &[("host", ai_host(&query.service.url).into())],
+            )
+        } else {
+            head
+        };
         let mut lines = vec![head];
         for n in names.iter().take(5) {
             lines.push(format!("  {n}"));
@@ -13368,11 +13400,35 @@ impl App {
         }
         self.ai_busy = Some((service.name.clone(), std::time::Instant::now()));
         self.ai_streamed.clear();
+        self.ai_stopped = false;
+        let cancel = CancelToken::new();
+        self.ai_cancel = Some(cancel.clone());
         self.requests.push(Request::AiAsk {
             query,
             token: if from_env { None } else { typed },
             dir,
+            cancel,
         });
+    }
+
+    /// `Esc` while a question is out: it is dropped where it is.
+    fn stop_ai(&mut self) {
+        if let Some(cancel) = self.ai_cancel.take() {
+            cancel.cancel();
+        }
+        let name = self
+            .ai_busy
+            .take()
+            .map(|(name, _)| name)
+            .unwrap_or_default();
+        self.ai_stopped = true;
+        self.ai_streamed.clear();
+        if let Some(s) = self.ai_session.as_mut() {
+            s.asking = None;
+        }
+        self.quick_of = None;
+        let m = self.i18n.t_args("ai-stopped", &[("name", name.into())]);
+        self.set_status(m);
     }
 
     /// An answer is back: read it, put it on the command line, or offer it as a commit
@@ -13707,13 +13763,7 @@ impl App {
         );
         // And how full the context window is: what the conversation took at the last answer,
         // out of what the model holds when the service said.
-        let short = |n: u64| {
-            if n >= 1000 {
-                format!("{:.1}k", n as f64 / 1000.0)
-            } else {
-                n.to_string()
-            }
-        };
+        let short = short_count;
         match (session.context_used, session.context_max) {
             (Some(u), Some(m)) => title.push_str(&format!(
                 " · ctx {}/{} ({}%)",
@@ -13724,6 +13774,21 @@ impl App {
             (Some(u), None) => title.push_str(&format!(" · ctx {}", short(u))),
             (None, Some(m)) => title.push_str(&format!(" · ctx 0/{}", short(m))),
             (None, None) => {}
+        }
+        // And what the next question will take before it is asked, which is what decides
+        // whether to take a file out first.
+        let next = ai_next_tokens(&session, "");
+        if next > 0 {
+            let over = session.context_max.is_some_and(|m| next > m);
+            title.push_str(" · ");
+            title.push_str(&self.i18n.t_args(
+                if over {
+                    "ai-next-over"
+                } else {
+                    "ai-next-estimate"
+                },
+                &[("tokens", short(next).into())],
+            ));
         }
         let side = session.side;
         let generation = self.panels[side].generation + 1;
@@ -13853,23 +13918,157 @@ impl App {
         self.set_status(m);
     }
 
-    /// `F8` in the conversation: the file under the cursor leaves the context.
+    /// `F8` in the conversation: the files of the context, to take one out — or, with none,
+    /// a new conversation.
     fn ai_forget_at_cursor(&mut self) {
-        // The panel shows the conversation, not rows to stand on: `F8` takes the files out of
-        // the context, and with none left it starts a new conversation.
         let Some(session) = self.ai_session.as_mut() else {
             return;
         };
-        let id = if !session.files.is_empty() {
-            session.files.clear();
-            "ai-context-removed"
-        } else {
+        if session.files.is_empty() {
             session.thread = None;
-            "ai-conversation-new"
+            session.sent.clear();
+            session.context_used = None;
+            self.show_ai_session();
+            self.quick_of = None;
+            let m = self.i18n.t("ai-conversation-new");
+            self.set_status(m);
+            return;
+        }
+        self.open_ai_context();
+    }
+
+    /// The list `F8` opens: every file of the context with its size, and a last row for all
+    /// of them at once.
+    fn open_ai_context(&mut self) {
+        let Some(session) = self.ai_session.as_ref() else {
+            return;
         };
+        let mut rows: Vec<PickRow> = session
+            .files
+            .iter()
+            .enumerate()
+            .map(|(at, f)| {
+                let size = std::fs::metadata(f)
+                    .map(|m| fcmd_core::size::format_size(m.len()))
+                    .unwrap_or_else(|_| "—".into());
+                PickRow::plain(format!("{}   {size}", f.display()), at.to_string(), false)
+            })
+            .collect();
+        if rows.len() > 1 {
+            rows.push(PickRow::plain(self.i18n.t("ai-context-all"), "all", false));
+        }
+        let title = self.i18n.t("ai-context-title");
+        self.mode = Mode::Pick(Box::new(Pick::new(
+            PickKind::AiContext,
+            title,
+            rows,
+            self.active,
+        )));
+    }
+
+    /// One row of the `F8` list taken: that file, or all of them, leaves the context; the
+    /// list stays open on what is left.
+    fn ai_context_drop(&mut self, value: &str) {
+        let Some(session) = self.ai_session.as_mut() else {
+            return;
+        };
+        let gone = if value == "all" {
+            std::mem::take(&mut session.files).len()
+        } else {
+            match value
+                .parse::<usize>()
+                .ok()
+                .filter(|i| *i < session.files.len())
+            {
+                Some(i) => {
+                    session.files.remove(i);
+                    1
+                }
+                None => 0,
+            }
+        };
+        let left = session.files.len();
         self.show_ai_session();
         self.quick_of = None;
-        let m = self.i18n.t(id);
+        if left > 0 {
+            self.open_ai_context();
+        } else {
+            self.mode = Mode::Normal;
+        }
+        let m = self
+            .i18n
+            .t_args("ai-context-dropped", &[("count", (gone as i64).into())]);
+        self.set_status(m);
+    }
+
+    /// `F7` in the conversation: the conversations kept in the answers folder, newest first,
+    /// each by its first question.
+    fn open_ai_threads(&mut self) {
+        let dir = self.ai_dir();
+        let mut found: Vec<(std::time::SystemTime, PathBuf)> = std::fs::read_dir(&dir)
+            .map(|rd| {
+                rd.flatten()
+                    .map(|e| e.path())
+                    .filter(|p| p.extension().is_some_and(|x| x == "md") && p.is_file())
+                    .map(|p| {
+                        let t = std::fs::metadata(&p)
+                            .and_then(|m| m.modified())
+                            .unwrap_or(std::time::UNIX_EPOCH);
+                        (t, p)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        found.sort_by_key(|f| std::cmp::Reverse(f.0));
+        let current = self.ai_session.as_ref().and_then(|s| s.thread.clone());
+        let rows: Vec<PickRow> = found
+            .into_iter()
+            .map(|(when, path)| {
+                let first = std::fs::read_to_string(&path)
+                    .ok()
+                    .and_then(|t| {
+                        t.lines()
+                            .map(|l| l.trim_start_matches('#').trim().to_string())
+                            .find(|l| !l.is_empty() && !l.starts_with('>'))
+                    })
+                    .unwrap_or_default();
+                let first: String = first.chars().take(60).collect();
+                let date = fcmd_ui::format_mtime(when);
+                let is_current = current.as_ref() == Some(&path);
+                PickRow::plain(
+                    format!("{date}   {first}"),
+                    path.display().to_string(),
+                    is_current,
+                )
+            })
+            .collect();
+        let title = self.i18n.t("ai-threads-title");
+        self.mode = Mode::Pick(Box::new(Pick::new(
+            PickKind::AiThreads,
+            title,
+            rows,
+            self.active,
+        )));
+    }
+
+    /// A conversation taken from the `F7` list: the next question goes on with it.
+    fn ai_thread_resume(&mut self, value: &str) {
+        let path = PathBuf::from(value);
+        let Some(session) = self.ai_session.as_mut() else {
+            return;
+        };
+        session.thread = Some(path.clone());
+        session.sent.clear();
+        session.context_used = None;
+        self.show_ai_session();
+        self.quick_of = None;
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let m = self
+            .i18n
+            .t_args("ai-thread-resumed", &[("name", name.into())]);
         self.set_status(m);
     }
 
@@ -13890,7 +14089,9 @@ impl App {
             .filter(|f| f.is_file())
             .cloned()
             .collect();
-        if query.files.is_empty() || query.files == session.sent {
+        let next = ai_next_tokens(&session, &query.question);
+        let over = session.context_max.filter(|m| next > *m);
+        if over.is_none() && (query.files.is_empty() || query.files == session.sent) {
             self.ask_ai(query);
             return;
         }
@@ -13906,6 +14107,29 @@ impl App {
             .map(|f| f.display().to_string())
             .collect();
         self.confirm_ai_send(query, names, Some(bytes));
+        // What the whole question comes to, against what the model holds.
+        if let Mode::Confirm(c) = &mut self.mode {
+            let line = match (over, session.context_max) {
+                (Some(m), _) => self.i18n.t_args(
+                    "ai-send-over",
+                    &[
+                        ("tokens", short_count(next).into()),
+                        ("max", short_count(m).into()),
+                    ],
+                ),
+                (None, Some(m)) => self.i18n.t_args(
+                    "ai-send-estimate-of",
+                    &[
+                        ("tokens", short_count(next).into()),
+                        ("max", short_count(m).into()),
+                    ],
+                ),
+                (None, None) => self
+                    .i18n
+                    .t_args("ai-send-estimate", &[("tokens", short_count(next).into())]),
+            };
+            c.lines.insert(1, line);
+        }
     }
 
     /// `tool.ai`: the services, the one `ai:` asks first.
@@ -19792,6 +20016,7 @@ impl App {
             PickKind::CharMap => return,
             PickKind::ReplaceTemplates => return,
             PickKind::AiServices => return,
+            PickKind::AiContext | PickKind::AiThreads => return,
             PickKind::PluginsConfig => return,
             // And `open_settings`, which knows which row the list was left on.
             PickKind::Settings => return,
@@ -20120,6 +20345,11 @@ impl App {
             KeyCode::F(3) if kind == PickKind::PluginsConfig => {
                 if let Some(at) = pick.chosen().and_then(|r| r.value.parse::<usize>().ok()) {
                     self.open_plugin_card(at);
+                }
+            }
+            KeyCode::Delete if kind == PickKind::AiContext => {
+                if let Some(value) = pick.chosen().map(|r| r.value.clone()) {
+                    self.ai_context_drop(&value);
                 }
             }
             KeyCode::Insert if kind == PickKind::AiServices => self.open_ai_form(None),
@@ -20837,6 +21067,14 @@ impl App {
                 self.open_highlight_form(Some(at));
             }
             PickKind::Git => self.git_menu(&row.value.clone()),
+            PickKind::AiContext => {
+                let value = row.value.clone();
+                self.ai_context_drop(&value);
+            }
+            PickKind::AiThreads => {
+                let value = row.value.clone();
+                self.ai_thread_resume(&value);
+            }
             PickKind::AiServices => {
                 // The one chosen goes first, which is the one `ai:` asks.
                 if let Some(at) = row
@@ -25103,7 +25341,7 @@ impl App {
                 (4, "key-edit"),
                 (5, ""),
                 (6, ""),
-                (7, ""),
+                (7, "key-ai-threads"),
                 (8, "key-ai-forget"),
                 (9, "key-pulldown"),
                 (10, "key-quit"),
@@ -25559,6 +25797,27 @@ fn is_editor_command(cmd: Command) -> bool {
 /// or backticks some models put around a command anyway are taken off, and only the first
 /// line that says anything is kept — whatever else came back stays in the answer file.
 /// The host part of a service's address, for the panel and the dialogs.
+/// About how many tokens the next question of a conversation will take: the conversation so
+/// far, which is sent again, the files of the context and the question, at four bytes a
+/// token — the usual measure for English and code, and on the high side for most text, which
+/// is the side to err on before a window fills.
+pub(crate) fn ai_next_tokens(session: &AiSession, question: &str) -> u64 {
+    let size = |p: &PathBuf| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+    let thread = session.thread.as_ref().map_or(0, size);
+    let files: u64 = session.files.iter().map(size).sum();
+    let bytes = thread + files + question.len() as u64 + session.service.system.len() as u64;
+    bytes.div_ceil(4)
+}
+
+/// `1234` as `1.2k`, the way the context window is counted on the title.
+fn short_count(n: u64) -> String {
+    if n >= 1000 {
+        format!("{:.1}k", n as f64 / 1000.0)
+    } else {
+        n.to_string()
+    }
+}
+
 fn ai_host(url: &str) -> String {
     url.split("//")
         .nth(1)
@@ -36505,10 +36764,131 @@ abcdefghij
         let asked = asked.expect("no dialog this time");
         assert_eq!(asked.thread, Some(answer));
 
-        // `F8` takes the file out of the context.
+        // `F8` lists the files of the context, and `Enter` takes the one under the cursor out.
         app.panels[1].cursor = 0;
         press(&mut app, "F8");
+        assert!(
+            matches!(&app.mode, Mode::Pick(p) if p.kind == PickKind::AiContext),
+            "{:?}",
+            app.mode
+        );
+        press(&mut app, "Enter");
         assert!(app.ai_session.as_ref().unwrap().files.is_empty());
+        assert!(app.mode.is_normal(), "with none left the list closes");
+    }
+
+    fn ai_session_on(app: &mut App, files: Vec<PathBuf>, max: Option<u64>) {
+        app.ai_session = Some(AiSession {
+            service: fcmd_config::AiCfg {
+                name: "local".into(),
+                url: "http://localhost:11434/api/chat".into(),
+                api: "ollama".into(),
+                ..Default::default()
+            },
+            side: 1,
+            files,
+            thread: None,
+            sent: Vec::new(),
+            asking: None,
+            context_max: max,
+            context_used: None,
+            model_used: None,
+        });
+        app.show_ai_session();
+        app.active = 1;
+    }
+
+    /// `F8` with several files: one row each and one for all, `Del` takes one out and the
+    /// list stays on the rest; the conversation itself is never touched.
+    #[test]
+    fn f8_takes_one_file_or_all_of_them_out_of_the_context() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_on_disk(dir.path());
+        let (a, b, c) = (
+            dir.path().join("a"),
+            dir.path().join("b"),
+            dir.path().join("c"),
+        );
+        for f in [&a, &b, &c] {
+            std::fs::write(f, "x").unwrap();
+        }
+        ai_session_on(&mut app, vec![a.clone(), b.clone(), c.clone()], None);
+        press(&mut app, "F8");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.rows.len(), 4, "three files and all of them");
+        press(&mut app, "Down");
+        press(&mut app, "Del");
+        assert_eq!(app.ai_session.as_ref().unwrap().files, vec![a, c]);
+        assert!(matches!(&app.mode, Mode::Pick(p) if p.kind == PickKind::AiContext));
+        press(&mut app, "End");
+        press(&mut app, "Enter");
+        assert!(app.ai_session.as_ref().unwrap().files.is_empty());
+        assert!(app.mode.is_normal());
+    }
+
+    /// `F7` lists the conversations kept, newest first, by their first question, and the
+    /// one taken is where the next question goes.
+    #[test]
+    fn f7_goes_on_with_an_earlier_conversation() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_on_disk(dir.path());
+        let answers = app.ai_dir();
+        std::fs::create_dir_all(&answers).unwrap();
+        let old = answers.join("one.md");
+        std::fs::write(&old, "# what is rust?\n\nA language.").unwrap();
+        ai_session_on(&mut app, Vec::new(), None);
+        press(&mut app, "F7");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(
+            pick.rows[0].label.contains("what is rust?"),
+            "{:?}",
+            pick.rows[0]
+        );
+        press(&mut app, "Enter");
+        assert_eq!(app.ai_session.as_ref().unwrap().thread, Some(old));
+        app.cmd.set("and go?");
+        press(&mut app, "Enter");
+        let asked = app.take_requests().into_iter().find_map(|r| match r {
+            Request::AiAsk { query, .. } => Some(query),
+            _ => None,
+        });
+        assert!(asked.expect("asked").thread.is_some());
+    }
+
+    /// The title says what the next question will take; a question that would not fit the
+    /// model is stopped at a dialog that says so, even with no file to name.
+    #[test]
+    fn the_next_question_is_measured_against_the_window() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_on_disk(dir.path());
+        let big = dir.path().join("big.txt");
+        std::fs::write(&big, "x".repeat(8000)).unwrap();
+        ai_session_on(&mut app, vec![big.clone()], Some(1000));
+        let title = app.panels[1]
+            .temp
+            .as_ref()
+            .map(|t| t.title.clone())
+            .unwrap_or_default();
+        assert!(
+            title.contains("next ≈ 2.0k, more than the model holds"),
+            "{title}"
+        );
+        // Sent once already: still asked, because it does not fit.
+        app.ai_session.as_mut().unwrap().sent = vec![big];
+        app.cmd.set("summarise");
+        press(&mut app, "Enter");
+        let Mode::Confirm(c) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(
+            c.lines.iter().any(|l| l.contains("more than the 1.0k")),
+            "{:?}",
+            c.lines
+        );
     }
 
     /// The conversation panel shows the conversation itself as it goes: the question on its way,
@@ -36953,6 +37333,43 @@ abcdefghij
             result: Err("nope".into()),
         });
         assert!(app.ai_busy.is_none());
+    }
+
+    /// `Esc` while a question is out stops it: the token it went with is cancelled, the wait
+    /// is gone from the screen, and an answer that still comes back is not shown.
+    #[test]
+    fn esc_stops_a_question_and_its_late_answer_is_dropped() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.cfg.ais.push(fcmd_config::AiCfg {
+            name: "local".into(),
+            url: "http://localhost:11434/api/chat".into(),
+            api: "ollama".into(),
+            ..Default::default()
+        });
+        app.ai_line("hello".into());
+        let token = app
+            .requests
+            .iter()
+            .find_map(|r| match r {
+                Request::AiAsk { cancel, .. } => Some(cancel.clone()),
+                _ => None,
+            })
+            .expect("a question went");
+        press(&mut app, "Esc");
+        assert!(token.is_cancelled());
+        assert!(app.ai_busy.is_none());
+        assert!(app.status.contains("stopped"), "{}", app.status);
+        app.handle_event(Event::AiDone {
+            result: Err("late".into()),
+        });
+        assert!(!app.status.contains("late"), "{}", app.status);
+        // The next question is shown as usual.
+        app.ai_line("again".into());
+        app.handle_event(Event::AiDone {
+            result: Err("nope".into()),
+        });
+        assert!(app.status.contains("nope"), "{}", app.status);
     }
 
     /// In the AI service dialog the address follows the protocol, `Alt+↓` lists the

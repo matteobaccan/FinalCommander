@@ -6,6 +6,15 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **The AI conversation, easier to steer.** `Esc` stops a question while the model is still
+  answering, and nothing of it is written. `F8` lists the files of the context, each with its
+  size, to take one out — or all of them — and with none left starts a new conversation. `F7`
+  lists the conversations kept so far, newest first by their first question, to go on with one.
+  The frame says about how many tokens the next question will take (`next ≈ 2.1k`), and a
+  question that would not fit the model's window stops at a dialog that says so first.
+
 ### Changed
 
 - **The key bar follows `Shift`, `Ctrl` and `Alt` on Windows too.** Holding one down shows

@@ -44,8 +44,9 @@ failed (a server that is not running, a wrong key). Then the panel is the **conv
 shown in it as it goes, rendered as Markdown: the files of the context at the top, each
 question on the right, each answer on the left as the model writes it, and while it is still
 coming a turning wheel with the seconds it has been thinking. The frame names the model that
-answered and how full its context window is (`ctx 1.5k/32.8k (4%)`; the size is shown when
-the server says it at the login). An answer stays in the panel; it never opens a viewer. The arrows and `PgUp`/`PgDn` scroll it; `Ctrl+R` builds it
+answered, how full its context window is (`ctx 1.5k/32.8k (4%)`; the size is shown when
+the server says it at the login) and about how much the next question will take (`next ≈ 2.1k`:
+the conversation so far, which goes again, the files and the question, at four bytes a token). An answer stays in the panel; it never opens a viewer. The arrows and `PgUp`/`PgDn` scroll it; `Ctrl+R` builds it
 again and keeps it a conversation:
 
 * whatever you type on the command line under it goes to the AI, as the next turn of the same
@@ -53,7 +54,15 @@ again and keeps it a conversation:
 * `F5` in the other panel puts the files selected there into the **context**, and they go with
   every question from then on — before the first one that carries them, a dialog says which
   files, how big and to which host;
-* `F8` takes the files out of the context; with none left, it starts a new conversation.
+* `F8` lists the files of the context with their sizes: `Enter` or `Del` takes the one under
+  the cursor out — the file stays on the disk — and the last row takes them all; with no files
+  in the context, `F8` starts a new conversation;
+* `F7` lists the conversations kept so far, newest first, each by its first question: `Enter`
+  goes on with one, and the next question carries it;
+* `Esc` while the model is still answering stops the question there: nothing more is shown of
+  it and nothing is written;
+* a question that would take more than the model holds is stopped first at a dialog that says
+  so, with the estimate, even when the files are the ones sent before.
 
 The rest of this chapter is the same thing from the command line.
 

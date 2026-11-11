@@ -111,6 +111,11 @@ pub enum PickKind {
     CharMap,
     /// The AI services (`tool.ai`): `Enter` makes one the default, `Ins`/`F4` edit, `Del`.
     AiServices,
+    /// The files that go with every question of an AI conversation (`F8` on it): `Enter` or
+    /// `Del` takes the one under the cursor out.
+    AiContext,
+    /// The conversations kept so far (`F7` on an AI conversation): `Enter` goes on with one.
+    AiThreads,
     /// Options → Plugins configuration: every plugin found, on, off or broken.
     PluginsConfig,
     /// The editor's replacements (`Alt+Shift+F7`): the named ones, then the recent pairs.

@@ -1050,6 +1050,7 @@ key-ai-edit = Edit
 key-ai-new = New
 key-ai-remove = Remove
 key-ai-forget = Forget
+key-ai-threads = History
 hex-needs-a-file = this buffer has no file to read bytes from
 hex-save-first = save first: the two editors cannot hold each other's unsaved changes
 
@@ -1389,17 +1390,33 @@ ai-context-added = { $count ->
        *[other] { $count } files
     } in the context
 ai-context-nothing = Nothing to add: only files on this disk go into the context
-ai-context-removed = Out of the context
 ai-command-ready = the command is on the line — read it before pressing Enter
 ai-commit-question = Write a commit message for the staged changes.
 ai-staged-diff = the staged diff
 ai-send-diff = The staged diff goes to { $host }
 ai-send-files = { $count } files, { $size }, will be sent to { $host } with the question.
 ai-asking = Asking { $name }…
-ai-busy = { $name } is thinking… { $secs }s
+ai-busy = { $name } is thinking… { $secs }s · Esc stops
 ai-conversation-new = A new conversation: the next question starts it.
 ai-live-empty = Type a question on the command line: it goes to { $name }, and the conversation shows here as it goes.
 ai-failed = The AI did not answer: { $why }
+ai-stopped = stopped: the question to { $name } was dropped, and nothing was written
+ai-context-title = Files in the context
+ai-context-all = All of them
+ai-context-dropped = { $count ->
+        [one] one file out of the context
+       *[other] { $count } files out of the context
+    }
+ai-context-hint = Enter or Del: take it out of the context — the file stays on the disk · Esc
+ai-threads-title = Conversations
+ai-threads-hint = Enter: go on with this conversation · Esc
+ai-thread-resumed = going on with { $name }
+ai-next-estimate = next ≈ { $tokens }
+ai-next-over = next ≈ { $tokens }, more than the model holds
+ai-send-estimate = About { $tokens } tokens in all, with the conversation so far.
+ai-send-estimate-of = About { $tokens } tokens in all, with the conversation so far, of the { $max } the model holds.
+ai-send-over = About { $tokens } tokens in all: more than the { $max } the model holds, so the start may be cut off. F8 takes a file out.
+ai-send-question = The question goes to { $host }.
 btn-send = Send
 
 ## Git (SPEC 06 §15).

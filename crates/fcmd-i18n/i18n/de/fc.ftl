@@ -1042,6 +1042,7 @@ key-ai-edit = Ändern
 key-ai-new = Neu
 key-ai-remove = Entf
 key-ai-forget = Entf
+key-ai-threads = Verlauf
 hex-needs-a-file = dieser Puffer hat keine Datei, aus der Bytes kämen
 hex-save-first = zuerst speichern: die beiden Editoren können einander keine ungespeicherten Änderungen übergeben
 
@@ -1379,17 +1380,33 @@ ai-context-added = { $count ->
        *[other] { $count } Dateien
     } im Kontext
 ai-context-nothing = Nichts hinzuzufügen: nur Dateien auf dieser Platte kommen in den Kontext
-ai-context-removed = Aus dem Kontext
 ai-command-ready = der Befehl steht in der Zeile — vor Enter lesen
 ai-commit-question = Schreibe eine Commit-Nachricht für die vorgemerkten Änderungen.
 ai-staged-diff = der vorgemerkte Diff
 ai-send-diff = Der vorgemerkte Diff geht an { $host }
 ai-send-files = { $count } Dateien, { $size }, werden mit der Frage an { $host } gesendet.
 ai-asking = Frage { $name }…
-ai-busy = { $name } denkt nach… { $secs } s
+ai-busy = { $name } denkt nach… { $secs } s · Esc bricht ab
 ai-conversation-new = Ein neues Gespräch: die nächste Frage beginnt es.
 ai-live-empty = Eine Frage in die Befehlszeile schreiben: sie geht an { $name }, und das Gespräch erscheint hier.
 ai-failed = Die KI hat nicht geantwortet: { $why }
+ai-stopped = abgebrochen: die Frage an { $name } wurde verworfen, nichts wurde geschrieben
+ai-context-title = Dateien im Kontext
+ai-context-all = Alle
+ai-context-dropped = { $count ->
+        [one] eine Datei aus dem Kontext genommen
+       *[other] { $count } Dateien aus dem Kontext genommen
+    }
+ai-context-hint = Enter oder Entf: aus dem Kontext nehmen — die Datei bleibt auf der Platte · Esc
+ai-threads-title = Gespräche
+ai-threads-hint = Enter: dieses Gespräch fortsetzen · Esc
+ai-thread-resumed = { $name } wird fortgesetzt
+ai-next-estimate = nächste ≈ { $tokens }
+ai-next-over = nächste ≈ { $tokens }, mehr als das Modell fasst
+ai-send-estimate = Etwa { $tokens } Token insgesamt, mit dem bisherigen Gespräch.
+ai-send-estimate-of = Etwa { $tokens } Token insgesamt, mit dem bisherigen Gespräch, von { $max }, die das Modell fasst.
+ai-send-over = Etwa { $tokens } Token insgesamt: mehr als die { $max }, die das Modell fasst, der Anfang kann abgeschnitten werden. F8 nimmt eine Datei heraus.
+ai-send-question = Die Frage geht an { $host }.
 btn-send = Senden
 
 ## Git (SPEC 06 §15).

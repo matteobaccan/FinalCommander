@@ -45,8 +45,10 @@ perché non è andata (un server che non è acceso, una chiave sbagliata). Da l�
 **conversazione**, mostrata lì dentro man mano, in Markdown: in cima i file del contesto, ogni
 domanda a destra, ogni risposta a sinistra mentre il modello la scrive e, finché sta ancora
 arrivando, una rotellina che gira con i secondi di attesa. La cornice dice il modello che ha
-risposto e quanto è piena la sua context window (`ctx 1.5k/32.8k (4%)`; la dimensione compare
-quando il server la dichiara al login). La risposta resta nel pannello; non apre un viewer. Le frecce e `PagSu`/`PagGiù` la
+risposto, quanto è piena la sua context window (`ctx 1.5k/32.8k (4%)`; la dimensione compare
+quando il server la dichiara al login) e quanto prenderà, circa, la prossima domanda
+(`prossima ≈ 2.1k`: la conversazione fin qui, che viene rimandata, i file e la domanda, a
+quattro byte per token). La risposta resta nel pannello; non apre un viewer. Le frecce e `PagSu`/`PagGiù` la
 fanno scorrere; `Ctrl+R` la ricostruisce e la lascia una conversazione:
 
 * quello che scrivi sulla riga di comando sotto di lui va all'AI, come seguito della stessa
@@ -54,7 +56,15 @@ fanno scorrere; `Ctrl+R` la ricostruisce e la lascia una conversazione:
 * `F5` nell'altro pannello mette i file selezionati lì nel **contesto**, e partono con ogni
   domanda da quel momento — prima della prima domanda che li porta, un dialogo dice quali file,
   quanto pesano e a quale host vanno;
-* `F8` toglie i file dal contesto; se non ce ne sono più, comincia una nuova conversazione.
+* `F8` elenca i file del contesto con la loro dimensione: `Enter` o `Canc` toglie quello sotto
+  il cursore — il file resta sul disco — e l'ultima riga li toglie tutti; senza file nel
+  contesto, `F8` comincia una nuova conversazione;
+* `F7` elenca le conversazioni tenute finora, dalla più recente, ognuna con la sua prima
+  domanda: `Enter` riprende quella, e la prossima domanda la porta con sé;
+* `Esc` mentre il modello sta ancora rispondendo interrompe la domanda lì: non se ne vede altro
+  e non viene scritto nulla;
+* una domanda che prenderebbe più di quanto il modello contiene si ferma prima a un dialogo che
+  lo dice, con la stima, anche quando i file sono quelli già mandati.
 
 Il resto del capitolo è la stessa cosa dalla riga di comando.
 

@@ -1042,6 +1042,7 @@ key-ai-edit = Modif
 key-ai-new = Nouveau
 key-ai-remove = Retirer
 key-ai-forget = Retirer
+key-ai-threads = Historique
 hex-needs-a-file = ce tampon n'a pas de fichier d'où lire des octets
 hex-save-first = enregistrez d'abord : les deux éditeurs ne peuvent pas se passer les modifications
 
@@ -1379,17 +1380,33 @@ ai-context-added = { $count ->
        *[other] { $count } fichiers
     } en contexte
 ai-context-nothing = Rien à ajouter : seuls les fichiers de ce disque vont dans le contexte
-ai-context-removed = Retiré du contexte
 ai-command-ready = la commande est sur la ligne — lisez-la avant d'appuyer sur Entrée
 ai-commit-question = Écris un message de commit pour les modifications indexées.
 ai-staged-diff = le diff indexé
 ai-send-diff = Le diff indexé part vers { $host }
 ai-send-files = { $count } fichiers, { $size }, seront envoyés à { $host } avec la question.
 ai-asking = Je demande à { $name }…
-ai-busy = { $name } réfléchit… { $secs } s
+ai-busy = { $name } réfléchit… { $secs } s · Échap interrompt
 ai-conversation-new = Une nouvelle conversation : la prochaine question la commence.
 ai-live-empty = Tapez une question sur la ligne de commande : elle va à { $name }, et la conversation s’affiche ici.
 ai-failed = L'IA n'a pas répondu : { $why }
+ai-stopped = interrompue : la question à { $name } a été abandonnée, rien n'a été écrit
+ai-context-title = Fichiers du contexte
+ai-context-all = Tous
+ai-context-dropped = { $count ->
+        [one] un fichier retiré du contexte
+       *[other] { $count } fichiers retirés du contexte
+    }
+ai-context-hint = Entrée ou Suppr : le retirer du contexte — le fichier reste sur le disque · Échap
+ai-threads-title = Conversations
+ai-threads-hint = Entrée : reprendre cette conversation · Échap
+ai-thread-resumed = reprise de { $name }
+ai-next-estimate = suivante ≈ { $tokens }
+ai-next-over = suivante ≈ { $tokens }, plus que le modèle ne contient
+ai-send-estimate = Environ { $tokens } tokens en tout, avec la conversation jusqu’ici.
+ai-send-estimate-of = Environ { $tokens } tokens en tout, avec la conversation jusqu’ici, sur les { $max } que le modèle contient.
+ai-send-over = Environ { $tokens } tokens en tout : plus que les { $max } que le modèle contient, le début pourrait être coupé. F8 retire un fichier.
+ai-send-question = La question part vers { $host }.
 btn-send = Envoyer
 
 ## Git (SPEC 06 §15).

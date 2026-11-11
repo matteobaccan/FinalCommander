@@ -1837,7 +1837,12 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         }
                     });
                 }
-                Request::AiAsk { query, token, dir } => {
+                Request::AiAsk {
+                    query,
+                    token,
+                    dir,
+                    cancel,
+                } => {
                     let tx = tx.clone();
                     runtime.spawn(async move {
                         let pieces = tx.clone();
@@ -1846,8 +1851,19 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                                 text: piece.to_string(),
                             });
                         };
-                        let result = ask_ai(&query, token, &dir, progress).await;
-                        let _ = tx.send(Event::AiDone { result });
+                        // `Esc` drops the request where it is — the connection with it — and
+                        // nothing is written or sent back.
+                        let stopped = async {
+                            while !cancel.is_cancelled() {
+                                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                            }
+                        };
+                        tokio::select! {
+                            result = ask_ai(&query, token, &dir, progress) => {
+                                let _ = tx.send(Event::AiDone { result });
+                            }
+                            () = stopped => {}
+                        }
                     });
                 }
                 Request::Undo { undo } => {

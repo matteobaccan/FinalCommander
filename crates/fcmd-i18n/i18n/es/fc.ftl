@@ -1042,6 +1042,7 @@ key-ai-edit = Editar
 key-ai-new = Nuevo
 key-ai-remove = Quitar
 key-ai-forget = Quitar
+key-ai-threads = Historial
 hex-needs-a-file = este búfer no tiene un archivo del que leer bytes
 hex-save-first = guarda primero: los dos editores no pueden pasarse los cambios sin guardar
 
@@ -1379,17 +1380,33 @@ ai-context-added = { $count ->
        *[other] { $count } archivos
     } en el contexto
 ai-context-nothing = Nada que añadir: al contexto solo van archivos de este disco
-ai-context-removed = Fuera del contexto
 ai-command-ready = la orden está en la línea — léela antes de pulsar Intro
 ai-commit-question = Escribe un mensaje de commit para los cambios preparados.
 ai-staged-diff = el diff preparado
 ai-send-diff = El diff preparado va a { $host }
 ai-send-files = { $count } archivos, { $size }, se enviarán a { $host } con la pregunta.
 ai-asking = Preguntando a { $name }…
-ai-busy = { $name } está pensando… { $secs } s
+ai-busy = { $name } está pensando… { $secs } s · Esc detiene
 ai-conversation-new = Una conversación nueva: la próxima pregunta la empieza.
 ai-live-empty = Escribe una pregunta en la línea de órdenes: va a { $name }, y la conversación se ve aquí.
 ai-failed = La IA no respondió: { $why }
+ai-stopped = detenida: la pregunta a { $name } se ha descartado y no se ha escrito nada
+ai-context-title = Archivos en el contexto
+ai-context-all = Todos
+ai-context-dropped = { $count ->
+        [one] un archivo fuera del contexto
+       *[other] { $count } archivos fuera del contexto
+    }
+ai-context-hint = Intro o Supr: sacarlo del contexto — el archivo sigue en el disco · Esc
+ai-threads-title = Conversaciones
+ai-threads-hint = Intro: seguir con esta conversación · Esc
+ai-thread-resumed = se sigue con { $name }
+ai-next-estimate = siguiente ≈ { $tokens }
+ai-next-over = siguiente ≈ { $tokens }, más de lo que cabe en el modelo
+ai-send-estimate = Unos { $tokens } tokens en total, con la conversación hasta ahora.
+ai-send-estimate-of = Unos { $tokens } tokens en total, con la conversación hasta ahora, de los { $max } que caben en el modelo.
+ai-send-over = Unos { $tokens } tokens en total: más de los { $max } que caben en el modelo, y el principio puede quedar cortado. F8 saca un archivo.
+ai-send-question = La pregunta va a { $host }.
 btn-send = Enviar
 
 ## Git (SPEC 06 §15).
