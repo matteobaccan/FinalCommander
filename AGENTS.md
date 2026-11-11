@@ -341,11 +341,15 @@ never shipped half. Issues come first whenever one is open, and a red CI before 
   a depth that can be set (6.3); explicit commands to convert the end of line, the BOM and the
   code page (6.6); a diff of what changed on disk before choosing to overwrite or reload
   (6.12). The editor is where the Delphi users spend their day, and these are the four things
-  FAR's has and ours has not.
+  FAR's has and ours has not. Beside them, **accented names sorted where a reader expects
+  them** (decided: yes): `Éxtra` beside `extra`, not after `zorro`, with case sensitivity a
+  setting; the Latin accents folded without a dependency first, a full collator only if that
+  proves not enough.
 - **0.42 — real pixels.** The kitty, iTerm2 and sixel protocols for pictures where the
   terminal has them, half blocks kept as the fallback (5.22); then what waits on it: a
   thumbnail view, and stepping through pictures full screen marking the keepers. HEIC's EXIF
-  beside it. Video stays the open question it is in the backlog until this is in.
+  beside it. **Video only through `ffmpeg`** when it is installed, by the rule for external
+  programs (decided): frames first, then playback without sound.
 - **0.43 — finding things.** A search saved under a name and opened as a panel; search on
   metadata (EXIF, ID3, document properties — the readers `F11` already has); an index as a
   source for `Alt+F7` when the machine has one (Everything, `mdfind`, `plocate`), run as a
@@ -358,9 +362,8 @@ never shipped half. Issues come first whenever one is open, and a red CI before 
   (3.7, 11.6); a synchronisation saved as a named job, with a written report; disk usage of a
   whole tree with a treemap (SPEC 06 §12); the unified diff and the first differing offset of
   two binaries.
-- **0.46 — extending it.** `when` conditions on macros with FAR's fall-through (SPEC 08 §5),
-  the same vocabulary `[command.when]` started; columns a plugin computes (content plugins);
-  `FarMenu.ini` read as it stands for the user menu.
+- **0.46 — extending it.** Columns a plugin computes (content plugins); `FarMenu.ini` read as
+  it stands for the user menu. Macros stay recordings: no conditions and no Lua (decided).
 - **0.47 — archives, the rest.** `cab` read in process; a selection extracted from a format
   read through a program, with the job engine's progress; `Test` on `Alt+F6`; a table for
   RARLAB's `rar`, verified on a machine that has it.
@@ -369,9 +372,8 @@ never shipped half. Issues come first whenever one is open, and a red CI before 
   stop moving without notice. Before it, a release that does nothing but read the program
   against its specs once more, the way 0.37.0 did.
 
-Open questions that block nothing above and are the author's to settle, each when its release
-comes near: video through `ffmpeg` (before 0.42 is over), a real collator for sorting, the Lua
-engine, a named cipher for the hex editor's blocks, and where tags and ratings would live.
+Settled on 11 November 2026: video only through `ffmpeg`, accented sorting yes, no Lua and no
+macro conditions, no cipher for hex blocks. Still open: tags and ratings — where they live.
 
 Dependencies keep their rule: Renovate's pull requests are merged when green and the gate
 passes on top, and never cut a release alone. `object` 0.41 and `reqwest` 0.13 are ports, not
