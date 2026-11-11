@@ -1760,3 +1760,11 @@ sync-report-failed = Failed: { $count }
 sync-report-stopped = Stopped part of the way, so these may or may not have been done: { $count }
 sync-report-not-done = Not done, because an earlier step failed or was stopped: { $count }
 menu-sync-saved = Saved synchronisations
+
+# hex editor search
+hex-search-wrapped = `{ $query }`: found by starting again from the other end of the file
+hex-replace-title = Replace
+hex-replace-with = Replace with
+btn-replace = Replace
+hex-replace-ask = Replace { $was } at { $at } with { $with }?
+hex-replace-length = the replacement is { $with } bytes long and the match { $was }: that would move everything after it — press Ins for insert mode first

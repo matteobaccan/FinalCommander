@@ -126,6 +126,19 @@ I byte cambiati sono disegnati come cambiati fino a che non vengono scritti, con
 l'elenco di cosa è cambiato: posizione, byte vecchio, byte nuovo. `Ctrl+Z` ne riporta indietro
 uno. `F2` scrive, in modo atomico.
 
+`F7` cerca nei byte con la stessa finestra: come testo, come byte esadecimali — `DE AD ?? EF`,
+dove `??` è un byte qualsiasi — o come espressione regolare. Quello che viene trovato è marcato
+e il cursore ci va sopra; `Shift+F7` trova il successivo e `Alt+F7` il precedente, e una ricerca
+che esce da un capo del file riparte dall'altro e lo dice. Un file di qualsiasi dimensione è
+cercato un pezzo alla volta, mai caricato intero.
+
+`Ctrl+F7` (o `F8`) sostituisce. La sostituzione si scrive come la ricerca — esadecimale per
+esadecimale, e una riga vuota per cancellare quello che è stato trovato. *Sostituisci* si ferma
+a ogni corrispondenza e chiede: sostituire questa, questa e tutte le successive, saltarla, o
+fermarsi. *Tutti* fa l'intero file in una volta, e un solo `Ctrl+Z` riporta indietro tutto. Una
+sostituzione della stessa lunghezza sovrascrive; una di lunghezza diversa sposta tutto quello
+che segue, quindi si fa solo dopo che `Insert` è passato all'inserimento.
+
 `F3` marca un blocco e `F12` dice cosa farne: scriverlo in un file, leggere un file dentro,
 riempirlo con un byte, farne lo XOR con una chiave, copiare o spostare byte da un'altra parte
 dello stesso file, inserire zeri, cancellare. Ognuna dice quanto diventerà lungo il file prima

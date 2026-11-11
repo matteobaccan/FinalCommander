@@ -1688,3 +1688,11 @@ sync-report-failed = 失败：{ $count }
 sync-report-stopped = 中途停止，因此这些可能已完成也可能没有：{ $count }
 sync-report-not-done = 未执行，因为之前的步骤失败或被停止：{ $count }
 menu-sync-saved = 已保存的同步
+
+# hex editor search
+hex-search-wrapped = `{ $query }`：从文件另一端重新开始后找到
+hex-replace-title = 替换
+hex-replace-with = 替换为
+btn-replace = 替换
+hex-replace-ask = 将 { $at } 处的 { $was } 替换为 { $with }？
+hex-replace-length = 替换内容长 { $with } 字节，而匹配内容长 { $was } 字节：这会移动其后的所有内容 — 请先按 Ins 切换到插入模式

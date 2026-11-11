@@ -62,6 +62,10 @@ pub enum FormKind {
     Search,
     /// Replace in the file the editor has open (SPEC 05 §2.4).
     EditorReplace,
+    /// Find bytes in the hex editor and put others in their place (SPEC 05 §2.5b).
+    HexReplace,
+    /// The question asked at each match of a replacement done one at a time.
+    HexReplaceAsk,
     /// One `[[highlight]]` group: its conditions and its two inks (SPEC 10 §3.11).
     Highlight,
     /// One `[[filter]]`: a name and the conditions, the highlight group's without the inks.

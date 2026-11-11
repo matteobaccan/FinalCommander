@@ -908,6 +908,26 @@ instead of text mode; `Shift+F4` picks the mode by hand either way.
 | Save | `F2`, through the same temp-file-and-rename path as a text save, so an interrupted save never leaves a half-written binary. In-place writing (no copy, for a device or a file too big to duplicate) is a separate, explicitly confirmed mode |
 | Growing a file | insert mode past the end extends it; truncating is an explicit block operation, never a side effect |
 
+### 2.5b Search and replace in hex mode
+
+The keys are the text editor's, because they are the same commands (`editor.search`,
+`editor.search.next`, `editor.search.prev`, `editor.replace`): `F7` searches, `Shift+F7` and
+`Alt+F7` repeat the last search forwards and backwards, `Ctrl+F7` or `F8` replaces.
+
+| Thing | Behaviour |
+| --- | --- |
+| The query | the dialog of §1.4: **text**, encoded through the buffer's code page (UTF-8 unless set otherwise — a binary does not say what its strings are written in, and UTF-8 is ASCII for everything ASCII), with the case-sensitive box; **hex** bytes with spaces anywhere and `??` for any byte (`DE AD ?? EF`); or a **regular expression** over the bytes |
+| Where it starts | forwards at the cursor, or one byte past it when the cursor is already on a match; backwards, a match has to end at the cursor or before it |
+| What is found | becomes the block, with the cursor on its first byte and the row scrolled into view |
+| The ends of the file | a search that runs off one end starts again from the other, and the status line says that it did |
+| Large files | the bytes are read through the piece table a window of 256 KiB at a time, the windows overlapping by at least the pattern's length less one, so a match lying across the edge of two is found and the file is never loaded whole. The search runs where the key was pressed, as the viewer's does (§1.4) |
+| The replacement | typed the way the query was: hex digits when the search is in hex (no wildcards; an empty line deletes what was found), text through the code page otherwise. A regular expression's replacement is literal — no capture references |
+| Lengths | a replacement as long as the match overwrites it. Any other length moves everything after it, so it is done only in insert mode (`Ins`); in overwrite mode it is refused with the two lengths, and a replace-all in which any one match is of another length is refused whole |
+| One at a time | *Replace* in the dialog goes to each match from the cursor on and asks: **Replace**, **All** (this one and every one after it), **Skip**, **Cancel**. The question is drawn over the bytes, with the match marked behind it. It does not come round from the start |
+| All at once | *All* in the dialog replaces every match in the file and says how many |
+| Undo | each confirmed replacement is one step; a replace-all is **one** step however many matches it had. All of its matches point at the same stretch of typed bytes, so a hundred thousand replacements cost the bytes of one |
+| Read-only | a read-only buffer and a device are searched, and refuse the replacement by name |
+
 ### 2.6 Blocks (`F3` marks, `F12` operates)
 
 A marked byte range with operations on it, which is the other half of a usable hex editor:

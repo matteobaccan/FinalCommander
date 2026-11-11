@@ -1812,6 +1812,15 @@ pub struct ComparePair {
     pub right_size: u64,
 }
 
+/// A replacement in the hex editor, between one question and the next.
+#[derive(Debug, Clone)]
+struct HexReplacing {
+    query: String,
+    with: Vec<u8>,
+    /// How many have been replaced so far, for the line that says so at the end.
+    done: usize,
+}
+
 /// A yes/no question that carries what it will do on `Enter`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Confirm {
@@ -2747,6 +2756,10 @@ pub struct App {
     drag: Option<Drag>,
     /// The hex editor, while a dialog of its own is open over it.
     hex_parked: Option<Box<HexEdit>>,
+    /// A replacement in the hex editor that is being asked about one match at a time.
+    hex_replacing: Option<HexReplacing>,
+    /// What the hex editor last replaced with, as it was typed, for the dialog to offer.
+    hex_replace_with: String,
     /// The dialog `F1` was pressed in, while its help page is on the screen. Whatever that
     /// dialog was itself opened over — a viewer, an editor — stays parked in its own slot,
     /// so closing the help comes back to the dialog and closing the dialog to the file.
@@ -3082,6 +3095,8 @@ impl App {
             last_find: FindSpec::default(),
             drag: None,
             hex_parked: None,
+            hex_replacing: None,
+            hex_replace_with: String::new(),
             dialog_under_help: None,
             trees: [None, None],
             tree_cache: crate::tree::Cache::default(),
@@ -5345,7 +5360,279 @@ impl App {
                     editor.read_only = !editor.read_only;
                 }
             }
+            Command::EditorSearch => self.open_hex_search(),
+            Command::EditorSearchNext | Command::EditorSearchPrev => {
+                let query = self.mode.hex().and_then(|e| e.last_search.clone());
+                match query {
+                    Some(query) => self.hex_find(&query, cmd == Command::EditorSearchPrev),
+                    // Nothing to repeat yet: the key asks what to look for instead of
+                    // doing nothing.
+                    None => self.open_hex_search(),
+                }
+            }
+            Command::EditorReplace => self.open_hex_replace(),
             other => self.not_implemented(&format!("{} (in hex)", other.id())),
+        }
+    }
+
+    /// `F7` in the hex editor: the dialog the viewer and the text editor ask with, because
+    /// it is the same question — what, written how, and which way.
+    fn open_hex_search(&mut self) {
+        let Some(editor) = self.mode.hex() else {
+            return;
+        };
+        let form = Form::search(
+            &editor.last_search.clone().unwrap_or_default(),
+            editor.search_mode.as_str(),
+            !editor.search_case_insensitive,
+            editor.search_whole_words,
+            false,
+            &self.i18n,
+        );
+        self.park_hex();
+        self.mode = Mode::Form(Box::new(form));
+    }
+
+    /// Look for `query` from the cursor and say how it went: nothing where it is found,
+    /// a line when it was found only by coming round from the other end, an error when it
+    /// is not there. The bytes found are the block, so they are what the eye lands on.
+    fn hex_find(&mut self, query: &str, backwards: bool) {
+        let rows = self.editor_size.1.max(1) as usize;
+        let found = self.mode.hex_mut().map(|editor| {
+            let found = editor.find(query, backwards, true);
+            editor.scroll_into_view(rows);
+            found
+        });
+        match found {
+            Some(Ok(Some(hit))) if hit.wrapped => {
+                let msg = self
+                    .i18n
+                    .t_args("hex-search-wrapped", &[("query", query.into())]);
+                self.set_status(msg);
+            }
+            Some(Ok(Some(_))) | None => {}
+            Some(Ok(None)) => {
+                let msg = self
+                    .i18n
+                    .t_args("editor-not-found", &[("query", query.into())]);
+                self.set_error(msg);
+            }
+            Some(Err(e)) => self.hex_error(e),
+        }
+    }
+
+    /// What the hex editor refused, in the language of the interface where it is one of
+    /// ours and in the search's own words where it is a pattern that does not compile.
+    fn hex_error(&mut self, error: fcmd_edit::HexError) {
+        let msg = match error {
+            fcmd_edit::HexError::WouldShift { was, with } => self.i18n.t_args(
+                "hex-replace-length",
+                &[("was", (was as i64).into()), ("with", (with as i64).into())],
+            ),
+            fcmd_edit::HexError::ReadOnly => {
+                let name = self.mode.hex().map(|e| e.name()).unwrap_or_default();
+                self.i18n
+                    .t_args("editor-read-only", &[("name", name.into())])
+            }
+            other => other.to_string(),
+        };
+        self.set_error(msg);
+    }
+
+    /// `Ctrl+F7` in the hex editor: what to find and what to put there.
+    fn open_hex_replace(&mut self) {
+        let Some(editor) = self.mode.hex() else {
+            return;
+        };
+        if editor.read_only {
+            self.hex_error(fcmd_edit::HexError::ReadOnly);
+            return;
+        }
+        let form = Form::hex_replace(
+            &editor.last_search.clone().unwrap_or_default(),
+            &self.hex_replace_with,
+            editor.search_mode.as_str(),
+            !editor.search_case_insensitive,
+            editor.search_whole_words,
+            &self.i18n,
+        );
+        self.park_hex();
+        self.mode = Mode::Form(Box::new(form));
+    }
+
+    /// The replace dialog answered: every match at once, or one at a time with a question
+    /// at each.
+    fn apply_hex_replace_form(&mut self, form: &Form, button: usize) {
+        self.restore_hex();
+        let query = form.text_value("search.what");
+        let typed = form.text_value("hexreplace.with");
+        if query.is_empty() {
+            return;
+        }
+        let mode = match form.choice_value("search.mode").as_str() {
+            "hex" => SearchMode::Hex,
+            "regex" => SearchMode::Regex,
+            _ => SearchMode::Plain,
+        };
+        let Some(editor) = self.mode.hex_mut() else {
+            return;
+        };
+        editor.search_mode = mode;
+        editor.search_case_insensitive = !form.toggle_value("search.case");
+        editor.search_whole_words = form.toggle_value("search.words");
+        let with = match editor.replacement(&typed) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                self.hex_error(e);
+                return;
+            }
+        };
+        self.hex_replace_with = typed;
+        if button == 1 {
+            self.hex_replace_all(&query, &with, 0, 0);
+            return;
+        }
+        // A match the cursor is already standing on is the first to be asked about, so the
+        // block an earlier search left there must not make this one step over it.
+        if let Some(editor) = self.mode.hex_mut() {
+            editor.clear_block();
+        }
+        self.hex_replacing = Some(HexReplacing {
+            query,
+            with,
+            done: 0,
+        });
+        self.hex_replace_next();
+    }
+
+    /// Every match from `from` on, in one step of undo. `before` is how many a run of
+    /// questions had already replaced, so the count on the status line is the whole of it.
+    fn hex_replace_all(&mut self, query: &str, with: &[u8], from: u64, before: usize) {
+        let done = self
+            .mode
+            .hex_mut()
+            .map(|editor| editor.replace_all(query, with, from));
+        match done {
+            Some(Ok(count)) if count + before > 0 => {
+                let msg = self.i18n.t_args(
+                    "editor-replaced",
+                    &[("count", ((count + before) as i64).into())],
+                );
+                self.set_status(msg);
+            }
+            Some(Ok(_)) => {
+                let msg = self
+                    .i18n
+                    .t_args("editor-not-found", &[("query", query.into())]);
+                self.set_error(msg);
+            }
+            Some(Err(e)) => self.hex_error(e),
+            None => {}
+        }
+    }
+
+    /// Go to the next match of the replacement in hand and ask about it; when there is no
+    /// next one, say how many were replaced. It never comes round from the start: a
+    /// replacement that holds what it replaces would be asked about for ever.
+    fn hex_replace_next(&mut self) {
+        let Some(state) = self.hex_replacing.clone() else {
+            return;
+        };
+        let rows = self.editor_size.1.max(1) as usize;
+        let found = self.mode.hex_mut().map(|editor| {
+            let found = editor.find(&state.query, false, false);
+            editor.scroll_into_view(rows);
+            // What is there now, to be read in the question: eight bytes say which match
+            // this is, and a longer one is cut rather than spelt out.
+            found.map(|hit| hit.map(|hit| (hit, editor.read(hit.at, hit.len.min(8) as usize))))
+        });
+        match found {
+            Some(Ok(Some((hit, was)))) => {
+                let shown = |bytes: &[u8], whole: u64| {
+                    let mut text = bytes
+                        .iter()
+                        .take(8)
+                        .map(|b| format!("{b:02X}"))
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    if whole > 8 {
+                        text.push('…');
+                    }
+                    text
+                };
+                let question = self.i18n.t_args(
+                    "hex-replace-ask",
+                    &[
+                        ("was", shown(&was, hit.len).into()),
+                        ("at", format!("{:08X}", hit.at).into()),
+                        ("with", shown(&state.with, state.with.len() as u64).into()),
+                    ],
+                );
+                self.park_hex();
+                self.mode = Mode::Form(Box::new(Form::hex_replace_ask(question, &self.i18n)));
+            }
+            Some(Ok(None)) => self.end_hex_replace(true),
+            Some(Err(e)) => {
+                self.hex_replacing = None;
+                self.hex_error(e);
+            }
+            None => self.hex_replacing = None,
+        }
+    }
+
+    /// The run of questions is over — the matches ran out, or `Esc` said enough. What was
+    /// replaced stays replaced, and the status line counts it; `searched_all` is whether
+    /// finding nothing means there was nothing to find.
+    fn end_hex_replace(&mut self, searched_all: bool) {
+        let Some(state) = self.hex_replacing.take() else {
+            return;
+        };
+        if state.done > 0 {
+            let msg = self
+                .i18n
+                .t_args("editor-replaced", &[("count", (state.done as i64).into())]);
+            self.set_status(msg);
+        } else if searched_all {
+            let msg = self
+                .i18n
+                .t_args("editor-not-found", &[("query", state.query.into())]);
+            self.set_error(msg);
+        }
+    }
+
+    /// One match answered: replace it, replace it and all the rest, or leave it.
+    fn apply_hex_replace_ask(&mut self, button: usize) {
+        self.restore_hex();
+        let Some(mut state) = self.hex_replacing.take() else {
+            return;
+        };
+        match button {
+            0 => {
+                let done = self.mode.hex_mut().map(|e| e.replace_hit(&state.with));
+                match done {
+                    Some(Ok(_)) => {
+                        state.done += 1;
+                        self.hex_replacing = Some(state);
+                        self.hex_replace_next();
+                    }
+                    Some(Err(e)) => self.hex_error(e),
+                    None => {}
+                }
+            }
+            1 => {
+                let from = self.mode.hex().map(|e| e.cursor).unwrap_or(0);
+                self.hex_replace_all(&state.query, &state.with, from, state.done);
+            }
+            2 => {
+                // The match is still the block under the cursor, which is what makes the
+                // next search start past it.
+                self.hex_replacing = Some(state);
+                self.hex_replace_next();
+            }
+            _ => {
+                self.hex_replacing = Some(state);
+                self.end_hex_replace(false);
+            }
         }
     }
 
@@ -16392,7 +16679,16 @@ impl App {
 
         self.restore_viewer();
         self.restore_editor();
+        self.restore_hex();
         if query.is_empty() {
+            return;
+        }
+
+        if let Some(editor) = self.mode.hex_mut() {
+            editor.search_mode = mode;
+            editor.search_case_insensitive = !case_sensitive;
+            editor.search_whole_words = whole_words;
+            self.hex_find(&query, backwards);
             return;
         }
 
@@ -19016,7 +19312,13 @@ impl App {
                 // dropping the reader onto the panels.
                 self.restore_viewer();
                 self.restore_editor();
+                self.restore_hex();
+                self.end_hex_replace(false);
             }
+            // The question a replacement asks at each match is all buttons, so the arrows
+            // walk them as they do in every other question.
+            KeyCode::Left if form.kind == FormKind::HexReplaceAsk => form.tab(false),
+            KeyCode::Right if form.kind == FormKind::HexReplaceAsk => form.tab(true),
             // FAR's copy dialog has a *Tree* button for the destination; here it is the same
             // folder list the panel's `Alt+F10` opens, and the row chosen lands in the row
             // that was asking. `F10` cannot be it: in this program `F10` is `OK`.
@@ -19189,6 +19491,8 @@ impl App {
                         self.mode = Mode::Normal;
                         self.restore_viewer();
                         self.restore_editor();
+                        self.restore_hex();
+                        self.end_hex_replace(false);
                     }
                     _ => self.apply_form(),
                 }
@@ -19253,6 +19557,14 @@ impl App {
         }
         if form.kind == FormKind::EditorReplace {
             self.apply_editor_replace_form(&form, button);
+            return;
+        }
+        if form.kind == FormKind::HexReplace {
+            self.apply_hex_replace_form(&form, button);
+            return;
+        }
+        if form.kind == FormKind::HexReplaceAsk {
+            self.apply_hex_replace_ask(button);
             return;
         }
         if form.kind == FormKind::Attributes {
@@ -21119,6 +21431,20 @@ impl App {
         if let Some(editor) = self.hex_parked.take() {
             self.mode = Mode::Hex(editor);
         }
+    }
+
+    /// The hex editor for the renderer when a question of its own is open over it, so the
+    /// question is drawn over the bytes it is about rather than over the panels. `None`
+    /// under anything else — a menu, a list — which is drawn as it always was.
+    pub fn hex_under_dialog(&mut self) -> Option<Box<HexEdit>> {
+        if !matches!(self.mode, Mode::Prompt(_) | Mode::Form(_)) {
+            return None;
+        }
+        self.hex_parked.take()
+    }
+
+    pub fn return_hex(&mut self, editor: Box<HexEdit>) {
+        self.hex_parked = Some(editor);
     }
 
     /// Ask for the one value an operation needs, with the hex editor waiting behind it.
@@ -26600,6 +26926,8 @@ impl App {
             (1, self.i18n.t("key-help")),
             (2, self.i18n.t("key-save")),
             (3, self.i18n.t("key-mark")),
+            (7, self.i18n.t("key-search")),
+            (8, self.i18n.t("key-replace")),
             (9, self.i18n.t("key-asm")),
             (10, self.i18n.t("key-quit")),
             (12, self.i18n.t("key-block")),
@@ -35334,6 +35662,152 @@ run = ["echo one", "echo two", "echo three"]
         let editor = app.mode.hex_mut().unwrap();
         assert_eq!(editor.cursor, 3);
         assert_eq!(editor.read(0, 8), b"ABCDEFGH");
+    }
+
+    /// Search and replace in the hex editor, through the keys and the dialogs a user walks:
+    /// `F7` and its two repeats, then `Ctrl+F7` one match at a time and all at once.
+    #[test]
+    fn bytes_are_searched_and_replaced_in_the_hex_editor() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bytes.bin");
+        let body = b"one MZ two MZ three MZ.";
+        std::fs::write(&path, body).unwrap();
+        let mut app = app();
+        app.open_hex(&path);
+        let fill = |app: &mut App, key: &str, text: &str| {
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("no dialog: {:?}", app.mode)
+            };
+            form.set_text(key, text.to_string());
+        };
+        let choose = |app: &mut App, mode: &str| {
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("no dialog: {:?}", app.mode)
+            };
+            form.set_choice("search.mode", mode);
+        };
+        let at = |app: &App| {
+            let editor = app.mode.hex().expect("back in the hex editor");
+            (editor.cursor, editor.block)
+        };
+
+        // `F7` asks with the dialog the viewer and the text editor ask with.
+        press(&mut app, "F7");
+        assert!(
+            matches!(&app.mode, Mode::Form(f) if f.kind == FormKind::Search),
+            "{:?}",
+            app.mode
+        );
+        fill(&mut app, "search.what", "MZ");
+        press(&mut app, "Enter");
+        assert_eq!(at(&app), (4, Some((4, 6))), "the bytes found are the block");
+
+        // `Shift+F7` goes on, and off the end it comes round and says so.
+        press(&mut app, "Shift+F7");
+        assert_eq!(at(&app).0, 11);
+        press(&mut app, "Shift+F7");
+        assert_eq!(at(&app).0, 20);
+        app.status.clear();
+        press(&mut app, "Shift+F7");
+        assert_eq!(at(&app).0, 4);
+        assert!(app.status.contains("other end"), "{}", app.status);
+        // `Alt+F7` is the same search the other way.
+        press(&mut app, "Alt+F7");
+        assert_eq!(at(&app).0, 20);
+        press(&mut app, "Alt+F7");
+        assert_eq!(at(&app).0, 11);
+
+        // As hex, with a hole in it; and what is not there is said, with the editor back.
+        press(&mut app, "F7");
+        fill(&mut app, "search.what", "4d ?? 20 74 68");
+        choose(&mut app, "hex");
+        press(&mut app, "Enter");
+        assert_eq!(at(&app), (11, Some((11, 16))), "`MZ th`, whatever the Z is");
+        press(&mut app, "F7");
+        fill(&mut app, "search.what", "00 00");
+        press(&mut app, "Enter");
+        assert!(app.status.contains("not found"), "{}", app.status);
+        assert_eq!(at(&app).0, 11, "and nothing moved");
+
+        // `Ctrl+F7`: one at a time. The first is replaced, the second skipped, and at the
+        // third *All* takes whatever is left.
+        app.mode.hex_mut().unwrap().cursor = 0;
+        press(&mut app, "Ctrl+F7");
+        assert!(
+            matches!(&app.mode, Mode::Form(f) if f.kind == FormKind::HexReplace),
+            "{:?}",
+            app.mode
+        );
+        fill(&mut app, "search.what", "4d 5a");
+        fill(&mut app, "hexreplace.with", "50 45");
+        press(&mut app, "Enter");
+        let Mode::Form(ask) = &app.mode else {
+            panic!("a question at the first match: {:?}", app.mode)
+        };
+        assert_eq!(ask.kind, FormKind::HexReplaceAsk);
+        let crate::form::Field::Dim(question) = &ask.fields[0] else {
+            panic!("the question is the dialog's one row")
+        };
+        assert!(
+            question.contains("4D 5A")
+                && question.contains("00000004")
+                && question.contains("50 45"),
+            "{question}"
+        );
+        press(&mut app, "Enter"); // Replace
+        assert!(matches!(&app.mode, Mode::Form(f) if f.kind == FormKind::HexReplaceAsk));
+        press(&mut app, "Right");
+        press(&mut app, "Right");
+        press(&mut app, "Enter"); // Skip
+        assert!(matches!(&app.mode, Mode::Form(f) if f.kind == FormKind::HexReplaceAsk));
+        press(&mut app, "Right");
+        press(&mut app, "Enter"); // All
+        let editor = app.mode.hex_mut().expect("back in the hex editor");
+        assert_eq!(editor.read(0, 64), b"one PE two MZ three PE.");
+        assert!(app.status.contains('2'), "{}", app.status);
+        // Two steps to take back: the one that was confirmed, and the rest as one.
+        app.run(Command::EditorUndo);
+        app.run(Command::EditorUndo);
+        let editor = app.mode.hex_mut().unwrap();
+        assert_eq!(editor.read(0, 64), body);
+        assert!(!editor.modified());
+
+        // Another length is refused while overwriting, and nothing is touched.
+        let all = |app: &mut App, what: &str, with: &str| {
+            press(app, "Ctrl+F7");
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("no dialog: {:?}", app.mode)
+            };
+            form.set_text("search.what", what.to_string());
+            form.set_text("hexreplace.with", with.to_string());
+            form.set_choice("search.mode", "text");
+            form.button = Some(1);
+            press(app, "Enter");
+        };
+        all(&mut app, "MZ", "exe");
+        assert!(app.status.contains("Ins"), "{}", app.status);
+        let editor = app.mode.hex_mut().expect("back in the hex editor");
+        assert_eq!(editor.read(0, 64), body);
+        assert!(!editor.modified());
+
+        // In insert mode the file grows, and one undo takes all three back.
+        press(&mut app, "Ins");
+        all(&mut app, "MZ", "exe");
+        assert!(app.status.contains('3'), "{}", app.status);
+        let editor = app.mode.hex_mut().unwrap();
+        assert_eq!(editor.read(0, 64), b"one exe two exe three exe.");
+        assert_eq!(editor.len(), body.len() as u64 + 3);
+
+        // `Esc` out of the dialog goes back to the bytes with the changes intact.
+        press(&mut app, "Ctrl+F7");
+        press(&mut app, "Esc");
+        assert!(
+            app.mode.hex().is_some_and(|e| e.modified()),
+            "{:?}",
+            app.mode
+        );
+        app.run(Command::EditorUndo);
+        assert_eq!(app.mode.hex_mut().unwrap().read(0, 64), body);
     }
 
     #[test]

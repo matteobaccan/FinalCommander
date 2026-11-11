@@ -112,7 +112,9 @@
 <text xml:space="preserve" x="268.8" y="535.6" fill="#c0c0c0">5</text>
 <text xml:space="preserve" x="336.0" y="535.6" fill="#c0c0c0">6</text>
 <text xml:space="preserve" x="403.2" y="535.6" fill="#c0c0c0">7</text>
+<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6" y="535.6" fill="#000000">Search</text>
 <text xml:space="preserve" x="470.4" y="535.6" fill="#c0c0c0">8</text>
+<text xml:space="preserve" x="478.8 487.2 495.6 504.0 512.4 520.8" y="535.6" fill="#000000">Replac</text>
 <text xml:space="preserve" x="537.6" y="535.6" fill="#c0c0c0">9</text>
 <text xml:space="preserve" x="546.0 554.4 562.8" y="535.6" fill="#000000">Asm</text>
 <text xml:space="preserve" x="604.8 613.2" y="535.6" fill="#c0c0c0">10</text>

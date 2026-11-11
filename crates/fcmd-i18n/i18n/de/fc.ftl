@@ -1750,3 +1750,11 @@ sync-report-failed = Fehlgeschlagen: { $count }
 sync-report-stopped = Unterwegs gestoppt, diese sind also vielleicht erledigt, vielleicht nicht: { $count }
 sync-report-not-done = Nicht ausgeführt, weil ein früherer Schritt fehlschlug oder gestoppt wurde: { $count }
 menu-sync-saved = Gespeicherte Abgleiche
+
+# hex editor search
+hex-search-wrapped = `{ $query }`: vom anderen Ende der Datei aus gefunden
+hex-replace-title = Ersetzen
+hex-replace-with = Ersetzen durch
+btn-replace = Ersetzen
+hex-replace-ask = { $was } bei { $at } durch { $with } ersetzen?
+hex-replace-length = der Ersatz ist { $with } Bytes lang und der Treffer { $was }: das würde alles dahinter verschieben — zuerst mit Einfg in den Einfügemodus wechseln

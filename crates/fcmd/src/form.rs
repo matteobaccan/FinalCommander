@@ -289,6 +289,8 @@ impl Form {
             | FormKind::SortGroup
             | FormKind::MaskGroup
             | FormKind::EditorReplace
+            | FormKind::HexReplace
+            | FormKind::HexReplaceAsk
             | FormKind::Search => Vec::new(),
             FormKind::EditorSettings => vec![
                 choice(
@@ -617,6 +619,7 @@ impl Form {
             FormKind::Sync => "sync-title",
             FormKind::Search => "search-title",
             FormKind::EditorReplace => "editor-replace-title",
+            FormKind::HexReplace | FormKind::HexReplaceAsk => "hex-replace-title",
             FormKind::Link => "link-title",
             FormKind::Highlight => "hl-new",
             FormKind::FilterSet => "filter-new",
@@ -2126,6 +2129,65 @@ impl Form {
             }
         }
         String::new()
+    }
+
+    /// `Ctrl+F7` in the hex editor: what to look for, what to put there, and how both are
+    /// written. One dialog rather than the text editor's two prompts, because here the
+    /// *how* — text or hex — changes what the two lines mean.
+    pub fn hex_replace(
+        what: &str,
+        with: &str,
+        mode: &str,
+        case_sensitive: bool,
+        whole_words: bool,
+        i18n: &I18n,
+    ) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let modes = [
+            ("text", t("search-mode-text")),
+            ("hex", t("search-mode-hex")),
+            ("regex", t("search-mode-regex")),
+        ];
+        let fields = vec![
+            Field::text("search.what", t("search-for"), what.to_string()),
+            Field::text("hexreplace.with", t("hex-replace-with"), with.to_string()),
+            choice("search.mode", t("search-mode"), &modes, mode),
+            Field::toggle("search.case", t("search-case"), case_sensitive),
+            Field::toggle("search.words", t("search-words"), whole_words),
+        ];
+        Form {
+            pages: Vec::new(),
+            page: 0,
+            kind: FormKind::HexReplace,
+            title: t("hex-replace-title"),
+            fields,
+            cursor: 0,
+            site: None,
+            button: None,
+            buttons: vec![t("btn-replace"), t("btn-overwrite-all"), t("btn-cancel")],
+        }
+    }
+
+    /// One match of a replacement done one at a time: this one, all the rest, not this one,
+    /// or enough. It opens on the first button, because there is no row to type in.
+    pub fn hex_replace_ask(question: String, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        Form {
+            pages: Vec::new(),
+            page: 0,
+            kind: FormKind::HexReplaceAsk,
+            title: t("hex-replace-title"),
+            fields: vec![Field::Dim(question)],
+            cursor: 0,
+            site: None,
+            button: Some(0),
+            buttons: vec![
+                t("btn-replace"),
+                t("btn-overwrite-all"),
+                t("btn-skip"),
+                t("btn-cancel"),
+            ],
+        }
     }
 
     /// `Shift+F2`: where to put what is inside an archive.

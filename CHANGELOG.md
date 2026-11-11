@@ -8,6 +8,14 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Search and replace in the hex editor.** `F7` asks with the same dialog as the viewer and
+  the text editor: text (through the file's code page) or hex bytes such as `DE AD ?? EF`, where
+  `??` is any byte, forwards or backwards, wrapping with a note on the status line.
+  `Shift+F7` / `Alt+F7` repeat it. `Ctrl+F7` replaces: one at a time with Replace / All / Skip /
+  Cancel asked over the bytes, or all at once as a single undo step. A replacement of another
+  length is spliced in insert mode and refused in overwrite mode. Files are read in windows, so
+  a match across a window boundary is found and nothing is loaded whole. Dialogs opened from the
+  hex editor are now drawn over its bytes.
 - **A tenth theme, `delphi-inspiration`.** FAR's classic blue panels, menus, dialogs and key bar,
   with the Delphi IDE's dark editor where code is read and written: the viewer (`F3`) and the
   editor (`F4`) take Delphi Dark 2027's page, white code, cream keywords, green comments and

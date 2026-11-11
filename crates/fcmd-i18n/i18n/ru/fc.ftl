@@ -1736,3 +1736,11 @@ sync-report-failed = Не удалось: { $count }
 sync-report-stopped = Остановлено на полпути, поэтому это могло быть сделано, а могло и нет: { $count }
 sync-report-not-done = Не выполнено, потому что предыдущий шаг не удался или был остановлен: { $count }
 menu-sync-saved = Сохранённые синхронизации
+
+# hex editor search
+hex-search-wrapped = `{ $query }`: найдено после перехода к другому концу файла
+hex-replace-title = Замена
+hex-replace-with = Заменить на
+btn-replace = Заменить
+hex-replace-ask = Заменить { $was } по адресу { $at } на { $with }?
+hex-replace-length = замена длиной { $with } байт, а найденное — { $was }: всё, что дальше, сдвинулось бы — сначала включите режим вставки клавишей Ins

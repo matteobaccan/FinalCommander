@@ -122,6 +122,18 @@ is what it starts in.
 Changed bytes are drawn as changed until they are written, with the list of what changed beside
 them: offset, old byte, new byte. `Ctrl+Z` takes one back. `F2` writes, atomically.
 
+`F7` searches the bytes with the same dialog: as text, as hex bytes — `DE AD ?? EF`, where `??`
+is any byte — or as a regular expression. What is found is marked and the cursor goes to it;
+`Shift+F7` finds the next one and `Alt+F7` the one before, and a search that runs off one end
+of the file starts again from the other and says so. A file of any size is searched a piece
+at a time, never loaded whole.
+
+`Ctrl+F7` (or `F8`) replaces. The replacement is typed the way the search was — hex for hex,
+and an empty line to delete what was found. *Replace* stops at each match and asks: replace
+this one, this one and all the rest, skip it, or stop. *All* does the whole file at once, and
+one `Ctrl+Z` takes all of it back. A replacement of the same length overwrites; one of another
+length moves everything after it, so it is done only after `Insert` has switched to inserting.
+
 `F3` marks a block and `F12` says what to do with it: write it out to a file, read a file in,
 fill it with a byte, exclusive-or it with a key, copy or move bytes from elsewhere in the same
 file, insert zeros, delete. Each one says what the file's length will become before it happens.

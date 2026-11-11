@@ -16,6 +16,8 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use fcmd_core::VPath;
+use fcmd_view::search::{compile_with, find as find_in_source};
+use fcmd_view::{Codepage, Pattern, SearchMode, Source as ByteSource};
 
 /// Where a piece's bytes come from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,6 +78,55 @@ pub enum HexError {
     NoPath,
     #[error("{0} is a device: write the bytes out to a file instead")]
     IsADevice(String),
+    /// A query that does not compile: a regular expression with a hole in it, hex digits
+    /// that are not hex digits.
+    #[error("{0}")]
+    Search(String),
+    /// A replacement of another length while the editor is overwriting. Everything after it
+    /// would move, which is the one thing overwrite mode promises not to do.
+    #[error("the replacement is {with} bytes and what it replaces is {was}: that moves everything after it, which is for insert mode")]
+    WouldShift { was: u64, with: u64 },
+    #[error("the buffer is read-only")]
+    ReadOnly,
+}
+
+/// Where a search landed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Hit {
+    pub at: u64,
+    pub len: u64,
+    /// It was found only by starting again from the other end of the file.
+    pub wrapped: bool,
+}
+
+/// How much of the file a replace-all looks at in one go. The windows overlap by the
+/// pattern's length less one, so a match lying across the edge of one is whole in the next.
+const SCAN: usize = 256 * 1024;
+
+/// The piece table as something the viewer's search can read. The search already knows how
+/// to walk forty gigabytes a window at a time; all it needs is a length and a way to read.
+struct Pieces<'a>(&'a mut HexEdit);
+
+impl ByteSource for Pieces<'_> {
+    fn len(&mut self) -> u64 {
+        self.0.len
+    }
+
+    fn read_at(&mut self, offset: u64, buf: &mut [u8]) -> io::Result<usize> {
+        let bytes = self.0.read(offset, buf.len());
+        buf[..bytes.len()].copy_from_slice(&bytes);
+        Ok(bytes.len())
+    }
+}
+
+/// The longest stretch a pattern can match, which is what two windows have to share.
+fn span_of(pattern: &Pattern) -> usize {
+    match pattern {
+        Pattern::Literal(bytes) => bytes.len(),
+        Pattern::Masked(mask) => mask.len(),
+        // A regular expression can match any length; this is what we are willing to pay for.
+        Pattern::Regex(_) => 4096,
+    }
 }
 
 type Result<T> = std::result::Result<T, HexError>;
@@ -123,6 +174,14 @@ pub struct HexEdit {
     /// — and it is never written to from here: the atomic save writes a new file beside the
     /// old one and renames it over the top, which is not a thing one can do to a disk.
     pub device: bool,
+    /// What a query typed as text is turned into bytes with. A binary does not say what its
+    /// strings are written in, so this is UTF-8 — which is ASCII for everything ASCII —
+    /// until somebody who knows better sets it.
+    pub codepage: Codepage,
+    pub last_search: Option<String>,
+    pub search_mode: SearchMode,
+    pub search_case_insensitive: bool,
+    pub search_whole_words: bool,
 }
 
 impl std::fmt::Debug for HexEdit {
@@ -211,6 +270,11 @@ impl HexEdit {
             read_only,
             device,
             sector,
+            codepage: Codepage::Utf8,
+            last_search: None,
+            search_mode: SearchMode::Plain,
+            search_case_insensitive: false,
+            search_whole_words: false,
         })
     }
 
@@ -247,6 +311,11 @@ impl HexEdit {
             read_only: false,
             device: false,
             sector: None,
+            codepage: Codepage::Utf8,
+            last_search: None,
+            search_mode: SearchMode::Plain,
+            search_case_insensitive: false,
+            search_whole_words: false,
         }
     }
 
@@ -466,6 +535,250 @@ impl HexEdit {
         true
     }
 
+    // ── search ─────────────────────────────────────────────────────────────────────────────
+
+    fn compile(&self, query: &str) -> Result<Pattern> {
+        compile_with(
+            query,
+            self.search_mode,
+            self.search_case_insensitive,
+            self.search_whole_words,
+            self.codepage,
+        )
+        .map_err(|e| HexError::Search(e.to_string()))
+    }
+
+    /// Is the block a match the cursor is standing on? Then a previous search put us here,
+    /// and the next one has to start past it rather than find it again.
+    pub fn on_a_hit(&self) -> bool {
+        self.mark.is_none() && self.block.is_some_and(|(a, b)| a == self.cursor && b > a)
+    }
+
+    /// Find `query` from the cursor on, or before it going backwards, as text through the
+    /// code page, as hex bytes with `??` for any byte, or as a regular expression — whichever
+    /// `search_mode` says. What is found becomes the block and the cursor goes to its first
+    /// byte. With `wrap`, a search that runs off one end starts again from the other, and
+    /// the hit says so.
+    ///
+    /// The file is read a window at a time through the pieces, never as a whole.
+    pub fn find(&mut self, query: &str, backwards: bool, wrap: bool) -> Result<Option<Hit>> {
+        let pattern = self.compile(query)?;
+        self.last_search = Some(query.to_string());
+        let cancel = fcmd_core::CancelToken::new();
+        let len = self.len;
+        // Forwards a match at the cursor counts, unless it is the one we are already on.
+        // Backwards it has to end where the cursor is or before, as in the text editor.
+        let from = if backwards {
+            self.cursor.min(len)
+        } else {
+            (self.cursor + u64::from(self.on_a_hit())).min(len)
+        };
+        let mut wrapped = false;
+        let mut found = find_in_source(&mut Pieces(self), &pattern, from, backwards, &cancel);
+        if found.is_none() && wrap {
+            wrapped = true;
+            let again = if backwards { len } else { 0 };
+            found = find_in_source(&mut Pieces(self), &pattern, again, backwards, &cancel);
+        }
+        // A regular expression that matches nothing at all (`a*` on a `b`) has found nothing.
+        let Some(hit) = found.filter(|m| m.len > 0) else {
+            return Ok(None);
+        };
+        let hit = Hit {
+            at: hit.offset,
+            len: hit.len as u64,
+            wrapped,
+        };
+        self.half = None;
+        self.mark = None;
+        self.cursor = hit.at;
+        self.block = Some((hit.at, hit.at + hit.len));
+        Ok(Some(hit))
+    }
+
+    /// The last search once more, in either direction.
+    pub fn find_again(&mut self, backwards: bool) -> Result<Option<Hit>> {
+        match self.last_search.clone() {
+            Some(query) => self.find(&query, backwards, true),
+            None => Ok(None),
+        }
+    }
+
+    /// What a replacement typed into a dialog is in bytes: hex digits when the search is in
+    /// hex — spaces anywhere, no wildcards, and nothing at all to delete what was found —
+    /// and otherwise the text through the code page.
+    pub fn replacement(&self, text: &str) -> Result<Vec<u8>> {
+        if self.search_mode != SearchMode::Hex {
+            return Ok(self.codepage.encode(text));
+        }
+        let digits: Vec<char> = text.chars().filter(|c| !c.is_whitespace()).collect();
+        if !digits.len().is_multiple_of(2) {
+            return Err(HexError::Search(format!(
+                "`{}` is not a run of hex bytes",
+                text.trim()
+            )));
+        }
+        digits
+            .chunks(2)
+            .map(|pair| {
+                let pair: String = pair.iter().collect();
+                u8::from_str_radix(&pair, 16)
+                    .map_err(|_| HexError::Search(format!("`{pair}` is not a hex byte")))
+            })
+            .collect()
+    }
+
+    /// May `was` bytes become `with`? The same length always may: that is an overwrite. Any
+    /// other length moves the rest of the file, and that is what `Ins` is asked for.
+    fn may_replace(&self, was: u64, with: u64) -> Result<()> {
+        if self.read_only {
+            return Err(HexError::ReadOnly);
+        }
+        if was != with && !self.insert {
+            return Err(HexError::WouldShift { was, with });
+        }
+        Ok(())
+    }
+
+    /// Replace the match the cursor is on — the block a search has just left — and stand
+    /// after what was put there. One step of undo. `false` when there is no such match.
+    pub fn replace_hit(&mut self, with: &[u8]) -> Result<bool> {
+        if !self.on_a_hit() {
+            return Ok(false);
+        }
+        let Some((a, b)) = self.block else {
+            return Ok(false);
+        };
+        self.may_replace(b - a, with.len() as u64)?;
+        self.splice(a, b - a, with);
+        self.block = None;
+        self.half = None;
+        self.cursor = (a + with.len() as u64).min(self.len);
+        Ok(true)
+    }
+
+    /// Every match of `query` at or after `from`, left to right and never two that overlap.
+    ///
+    /// Read a window at a time. A match is taken from a window only where the window still
+    /// holds the pattern's whole length after its first byte; one that starts nearer the
+    /// edge than that is left for the next window, which begins early enough to hold it.
+    fn matches_from(&mut self, pattern: &Pattern, from: u64) -> Vec<(u64, u64)> {
+        let overlap = span_of(pattern).saturating_sub(1).min(SCAN - 1) as u64;
+        let mut out = Vec::new();
+        let mut at = from.min(self.len);
+        while at < self.len {
+            let window = self.read(at, SCAN);
+            if window.is_empty() {
+                break;
+            }
+            let size = window.len() as u64;
+            let last = at + size >= self.len;
+            // Where a match must start to be trusted in this window.
+            let trusted = if last {
+                size
+            } else {
+                size - overlap.min(size - 1)
+            };
+            let mut next = at + trusted;
+            for m in pattern.matches_in(&window) {
+                if m.offset >= trusted {
+                    break;
+                }
+                if m.len == 0 {
+                    continue;
+                }
+                out.push((at + m.offset, m.len as u64));
+                next = next.max(at + m.offset + m.len as u64);
+            }
+            if last {
+                break;
+            }
+            at = next;
+        }
+        out
+    }
+
+    /// Replace every match at or after `from` with the same bytes, and say how many. The
+    /// whole of it is **one** step of undo, whatever the count, and it costs the bytes of
+    /// one replacement: every match points at the same stretch of typed bytes.
+    pub fn replace_all(&mut self, query: &str, with: &[u8], from: u64) -> Result<usize> {
+        let pattern = self.compile(query)?;
+        self.last_search = Some(query.to_string());
+        if self.read_only {
+            return Err(HexError::ReadOnly);
+        }
+        let matches = self.matches_from(&pattern, from);
+        // All of them or none: a replace-all that stopped halfway at the first match of
+        // another length would leave a file nobody asked for.
+        for (_, len) in &matches {
+            self.may_replace(*len, with.len() as u64)?;
+        }
+        if matches.is_empty() {
+            return Ok(0);
+        }
+        self.remember();
+
+        let put = (!with.is_empty()).then(|| {
+            let at = self.added.len() as u64;
+            self.added.extend_from_slice(with);
+            Piece {
+                source: Source::Added,
+                at,
+                len: with.len() as u64,
+            }
+        });
+        // One walk over the pieces with the matches beside them, both in order.
+        let mut out: Vec<Piece> = Vec::with_capacity(self.pieces.len() + matches.len() * 2);
+        let mut pos = 0u64;
+        let mut next = 0usize;
+        for piece in &self.pieces {
+            let piece_end = pos + piece.len;
+            let mut cur = pos;
+            let keep = |out: &mut Vec<Piece>, a: u64, b: u64| {
+                if b > a {
+                    out.push(Piece {
+                        source: piece.source,
+                        at: piece.at + (a - pos),
+                        len: b - a,
+                    });
+                }
+            };
+            while cur < piece_end {
+                match matches.get(next) {
+                    Some(&(start, len)) if start < piece_end => {
+                        keep(&mut out, cur, start);
+                        // The replacement goes in where the match begins, once, however
+                        // many pieces the match runs across.
+                        if start >= cur {
+                            if let Some(put) = put {
+                                out.push(put);
+                            }
+                        }
+                        let end = start + len;
+                        cur = end.min(piece_end);
+                        if end <= piece_end {
+                            next += 1;
+                        }
+                    }
+                    _ => {
+                        keep(&mut out, cur, piece_end);
+                        cur = piece_end;
+                    }
+                }
+            }
+            pos = piece_end;
+        }
+        let removed: u64 = matches.iter().map(|(_, len)| len).sum();
+        self.pieces = out;
+        self.len = self.len - removed + matches.len() as u64 * with.len() as u64;
+        self.cursor = self.cursor.min(self.len);
+        self.block = None;
+        self.mark = None;
+        self.half = None;
+        self.redo.clear();
+        Ok(matches.len())
+    }
+
     // ── undo ───────────────────────────────────────────────────────────────────────────────
 
     fn remember(&mut self) {
@@ -529,12 +842,22 @@ impl HexEdit {
     /// The patch list of SPEC 05 §2.5: every run that differs from the file on disk, with the
     /// bytes that were there and the bytes that are there now.
     pub fn changes(&mut self) -> Vec<Change> {
+        self.first_changes(usize::MAX)
+    }
+
+    /// The head of the patch list, for a window that shows four rows of it: a replace-all
+    /// can leave a hundred thousand runs behind, and reading every one of them back from
+    /// the file for each frame would make the cursor crawl.
+    pub fn first_changes(&mut self, limit: usize) -> Vec<Change> {
         let mut out: Vec<Change> = Vec::new();
         let mut pos = 0u64; // where we are in the content as it is now
         let mut original = 0u64; // where we are in the file as it is on disk
         let pieces = self.pieces.clone();
         let mut i = 0;
         while i < pieces.len() {
+            if out.len() >= limit {
+                return out;
+            }
             let piece = pieces[i];
             match piece.source {
                 Source::Original => {
@@ -589,7 +912,7 @@ impl HexEdit {
         }
         // Anything left of the original after the last piece was cut off the end.
         let total = self.original_len();
-        if original < total {
+        if original < total && out.len() < limit {
             let old = self.read_original(original, total - original);
             out.push(Change {
                 at: pos,
@@ -1043,5 +1366,235 @@ mod tests {
         e.set_byte(0, b'X');
         assert_eq!(all(&mut e), b"abc");
         assert!(!e.modified());
+    }
+
+    // ── search and replace ─────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn text_is_found_through_the_code_page_and_becomes_the_block() {
+        let mut e = edit(b"alpha Beta alpha beta");
+        let hit = e.find("beta", false, true).unwrap().unwrap();
+        assert_eq!((hit.at, hit.len, hit.wrapped), (17, 4, false));
+        assert_eq!(e.cursor, 17);
+        assert_eq!(e.block, Some((17, 21)));
+
+        // Without the case, the earlier one is a match as well.
+        e.cursor = 0;
+        e.clear_block();
+        e.search_case_insensitive = true;
+        assert_eq!(e.find("beta", false, true).unwrap().unwrap().at, 6);
+
+        // And a character that is not ASCII is looked for as the file would hold it.
+        let mut e = edit(&[b'c', b'a', b'f', 0xE9, b'!']);
+        e.codepage = Codepage::Cp1252;
+        let hit = e.find("café", false, true).unwrap().unwrap();
+        assert_eq!((hit.at, hit.len), (0, 4));
+    }
+
+    #[test]
+    fn hex_bytes_are_found_with_a_hole_for_any_byte() {
+        let mut e = edit(&[0x00, 0xDE, 0xAD, 0x11, 0xEF, 0xDE, 0xAD, 0xBE, 0xEF]);
+        e.search_mode = SearchMode::Hex;
+        let hit = e.find("DE AD BE EF", false, true).unwrap().unwrap();
+        assert_eq!((hit.at, hit.len), (5, 4));
+
+        e.cursor = 0;
+        e.clear_block();
+        let hit = e.find("de ad ?? ef", false, true).unwrap().unwrap();
+        assert_eq!((hit.at, hit.len), (1, 4), "the wildcard takes the 11");
+        // The same again goes on to the next rather than standing still.
+        assert_eq!(e.find_again(false).unwrap().unwrap().at, 5);
+
+        // Digits that are not digits are an error, not a search for nothing.
+        assert!(matches!(
+            e.find("zz", false, true),
+            Err(HexError::Search(_))
+        ));
+    }
+
+    #[test]
+    fn a_search_goes_backwards_and_wraps_at_either_end() {
+        let mut e = edit(b"ab..ab..ab");
+        e.cursor = 9;
+        let hit = e.find("ab", true, true).unwrap().unwrap();
+        assert_eq!(
+            (hit.at, hit.wrapped),
+            (4, false),
+            "the one that ends before us"
+        );
+        assert_eq!(e.find_again(true).unwrap().unwrap().at, 0);
+        // Nothing is before the first: it comes round to the last, and says so.
+        let hit = e.find_again(true).unwrap().unwrap();
+        assert_eq!((hit.at, hit.wrapped), (8, true));
+        // And forwards off the end comes round to the first.
+        let hit = e.find_again(false).unwrap().unwrap();
+        assert_eq!((hit.at, hit.wrapped), (0, true));
+
+        // Asked not to wrap, it stops at the end instead.
+        e.cursor = 9;
+        e.clear_block();
+        assert_eq!(e.find("ab", false, false).unwrap(), None);
+        assert_eq!(e.cursor, 9, "and a search that found nothing moved nothing");
+        assert_eq!(e.find("nowhere", false, true).unwrap(), None);
+    }
+
+    /// The file is read a window at a time, so the match that matters is the one lying
+    /// across the edge of two windows — forwards, backwards, and in a replace-all.
+    #[test]
+    fn a_match_across_the_edge_of_two_windows_is_found() {
+        let needle = b"NEEDLE";
+        for into in 1..needle.len() {
+            // `into` bytes of the needle are in the first window and the rest in the second.
+            let at = SCAN - into;
+            let mut body = vec![b'.'; 2 * SCAN + 64];
+            body[at..at + needle.len()].copy_from_slice(needle);
+
+            let mut e = edit(&body);
+            let hit = e.find("NEEDLE", false, false).unwrap().unwrap();
+            assert_eq!(hit.at, at as u64, "forwards, {into} bytes before the edge");
+
+            // Backwards the windows are counted from the cursor, so the edge is put where
+            // the needle is by starting a window's length past its middle.
+            let mut e = edit(&body);
+            e.cursor = (at + into + SCAN) as u64;
+            let hit = e.find("NEEDLE", true, false).unwrap().unwrap();
+            assert_eq!(hit.at, at as u64, "backwards, {into} bytes before the edge");
+
+            let mut e = edit(&body);
+            e.search_mode = SearchMode::Hex;
+            assert_eq!(e.replace_all("4E 45 45 ?? 4C 45", b"needle", 0).unwrap(), 1);
+            assert_eq!(e.read(at as u64 - 1, 8), b".needle.");
+            assert_eq!(e.len(), body.len() as u64);
+        }
+    }
+
+    #[test]
+    fn a_replacement_of_the_same_length_overwrites_in_place() {
+        let mut e = edit(b"one two one two");
+        assert!(e.find("two", false, true).unwrap().is_some());
+        assert!(e.replace_hit(b"2nd").unwrap());
+        assert_eq!(all(&mut e), b"one 2nd one two");
+        assert_eq!(e.cursor, 7, "the cursor stands after what was put there");
+        assert_eq!(e.block, None);
+        assert!(e.is_changed(4) && e.is_changed(6) && !e.is_changed(7));
+        // With no match under the cursor there is nothing to replace.
+        assert!(!e.replace_hit(b"xxx").unwrap());
+
+        // The replacement is typed the way the search was: hex for hex, with nothing odd.
+        e.search_mode = SearchMode::Hex;
+        assert_eq!(
+            e.replacement("de ad BEEF").unwrap(),
+            [0xDE, 0xAD, 0xBE, 0xEF]
+        );
+        assert_eq!(e.replacement("").unwrap(), b"");
+        assert!(e.replacement("d").is_err());
+        assert!(
+            e.replacement("??").is_err(),
+            "a hole means nothing to write"
+        );
+        e.search_mode = SearchMode::Plain;
+        assert_eq!(e.replacement("de").unwrap(), b"de");
+    }
+
+    #[test]
+    fn a_longer_or_shorter_replacement_moves_the_file_only_in_insert_mode() {
+        let mut e = edit(b"a-b-c");
+        // Overwriting is the default, and there another length is refused, whole.
+        assert!(matches!(
+            e.replace_all("-", b"<->", 0),
+            Err(HexError::WouldShift { was: 1, with: 3 })
+        ));
+        assert!(e.find("-", false, true).unwrap().is_some());
+        assert!(matches!(
+            e.replace_hit(b""),
+            Err(HexError::WouldShift { was: 1, with: 0 })
+        ));
+        assert_eq!(all(&mut e), b"a-b-c");
+        assert!(!e.modified(), "and a refusal changed nothing");
+
+        e.insert = true;
+        e.cursor = 0;
+        e.clear_block();
+        assert_eq!(e.replace_all("-", b"<->", 0).unwrap(), 2);
+        assert_eq!(all(&mut e), b"a<->b<->c");
+        assert_eq!(e.len(), 9);
+        // Shorter, down to nothing at all.
+        assert_eq!(e.replace_all("<->", b"", 0).unwrap(), 2);
+        assert_eq!(all(&mut e), b"abc");
+        assert_eq!(e.len(), 3);
+        // One at a time, longer.
+        e.cursor = 0;
+        assert!(e.find("b", false, true).unwrap().is_some());
+        assert!(e.replace_hit(b"[b]").unwrap());
+        assert_eq!(all(&mut e), b"a[b]c");
+        assert_eq!(e.cursor, 4);
+    }
+
+    #[test]
+    fn replacing_everything_is_one_step_of_undo() {
+        let mut e = edit(b"xx.xx.xx.xx");
+        e.set_byte(2, b'-');
+        e.insert = true;
+        // From an offset on, the ones before it are left alone.
+        assert_eq!(e.replace_all("xx", b"y", 3).unwrap(), 3);
+        assert_eq!(all(&mut e), b"xx-y.y.y");
+        assert!(e.undo());
+        assert_eq!(all(&mut e), b"xx-xx.xx.xx", "all three back at once");
+        assert!(e.redo());
+        assert_eq!(all(&mut e), b"xx-y.y.y");
+        assert!(e.undo());
+
+        // Matches that run across pieces the earlier edits left behind.
+        e.set_byte(1, b'x');
+        e.set_byte(4, b'x');
+        assert_eq!(e.replace_all("xx", b"ZZZ", 0).unwrap(), 4);
+        assert_eq!(all(&mut e), b"ZZZ-ZZZ.ZZZ.ZZZ");
+        // The typed `-` sits between two of them, so those read as one run of three.
+        assert_eq!(e.changes().len(), 3);
+        assert_eq!(e.first_changes(2).len(), 2);
+        assert!(e.undo());
+        assert_eq!(all(&mut e), b"xx-xx.xx.xx");
+
+        // Nothing found is nothing done, and nothing to undo.
+        let steps = e.undo.len();
+        assert_eq!(e.replace_all("nowhere", b"y", 0).unwrap(), 0);
+        assert_eq!(e.undo.len(), steps);
+
+        // One replacement is one step too.
+        e.cursor = 0;
+        assert!(e.find("xx", false, true).unwrap().is_some());
+        assert!(e.replace_hit(b"q").unwrap());
+        assert_eq!(all(&mut e), b"q-xx.xx.xx");
+        assert!(e.undo());
+        assert_eq!(all(&mut e), b"xx-xx.xx.xx");
+    }
+
+    #[test]
+    fn a_read_only_buffer_is_searched_but_not_replaced_in() {
+        let mut e = edit(b"abcabc");
+        e.read_only = true;
+        assert!(e.find("bc", false, true).unwrap().is_some());
+        assert!(matches!(e.replace_hit(b"xy"), Err(HexError::ReadOnly)));
+        assert!(matches!(
+            e.replace_all("bc", b"xy", 0),
+            Err(HexError::ReadOnly)
+        ));
+        assert_eq!(all(&mut e), b"abcabc");
+    }
+
+    /// A file on disk rather than bytes in memory: the search reads through the same pieces
+    /// the window does, typed bytes and all.
+    #[test]
+    fn a_search_sees_the_edits_laid_over_a_file_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data.bin");
+        std::fs::write(&path, b"....MZ....").unwrap();
+        let mut e = HexEdit::open(&path).unwrap();
+        e.set_byte(5, b'Q');
+        assert_eq!(e.find("MZ", false, true).unwrap(), None, "it is MQ now");
+        assert_eq!(e.find("MQ", false, true).unwrap().unwrap().at, 4);
+        assert_eq!(e.replace_all("MQ", b"PE", 0).unwrap(), 1);
+        e.save(None).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"....PE....");
     }
 }

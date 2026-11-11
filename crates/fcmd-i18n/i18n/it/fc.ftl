@@ -1751,3 +1751,11 @@ sync-report-failed = Falliti: { $count }
 sync-report-stopped = Fermato a metà, quindi questi possono essere stati fatti oppure no: { $count }
 sync-report-not-done = Non fatti, perché un passo precedente è fallito o è stato fermato: { $count }
 menu-sync-saved = Sincronizzazioni salvate
+
+# hex editor search
+hex-search-wrapped = `{ $query }`: trovato ripartendo dall'altro capo del file
+hex-replace-title = Sostituisci
+hex-replace-with = Sostituisci con
+btn-replace = Sostituisci
+hex-replace-ask = Sostituire { $was } a { $at } con { $with }?
+hex-replace-length = la sostituzione è lunga { $with } byte e la corrispondenza { $was }: sposterebbe tutto quello che segue — premi Ins per passare prima in inserimento

@@ -24,6 +24,13 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             return cursor;
         }
     }
+    // And its questions are drawn over it: a replacement asked about one match at a time
+    // is a question about the bytes behind the dialog.
+    if let Some(mut editor) = app.hex_under_dialog() {
+        draw_hex(app, &mut editor, buf);
+        app.return_hex(editor);
+        return draw_dialog_over_screen(app, buf);
+    }
 
     // The editor takes the whole screen; its prompts and confirmations draw on top of it.
     if app.mode.editor().is_some() || app.editor_parked_for_render() {
@@ -34,67 +41,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                 return cursor;
             }
             // A prompt or confirmation is open over the editor.
-            let screen = Rect::new(0, 0, w, h.saturating_sub(1));
-            match &app.mode {
-                Mode::Prompt(prompt) => {
-                    let (_, cx, cy) = widgets::draw_prompt(
-                        buf,
-                        &app.theme,
-                        screen,
-                        &prompt.title,
-                        &prompt.text,
-                        prompt.text.chars().count(),
-                    );
-                    return Some((cx, cy));
-                }
-                Mode::Form(form) => {
-                    let rows = form.rows();
-                    let tabs = form.tabs();
-                    let area = widgets::draw_form(
-                        buf,
-                        &app.theme,
-                        screen,
-                        &widgets::FormView {
-                            title: &form.title,
-                            rows: &rows,
-                            selected: form.cursor_row(),
-                            buttons: &form.buttons,
-                            button: form.button,
-                            tabs: &tabs,
-                            tab: form.page,
-                            over: None,
-                        },
-                    );
-                    return form.caret().map(|(row, col)| {
-                        (
-                            area.x + 2 + col as u16,
-                            // A dialog with pages has its row of pages under the title.
-                            area.y + 1 + u16::from(!form.pages.is_empty()) + row as u16,
-                        )
-                    });
-                }
-                Mode::Confirm(confirm) => {
-                    widgets::draw_choice(
-                        buf,
-                        &app.theme,
-                        screen,
-                        &confirm.title,
-                        &confirm.lines,
-                        &[],
-                        0,
-                    );
-                    return None;
-                }
-                // A list opened from the editor — the matches of a search, the characters,
-                // the replacements kept — is drawn over it like the dialogs are. Without
-                // this arm the list was there and answered keys, and nobody could see it.
-                Mode::Pick(pick) => {
-                    let list = draw_pick(app, buf, screen, pick);
-                    app.layout.list = list;
-                    return None;
-                }
-                _ => return None,
-            }
+            return draw_dialog_over_screen(app, buf);
         }
     }
 
@@ -1588,7 +1535,74 @@ fn operand_runs(text: &str, from: usize, out: &mut Vec<(usize, usize, &'static s
     }
 }
 
-/// The editor, full screen. Returns where the text cursor sits.
+/// A prompt, a dialog or a confirmation over an editor that has already been drawn, and
+/// where the caret goes in it. The text editor and the hex editor share it, so a question
+/// looks the same over lines and over bytes.
+fn draw_dialog_over_screen(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
+    let (w, h) = (buf.width(), buf.height());
+    let screen = Rect::new(0, 0, w, h.saturating_sub(1));
+    match &app.mode {
+        Mode::Prompt(prompt) => {
+            let (_, cx, cy) = widgets::draw_prompt(
+                buf,
+                &app.theme,
+                screen,
+                &prompt.title,
+                &prompt.text,
+                prompt.text.chars().count(),
+            );
+            Some((cx, cy))
+        }
+        Mode::Form(form) => {
+            let rows = form.rows();
+            let tabs = form.tabs();
+            let area = widgets::draw_form(
+                buf,
+                &app.theme,
+                screen,
+                &widgets::FormView {
+                    title: &form.title,
+                    rows: &rows,
+                    selected: form.cursor_row(),
+                    buttons: &form.buttons,
+                    button: form.button,
+                    tabs: &tabs,
+                    tab: form.page,
+                    over: None,
+                },
+            );
+            form.caret().map(|(row, col)| {
+                (
+                    area.x + 2 + col as u16,
+                    // A dialog with pages has its row of pages under the title.
+                    area.y + 1 + u16::from(!form.pages.is_empty()) + row as u16,
+                )
+            })
+        }
+        Mode::Confirm(confirm) => {
+            widgets::draw_choice(
+                buf,
+                &app.theme,
+                screen,
+                &confirm.title,
+                &confirm.lines,
+                &[],
+                0,
+            );
+            None
+        }
+        // A list opened from the editor — the matches of a search, the characters, the
+        // replacements kept — is drawn over it like the dialogs are. Without this arm the
+        // list was there and answered keys, and nobody could see it.
+        Mode::Pick(pick) => {
+            let list = draw_pick(app, buf, screen, pick);
+            app.layout.list = list;
+            None
+        }
+        _ => None,
+    }
+}
+
 /// The hex editor (SPEC 05 §2.5): offsets, bytes, and the same bytes as characters, with the
 /// ones that have changed in their own colour and the block behind them.
 fn draw_hex(
@@ -1711,7 +1725,7 @@ fn draw_hex(
     }
 
     // The patch list, when there is one: what would change if this were saved now.
-    let changes = editor.changes();
+    let changes = editor.first_changes(4);
     if !changes.is_empty() && body.h > 6 {
         let rows = (changes.len() as u16).min(4) + 1;
         let top = body.y + body.h - rows;
@@ -7674,6 +7688,55 @@ third line
             "{:?}",
             app.mode
         );
+    }
+
+    /// A question the hex editor asks is drawn over the bytes it is about: the match a
+    /// replacement stops at has to be on the screen while one decides about it.
+    #[test]
+    fn a_replacement_asks_about_each_match_over_the_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("program.bin");
+        std::fs::write(&path, b"....mz....mz....").unwrap();
+        let mut app = app("commander", "en");
+        app.open_hex(&path);
+        let key = |app: &mut App, k: &str| app.handle_input(Input::Key(k.parse().unwrap()));
+
+        // The key bar says the two keys are there.
+        let out = frame(&mut app, 100, 24);
+        assert!(out.contains("Search") && out.contains("Replac"), "{out}");
+
+        key(&mut app, "F7");
+        let out = frame(&mut app, 100, 24);
+        assert!(out.contains("Search for"), "{out}");
+        assert!(out.contains("00000000"), "the bytes stay behind it: {out}");
+        key(&mut app, "Esc");
+
+        key(&mut app, "Ctrl+F7");
+        let out = frame(&mut app, 100, 24);
+        assert!(out.contains("Replace with"), "{out}");
+        assert!(out.contains("All"), "{out}");
+        for c in "mz".chars() {
+            key(&mut app, &c.to_string());
+        }
+        key(&mut app, "Down");
+        for c in "pe".chars() {
+            key(&mut app, &c.to_string());
+        }
+        key(&mut app, "Enter");
+        let out = frame(&mut app, 100, 24);
+        assert!(
+            out.contains("Replace 6D 7A at 00000004 with 70 65?"),
+            "{out}"
+        );
+        assert!(out.contains("Skip"), "{out}");
+        assert!(out.contains("00000000"), "{out}");
+        key(&mut app, "Enter");
+        let out = frame(&mut app, 100, 24);
+        assert!(out.contains("at 0000000A"), "on to the second: {out}");
+        key(&mut app, "Esc");
+        let out = frame(&mut app, 100, 24);
+        assert!(out.contains("....pe....mz...."), "{out}");
+        assert!(app.status.contains('1'), "{}", app.status);
     }
 
     /// The block keys, end to end: mark some bytes, fill them, exclusive-or them, write them

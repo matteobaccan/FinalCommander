@@ -1750,3 +1750,11 @@ sync-report-failed = Échoués : { $count }
 sync-report-stopped = Arrêté en cours de route, ceux-ci ont donc pu être faits ou non : { $count }
 sync-report-not-done = Non faits, parce qu'une étape précédente a échoué ou a été arrêtée : { $count }
 menu-sync-saved = Synchronisations enregistrées
+
+# hex editor search
+hex-search-wrapped = `{ $query }` : trouvé en repartant de l'autre bout du fichier
+hex-replace-title = Remplacer
+hex-replace-with = Remplacer par
+btn-replace = Remplacer
+hex-replace-ask = Remplacer { $was } en { $at } par { $with } ?
+hex-replace-length = le remplacement fait { $with } octets et la correspondance { $was } : cela décalerait tout ce qui suit — appuyez d'abord sur Inser pour passer en mode insertion
