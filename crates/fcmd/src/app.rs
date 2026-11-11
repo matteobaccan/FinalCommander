@@ -3206,6 +3206,9 @@ pub struct App {
     apply_total: usize,
     /// The shell command we are waiting for, if any, and the line that started it.
     shell: Option<(u64, String)>,
+    /// The last command, when it ended with something other than zero: the line and the
+    /// code, for `ai.explain` in the panels (SPEC 06 §14). A command that ends well forgets it.
+    pub last_failed: Option<(String, i32)>,
     /// The panelize command we are waiting for, if any (SPEC 02 §14).
     panelize: Option<u64>,
     /// The recode we are waiting for, if any (SPEC 03 §13).
@@ -3494,6 +3497,7 @@ impl App {
             apply_queue: Vec::new(),
             apply_total: 0,
             shell: None,
+            last_failed: None,
             panelize: None,
             recode: None,
             last_recode: ("utf8".to_string(), "keep".to_string()),
@@ -15070,9 +15074,66 @@ impl App {
             self.ai_explain(name, text.join("\n"));
             return;
         }
+        // In the panels there is no text in front, but there may be a command that has just
+        // failed, and why is the question one would otherwise paste into a chat window.
+        if self.mode.is_normal() && self.last_failed.is_some() {
+            self.ai_explain_failure();
+            return;
+        }
         let m = self.i18n.t("ai-nothing-to-explain");
         self.set_error(m);
     }
+
+    /// `Ctrl+Alt+X` in the panels after a command that failed (the study's B2): the command,
+    /// its exit code and the end of what it printed — at most [`Self::FAILURE_LINES`] lines,
+    /// read from the screen `Ctrl+O` shows — after the dialog that says so.
+    fn ai_explain_failure(&mut self) {
+        let Some((line, code)) = self.last_failed.clone() else {
+            return;
+        };
+        if self.cfg.ais.is_empty() {
+            let m = self.i18n.t("ai-none");
+            self.set_error(m);
+            return;
+        }
+        // Its output is what follows its own heading, the last one of that text.
+        let heading = format!("$ {line}");
+        let from = self
+            .user_screen
+            .iter()
+            .rposition(|row| *row == heading)
+            .map_or(self.user_screen.len(), |at| at + 1);
+        let printed = &self.user_screen[from..];
+        let tail = &printed[printed.len().saturating_sub(Self::FAILURE_LINES)..];
+        let output = tail.join("\n");
+        let question = self.i18n.t_args(
+            "ai-failure-question",
+            &[
+                ("command", line.clone().into()),
+                ("code", (code as i64).into()),
+            ],
+        );
+        let mut query = AiQuery::new(self.cfg.ais[0].clone(), question);
+        let bytes = (line.len() + output.len()) as u64;
+        // A command that printed nothing still failed: the question alone says so.
+        if !output.trim().is_empty() {
+            query.inline = vec![("output".into(), output)];
+        }
+        let head = self.i18n.t_args(
+            "ai-send-failure",
+            &[
+                ("lines", (tail.len() as i64).into()),
+                ("host", ai_host(&query.service.url).into()),
+            ],
+        );
+        self.confirm_ai_send(query, vec![heading], Some(bytes));
+        if let Mode::Confirm(c) = &mut self.mode {
+            c.lines[0] = head;
+        }
+    }
+
+    /// The most of a failed command's output that is sent: the end is where the error is.
+    const FAILURE_LINES: usize = 200;
 
     /// `Shift+F7` in a repository: a message drafted from what is staged, after a dialog
     /// says the staged diff is what goes and to which host.
@@ -16523,6 +16584,12 @@ impl App {
             self.shell_screen = false;
             self.panels_off = false;
         }
+        // What "explain what failed" is about: the last command, and only while it is the
+        // last one that ran.
+        self.last_failed = match status {
+            Some(code) if code != 0 => Some((line.clone(), code)),
+            _ => None,
+        };
         match status {
             Some(0) | None => {
                 let msg = self
@@ -48606,5 +48673,107 @@ abcdefghij
             ai_rewrite_text("see:\n```\ncode\n```\nend", "old\n"),
             "see:\n```\ncode\n```\nend\n"
         );
+    }
+
+    /// Run `line` from the command line and have it end with `status`, having printed `out`.
+    fn ran(app: &mut App, line: &str, out: &str, status: i32) {
+        app.requests.clear();
+        typed(app, line);
+        press(app, "Enter");
+        let id = shell_id(app);
+        app.handle_event(Event::ShellDone {
+            id,
+            line: line.into(),
+            output: out.into(),
+            status: Some(status),
+        });
+        app.take_requests();
+    }
+
+    /// The study's B2: after a command that failed, `Ctrl+Alt+X` in the panels asks why —
+    /// the command, its exit code and the end of what it printed, at most two hundred lines
+    /// and only its own — after the dialog that says so; a command that then succeeds takes
+    /// the question away.
+    #[test]
+    fn ctrl_alt_x_in_the_panels_asks_why_the_last_command_failed() {
+        let mut app = app();
+        app.cfg.ais = vec![ai_service_cfg("local", "http://127.0.0.1:11434/api/chat")];
+        // Nothing has failed: nothing to explain, and nothing asked.
+        press(&mut app, "Ctrl+Alt+X");
+        assert!(app.status_error && app.mode.is_normal(), "{}", app.status);
+
+        ran(&mut app, "echo fine", "fine\n", 0);
+        let long: String = (1..=250).map(|n| format!("line {n}\n")).collect();
+        ran(
+            &mut app,
+            "make all",
+            &format!("{long}make: *** [all] Error 2\n"),
+            2,
+        );
+        assert_eq!(app.last_failed, Some(("make all".to_string(), 2)));
+
+        press(&mut app, "Ctrl+Alt+X");
+        let Mode::Confirm(c) = &app.mode else {
+            panic!("said before it goes: {:?}", app.mode)
+        };
+        assert!(
+            c.lines[0].contains("200") && c.lines[0].contains("127.0.0.1"),
+            "{:?}",
+            c.lines
+        );
+        assert!(
+            c.lines.iter().any(|l| l.contains("$ make all")),
+            "{:?}",
+            c.lines
+        );
+        assert_eq!(c.button, 1, "Cancel is the one lit");
+        assert!(ai_asked(&mut app).is_none());
+        if let Mode::Confirm(c) = &mut app.mode {
+            c.button = 0;
+        }
+        press(&mut app, "Enter");
+        let query = ai_asked(&mut app).expect("asked on yes");
+        assert_eq!(query.purpose, AiUse::Answer);
+        assert!(
+            query.question.contains("make all") && query.question.contains('2'),
+            "{}",
+            query.question
+        );
+        assert!(query.files.is_empty());
+        let (name, output) = &query.inline[0];
+        assert_eq!(name, "output");
+        assert_eq!(output.lines().count(), 200, "the end of it, capped");
+        assert!(output.ends_with("make: *** [all] Error 2"));
+        assert!(output.starts_with("line 52\n"), "{}", &output[..20]);
+        assert!(
+            !output.contains("fine"),
+            "the command before it is not part of it"
+        );
+        app.ai_busy = None;
+
+        // A command that prints nothing still failed: the question goes alone.
+        ran(&mut app, "false", "", 1);
+        press(&mut app, "Ctrl+Alt+X");
+        if let Mode::Confirm(c) = &mut app.mode {
+            c.button = 0;
+        }
+        press(&mut app, "Enter");
+        let query = ai_asked(&mut app).expect("asked");
+        assert!(query.inline.is_empty());
+        assert!(query.question.contains("false"));
+        app.ai_busy = None;
+
+        // The next command ends well: there is no failure to ask about any more.
+        ran(&mut app, "true", "", 0);
+        assert_eq!(app.last_failed, None);
+        press(&mut app, "Ctrl+Alt+X");
+        assert!(app.status_error && app.mode.is_normal(), "{}", app.status);
+        assert!(ai_asked(&mut app).is_none());
+
+        // And with no service, a failure says how to set one up.
+        ran(&mut app, "false", "", 1);
+        app.cfg.ais.clear();
+        press(&mut app, "Ctrl+Alt+X");
+        assert!(app.status_error && app.mode.is_normal());
     }
 }

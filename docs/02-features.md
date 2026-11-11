@@ -250,6 +250,7 @@ something readable rather than only into instructions.
 | 7.19 | Redaction before a question goes to a language model: keys, tokens, private keys, passwords in addresses and `.env`-style secrets masked, with a count and a preview of what is sent; the user's own patterns | NEW | ✓ on by default, `[ai_guard]` (SPEC 06 §14.2) |
 | 7.20 | A local-only switch for the language models: only a service on this machine (`localhost`, `127.0.0.0/8`, `::1`, a unix socket, the user's own list) is asked, anything else refused before it is sent | NEW | ✓ `F6` in the AI panel, `[ai_guard] local_only` (SPEC 06 §14.2) |
 | 7.21 | Words to a rename: an instruction in words on the selected files, answered by a language model with a pattern that lands in the multi-rename dialog, previewed, editable, renamed only on `OK` | NEW | ✓ `Ctrl+Alt+U` (SPEC 03 §8a) |
+| 7.22 | Explain what failed: after a command that ended with a non-zero code, one key sends the command, the code and the end of its output to a language model and opens the answer | NEW | ✓ `Ctrl+Alt+X` in the panels (SPEC 06 §14) |
 
 ## 8. Shell & terminal integration
 

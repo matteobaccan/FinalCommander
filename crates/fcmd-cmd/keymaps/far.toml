@@ -1513,6 +1513,13 @@ keys = ["Ctrl+Alt+X"]
 scope = "editor"
 cmd = "ai.explain"
 
+# In the panels the same key asks about the command that has just failed: the command, its
+# exit code and the end of what it printed, after the same dialog.
+[[bind]]
+keys = ["Ctrl+Alt+X"]
+scope = "panel"
+cmd = "ai.explain"
+
 [[bind]]
 keys = ["Shift+F7"]
 scope = "panel"

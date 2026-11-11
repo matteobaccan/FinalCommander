@@ -754,6 +754,14 @@ completions (and every server that speaks it), Anthropic's messages, Ollama's ch
   the host, for a one-line commit message from `git diff --cached --stat --patch` (run on the
   worker, capped like a file); the answer opens the commit prompt, which commits only on
   `Enter`.
+* **`Ctrl+Alt+X` in the panels** (`ai.explain`, 0.44, the study's B2), when nothing to read is in
+  front and the last command run from the command line ended with a code other than zero, asks
+  why: the question names the command and the code, and the text sent with it, called
+  `output`, is what the user screen holds under that command's own `$ line` heading — the last
+  200 lines of it, or nothing when it printed nothing. The send dialog says the command and how
+  many lines go, and to which host. The failure is remembered only until the next command
+  ends; one that ends with zero forgets it. With a quick view open the key still explains what
+  the quick view shows.
 * **`Ctrl+Alt+U`** (`ai.rename`, panels and the multi-rename dialog) asks for a rename pattern
   from words: SPEC 03 §8a. **`Ctrl+Alt+W`** (`ai.rewrite`, editor) has the marked block
   rewritten and shows it as a diff: SPEC 05 §2.10.

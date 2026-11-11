@@ -386,7 +386,8 @@ pub enum Command {
     ToolGit,
     /// A commit message drafted by the language model from what is staged.
     GitCommitDraft,
-    /// Ask the language model what the marked block, or the screen, is.
+    /// Ask the language model what the marked block, or the screen, is — and, in the panels,
+    /// why the command that has just failed did.
     AiExplain,
     /// Have the language model rewrite the editor's marked block; its version is shown as a
     /// diff and applied on a yes (SPEC 05 §2.10).

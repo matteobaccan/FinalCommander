@@ -119,6 +119,7 @@ More ways to ask:
 | `ai+ question` | asks a **follow-up** in the same thread: the earlier questions and answers go again (no service keeps a conversation), and the new answer is added to the same file. The thread is the last answer of this session, or the one under the cursor in the `fcmd-ai` folder |
 | `ai! what to do` | asks for **one command** for your shell and system, and puts it on the command line — **not run**: read it, change it, and press `Enter` yourself |
 | `Ctrl+Alt+X` in the viewer or the editor | asks **what this is**: the marked block in the editor, or what is on the screen, goes with the file's name — after a dialog that says how much and to which host |
+| `Ctrl+Alt+X` in the panels, after a command that failed | asks **why it failed**: the command, its exit code and the end of what it printed — the last 200 lines at most, the ones `Ctrl+O` shows — go after the same dialog, and the answer opens in the viewer. Once another command has ended well there is nothing to ask about |
 | `Ctrl+Alt+U` on selected files | asks for a **rename pattern** from words, and opens the multi-rename dialog with it — see *Renaming many files at once* |
 | `Ctrl+Alt+W` in the editor | has the marked block **rewritten**, shows the result as a comparison and puts it in only on `Enter` — see *Having a block rewritten* |
 | `Shift+F7` in a repository | drafts a **commit message** from the staged diff — after the same dialog — and opens the commit prompt with it, to read and change before anything is committed |
