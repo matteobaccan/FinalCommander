@@ -8,6 +8,21 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The wastebasket as a panel.** A *Wastebasket* row in `Alt+F1`/`Alt+F2`
+  (`drives.panels.trash`) and *Commands → Wastebasket* list what was thrown away: name, the
+  folder it was in, size, and when. `F5` puts back what is selected; where something already
+  stands there it asks, one item at a time — *Overwrite* (the one standing there goes to the
+  wastebasket, so nothing is lost), *Rename* (`name (2).ext`), *Skip*. `F8`/`Del` delete for
+  good after asking, `F7` and *Commands → Empty the wastebasket* empty it with Cancel lit,
+  `F3`/`Enter` show the item's card. Linux and Windows; macOS lets no program list its
+  wastebasket, and the row says so.
+- **An external editor and viewer of your own.** `editor.external` and `viewer.external` take a
+  command line with `{file}` and `{line}` (`vim +{line} {file}`, `code -w {file}`,
+  `notepad++ {file}`), used by `Alt+F4`/`Alt+F3` after an `[[assoc]]` for the file and before
+  `$VISUAL`/`$EDITOR`/`$PAGER`; the program is given the terminal while it runs.
+  `editor.use_external` / `viewer.use_external` are FAR's *use the external editor for F4* /
+  *viewer for F3*: the keys change places, and `Alt+F4`/`Alt+F3` open ours. In the editor and
+  viewer settings dialogs, in All settings, and `--set`.
 - **Disk usage of a whole tree, as a map.** `Tab` in the `Alt+Shift+F3` list measures
   everything under the folder once, in the background (progress on screen, `Esc` stops it), and
   draws it as a treemap in the terminal's cells: each rectangle as large as its share, in the
