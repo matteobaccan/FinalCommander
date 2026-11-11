@@ -1284,6 +1284,27 @@ keys = ["Alt+C"]
 scope = "editor"
 cmd = "editor.case"
 
+# Search as you type: the cursor goes to the first hit at every key, the arrows walk the
+# others, `Enter` stays and `Esc` goes back to where it began. Emacs' key for it, far2l's
+# idea; `F7` is still the dialog, and decides how this one searches.
+[[bind]]
+keys = ["Ctrl+S"]
+scope = "editor"
+cmd = "editor.search.incremental"
+
+# The word under the cursor, wherever else it is written: the next place and the one before.
+# `Ctrl+F3` is the key the Windows editors have for it; in the panels it sorts by name, and
+# there is nothing to sort here.
+[[bind]]
+keys = ["Ctrl+F3"]
+scope = "editor"
+cmd = "editor.word.next"
+
+[[bind]]
+keys = ["Ctrl+Shift+F3"]
+scope = "editor"
+cmd = "editor.word.prev"
+
 # The language the file is coloured as, chosen from a list when its name says nothing or the
 # wrong thing. mcedit has it in its menu; `Y` because `S` sorts the block.
 [[bind]]

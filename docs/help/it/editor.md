@@ -50,6 +50,32 @@ momento.
 Un blocco a colonne è un rettangolo invece di una sequenza di righe: è così che si sposta una
 colonna di numeri senza toccare quello che le sta accanto.
 
+# Cercare mentre si scrive, e la parola sotto il cursore
+
+`Ctrl+S` cerca mentre scrivi. Si apre una riga ai piedi del testo, e a ogni tasto il cursore
+va al primo punto, a partire da dov'eri, che contiene ciò che hai scritto finora, e lo marca.
+Aggiungi una lettera e la ricerca si restringe; cancellane una con `Backspace` e torna a ciò
+che aveva trovato il testo più corto: cerca sempre da dove sei partito, quindi i tasti non ti
+portano giù per il file.
+
+| Tasto | Che cosa fa |
+| --- | --- |
+| `↓`, o di nuovo `Ctrl+S` | il punto successivo |
+| `↑` | quello precedente |
+| `Invio` | resta lì; `Shift+F7` e `Alt+F7` proseguono da quel punto |
+| `Esc` | torna dov'eri, con il blocco che avevi marcato |
+
+Quando nulla corrisponde, la riga di stato lo dice e il cursore torna dov'era all'inizio,
+finché non cancelli una lettera. Cerca nel modo in cui è stata lasciata la finestra di `F7` —
+come testo o come espressione regolare, con o senza maiuscole e parole intere — quindi è lì
+che si cambia il modo; un'espressione non ancora finita semplicemente non è ancora trovata.
+
+`Ctrl+F3` va al punto successivo in cui è scritta la **parola sotto il cursore**, e
+`Ctrl+Shift+F3` a quello precedente, facendo il giro alla fine del file. È la parola come
+parola intera e con le stesse maiuscole: da `count` non si ferma su `recount` né su `Count`.
+Non viene chiesto nulla e la ricerca di `F7` resta com'era. Una parola che non è scritta
+altrove, o un cursore che non è su una parola, viene detto nella riga di stato.
+
 # Quando il file è cambiato sotto
 
 Se qualcos'altro ha scritto il file mentre lo modificavi — una compilazione, un `git pull`, un

@@ -234,6 +234,7 @@ something readable rather than only into instructions.
 | 6.18 | Line numbers in a margin, per file (`Alt+N`) and as a setting (`editor.line_numbers`) | MC | ✓ (SPEC 05 §2.2k) |
 | 6.20 | The case of the block, a column block or the word under the cursor: upper, lower, title, toggle | FAR (`editcase`)/MC | ✓ `Alt+C` (SPEC 05 §2.2m) |
 | 6.21 | The syntax chosen by hand from the highlighter's languages, remembered per file | MC/far2l | ✓ `Alt+Shift+Y` (SPEC 05 §2.2b) |
+| 6.22 | Search as you type, the cursor on the first hit at every key and `Esc` back to where it began; the next and the previous occurrence of the word under the cursor | far2l | ✓ `Ctrl+S`, `Ctrl+F3` / `Ctrl+Shift+F3` (SPEC 05 §2.2n) |
 | 6.19 | The block — or the whole file — run through a shell command and replaced by its output as one undo step, nothing replaced on failure; a command's output or a file inserted at the cursor; the block written to a file | MC/far2l | ✓ `Alt+Shift+P/O/I/W` (SPEC 05 §2.2l) |
 
 ## 7. Tools & dialogs

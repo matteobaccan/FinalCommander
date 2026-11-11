@@ -1963,3 +1963,6 @@ editor-case-lower = kleinbuchstaben
 editor-case-title = Wortanfänge Groß: jedes Wort beginnt mit einem Großbuchstaben
 editor-case-toggle = uMKEHREN: groß wird klein und klein wird groß
 editor-no-word = Nichts ist markiert, und der Cursor steht auf keinem Wort
+editor-prompt-isearch = Suchen beim Tippen (↓ ↑ nächster und voriger, Esc geht zurück)
+editor-word-only = Das Wort unter dem Cursor steht nirgends sonst
+editor-not-on-word = Der Cursor steht auf keinem Wort

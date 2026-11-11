@@ -1973,3 +1973,6 @@ editor-case-lower = lower case
 editor-case-title = Title Case: a capital at the start of every word
 editor-case-toggle = tOGGLE: capitals become small and small become capitals
 editor-no-word = Nothing is selected and the cursor is not on a word
+editor-prompt-isearch = Search as you type (↓ ↑ next and previous, Esc goes back)
+editor-word-only = The word under the cursor is written nowhere else
+editor-not-on-word = The cursor is not on a word

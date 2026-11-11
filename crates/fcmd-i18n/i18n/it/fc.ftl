@@ -1964,3 +1964,6 @@ editor-case-lower = tutto minuscolo
 editor-case-title = Iniziali Maiuscole: una maiuscola all'inizio di ogni parola
 editor-case-toggle = iNVERTI: le maiuscole diventano minuscole e viceversa
 editor-no-word = Nulla è selezionato e il cursore non è su una parola
+editor-prompt-isearch = Cerca mentre scrivi (↓ ↑ successivo e precedente, Esc torna indietro)
+editor-word-only = La parola sotto il cursore non è scritta altrove
+editor-not-on-word = Il cursore non è su una parola

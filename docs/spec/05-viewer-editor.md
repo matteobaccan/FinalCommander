@@ -913,6 +913,35 @@ two lines.
 
 The replacements of §2.2f run with the options the dialog was last set to.
 
+### 2.2n Search as you type, and the word under the cursor
+
+**`editor.search.incremental` (`Ctrl+S`)** asks for the text in a prompt drawn across the
+last three rows of the editor's text rather than in the middle of the screen, and searches at
+every key. What the editor was showing when the key was pressed — cursor, block, window, and
+the last search — is kept (`EditorIsearch`).
+
+- Each change to the text restores that state and runs `Editor::find` forwards from it, so a
+  longer text narrows the hit and a shorter one goes back to the hit the shorter text had;
+  the keys never walk the cursor down the file. A hit *at* the starting cursor counts. An
+  empty text is the starting state.
+- `↓` or `Ctrl+S` runs the same search on from the current hit, `↑` backwards from it; both
+  wrap, as `Shift+F7` and `Alt+F7` do.
+- The search is made with the mode, case and whole-words flags the `F7` dialog last set. A
+  text that is not found, or a pattern that does not compile yet, is said on the status line
+  as an error, with the cursor back at the starting state.
+- After every step the hit is scrolled into the rows above the prompt.
+- `Enter` closes the prompt and leaves the cursor on the hit, marked, with the text as the
+  last search, so `Shift+F7` continues from there. `Enter` on an empty text changes nothing,
+  the last search included. `Esc` restores everything that was kept.
+
+**`editor.word.next` / `editor.word.prev` (`Ctrl+F3` / `Ctrl+Shift+F3`)** go to the next and
+the previous occurrence of the word under the cursor — the run of letters, digits and
+underscores the cursor is on or stands right after (`Editor::word_at_cursor`). The word is
+matched exactly as written and only where it stands alone (the *whole words* rule of §2.2h),
+whatever the dialog's flags are, and the last search is not touched. The search wraps; the
+hit is selected like any other. A word with no other occurrence, and a cursor on no word, are
+each said on the status line and move nothing.
+
 ### 2.2i Conversions: end of line, byte order mark, code page (`Shift+F8`)
 
 A save writes what was read (§2.1). `Shift+F8` (`editor.convert`) is the one place that

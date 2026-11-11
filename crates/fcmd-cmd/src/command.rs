@@ -624,6 +624,12 @@ pub enum Command {
     EditorCaseTitle,
     /// Capitals made small and small letters capitals, over the block.
     EditorCaseToggle,
+    /// `Ctrl+S`: search as you type, the cursor on the first hit at every key.
+    EditorSearchIncremental,
+    /// `Ctrl+F3`: the next place the word under the cursor is written.
+    EditorWordNext,
+    /// `Ctrl+Shift+F3`: the place before this one where the word under the cursor is written.
+    EditorWordPrev,
     // (more editor commands go above this line)
 }
 
@@ -931,6 +937,9 @@ impl Command {
             Command::EditorDeleteWordRight,
             Command::EditorToggleReadOnly,
             Command::EditorConvert,
+            Command::EditorWordPrev,
+            Command::EditorWordNext,
+            Command::EditorSearchIncremental,
             Command::EditorCaseToggle,
             Command::EditorCaseTitle,
             Command::EditorCaseLower,
@@ -1260,6 +1269,9 @@ impl Command {
             Command::EditorDeleteWordRight => "editor.delete.word.right".into(),
             Command::EditorToggleReadOnly => "editor.readonly.toggle".into(),
             Command::EditorConvert => "editor.convert".into(),
+            Command::EditorWordPrev => "editor.word.prev".into(),
+            Command::EditorWordNext => "editor.word.next".into(),
+            Command::EditorSearchIncremental => "editor.search.incremental".into(),
             Command::EditorCaseToggle => "editor.case.toggle".into(),
             Command::EditorCaseTitle => "editor.case.title".into(),
             Command::EditorCaseLower => "editor.case.lower".into(),
@@ -1566,6 +1578,9 @@ impl Command {
             ("editor.delete.word.right", _) => Command::EditorDeleteWordRight,
             ("editor.readonly.toggle", _) => Command::EditorToggleReadOnly,
             ("editor.convert", _) => Command::EditorConvert,
+            ("editor.word.prev", _) => Command::EditorWordPrev,
+            ("editor.word.next", _) => Command::EditorWordNext,
+            ("editor.search.incremental", _) => Command::EditorSearchIncremental,
             ("editor.case.toggle", _) => Command::EditorCaseToggle,
             ("editor.case.title", _) => Command::EditorCaseTitle,
             ("editor.case.lower", _) => Command::EditorCaseLower,

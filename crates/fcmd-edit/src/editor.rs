@@ -1654,6 +1654,58 @@ impl Editor {
         Ok(false)
     }
 
+    /// `Ctrl+F3` and `Ctrl+Shift+F3`: the next, or the previous, place the word under the
+    /// cursor is written — as a whole word and in the same capitals, whatever the search
+    /// dialog was last set to, and without touching what `Shift+F7` will look for. It goes
+    /// round the end of the file. `None` when the cursor is not on a word, `Some(false)`
+    /// when this is the only place it is written.
+    pub fn find_word(&mut self, backwards: bool) -> Option<bool> {
+        let (start, end) = self.word_at_cursor()?;
+        let here = self.cursor.line;
+        let word: String = self
+            .buffer
+            .line(here)
+            .chars()
+            .skip(start)
+            .take(end - start)
+            .collect();
+        let lines = self.buffer.len();
+        // The cursor's own line is looked at twice: first for what lies beyond the word in
+        // the direction asked for, and after every other line for what lies behind it.
+        for step in 0..=lines {
+            let line = if backwards {
+                (here + lines - step % lines) % lines
+            } else {
+                (here + step) % lines
+            };
+            let text = self.buffer.line(line);
+            let mut hits: Vec<usize> = text
+                .match_indices(word.as_str())
+                .filter(|(at, found)| stands_alone(text, *at, at + found.len()))
+                .map(|(at, _)| text[..at].chars().count())
+                .collect();
+            if backwards {
+                hits.reverse();
+            }
+            let found = hits.into_iter().find(|&at| match (step, backwards) {
+                (0, false) => at > start,
+                (0, true) => at < start,
+                (n, false) if n == lines => at < start,
+                (n, true) if n == lines => at > start,
+                _ => true,
+            });
+            if let Some(at) = found {
+                self.select_hit(Hit {
+                    line,
+                    start: at,
+                    end: at + (end - start),
+                });
+                return Some(true);
+            }
+        }
+        Some(false)
+    }
+
     /// The first hit on every line that has one, top to bottom: what the list of all
     /// matches shows. One row per line, because a line is what the list has room to show
     /// and `Shift+F7` walks the rest of it.
@@ -2245,6 +2297,42 @@ mod tests {
         assert!(!e.spans(0).is_empty(), "now it is read as Rust");
         e.set_syntax(None);
         assert!(e.spans(0).is_empty());
+    }
+
+    /// The word under the cursor is looked for as a word and in its own capitals: `set` is
+    /// not found inside `offset` nor as `Set`, the search goes round the end of the file in
+    /// both directions, and the dialog's own search is left as it was.
+    #[test]
+    fn the_word_under_the_cursor_is_found_again_as_a_whole_word() {
+        let mut e = editor("set a\noffset set Set\nx = set;\nlast");
+        e.last_search = Some("kept".into());
+        e.cursor = Position::new(0, 1);
+        assert_eq!(e.find_word(false), Some(true));
+        assert_eq!(e.cursor, Position::new(1, 7), "not the one inside `offset`");
+        assert_eq!(e.block_text().as_deref(), Some("set"), "and it is marked");
+        assert_eq!(e.find_word(false), Some(true));
+        assert_eq!(e.cursor, Position::new(2, 4), "not `Set` either");
+        assert_eq!(e.find_word(false), Some(true));
+        assert_eq!(e.cursor, Position::new(0, 0), "round the end of the file");
+        assert_eq!(e.find_word(true), Some(true));
+        assert_eq!(e.cursor, Position::new(2, 4), "and back round the start");
+        assert_eq!(e.find_word(true), Some(true));
+        assert_eq!(e.cursor, Position::new(1, 7));
+        assert_eq!(e.last_search.as_deref(), Some("kept"));
+
+        // Two on one line, from the cursor left after the first by the setting.
+        let mut e = editor("ab ab");
+        e.cursor_after_match = true;
+        assert_eq!(e.find_word(false), Some(true));
+        assert_eq!(e.cursor, Position::new(0, 5), "after the second");
+        assert_eq!(e.find_word(false), Some(true));
+        assert_eq!(e.cursor, Position::new(0, 2), "and round to the first");
+
+        let mut e = editor("only once\n  ");
+        assert_eq!(e.find_word(false), Some(false), "nowhere else");
+        assert_eq!(e.cursor, Position::new(0, 0), "so the cursor stays");
+        e.cursor = Position::new(1, 1);
+        assert_eq!(e.find_word(false), None, "no word here");
     }
 
     /// What a filter is given and where its answer goes: the block when one is marked, and

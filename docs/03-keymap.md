@@ -203,6 +203,8 @@ indistinguishable in a TTY — see §9.
 | switch to viewer | F6 | — | F6 |
 | search / replace | F7 / Ctrl+F7 | F7 / F4 | F7 / Ctrl+F7 |
 | search next / previous | Shift+F7 / Alt+F7 | F17 (Shift+F7) | n / N, Shift+F7 |
+| search as you type | — | — | **Ctrl+S**: `↓`/`↑` the next and the previous, `Enter` stays, `Esc` goes back |
+| next / previous occurrence of the word under the cursor | — | — | **Ctrl+F3 / Ctrl+Shift+F3** |
 | go to line:col | Alt+F8 | Alt+L | Alt+F8, `:` |
 | complete the word from the file | — (EditorCompletion plugin) | — | **Alt+/**, again for the next word |
 | insert a character from a list | — (Character Map plugin) | — | **Alt+Shift+C** |
@@ -247,7 +249,8 @@ toggle, Shift+F8 convert the end of line, the BOM or the code page, Ctrl+Q liter
 Ctrl+Shift+Ins append the block to the clipboard, Ctrl+N / Ctrl+E the first and last line on
 the screen, Alt+N line numbers, Alt+Shift+P the block through a command, Alt+Shift+O a command's
 output and Alt+Shift+I a file in at the cursor, Alt+Shift+W the block to a file, Alt+C the case
-of the block, Alt+Shift+Y the syntax. Movement, typing, Shift+arrows (stream block) and
+of the block, Alt+Shift+Y the syntax, Ctrl+S search as you type, Ctrl+F3 / Ctrl+Shift+F3 the
+next and the previous place the word under the cursor is written. Movement, typing, Shift+arrows (stream block) and
 Alt+Shift+arrows (column block) are handled by the editor itself and are not bindable yet.
 
 ## 8b. Netbox (connections)

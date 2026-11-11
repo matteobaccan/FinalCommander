@@ -1963,3 +1963,6 @@ editor-case-lower = minuscules
 editor-case-title = Initiales En Majuscule : une majuscule au début de chaque mot
 editor-case-toggle = iNVERSER : les majuscules deviennent minuscules et inversement
 editor-no-word = Rien n'est sélectionné et le curseur n'est pas sur un mot
+editor-prompt-isearch = Recherche à la frappe (↓ ↑ suivant et précédent, Échap revient)
+editor-word-only = Le mot sous le curseur n'apparaît nulle part ailleurs
+editor-not-on-word = Le curseur n'est pas sur un mot

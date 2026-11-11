@@ -1885,3 +1885,6 @@ editor-case-lower = 全部小写（lower）
 editor-case-title = 每个单词首字母大写（Title）
 editor-case-toggle = 大小写互换（tOGGLE）
 editor-no-word = 没有选中内容，光标也不在单词上
+editor-prompt-isearch = 边输入边搜索（↓ ↑ 下一个和上一个，Esc 返回原处）
+editor-word-only = 光标处的单词没有出现在别处
+editor-not-on-word = 光标不在单词上

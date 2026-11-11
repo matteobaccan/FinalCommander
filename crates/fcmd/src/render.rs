@@ -1590,6 +1590,28 @@ fn draw_dialog_over_screen(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)
     let (w, h) = (buf.width(), buf.height());
     let screen = Rect::new(0, 0, w, h.saturating_sub(1));
     match &app.mode {
+        // The editor's search as you type is a question about the text one is looking at,
+        // as the quick search is about a panel's rows: it sits over the foot of the text,
+        // across its width, and the editor keeps what it finds above it
+        // (`App::ISEARCH_ROWS`). A window too small for that asks in the middle, like
+        // every other question.
+        Mode::Prompt(prompt)
+            if matches!(prompt.kind, PromptKind::EditorIncSearch)
+                && w >= 28
+                && h >= 4 + App::ISEARCH_ROWS =>
+        {
+            let keybar = u16::from(app.cfg.ui.key_bar);
+            let area = Rect::new(0, h - keybar - App::ISEARCH_ROWS, w, App::ISEARCH_ROWS);
+            let (_, cx, cy) = widgets::draw_prompt_at(
+                buf,
+                &app.theme,
+                area,
+                &prompt.title,
+                &prompt.text,
+                prompt.text.chars().count(),
+            );
+            Some((cx, cy))
+        }
         Mode::Prompt(prompt) => {
             let (_, cx, cy) = widgets::draw_prompt(
                 buf,
@@ -7844,6 +7866,39 @@ See the [docs](https://example.com/docs) for more.
         }
         let text = frame(&mut app, 60, 12);
         assert!(!text.lines().nth(1).unwrap().starts_with(' '), "{text}");
+    }
+
+    /// The search as you type asks its question over the foot of the text, not over the
+    /// middle of it, and what it finds is kept above the question.
+    #[test]
+    fn the_search_as_you_type_sits_at_the_foot_and_shows_what_it_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("long.txt");
+        let text: String = (1..=60).map(|n| format!("line {n}\n")).collect();
+        std::fs::write(&file, text + "needle here\n").unwrap();
+        let mut app = super::tests::app("far", "en");
+        app.mode =
+            crate::app::Mode::Editor(Box::new(fcmd_edit::Editor::open(&file).expect("it opens")));
+        frame(&mut app, 60, 14);
+        press(&mut app, "Ctrl+S");
+        for key in ["n", "e", "e", "d"] {
+            press(&mut app, key);
+        }
+        let screen = frame(&mut app, 60, 14);
+        let rows: Vec<&str> = screen.lines().collect();
+        let found = rows
+            .iter()
+            .position(|r| r.contains("needle here"))
+            .unwrap_or_else(|| panic!("the hit is not on the screen:\n{screen}"));
+        let asked = rows
+            .iter()
+            .position(|r| r.contains("need") && !r.contains("needle"))
+            .unwrap_or_else(|| panic!("the question is not on the screen:\n{screen}"));
+        assert!(
+            found < asked - 1,
+            "the hit is under the question:\n{screen}"
+        );
+        assert!(asked >= 10, "the question is not at the foot:\n{screen}");
     }
 
     /// A file that is not Pascal has blocks of its own and no guides: the editor draws them

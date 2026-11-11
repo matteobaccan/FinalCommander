@@ -47,6 +47,32 @@ opened afterwards.
 A column block is a rectangle rather than a run of lines, which is how a column of numbers is
 moved without touching what is beside it.
 
+# Searching as you type, and the word under the cursor
+
+`Ctrl+S` searches while you type. A line opens at the foot of the text, and at every key the
+cursor goes to the first place from where you were that holds what you have typed so far, and
+marks it. Add a letter and the search narrows; rub one out with `Backspace` and it goes back
+to what the shorter text had found — it always looks from where you began, so the keys do not
+walk you down the file.
+
+| Key | What it does |
+| --- | --- |
+| `↓`, or `Ctrl+S` again | the next place |
+| `↑` | the one before |
+| `Enter` | stays there; `Shift+F7` and `Alt+F7` go on from it |
+| `Esc` | goes back to where you were, with the block you had marked |
+
+When nothing matches, the status line says so and the cursor is back where it began, until
+you rub a letter out. It searches the way the `F7` dialog was last set — as text or as a
+regular expression, with or without case and whole words — so that dialog is where you change
+how; a pattern that is not finished yet is simply not found yet.
+
+`Ctrl+F3` goes to the next place the **word under the cursor** is written, and
+`Ctrl+Shift+F3` to the one before, round the end of the file. It is the word as a whole word
+and in the same capitals: from `count` it does not stop at `recount` or at `Count`. Nothing
+is asked and the `F7` search is left as it was. A word that is written nowhere else, or a
+cursor that is not on a word, is said on the status line.
+
 # When the file changed underneath
 
 If something else wrote the file while you were editing it — a build, a `git pull`, another

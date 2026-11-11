@@ -1684,6 +1684,17 @@ pub fn learn_rows() -> Vec<(&'static str, Vec<(String, String)>)> {
     ]
 }
 
+/// Where the editor stood when a search as you type began (SPEC 05 §2.2n): every key looks
+/// again from here, and `Esc` puts all of it back.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct EditorIsearch {
+    cursor: fcmd_edit::Position,
+    block: Option<fcmd_edit::editor::Block>,
+    top: usize,
+    left: usize,
+    last_search: Option<String>,
+}
+
 /// A command the editor has started and not yet heard from.
 ///
 /// The command runs on a worker and the editor stays usable meanwhile, so the answer has to
@@ -1723,6 +1734,8 @@ pub enum PromptKind {
     EditorGoto,
     /// The pattern of the lines to take out (`!` first: the lines to keep).
     EditorDeleteMatching,
+    /// What to find in the editor, looked for at every key (`Ctrl+S`).
+    EditorIncSearch,
     /// The command the block — or the whole file — is run through (`Alt+Shift+P`).
     EditorPipe,
     /// The command whose output goes in at the cursor (`Alt+Shift+O`).
@@ -3293,6 +3306,8 @@ pub struct App {
     decompile_id: Option<u64>,
     /// The command the editor is waiting on, and what it was given (SPEC 05 §2.2l).
     editor_pipe: Option<EditorPipe>,
+    /// Where the editor was when `Ctrl+S` began a search, for `Esc` to go back to.
+    editor_isearch: Option<EditorIsearch>,
     /// The netbox's site list and what is connected right now.
     pub sites: Vec<Site>,
     pub connected: Vec<String>,
@@ -3748,6 +3763,7 @@ impl App {
             editor_size: (80, 20),
             decompile_id: None,
             editor_pipe: None,
+            editor_isearch: None,
             sites,
             connected: Vec::new(),
             pending_connect: None,
@@ -7605,6 +7621,10 @@ impl App {
                     }
                     return;
                 }
+                // A search as you type that is given up goes back to where it began.
+                if matches!(prompt.kind, PromptKind::EditorIncSearch) {
+                    self.editor_isearch_back();
+                }
                 self.restore_viewer();
                 self.restore_editor();
                 // A question asked over the hex editor goes back to it when it is dismissed:
@@ -7633,6 +7653,17 @@ impl App {
                 if matches!(prompt.kind, PromptKind::QuickSearch { .. }) =>
             {
                 self.mode = Mode::Normal;
+            }
+            // In a search as you type the arrows — and the key that began it — go on to the
+            // next hit and back to the one before, with the question still open.
+            KeyCode::Down | KeyCode::Up | KeyCode::Char('s')
+                if matches!(prompt.kind, PromptKind::EditorIncSearch)
+                    && (key.code != KeyCode::Char('s') || key.mods == Mods::CTRL) =>
+            {
+                let backwards = key.code == KeyCode::Up;
+                let text = prompt.text.clone();
+                self.mode = Mode::Prompt(prompt);
+                self.editor_isearch_find(&text, Some(backwards));
             }
             KeyCode::Backspace => {
                 prompt.text.pop();
@@ -7663,6 +7694,7 @@ impl App {
                     self.panel_mut().cursor_to(row);
                 }
             }
+            PromptKind::EditorIncSearch => self.editor_isearch_find(text, None),
             PromptKind::Filter => {
                 // The filter bar takes the whole mask grammar — `*.rs,*.toml`, an exclusion
                 // after `|`, `<arc>`, `/regex/i` — and a bare word still means "contains".
@@ -8308,6 +8340,18 @@ impl App {
                     }
                     Some(Err(e)) => self.set_error(e),
                     None => {}
+                }
+            }
+            PromptKind::EditorIncSearch => {
+                // The hit is already under the cursor: `Enter` only says "here". A search
+                // left empty has looked for nothing, and what `Shift+F7` repeats is still
+                // what it was.
+                let began = self.editor_isearch.take();
+                self.restore_editor();
+                if prompt.text.is_empty() {
+                    if let (Some(began), Some(editor)) = (began, self.mode.editor_mut()) {
+                        editor.last_search = began.last_search;
+                    }
                 }
             }
             PromptKind::EditorPipe | PromptKind::EditorInsertOutput => {
@@ -26883,6 +26927,24 @@ impl App {
                 );
                 return;
             }
+            Command::EditorSearchIncremental => {
+                let Some(editor) = self.mode.editor() else {
+                    return;
+                };
+                self.editor_isearch = Some(EditorIsearch {
+                    cursor: editor.cursor,
+                    block: editor.block,
+                    top: editor.top,
+                    left: editor.left,
+                    last_search: editor.last_search.clone(),
+                });
+                self.editor_prompt(
+                    PromptKind::EditorIncSearch,
+                    "editor-prompt-isearch",
+                    String::new(),
+                );
+                return;
+            }
             Command::EditorSyntax => {
                 self.open_editor_syntax();
                 return;
@@ -27090,6 +27152,13 @@ impl App {
                         "editor-line-numbers-off".into()
                     });
                 }
+                Command::EditorWordNext | Command::EditorWordPrev => {
+                    match editor.find_word(cmd == Command::EditorWordPrev) {
+                        Some(true) => {}
+                        Some(false) => return Err("editor-word-only".into()),
+                        None => return Err("editor-not-on-word".into()),
+                    }
+                }
                 Command::EditorSearchNext | Command::EditorSearchPrev => {
                     let query = editor.last_search.clone().unwrap_or_default();
                     if query.is_empty() {
@@ -27156,6 +27225,68 @@ impl App {
         if let Some(text) = error {
             self.set_error(text);
         }
+    }
+
+    /// How many rows the search-as-you-type box takes off the foot of the editor's text.
+    pub const ISEARCH_ROWS: u16 = 3;
+
+    /// One step of the search as you type (`Ctrl+S`), on the editor parked under its
+    /// question.
+    ///
+    /// With `again` it is `↓` or `↑`: on from the hit the cursor is on, forwards or
+    /// backwards. Without, the text has just changed, and the search starts over from where
+    /// the editor stood when the question was asked — so a letter added narrows what was
+    /// found and a letter rubbed out goes back to what the shorter text had found, instead
+    /// of each key walking further down the file. It is the search the dialog was last set
+    /// to make: text or a pattern, with or without case and whole words.
+    fn editor_isearch_find(&mut self, text: &str, again: Option<bool>) {
+        let Some(began) = self.editor_isearch.clone() else {
+            return;
+        };
+        let (width, height) = self.editor_size;
+        let Some(editor) = self.editor_parked.as_mut() else {
+            return;
+        };
+        if again.is_none() {
+            editor.cursor = began.cursor;
+            editor.block = began.block;
+            editor.top = began.top;
+            editor.left = began.left;
+        }
+        let found = if text.is_empty() {
+            Ok(true)
+        } else {
+            editor.find(text, again.unwrap_or(false))
+        };
+        // The question's box lies over the last rows of the text, so what was found is
+        // kept above them.
+        let rows = height.saturating_sub(Self::ISEARCH_ROWS).max(1);
+        editor.scroll_into_view(rows as usize, width as usize);
+        match found {
+            Ok(true) => self.set_status(String::new()),
+            Ok(false) => {
+                let m = self
+                    .i18n
+                    .t_args("editor-not-found", &[("query", text.into())]);
+                self.set_error(m);
+            }
+            // A pattern half typed is not a mistake yet: `(` becomes `(a|b)` two keys on.
+            Err(e) => self.set_error(e.to_string()),
+        }
+    }
+
+    /// `Esc` in the search as you type: the editor as it was when the question was asked —
+    /// the cursor, the block, the window, and what `Shift+F7` repeats.
+    fn editor_isearch_back(&mut self) {
+        let (Some(began), Some(editor)) = (self.editor_isearch.take(), self.editor_parked.as_mut())
+        else {
+            return;
+        };
+        editor.cursor = began.cursor;
+        editor.block = began.block;
+        editor.top = began.top;
+        editor.left = began.left;
+        editor.last_search = began.last_search;
     }
 
     /// `Alt+Shift+Y`: the languages the highlighter knows, as a list, for the file whose
@@ -45018,6 +45149,128 @@ abcdefghij
         press(&mut app, "Alt+Shift+W");
         answer_prompt(&mut app, "no-such-folder/out.txt");
         assert!(app.status_error && matches!(app.mode, Mode::Editor(_)));
+    }
+
+    /// `Ctrl+S` looks as it is typed: every key goes to the first hit from where the search
+    /// began, a letter rubbed out goes back to what the shorter text found, the arrows walk
+    /// the hits, `Enter` stays there and `Esc` puts everything back.
+    #[test]
+    fn ctrl_s_searches_as_it_is_typed_and_esc_goes_back() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("a.txt"),
+            "alpha\nbeta\nbar one\nbaz\nbar two\n",
+        )
+        .unwrap();
+        let mut app = editing_app(dir.path());
+        app.open_editor_on(&VPath::local(dir.path().join("a.txt")));
+        press(&mut app, "Right");
+        let at = |app: &App| {
+            let e = app
+                .editor_parked
+                .as_deref()
+                .or(app.mode.editor())
+                .expect("an editor");
+            (e.cursor.line, e.cursor.col)
+        };
+        press(&mut app, "Ctrl+S");
+        assert!(
+            matches!(&app.mode, Mode::Prompt(p) if p.kind == PromptKind::EditorIncSearch),
+            "{:?}",
+            app.mode
+        );
+        press(&mut app, "b");
+        assert_eq!(at(&app), (1, 0), "the first b after the cursor: beta");
+        press(&mut app, "a");
+        assert_eq!(at(&app), (2, 0), "ba: bar one");
+        press(&mut app, "z");
+        assert_eq!(at(&app), (3, 0), "baz");
+        press(&mut app, "Backspace");
+        assert_eq!(
+            at(&app),
+            (2, 0),
+            "ba again, from where it began and not from baz"
+        );
+        press(&mut app, "r");
+        press(&mut app, "Down");
+        assert_eq!(at(&app), (4, 0), "the next bar");
+        press(&mut app, "Up");
+        assert_eq!(at(&app), (2, 0), "and the one before");
+        press(&mut app, "Ctrl+S");
+        assert_eq!(at(&app), (4, 0), "the key that began it goes on as well");
+        press(&mut app, "x");
+        assert!(app.status_error, "barx is nowhere: {}", app.status);
+        assert_eq!(at(&app), (0, 1), "and the cursor is back where it began");
+        press(&mut app, "Backspace");
+        assert!(!app.status_error, "{}", app.status);
+        assert_eq!(at(&app), (2, 0));
+
+        // `Enter` stays on the hit, marked, and `Shift+F7` goes on from it.
+        press(&mut app, "Enter");
+        let Mode::Editor(e) = &app.mode else {
+            panic!("the editor back: {:?}", app.mode)
+        };
+        assert_eq!((e.cursor.line, e.cursor.col), (2, 0));
+        assert_eq!(e.block_text().as_deref(), Some("bar"));
+        assert_eq!(e.last_search.as_deref(), Some("bar"));
+        press(&mut app, "Shift+F7");
+        assert_eq!(at(&app), (4, 0));
+
+        // `Esc` goes back: the cursor, the block and what `Shift+F7` repeats.
+        press(&mut app, "Ctrl+S");
+        press(&mut app, "a");
+        press(&mut app, "l");
+        assert_eq!(at(&app), (0, 0), "alpha, round the end of the file");
+        press(&mut app, "Esc");
+        let Mode::Editor(e) = &app.mode else {
+            panic!("the editor back: {:?}", app.mode)
+        };
+        assert_eq!((e.cursor.line, e.cursor.col), (4, 0));
+        assert_eq!(e.block_text().as_deref(), Some("bar"), "the block it had");
+        assert_eq!(e.last_search.as_deref(), Some("bar"));
+        // And an `Enter` on nothing typed has searched for nothing.
+        press(&mut app, "Ctrl+S");
+        press(&mut app, "Enter");
+        assert_eq!(
+            app.mode
+                .editor()
+                .expect("the editor")
+                .last_search
+                .as_deref(),
+            Some("bar")
+        );
+    }
+
+    /// `Ctrl+F3` and `Ctrl+Shift+F3` go to the next and the previous place the word under
+    /// the cursor is written; one that is written once, or no word at all, is said.
+    #[test]
+    fn ctrl_f3_goes_to_the_next_place_the_word_under_the_cursor_is_written() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("a.txt"),
+            "count = 1\nrecount\ncount += 2\n\n",
+        )
+        .unwrap();
+        let mut app = editing_app(dir.path());
+        app.open_editor_on(&VPath::local(dir.path().join("a.txt")));
+        let at = |app: &App| {
+            let e = app.mode.editor().expect("the editor");
+            (e.cursor.line, e.cursor.col)
+        };
+        press(&mut app, "Ctrl+F3");
+        assert_eq!(at(&app), (2, 0), "not the one inside `recount`");
+        assert!(!app.status_error, "{}", app.status);
+        press(&mut app, "Ctrl+F3");
+        assert_eq!(at(&app), (0, 0), "round the end");
+        press(&mut app, "Ctrl+Shift+F3");
+        assert_eq!(at(&app), (2, 0));
+        press(&mut app, "Up");
+        press(&mut app, "Ctrl+F3");
+        assert_eq!(at(&app), (1, 0), "`recount` is written once");
+        assert!(!app.status.is_empty(), "and that is said");
+        press(&mut app, "Ctrl+End");
+        press(&mut app, "Ctrl+F3");
+        assert!(!app.status.is_empty(), "no word on an empty line");
     }
 
     /// `Alt+C` lists the four cases over the editor and `Enter` applies the one under the
