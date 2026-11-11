@@ -19,6 +19,26 @@ Notable changes, newest first. The format follows
 - **Editor: a burst of typing is one undo step**, as in FAR — and so is a run of `Backspace`
   or of `Del`. Moving the cursor, `Enter` or any command ends the step. `editor.undo_depth`
   sets how many steps a file keeps (1000 by default).
+- **Accented names sort where a reader looks for them.** `Éxtra.txt` stands beside `extra.txt`
+  instead of after `zorro.txt`: the Latin accents are folded for the comparison — every letter
+  of Latin-1 and Latin Extended-A, so `é` reads as `e`, `ł` as `l`, `ø` as `o`, `ß` as `ss`,
+  `æ` as `ae` — and so is an accent written as a separate character after its letter, which is
+  how macOS stores them. Of two names that read the same, the plain one comes first. It is a
+  table of letters and not a locale, and nothing outside Latin changes place. A name that is
+  not valid UTF-8 keeps every byte it has and sorts after the names that are.
+- **`panel.sort_case = "auto" | "yes" | "no"`**, and a row for it in *System settings*:
+  whether the sort tells `Makefile` from `makefile`. `auto` is what it always did — the case
+  counts on Linux and not on Windows and macOS.
+- **A copy keeps extended attributes.** The tags and labels a desktop keeps beside a file's
+  bytes — Dolphin's `user.xdg.tags`, the Finder's tags and label, the address a file was
+  downloaded from — now arrive with the copy, for files and folders, and with a move to
+  another disk. *Keep the extended attributes* is a box of the `F5` dialog, on by default. A
+  destination with nowhere to keep them (a FAT stick, a share, a server, an archive) gets the
+  file without them and the copy is not an error. On Linux the `user.` attributes are copied,
+  as `cp` does; on macOS everything is, the quarantine mark included, as the Finder does it.
+  Windows has nothing of the kind, and NTFS streams are not copied.
+- **`operations.preserve = ["mtime", "mode", "xattrs"]`** says what a copy keeps beside the
+  bytes, and is what the three *Keep* boxes of the copy dialog start as.
 
 ### Changed
 
@@ -27,6 +47,8 @@ Notable changes, newest first. The format follows
   found as a whole word and `set` is still not found inside `offset`.
 - A plain replacement in the editor is taken literally: a `$1` typed there is a dollar and a
   one. Only a regular expression's replacement refers to groups.
+- With `panel.natural_sort` off, names are still compared with the accents folded:
+  digits-as-numbers and the alphabet were never the same switch.
 
 - **Tar is read and written by our own code.** The `tar` crate is gone: `fcmd-arc` reads v7,
   ustar, GNU (long names and links, base-256 sizes) and PAX archives itself, and writes ustar
@@ -45,6 +67,8 @@ Notable changes, newest first. The format follows
 - `Alt+F7` with `editor.cursor_after_match` on found the same hit again instead of the one
   before it.
 - The editor's help said `Ctrl+Y` redoes; it deletes the line, and redo is `Ctrl+Shift+Z`.
+- Two names that are not valid UTF-8 and differ only in their invalid bytes no longer sort as
+  the same name when the case does not count.
 
 ## [0.40.0] — 2026-11-11
 
