@@ -19,5 +19,5 @@ pub mod transcript;
 
 pub use pty::{default_shell, TermError, Terminal};
 pub use screen::{Screen, SCROLLBACK};
-pub use shell::{hook_for, quote, Shell};
+pub use shell::{hook_for, quote, run_line_with, Shell};
 pub use transcript::Transcript;

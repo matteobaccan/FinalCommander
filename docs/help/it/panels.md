@@ -169,8 +169,10 @@ spostando il pannello la shell viene dietro, così il comando dopo gira dove sta
 `Ctrl+C` sullo schermo dell'output manda l'interruzione a quello che ci sta girando dentro.
 
 La shell è la tua — `$SHELL`, o quello che dice `[term] shell` — e a `bash`, `zsh`, `fish` e a
-una `sh` qualunque si può chiedere dove sono. A `cmd.exe` no, quindi su Windows con `cmd` ogni
-comando gira per conto suo come ha sempre fatto; niente a metà. *Opzioni → Tutti i parametri →
+una `sh` qualunque si può chiedere dove sono. A `cmd.exe` e a PowerShell no, quindi con loro
+ogni comando gira per conto suo; niente a metà. Ognuna viene chiamata come si aspetta — `cmd
+/C`, PowerShell con `-Command`, le altre con `-c` — così con `shell = "pwsh"` sotto `[term]` la
+riga di comando è quella di PowerShell: le sue pipe, i suoi cmdlet, le sue virgolette. *Opzioni → Tutti i parametri →
 `term.subshell`* spegne del tutto la shell tenuta viva, e `term.follow_cwd` spegne solo
 l'inseguimento.
 

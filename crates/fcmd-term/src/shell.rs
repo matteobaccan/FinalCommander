@@ -260,6 +260,49 @@ pub fn hook_for(program: &str) -> Option<String> {
     }
 }
 
+/// The program and the arguments that run one command line in `shell` — the shell the
+/// configuration names (`term.shell`, a command line of its own, so `pwsh -NoProfile` works),
+/// or, empty, the session's own.
+///
+/// Each shell is asked the way it is meant to be asked: `cmd.exe` with `/C`, PowerShell
+/// (`pwsh`, `powershell`) with `-Command` and no banner or prompt to wait at, Nushell and
+/// every POSIX shell, `fish` and the rest with `-c`. The line itself is passed whole, as one
+/// argument: it is the shell's to parse, with its own pipes and quotes.
+pub fn run_line_with(shell: &str, line: &str) -> (String, Vec<String>) {
+    let mut words = crate::pty::shell_split(shell);
+    if words.is_empty() {
+        words = crate::pty::shell_split(&crate::pty::default_shell());
+    }
+    let program = words.remove(0);
+    // The name whichever way the path is written: a Windows path read on any system.
+    let base = program.rsplit(['/', '\\']).next().unwrap_or(&program);
+    let name = Path::new(base)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    let mut args = words;
+    match name.as_str() {
+        "cmd" => {
+            args.push("/C".into());
+            args.push(line.into());
+        }
+        "pwsh" | "powershell" => {
+            for flag in ["-NoLogo", "-NonInteractive"] {
+                if !args.iter().any(|a| a.eq_ignore_ascii_case(flag)) {
+                    args.push(flag.into());
+                }
+            }
+            args.push("-Command".into());
+            args.push(line.into());
+        }
+        _ => {
+            args.push("-c".into());
+            args.push(line.into());
+        }
+    }
+    (program, args)
+}
+
 /// One argument, safe to hand a shell: wrapped in single quotes, with any of its own closed,
 /// escaped and reopened. The form every POSIX shell and `fish` read the same way.
 pub fn quote(arg: &str) -> String {
@@ -269,6 +312,57 @@ pub fn quote(arg: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Each shell is handed a line the way it reads one.
+    #[test]
+    fn each_shell_is_asked_its_own_way() {
+        let run = |shell: &str| run_line_with(shell, "ls | wc -l");
+        assert_eq!(
+            run("C:\\Windows\\System32\\cmd.exe"),
+            (
+                "C:\\Windows\\System32\\cmd.exe".into(),
+                vec!["/C".into(), "ls | wc -l".into()]
+            )
+        );
+        assert_eq!(
+            run("pwsh"),
+            (
+                "pwsh".into(),
+                vec![
+                    "-NoLogo".into(),
+                    "-NonInteractive".into(),
+                    "-Command".into(),
+                    "ls | wc -l".into()
+                ]
+            )
+        );
+        // The configuration's own flags stay, and are not given twice.
+        let (program, args) = run("powershell.exe -NoProfile -nologo");
+        assert_eq!(program, "powershell.exe");
+        assert_eq!(
+            args,
+            [
+                "-NoProfile",
+                "-nologo",
+                "-NonInteractive",
+                "-Command",
+                "ls | wc -l"
+            ]
+        );
+        assert_eq!(
+            run("/usr/bin/fish"),
+            (
+                "/usr/bin/fish".into(),
+                vec!["-c".into(), "ls | wc -l".into()]
+            )
+        );
+        assert_eq!(
+            run("bash -l").1,
+            vec!["-l".to_string(), "-c".into(), "ls | wc -l".into()]
+        );
+        // Nothing configured: the session's own shell.
+        assert!(!run("").0.is_empty());
+    }
 
     /// Wait for the transcript to hold a line, so a test does not race the reader thread.
     fn wait_for(shell: &Shell, want: &str) -> Vec<String> {

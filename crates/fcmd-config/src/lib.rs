@@ -760,8 +760,10 @@ impl Default for DrivesCfg {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct TermCfg {
-    /// What to run. Empty means the shell the session already uses — `$SHELL` on Unix,
-    /// `ComSpec` on Windows — because that is where somebody's aliases and prompt live.
+    /// What to run, in the terminal pane and for every command typed on the command line.
+    /// Empty means the shell the session already uses — `$SHELL` on Unix, `ComSpec` on
+    /// Windows — because that is where somebody's aliases and prompt live. `pwsh` or
+    /// `powershell` makes the command line PowerShell's (each line is run with `-Command`).
     ///
     /// It is a command line, split the way a shell splits one, so `bash -l` works and a path
     /// with a space in it can be quoted. Nothing expands it: there is no shell in between,

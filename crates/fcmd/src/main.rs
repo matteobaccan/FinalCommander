@@ -1088,6 +1088,9 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
         let cursor = render::draw(&mut app, &mut buf);
         term.draw(&buf, cursor)?;
 
+        // The shell a command line runs in is the configured one, read again each time round
+        // so a change in the settings counts from the next command.
+        set_line_shell(&app.cfg.term.shell);
         for request in app.take_requests() {
             match request {
                 Request::Read {
@@ -2269,6 +2272,18 @@ fn run_job(
 /// run has to add — a spawn failure, where the output was written, that it was truncated —
 /// and not the output itself, which has already gone through `report`. The one exception is a
 /// run with a file to write into: nothing of that is printed, so nothing is reported.
+/// The shell the command line's commands run in: `term.shell`, or the session's own when it
+/// is empty. One for the process, since every worker that runs a line wants the same.
+static LINE_SHELL: std::sync::RwLock<String> = std::sync::RwLock::new(String::new());
+
+fn set_line_shell(shell: &str) {
+    if let Ok(mut s) = LINE_SHELL.write() {
+        if *s != shell {
+            *s = shell.to_string();
+        }
+    }
+}
+
 fn run_shell(
     line: &str,
     cwd: &std::path::Path,
@@ -2279,16 +2294,11 @@ fn run_shell(
     use std::process::{Command, Stdio};
     const MAX_OUTPUT: usize = 4 * 1024 * 1024;
 
-    let mut command = if cfg!(windows) {
-        let mut c = Command::new(std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".into()));
-        c.arg("/C").arg(line);
-        c
-    } else {
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
-        let mut c = Command::new(shell);
-        c.arg("-c").arg(line);
-        c
-    };
+    // Each shell asked its own way: `cmd /C`, PowerShell's `-Command`, everybody else's `-c`.
+    let shell = LINE_SHELL.read().map(|s| s.clone()).unwrap_or_default();
+    let (program, args) = fcmd_term::run_line_with(&shell, line);
+    let mut command = Command::new(program);
+    command.args(args);
     command
         .current_dir(cwd)
         .stdin(Stdio::null())

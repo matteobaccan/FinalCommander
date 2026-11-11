@@ -157,8 +157,11 @@ command runs where you are looking. `Ctrl+C` on the output screen sends the inte
 whatever is running in it.
 
 The shell is your own — `$SHELL`, or whatever `[term] shell` names — and `bash`, `zsh`, `fish`
-and a plain `sh` can all be asked where they are. `cmd.exe` cannot, so on Windows with `cmd`
-each command runs on its own as it always did; nothing is half-done. *Options → All parameters
+and a plain `sh` can all be asked where they are. `cmd.exe` and PowerShell cannot, so with
+either of them each command runs on its own; nothing is half-done. Each is asked the way it
+expects — `cmd /C`, PowerShell with `-Command`, the rest with `-c` — so with
+`shell = "pwsh"` under `[term]` the command line is PowerShell's: its pipes, its cmdlets, its
+quoting. *Options → All parameters
 → `term.subshell`* turns the kept shell off altogether, and `term.follow_cwd` turns off only
 the following.
 

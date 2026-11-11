@@ -33,6 +33,11 @@ Notable changes, newest first. The format follows
 
 ### Changed
 
+- **The command line runs in the shell you configure.** `[term] shell` now counts for what is
+  typed on the command line too, not only for the terminal pane, and each shell is asked the
+  way it expects: `cmd /C`, PowerShell (`pwsh`, `powershell`) with `-Command`, the rest with
+  `-c`. With `shell = "pwsh"`, Windows' command line is PowerShell's. A path to the shell
+  written with backslashes is no longer read as escapes.
 - **The themes, shown.** The README, the help and the web site have a section on the nine
   themes: a picture of each on the same scene — the panels under a menu and a Delphi unit with
   its block lines — a line on each, how to choose one and how to make your own.

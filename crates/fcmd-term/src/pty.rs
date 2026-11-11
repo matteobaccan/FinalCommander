@@ -200,7 +200,14 @@ pub(crate) fn open(
 }
 
 /// Split a command line the way a shell splits one, keeping quoted words whole.
-fn shell_split(line: &str) -> Vec<String> {
+///
+/// A Windows path is written with backslashes, which POSIX quoting reads as escapes: a line
+/// with no quotes in it is split at its spaces only, so `C:\Windows\System32\cmd.exe` stays
+/// the path it is.
+pub(crate) fn shell_split(line: &str) -> Vec<String> {
+    if !line.contains(['"', '\'']) {
+        return line.split_whitespace().map(str::to_string).collect();
+    }
     shell_words::split(line).unwrap_or_else(|_| {
         // An unbalanced quote is not a reason to run nothing: the words as they stand are a
         // better guess than a refusal, and the program that is not found says so itself.
