@@ -23,6 +23,10 @@ pub const LANGUAGES: &[(&str, &str)] = &[
     ("es", "Español"),
     ("ru", "Русский"),
     ("zh", "简体中文"),
+    ("uk", "Українська"),
+    ("be", "Беларуская"),
+    ("pl", "Polski"),
+    ("cs", "Čeština"),
 ];
 
 const CATALOGUES: &[(&str, &str)] = &[
@@ -33,6 +37,10 @@ const CATALOGUES: &[(&str, &str)] = &[
     ("es", include_str!("../i18n/es/fc.ftl")),
     ("ru", include_str!("../i18n/ru/fc.ftl")),
     ("zh", include_str!("../i18n/zh/fc.ftl")),
+    ("uk", include_str!("../i18n/uk/fc.ftl")),
+    ("be", include_str!("../i18n/be/fc.ftl")),
+    ("pl", include_str!("../i18n/pl/fc.ftl")),
+    ("cs", include_str!("../i18n/cs/fc.ftl")),
 ];
 
 pub struct I18n {

@@ -213,7 +213,32 @@ fn plural(lang: &str, n: f64) -> &'static str {
                 "other"
             }
         }
-        "ru" => {
+        // Polish: one is the whole number 1 alone, so 21 and 31 are many.
+        "pl" => {
+            if !whole {
+                "other"
+            } else if i == 1 {
+                "one"
+            } else if (2..=4).contains(&(i % 10)) && !(12..=14).contains(&(i % 100)) {
+                "few"
+            } else {
+                "many"
+            }
+        }
+        // Czech: 2 to 4 are few, a fraction is many, and every other whole number is other.
+        "cs" => {
+            if !whole {
+                "many"
+            } else if i == 1 {
+                "one"
+            } else if (2..=4).contains(&i) {
+                "few"
+            } else {
+                "other"
+            }
+        }
+        // Russian, Ukrainian and Belarusian share one rule.
+        "ru" | "uk" | "be" => {
             if !whole {
                 "other"
             } else if i % 10 == 1 && i % 100 != 11 {
@@ -532,6 +557,29 @@ mod tests {
         assert_eq!(cat("ru", 25.0), "many");
         assert_eq!(cat("ru", 2.5), "other");
         assert_eq!(cat("zh", 1.0), "other");
+        for lang in ["uk", "be"] {
+            assert_eq!(cat(lang, 1.0), "one");
+            assert_eq!(cat(lang, 21.0), "one");
+            assert_eq!(cat(lang, 11.0), "many");
+            assert_eq!(cat(lang, 22.0), "few");
+            assert_eq!(cat(lang, 12.0), "many");
+            assert_eq!(cat(lang, 5.0), "many");
+            assert_eq!(cat(lang, 0.0), "many");
+            assert_eq!(cat(lang, 1.5), "other");
+        }
+        assert_eq!(cat("pl", 1.0), "one");
+        assert_eq!(cat("pl", 21.0), "many");
+        assert_eq!(cat("pl", 22.0), "few");
+        assert_eq!(cat("pl", 12.0), "many");
+        assert_eq!(cat("pl", 5.0), "many");
+        assert_eq!(cat("pl", 0.0), "many");
+        assert_eq!(cat("pl", 1.5), "other");
+        assert_eq!(cat("cs", 1.0), "one");
+        assert_eq!(cat("cs", 3.0), "few");
+        assert_eq!(cat("cs", 5.0), "other");
+        assert_eq!(cat("cs", 22.0), "other");
+        assert_eq!(cat("cs", 0.0), "other");
+        assert_eq!(cat("cs", 1.5), "many");
     }
 
     #[test]
