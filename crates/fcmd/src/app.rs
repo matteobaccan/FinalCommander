@@ -9961,7 +9961,37 @@ impl App {
         }
         let entry = panel.current()?;
         let path = panel.cwd.join(entry.name_str().as_ref());
-        fcmd_arc::Format::of_name(&path.display_name()).map(|_| path)
+        Self::names_an_archive(&path.display_name()).then_some(path)
+    }
+
+    /// Is a file called this an archive, by its name alone — one this program reads, or one
+    /// a program on the machine reads for it (`docs/05-multiarc.md`)? The archive commands
+    /// ask this rather than `Format::of_name`, which knows nothing of a `.rar`.
+    fn names_an_archive(name: &str) -> bool {
+        fcmd_arc::Format::of_name(name).is_some() || fcmd_arc::claimed_by_a_tool(name)
+    }
+
+    /// An archive's name without what marks it as one: `src.tar.gz` is `src`, and a format
+    /// only a program reads loses its last extension.
+    fn archive_stem(name: &str) -> String {
+        let suffix = match fcmd_arc::Format::of_name(name) {
+            Some(format) => format!(".{}", format.extension()),
+            None => match name.rfind('.') {
+                Some(dot) if dot > 0 => name[dot..].to_string(),
+                _ => String::new(),
+            },
+        };
+        match name.len().checked_sub(suffix.len()) {
+            // Whatever case the extension is written in: `PHOTOS.RAR` is `PHOTOS`.
+            Some(cut)
+                if cut > 0
+                    && name.is_char_boundary(cut)
+                    && name[cut..].eq_ignore_ascii_case(&suffix) =>
+            {
+                name[..cut].to_string()
+            }
+            _ => name.to_string(),
+        }
     }
 
     /// `Alt+F1` and `Alt+F2`: everything a panel can be sent to, as a table.
@@ -18402,22 +18432,14 @@ impl App {
         };
         let path = self.panel().path_of(&entry);
         let name = path.display_name();
-        if fcmd_arc::Format::of_name(&name).is_none() {
+        if !Self::names_an_archive(&name) {
             let m = self.i18n.t("unpack-not-an-archive");
             self.set_error(m);
             return;
         }
         // A directory of its own, named after the archive without its extension: unpacking a
         // hundred files straight into a panel is nobody's intention.
-        let stem = name
-            .strip_suffix(&format!(
-                ".{}",
-                fcmd_arc::Format::of_name(&name)
-                    .map(|f| f.extension())
-                    .unwrap_or("")
-            ))
-            .unwrap_or(&name)
-            .to_string();
+        let stem = Self::archive_stem(&name);
         let to = self.other().cwd.join(stem).to_string();
         self.mode = Mode::Form(Box::new(Form::unpack(to, name, &self.i18n)));
     }
@@ -48775,5 +48797,40 @@ abcdefghij
         app.cfg.ais.clear();
         press(&mut app, "Ctrl+Alt+X");
         assert!(app.status_error && app.mode.is_normal());
+    }
+
+    /// A `.rar` is an archive to `Enter`, so it is one to `Shift+F2` and to the archive
+    /// commands as well: both used to ask only about the formats read in process, and
+    /// answered "not an archive we can read" for a file the panel had just walked into.
+    #[test]
+    fn an_archive_only_a_program_reads_is_extracted_and_tested_like_any_other() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("PHOTOS.RAR"), b"Rar!\x1a\x07\x01\x00").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        app.take_requests();
+
+        app.run(Command::FileUnpack);
+        let Mode::Form(form) = &app.mode else {
+            panic!("no extract dialog: {:?} {}", app.mode, app.status)
+        };
+        assert_eq!(form.kind, FormKind::Unpack);
+        // A folder named after the archive, whatever case its extension is written in.
+        assert_eq!(
+            form.text_value("unpack.to"),
+            app.other().cwd.join("PHOTOS").to_string()
+        );
+        app.mode = Mode::Normal;
+
+        app.run(Command::ArcTest);
+        let tested = app.take_requests().into_iter().find_map(|r| match r {
+            Request::ArcTest { archive, .. } => Some(archive),
+            _ => None,
+        });
+        assert_eq!(tested, Some(app.panel().cwd.join("PHOTOS.RAR")));
+
+        assert_eq!(App::archive_stem("src.tar.gz"), "src");
+        assert_eq!(App::archive_stem("disc.iso"), "disc");
+        assert_eq!(App::archive_stem(".rar"), ".rar");
     }
 }

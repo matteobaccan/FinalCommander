@@ -489,14 +489,32 @@ nient'altro; nessuno dei due si scrive, per la stessa ragione per cui non si scr
 I formati che questo programma non legge da sé — `.rar`, `.cab`, `.iso`, `.wim`, `.lha`, `.arj`,
 `.msi` — si aprono attraverso un programma già presente sulla macchina:
 `7z`, in partenza. `Enter` entra esattamente come in uno zip, la cornice dice il formato, e il
-visualizzatore, la ricerca dentro gli archivi e `Ctrl+A` su una voce funzionano tutti. `F3` e
-`F5` su una voce lanciano di nuovo il programma, in una cartella temporanea che poi viene
-cancellata, ed `Esc` lo ferma. Un archivio del genere è **in sola lettura**, e di proposito:
+visualizzatore, la ricerca dentro gli archivi e `Ctrl+A` su una voce funzionano tutti. `F3`
+su una voce lancia di nuovo il programma, in una cartella temporanea che poi viene
+cancellata, ed `Esc` lo ferma. `F5` su una selezione e `Shift+F2` sull'archivio intero lo
+lanciano una volta sola, per tutto ciò che è stato chiesto (vedi *Estrarre* più sotto). Un
+archivio del genere è **in sola lettura**, e di proposito:
 niente di ciò che viene guidato così crea mai un archivio, ci aggiunge o ne toglie qualcosa, per
 cui il dialogo di compressione continua a offrire solo i formati che questo programma scrive da
 sé. Dove il programma non è installato, il pannello dice quale installare invece di dare
 l'archivio per rotto. Un altro programma, o altre opzioni per `7z`, vanno in `fcmd.toml` come
 blocco `[[archiver]]` — vedi *Formati tuoi*.
+
+## Estrarre
+
+Tirare fuori dei file da un archivio — `F5` da dentro, `Shift+F2` sopra, *estrai qui* nel menu
+degli archivi — è una copia come le altre: lo stesso riquadro, con i file e i byte contati
+mentre vengono scritti, lo stesso `Esc`, e la stessa strada verso lo sfondo e la coda dei
+lavori. Ogni file viene scritto accanto a dove sta andando con un nome che finisce in
+`.fcmd-part` e prende il suo solo quando è intero: fermarsi a metà, una voce rovinata o un
+disco pieno non lasciano mai mezzo file che sembra finito.
+
+Un archivio letto attraverso un programma viene estratto da quel programma in **un solo
+lancio** per tutto ciò che hai chiesto, e non uno per ogni file — che in un `.rar` solido
+voleva dire decomprimere di nuovo gli stessi dati per ogni file dopo il primo. Il programma
+scrive in una cartella nascosta accanto alla destinazione (`.fcmd-unpack-…`), ogni file va al
+suo posto appena il programma l'ha finito, e la barra conta i byte mentre arrivano. `Esc`
+ferma il programma e toglie la cartella con quello che c'era scritto a metà.
 
 Si apre anche un archivio dentro un archivio, e uno su un server o in un bucket. Nessuno dei due
 è un file in cui questo programma possa spostarsi, quindi viene prima copiato nella cartella

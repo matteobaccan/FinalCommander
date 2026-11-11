@@ -114,6 +114,22 @@ where the code lives, not whether it is linked into the binary.
   from a copy can be written into as well — see the rebuild below, which rebuilds the copy and
   then puts it back where it came from. One on a server cannot: there is nowhere to put it
   back.
+- **Getting entries out is a copy job** (`fcmd_jobs::ArcFs`, SPEC 03): the same progress,
+  cancel, queue and background as a copy between two folders, because to the engine it is
+  one. The bytes of an entry are reported as they are written, each once. An entry is
+  written to `<name>.fcmd-part` beside its destination and renamed when it is whole, so a
+  cancel, a damaged entry or a full disk leave nothing under the final name and no part
+  either. For an archive a program reads (`docs/05-multiarc.md` §10) the engine first says
+  which files it is about to ask for (`JobFs::foresee`), and the first of them starts the
+  program **once** for all of them, in a folder of ours beside the destination
+  (`.fcmd-unpack-<pid>-<n>`, the destination's own filesystem, so placing a file is a rename
+  and nothing the size of a disc image goes through the temporary directory). A file is
+  moved into place when it has all the bytes the listing gave it and the program has started
+  on a later one — these programs write one file at a time, in the archive's order — or when
+  the program has ended; a program that keeps to no order therefore costs only smoothness,
+  never a half-written file. `Esc` kills the program and removes the folder; a program that
+  fails is that reason against each file still waiting. An entry nobody foresaw (`F3`, the
+  cache's own copies) is still one run into a temporary folder.
 - An encrypted container asks for its password rather than refusing. **Implemented** for 7z,
   whose header may itself be encrypted: the refusal the reader answers with is the one the
   panel and the viewer turn into a masked prompt, and the answer goes into the container

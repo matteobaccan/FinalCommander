@@ -471,13 +471,30 @@ neither is written, for the reason a `.deb` is not.
 The formats this program does not read itself — `.rar`, `.cab`, `.iso`, `.wim`, `.lha`, `.arj`,
 `.msi` — open through a program already on the machine: `7z`, by
 default. `Enter` goes in exactly as it does into a zip, the frame names the format, and the
-viewer, the search inside archives and `Ctrl+A` on an entry all work. `F3` and `F5` on an
-entry run the program again, into a temporary folder that is removed afterwards, and `Esc`
-stops it. Such an archive is **read only**, and on purpose: nothing driven that way ever
+viewer, the search inside archives and `Ctrl+A` on an entry all work. `F3` on an entry runs
+the program again, into a temporary folder that is removed afterwards, and `Esc` stops it.
+`F5` on a selection and `Shift+F2` on the whole archive run it once, for everything asked for
+(see *Unpacking* below). Such an archive is **read only**, and on purpose: nothing driven that way ever
 creates an archive, adds to one or deletes from one, so the pack dialog keeps offering only
 the formats this program writes itself. Where the program is not installed, the panel says
 which one to install instead of calling the archive broken. Another program, or other switches
 for `7z`, go in `fcmd.toml` as an `[[archiver]]` block — see *Formats of your own*.
+
+## Unpacking
+
+Getting files out of an archive — `F5` from inside one, `Shift+F2` on one, *extract here* in
+the archive menu — is a copy like any other: the same box, with the files and the bytes
+counted as they are written, the same `Esc`, and the same way into the background and the
+job queue. Each file is written beside where it is going under a name ending in
+`.fcmd-part` and takes its own name only when it is whole, so stopping half way, a damaged
+entry or a full disk never leave half a file that looks like a finished one.
+
+An archive read through a program is unpacked by that program in **one run** for everything
+you asked for, rather than one run for each file — which in a solid `.rar` used to mean
+unpacking the same data again for every file after the first. The program writes into a
+hidden folder beside the destination (`.fcmd-unpack-…`), each file moves into place as soon
+as the program has finished it, and the bar counts the bytes as they land. `Esc` stops the
+program and removes the folder with whatever was half written in it.
 
 An archive inside an archive opens too, and so does one on a server or in a bucket. Neither is
 a file this program can seek in, so it is copied into the temporary directory first, once, and

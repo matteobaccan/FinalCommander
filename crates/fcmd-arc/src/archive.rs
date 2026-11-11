@@ -308,6 +308,35 @@ impl Archive {
         Ok(archive)
     }
 
+    /// These entries out of an archive a program read, in one run of the program, into `into`
+    /// — where each lands at the path it has inside the archive.
+    ///
+    /// One run for the whole set is the point: a program asked for a file at a time starts
+    /// the archive again for each, and in a solid `.rar` that means unpacking everything in
+    /// front of it every time. `into` must exist, and is the caller's to clean up: a
+    /// cancelled run leaves in it whatever the program had written when it was killed.
+    pub fn unpack_through_tool(
+        &self,
+        names: &[String],
+        into: &Path,
+        cancel: &CancelToken,
+    ) -> Result<()> {
+        let (Some(tool), Some(runner)) = (&self.tool, &self.runner) else {
+            return Err(ArcError::External {
+                path: self.name(),
+                reason: "no program is attached to this archive".to_string(),
+            });
+        };
+        tool.extract(&self.source, names, into, runner.as_ref(), cancel)
+            .map_err(|e| match e {
+                crate::ext::ExtError::Cancelled => ArcError::Cancelled,
+                other => ArcError::External {
+                    path: self.name(),
+                    reason: other.to_string(),
+                },
+            })
+    }
+
     /// One entry out of an archive a program read: the program runs again, into a temporary
     /// folder, and the file it wrote is poured into `out`.
     ///
@@ -318,39 +347,18 @@ impl Archive {
     fn copy_out_through_tool(
         &self,
         inner: &str,
-        size: u64,
         out: &mut dyn Write,
         cancel: &CancelToken,
         progress: &mut dyn FnMut(u64),
     ) -> Result<u64> {
-        let (Some(tool), Some(runner)) = (&self.tool, &self.runner) else {
-            return Err(ArcError::External {
-                path: self.name(),
-                reason: "no program is attached to this archive".to_string(),
-            });
-        };
-        let _ = size;
         let temp = scratch()?;
         let outcome = (|| -> Result<u64> {
-            tool.extract(
-                &self.source,
-                std::slice::from_ref(&inner.to_string()),
-                &temp,
-                runner.as_ref(),
-                cancel,
-            )
-            .map_err(|e| match e {
-                crate::ext::ExtError::Cancelled => ArcError::Cancelled,
-                other => ArcError::External {
-                    path: self.name(),
-                    reason: other.to_string(),
-                },
-            })?;
+            self.unpack_through_tool(std::slice::from_ref(&inner.to_string()), &temp, cancel)?;
             // It landed under the temporary folder at the path it has inside the archive.
             let landed = temp.join(inner.trim_start_matches('/'));
             let mut file = File::open(&landed).map_err(|e| ArcError::External {
                 path: self.name(),
-                reason: format!("`{}` wrote nothing for {inner}: {e}", tool.program),
+                reason: format!("`{}` wrote nothing for {inner}: {e}", self.label()),
             })?;
             copy(&mut file, out, cancel, progress)
         })();
@@ -678,7 +686,7 @@ impl Archive {
         let Some(format) = self.format else {
             // Nothing in this crate can parse it, so there is nothing to seek into: the
             // program that listed it runs again and hands the entry over.
-            return self.copy_out_through_tool(&inner, entry.size, out, cancel, progress);
+            return self.copy_out_through_tool(&inner, out, cancel, progress);
         };
         match format {
             Format::Eml => {

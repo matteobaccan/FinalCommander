@@ -311,7 +311,11 @@ failing, because what it would be reporting then is somebody's package manager.
 
 Still to build:
 
-- a selection extracted through the job engine, with the bar counting bytes as they land;
+- ~~a selection extracted through the job engine, with the bar counting bytes as they land~~
+  — built: `ArcFs` learns from the engine which entries a job is about to ask for and runs
+  `Extract` once for all of them, beside the destination; each file is moved into place as
+  the program finishes it and its bytes are counted as they land (SPEC 04 §4). `Shift+F2`
+  and the archive commands take a `.rar` like any other archive;
 - `Test` on `Alt+F6`;
 - ~~`[[archiver]]` blocks in the configuration~~ — built: SPEC 07 §2b-quinquies is the reference.
   They are read once at startup and installed into one table for the whole run, which every

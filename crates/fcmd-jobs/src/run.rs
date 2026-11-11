@@ -208,6 +208,17 @@ pub fn execute_recorded(
         .and_then(|t| fcmd_platform::mount_of(t.as_path()))
         .and_then(|m| fcmd_platform::max_file_size(&m.fs).map(|limit| (limit, m.fs)));
 
+    // What is about to be copied, said before the first of it: see [`JobFs::foresee`].
+    if !spec.options.dry_run {
+        fs.foresee(
+            &mut plan
+                .units
+                .iter()
+                .filter(|unit| matches!(unit.kind, UnitKind::File { .. }))
+                .filter_map(|unit| unit.src.as_ref()),
+        );
+    }
+
     for unit in &plan.units {
         if cancel.is_cancelled() {
             state.outcome.cancelled = true;

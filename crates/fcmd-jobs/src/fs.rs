@@ -96,6 +96,19 @@ pub trait JobFs: Send + Sync {
         ))
     }
 
+    /// The files a job is about to ask [`JobFs::copy_file`] for, said once before the first
+    /// of them.
+    ///
+    /// A filesystem that pays per request rather than per byte can use it to do the whole
+    /// set at one go: an archive read through a program on the machine starts that program
+    /// once for everything, where a file at a time would start it once per file and, in a
+    /// solid archive, unpack everything in front of each one again. It promises nothing —
+    /// a file named here may never be asked for (skipped, cancelled), and one that was not
+    /// named still may be. The default has nothing to prepare.
+    fn foresee(&self, files: &mut dyn Iterator<Item = &VPath>) {
+        let _ = files;
+    }
+
     /// Copy `src` to `dst`, calling `on_bytes` as it goes. Returning `false` from `on_bytes`
     /// cancels the copy, and the partial file is removed.
     fn copy_file(
