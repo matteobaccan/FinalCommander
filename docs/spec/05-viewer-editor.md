@@ -862,6 +862,17 @@ unterminated string, a Markdown fence. That is what makes both callers possible:
   `inline` and `item` in a form) to its `end` or `until`, in the column where that line starts,
   one per nested block, only through blank cells and never in the text that is copied. The
   colour is `syntax.guide`; wrapped lines have none, a row there not being a line.
+  The **editor** draws the same guides in its text area, for the same two syntaxes and under
+  the same `ui.syntax` switch, from the same reading of the words (`fcmd_view::guides`). It
+  works them out for the lines on screen only, reading back above the first of them as far
+  as the viewer does (256 KiB of text) for the blocks already open, and starting the scanner
+  in the state the colouring has for that line, so a comment opened further up still hides
+  its words. The answer is kept until an edit touches a line in the window or above it — an
+  edit below the window, a cursor movement or a redraw costs nothing — and a change of tab
+  width or of the window asks again. Columns are display columns with tabs expanded, shifted
+  by the horizontal scroll; a guide whose column has scrolled off is not drawn. A marked
+  block is drawn over the guides, and with *Show spaces and tabs* on a guide takes the place
+  of the `·` in its cell.
 
 Recognition is by file name. The classes are `keyword`, `type`, `string`, `number`,
 `comment`, `preproc`, `tag`, `attr`, `entity`, `function`; each is a `syntax.*` theme key, and

@@ -102,6 +102,16 @@ Dockerfile, Lua, Perl, Pascal and Delphi — is coloured as you read it, and the
 you can see at once when a file is being read as something you did not mean. The colours come
 from the theme, so they follow it. `ui.syntax = false` in `fcmd.toml` turns them off.
 
+In a Pascal or Delphi unit, and in a form read as text, a thin line runs down each block the
+way the Delphi IDE draws it: from the line that opens it — `begin`, `try`, `case`, `repeat`,
+`asm`, a `class` or `record` with a body, an `object` of a form — to its `end` or `until`, in
+the column where that line starts, one line for each block inside another. They are the same
+lines the viewer draws, and here they follow the text as you type: open a block and its line
+appears, close one or comment its `begin` out and it goes. A line only ever passes through
+blank cells, so it never hides a character, and it is not part of the file — nothing of it is
+copied or saved. Its colour is the theme's `syntax.guide`, and the switch that turns the
+colours off turns the lines off with them.
+
 # Bytes instead of lines
 
 `F4` on a binary opens the same editor on its bytes, and `Alt+H` switches either way. Two

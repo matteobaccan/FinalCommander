@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use fcmd_core::VPath;
+use fcmd_view::guides::{self, Guides};
 use fcmd_view::SearchMode;
 use regex::Regex;
 
@@ -134,6 +135,17 @@ pub struct Editor {
     burst: Option<(Burst, Position)>,
     /// What the file is being read as, and how much of it has been scanned so far.
     pub highlight: crate::Highlight,
+    /// The block guides of the rows last asked for, kept until an edit reaches them.
+    guides: Option<GuideMemo>,
+}
+
+/// The guides of one window of the buffer, and everything they were worked out from that
+/// can change without the text changing.
+struct GuideMemo {
+    rows: std::ops::Range<usize>,
+    tab_width: usize,
+    syntax: &'static str,
+    guides: Vec<Guides>,
 }
 
 impl std::fmt::Debug for Editor {
@@ -186,6 +198,7 @@ impl Editor {
             replace_preserve_style: false,
             burst: None,
             highlight,
+            guides: None,
         }
     }
 
@@ -194,13 +207,74 @@ impl Editor {
     /// It is a method of the editor rather than of the buffer because the two have to be
     /// borrowed together: the cache is extended while the buffer is read.
     pub fn spans(&mut self, line: usize) -> Vec<fcmd_syntax::Span> {
+        self.forget_touched();
         let Editor {
             buffer, highlight, ..
         } = self;
-        if let Some(from) = buffer.take_touched() {
-            highlight.forget_from(from);
-        }
         highlight.spans(buffer, line)
+    }
+
+    /// Throw away what was worked out from lines that have changed since: the scan from
+    /// the first of them down, and the guides if the change is in or above their window.
+    ///
+    /// The buffer says once how far up an edit reached, so both caches have to hear it
+    /// here, in one place — asked separately, whoever came second would be told nothing.
+    fn forget_touched(&mut self) {
+        if let Some(from) = self.buffer.take_touched() {
+            self.highlight.forget_from(from);
+            if self
+                .guides
+                .as_ref()
+                .is_some_and(|memo| from < memo.rows.end)
+            {
+                self.guides = None;
+            }
+        }
+    }
+
+    /// The lines the Delphi IDE draws down the blocks of a Pascal unit or a form, for the
+    /// buffer lines `rows`: one entry per line, columns counted as the screen shows them
+    /// with tabs expanded and before any horizontal scroll. `None` for a syntax that has no
+    /// blocks to draw — the same answer [`guides::applies`] gives the viewer.
+    ///
+    /// Only the window is worked out, with the lines above it read back as far as the
+    /// viewer reads ([`guides::LOOKBACK`]) to find the blocks already open, and the answer
+    /// is kept: moving the cursor, or typing below the window, costs nothing, and an edit
+    /// in the window or above it costs that one scan again.
+    pub fn block_guides(&mut self, rows: std::ops::Range<usize>) -> Option<&[Guides]> {
+        let syntax = self.highlight.syntax().filter(|s| guides::applies(s))?;
+        self.forget_touched();
+        let end = rows.end.min(self.buffer.len());
+        let rows = rows.start.min(end)..end;
+        let kept = self.guides.as_ref().is_some_and(|memo| {
+            memo.rows == rows && memo.tab_width == self.tab_width && memo.syntax == syntax.name
+        });
+        if !kept {
+            // Back from the window until the look-back is spent, a whole line at a time.
+            let mut start = rows.start;
+            let mut budget = guides::LOOKBACK as usize;
+            while start > 0 {
+                let cost = self.buffer.line(start - 1).len() + 1;
+                if cost > budget {
+                    break;
+                }
+                budget -= cost;
+                start -= 1;
+            }
+            // The scanner begins where the colouring says that line begins: inside a
+            // comment opened above the look-back, its words still open nothing.
+            let state = self.highlight.state_at(&self.buffer, start);
+            let lines: Vec<String> = (start..rows.end)
+                .map(|i| fcmd_view::view::expand_tabs(self.buffer.line(i), self.tab_width))
+                .collect();
+            self.guides = Some(GuideMemo {
+                guides: guides::guides_from(syntax, &lines, rows.start - start, state),
+                rows,
+                tab_width: self.tab_width,
+                syntax: syntax.name,
+            });
+        }
+        self.guides.as_ref().map(|memo| memo.guides.as_slice())
     }
 
     pub fn open(path: &Path) -> Result<Editor, EditorError> {
@@ -1660,6 +1734,66 @@ struct Completion {
 mod tests {
     use super::*;
     use crate::buffer::Eol;
+
+    fn pascal(text: &str) -> Editor {
+        let mut editor = Editor::new(Buffer::from_text(text), None);
+        editor.highlight = crate::Highlight::for_name("Unit1.pas");
+        editor
+    }
+
+    #[test]
+    fn the_guides_of_a_window_know_the_blocks_opened_above_it() {
+        let mut e = pascal("begin\n  try\n    x;\n  finally\n    y;\n  end;\nend;\n");
+        // Lines 2..5 only: `begin` and `try` are above the window and still count.
+        let g = e.block_guides(2..5).expect("Pascal has guides").to_vec();
+        assert_eq!(g.len(), 3);
+        assert_eq!(g[0].through, [0, 2]);
+        assert_eq!(g[1].through, [0], "`finally` stands in try's column");
+        assert_eq!(g[2].through, [0, 2]);
+        // A window past the end is cut to the buffer, not padded.
+        assert_eq!(e.block_guides(5..99).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn the_guides_follow_an_edit_in_or_above_the_window_and_ignore_one_below() {
+        let mut e = pascal("begin\n  x;\n  y;\nend;\nz;\n");
+        assert_eq!(e.block_guides(1..3).unwrap()[0].through, [0]);
+        // Below the window: the answer that was kept is still the answer.
+        e.buffer.insert(Position::new(4, 0), "w").unwrap();
+        assert!(e.guides.is_some(), "an edit below threw the guides away");
+        assert_eq!(e.block_guides(1..3).unwrap()[0].through, [0]);
+        // Above it: `begin` becomes a comment, and the block is no longer one.
+        e.buffer.insert(Position::new(0, 0), "// ").unwrap();
+        assert!(e.block_guides(1..3).unwrap()[0].through.is_empty());
+        e.undo();
+        assert_eq!(e.block_guides(1..3).unwrap()[0].through, [0]);
+    }
+
+    #[test]
+    fn the_guides_stand_in_the_columns_tabs_are_drawn_in() {
+        let mut e = pascal("begin\n\ttry\n\t\tx;\n\tend;\nend;\n");
+        e.tab_width = 4;
+        assert_eq!(e.block_guides(2..3).unwrap()[0].through, [0, 4]);
+        // Another tab width is another answer, with no edit in between.
+        e.tab_width = 8;
+        assert_eq!(e.block_guides(2..3).unwrap()[0].through, [0, 8]);
+    }
+
+    #[test]
+    fn a_comment_opened_above_the_window_keeps_its_words_from_opening_blocks() {
+        let mut e = pascal("{ a note\nbegin in the note\n}\nbegin\n  x;\nend;\n");
+        let g = e.block_guides(4..5).unwrap();
+        assert_eq!(g[0].through, [0], "one block, the real one");
+    }
+
+    #[test]
+    fn a_language_without_block_words_has_no_guides() {
+        let mut e = Editor::new(Buffer::from_text("fn main() {\n}\n"), None);
+        e.highlight = crate::Highlight::for_name("main.rs");
+        assert!(e.block_guides(0..2).is_none());
+        let mut plain = Editor::new(Buffer::from_text("begin\nend\n"), None);
+        assert!(plain.block_guides(0..2).is_none(), "no syntax, no guides");
+    }
 
     #[test]
     fn lines_matching_a_pattern_go_or_stay_in_one_undo() {

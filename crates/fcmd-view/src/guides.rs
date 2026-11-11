@@ -17,6 +17,12 @@ pub struct Guides {
     pub ends: Vec<usize>,
 }
 
+/// How far above the window to look for the blocks that are open when its first line
+/// starts, in bytes of text: a unit's longest routine fits many times over. The viewer and
+/// the editor both read back this much and no more, so a line drawn in one is drawn in the
+/// other.
+pub const LOOKBACK: u64 = 256 * 1024;
+
 /// Whether a file's syntax has blocks worth a guide: Pascal and the forms written in it.
 pub fn applies(syntax: &Syntax) -> bool {
     matches!(syntax.name, "Pascal" | "Delphi form")
@@ -25,9 +31,16 @@ pub fn applies(syntax: &Syntax) -> bool {
 /// The guides of `lines[from..]`, after reading the lines before `from` for the blocks that
 /// are already open when the first of them starts.
 pub fn guides(syntax: &Syntax, lines: &[String], from: usize) -> Vec<Guides> {
+    guides_from(syntax, lines, from, State::default())
+}
+
+/// The same, for a caller that knows what `lines[0]` starts inside — a comment opened
+/// further up, a string — and so need not have the scanner guess. The editor keeps that
+/// state for every line it has coloured; the viewer, reading a window of a file, does not.
+pub fn guides_from(syntax: &Syntax, lines: &[String], from: usize, state: State) -> Vec<Guides> {
     let form = syntax.name == "Delphi form";
     let mut stack: Vec<(usize, &'static str)> = Vec::new();
-    let mut state = State::default();
+    let mut state = state;
     let mut out = Vec::with_capacity(lines.len().saturating_sub(from));
     for (n, line) in lines.iter().enumerate() {
         let (spans, next) = syntax.line(line, state);
@@ -135,6 +148,27 @@ mod tests {
         assert!(g[2].through.is_empty(), "the forward one closed itself");
         assert_eq!(g[3].through, [2], "inside TBar's class, under its name");
         assert_eq!(g[4].ends, [2]);
+    }
+
+    /// Started in the middle of a comment, the words in it open nothing: what the editor
+    /// relies on when the lines it hands over begin below the comment's first line.
+    #[test]
+    fn a_window_that_starts_inside_a_comment_opens_nothing_until_it_closes() {
+        let syntax = fcmd_syntax::of_name("Unit1.pas").expect("a syntax");
+        let (_, inside) = syntax.line("{ a note", State::default());
+        let lines: Vec<String> = ["begin here", "", "}", "begin", "", "end;"]
+            .iter()
+            .map(|l| l.to_string())
+            .collect();
+        let g = guides_from(syntax, &lines, 0, inside);
+        assert!(
+            g[1].through.is_empty(),
+            "the begin in the comment opened one"
+        );
+        assert_eq!(g[4].through, [0], "the real begin, after the brace");
+        assert_eq!(g[5].ends, [0]);
+        // Without the state the first line's `begin` is taken for code.
+        assert_eq!(guides(syntax, &lines, 0)[1].through, [0]);
     }
 
     /// A form's objects nest the same way.

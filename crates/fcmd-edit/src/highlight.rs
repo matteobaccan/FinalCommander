@@ -47,6 +47,26 @@ impl Highlight {
         self.syntax.is_some()
     }
 
+    /// The syntax itself, for what is worked out from it besides the colours.
+    pub fn syntax(&self) -> Option<&'static Syntax> {
+        self.syntax
+    }
+
+    /// The state `line` starts in — inside a block comment, say — scanning down to it if
+    /// nobody has asked for a line that far yet.
+    pub fn state_at(&mut self, buffer: &Buffer, line: usize) -> State {
+        let Some(syntax) = self.syntax else {
+            return State::default();
+        };
+        let line = line.min(buffer.len());
+        while self.states.len() <= line {
+            let at = self.states.len() - 1;
+            let (_, next) = syntax.line(buffer.line(at), self.states[at]);
+            self.states.push(next);
+        }
+        self.states[line]
+    }
+
     /// Read the file as something else, or as nothing at all.
     pub fn set_syntax(&mut self, syntax: Option<&'static Syntax>) {
         self.syntax = syntax;

@@ -105,6 +105,16 @@ Perl, Pascal e Delphi — viene colorato mentre lo leggi, e la riga di stato nom
 subito quando un file viene letto come qualcosa che non intendevi. I colori vengono dal tema,
 quindi lo seguono. `ui.syntax = false` in `fcmd.toml` li spegne.
 
+In una unit Pascal o Delphi, e in un form letto come testo, una linea sottile scende lungo
+ogni blocco come la disegna l'IDE di Delphi: dalla riga che lo apre — `begin`, `try`, `case`,
+`repeat`, `asm`, una `class` o un `record` con un corpo, un `object` di un form — al suo `end`
+o `until`, nella colonna dove comincia quella riga, una linea per ogni blocco dentro un altro.
+Sono le stesse linee che disegna il visualizzatore, e qui seguono il testo mentre scrivi: apri
+un blocco e la sua linea compare, chiudine uno o commenta il suo `begin` e se ne va. Una linea
+passa soltanto per celle vuote, quindi non copre mai un carattere, e non fa parte del file —
+nulla di lei viene copiato o salvato. Il colore è `syntax.guide` del tema, e l'interruttore
+che spegne i colori spegne anche le linee.
+
 # Byte invece di righe
 
 `F4` su un binario apre lo stesso editor sui suoi byte, e `Alt+H` passa da una parte

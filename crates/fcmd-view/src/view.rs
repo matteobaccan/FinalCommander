@@ -213,10 +213,6 @@ const BASE64_MIN: usize = 16;
 /// biggest picture a form carries as text and is read in a moment.
 const SYNTAX_LOOKBACK: u64 = 1024 * 1024;
 
-/// How far above the window the block guides look for the blocks that are open: a unit's
-/// longest routine fits many times over.
-const GUIDE_LOOKBACK: u64 = 256 * 1024;
-
 pub struct Viewer {
     source: Box<dyn Source>,
     pub path: VPath,
@@ -2111,7 +2107,7 @@ impl Viewer {
     /// shifted for the horizontal scroll: `None` where they are not drawn — a syntax without
     /// blocks, a mode that is not text, or wrapped lines, where a row is not a line.
     ///
-    /// The lines above the window are read back as far as [`GUIDE_LOOKBACK`], so a block
+    /// The lines above the window are read back as far as [`crate::guides::LOOKBACK`], so a block
     /// opened up there still has its line down the screen.
     pub fn block_guides(
         &mut self,
@@ -2123,7 +2119,7 @@ impl Viewer {
         }
         let top = self.top;
         let len = self.source.len();
-        let start = top.saturating_sub(GUIDE_LOOKBACK);
+        let start = top.saturating_sub(crate::guides::LOOKBACK);
         let mut at = if start == 0 {
             0
         } else {

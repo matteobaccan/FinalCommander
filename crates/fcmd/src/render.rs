@@ -1795,6 +1795,13 @@ fn draw_editor(
     app.layout.text = Some(body);
 
     let colouring = app.cfg.ui.syntax;
+    // The lines down the blocks of a Pascal unit or a form, where the viewer draws them and
+    // under the same switch as the colours they are worked out with. Owned, because the
+    // editor is borrowed again for every line below.
+    let guides: Option<Vec<fcmd_view::guides::Guides>> = colouring
+        .then(|| editor.block_guides(visible.clone()).map(<[_]>::to_vec))
+        .flatten();
+    let guide = app.theme.fg_on("syntax.guide", "editor.bg");
     for (row, line_index) in visible.clone().enumerate() {
         let y = body.y + row as u16;
         let (text, columns) = expand_with_map(editor, line_index);
@@ -1825,6 +1832,22 @@ fn draw_editor(
                 let style = app.theme.styled(span.class.theme_key(), base);
                 let room = body.w - from as u16;
                 buf.put_str(from as u16, y, &slice, style, room);
+            }
+        }
+
+        // The guides, after the colours and before the block: a line runs only through
+        // blank cells — never over text — and a marked block is drawn over it as over
+        // anything else. Blank is asked of the line itself and not of what is on screen,
+        // where a space may be showing as `·`.
+        if let Some(g) = guides.as_ref().and_then(|g| g.get(row)) {
+            let line = expand_line(editor, line_index);
+            for (cols, glyph) in [(&g.through, "│"), (&g.ends, "└")] {
+                for &c in cols {
+                    let blank = line.chars().nth(c).is_none_or(char::is_whitespace);
+                    if blank && c >= editor.left && c - editor.left < body.w as usize {
+                        buf.put_str((c - editor.left) as u16, y, glyph, guide, 1);
+                    }
+                }
             }
         }
 
@@ -6612,6 +6635,93 @@ See the [docs](https://example.com/docs) for more.
         app.cfg.ui.syntax = false;
         let buf = frame_buf(&mut app, 60, 12);
         assert_eq!(colour_at(&buf, 1, 1), app.theme.color("editor.fg"));
+    }
+
+    /// The editor draws the lines down Pascal's blocks that the viewer draws, in the same
+    /// colour, and keeps them in step with the text: a block closed by typing loses its line
+    /// in the next frame.
+    #[test]
+    fn the_editor_draws_block_guides_and_follows_the_edits() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("Unit1.pas");
+        std::fs::write(
+            &file,
+            "begin\n  try\n    x := 1;\n\n  finally\n    y;\n  end;\nend;\n",
+        )
+        .unwrap();
+        let mut app = super::tests::app("far", "en");
+        app.mode =
+            crate::app::Mode::Editor(Box::new(fcmd_edit::Editor::open(&file).expect("it opens")));
+        let buf = frame_buf(&mut app, 60, 14);
+        let at = |buf: &Buffer, x: u16, y: u16| {
+            let cell = buf.get(x, y).unwrap();
+            (cell.ch, cell.style.fg)
+        };
+        let guide = app.theme.color("syntax.guide");
+        // Row 0 is the status line, so line n of the file is row n + 1.
+        assert_eq!(at(&buf, 0, 1).0, 'b', "the opening line has none");
+        assert_eq!(at(&buf, 0, 2), ('│', guide), "inside begin");
+        assert_eq!(at(&buf, 0, 3), ('│', guide));
+        assert_eq!(at(&buf, 2, 3), ('│', guide), "inside try as well");
+        assert_eq!(at(&buf, 2, 4), ('│', guide), "through an empty line too");
+        assert_eq!(at(&buf, 2, 5).0, 'f', "never over text: `finally` is there");
+        assert_eq!(at(&buf, 2, 6), ('│', guide));
+        assert_eq!(at(&buf, 0, 7), ('│', guide), "begin goes on past try's end");
+        assert_eq!(at(&buf, 2, 7).0, 'e', "the `end` itself is text");
+        assert_eq!(at(&buf, 0, 8).0, 'e');
+
+        // Take `try` out, and its line is gone from the rows below in the same frame.
+        {
+            let editor = app.mode.editor_mut().expect("the editor");
+            editor.cursor = fcmd_edit::Position::new(1, 0);
+            editor.delete_line().unwrap();
+        }
+        let buf = frame_buf(&mut app, 60, 14);
+        assert_eq!(at(&buf, 0, 2), ('│', guide), "begin's line is still there");
+        assert_ne!(at(&buf, 2, 3).0, '│', "try's line outlived try");
+
+        // Undo puts `try` back, and its line with it.
+        {
+            let editor = app.mode.editor_mut().expect("the editor");
+            editor.undo();
+        }
+        let buf = frame_buf(&mut app, 60, 14);
+        assert_eq!(at(&buf, 2, 3), ('│', guide), "undo brought it back");
+
+        // Scrolled one column sideways the lines move with the text: try's is in column 1,
+        // and begin's, which was in the column that scrolled off, is not drawn anywhere.
+        {
+            let editor = app.mode.editor_mut().expect("the editor");
+            editor.cursor = fcmd_edit::Position::new(2, 1);
+            editor.left = 1;
+        }
+        let buf = frame_buf(&mut app, 60, 14);
+        assert_eq!(at(&buf, 1, 3), ('│', guide), "try's line moved left");
+        assert_eq!(at(&buf, 0, 3).0, ' ', "begin's line came along into view");
+        {
+            let editor = app.mode.editor_mut().expect("the editor");
+            editor.left = 0;
+        }
+
+        // And the switch that turns the colours off turns these off with them.
+        app.cfg.ui.syntax = false;
+        let buf = frame_buf(&mut app, 60, 14);
+        assert_eq!(at(&buf, 0, 2).0, ' ');
+        assert_eq!(at(&buf, 2, 3).0, ' ');
+    }
+
+    /// A file that is not Pascal has blocks of its own and no guides: the editor draws them
+    /// for exactly the languages the viewer does.
+    #[test]
+    fn the_editor_draws_no_guides_where_the_viewer_draws_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("main.rs");
+        std::fs::write(&file, "fn main() {\n    if x {\n        y();\n    }\n}\n").unwrap();
+        let mut app = super::tests::app("far", "en");
+        app.mode =
+            crate::app::Mode::Editor(Box::new(fcmd_edit::Editor::open(&file).expect("it opens")));
+        let screen = frame(&mut app, 60, 10);
+        assert!(!screen.contains('│'), "{screen}");
     }
 
     /// The question about a file changed on disk has four answers, and a button that does
