@@ -4,6 +4,7 @@
 //! and `End` costs one seek — there is no index to build and no line count to compute. See
 //! `docs/spec/05-viewer-editor.md` §1.
 
+mod aigen;
 pub mod asm;
 pub mod base64;
 pub mod decode;

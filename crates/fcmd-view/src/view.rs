@@ -625,6 +625,54 @@ impl Viewer {
         self.structure()?.rows.get(at)?.offset
     }
 
+    /// `Enter` on a row of the structure pane that names a text — an image model's prompt
+    /// graph, its workflow, its settings: the whole of it, JSON laid out, as a view derived
+    /// from the file (`F4` goes back to the bytes). False when the row is not one of those,
+    /// or the text is no longer where it was.
+    pub fn structure_text(&mut self) -> bool {
+        let at = self.struct_cursor;
+        let Some(row) = self.structure().and_then(|s| s.rows.get(at)).cloned() else {
+            return false;
+        };
+        if row.kind != crate::structure::RowKind::Text {
+            return false;
+        }
+        let Some(offset) = row.offset else {
+            return false;
+        };
+        let Some(text) = self.text_at(offset) else {
+            return false;
+        };
+        self.show_derived("metadata", crate::aigen::readable(&text));
+        true
+    }
+
+    /// The text at `offset`: a PNG text chunk when one starts there, otherwise an EXIF value.
+    fn text_at(&mut self, offset: u64) -> Option<String> {
+        let head = self.source.read_vec(offset, 8).ok()?;
+        if let Some(kind) = head
+            .get(4..8)
+            .filter(|k| matches!(*k, b"tEXt" | b"zTXt" | b"iTXt"))
+        {
+            let size = u32::from_be_bytes(head[..4].try_into().ok()?) as usize;
+            if size > crate::aigen::TEXT_LIMIT {
+                return None;
+            }
+            let kind = kind.to_vec();
+            let body = self.source.read_vec(offset + 8, size).ok()?;
+            return crate::aigen::chunk_text(&kind, &body).map(|(_, v)| v);
+        }
+        let len = self.source.len();
+        let want = (len.saturating_sub(offset) as usize).min(crate::aigen::TEXT_LIMIT);
+        let bytes = self.source.read_vec(offset, want).ok()?;
+        let key = if bytes.starts_with(b"UNICODE\0") || bytes.starts_with(b"ASCII\0\0\0") {
+            "UserComment"
+        } else {
+            "text"
+        };
+        Some(crate::aigen::exif_value(key, &bytes))
+    }
+
     /// One line of identity for the pane's title.
     pub fn structure_summary(&mut self) -> Option<String> {
         self.structure().map(|s| s.summary.clone())
@@ -2648,6 +2696,42 @@ mod tests {
 
     fn texts(v: &mut Viewer, w: u16, h: u16) -> Vec<String> {
         v.rows(w, h).into_iter().map(|r| r.text).collect()
+    }
+
+    /// `Enter` on a picture's prompt graph in the structure pane: the graph, laid out as
+    /// JSON, as a view of its own; on any other row, nothing of the kind.
+    #[test]
+    fn enter_on_an_image_model_s_graph_opens_it_laid_out() {
+        fn chunk(kind: &[u8], body: &[u8]) -> Vec<u8> {
+            let mut c = (body.len() as u32).to_be_bytes().to_vec();
+            c.extend(kind);
+            c.extend(body);
+            c.extend([0, 0, 0, 0]);
+            c
+        }
+        let mut p = b"\x89PNG\r\n\x1a\n".to_vec();
+        let mut ihdr = 1u32.to_be_bytes().to_vec();
+        ihdr.extend(1u32.to_be_bytes());
+        ihdr.extend([8, 2, 0, 0, 0]);
+        p.extend(chunk(b"IHDR", &ihdr));
+        let mut text = b"prompt\0".to_vec();
+        text.extend(br#"{"1":{"class_type":"KSampler","inputs":{"seed":5}}}"#);
+        p.extend(chunk(b"tEXt", &text));
+        p.extend(chunk(b"IEND", b""));
+        let mut v = viewer(&p);
+        assert!(v.toggle_structure());
+        let rows = v.structure().expect("a structure").rows.clone();
+        let at = rows
+            .iter()
+            .position(|r| r.kind == crate::structure::RowKind::Text)
+            .unwrap_or_else(|| panic!("no row that opens the graph: {rows:#?}"));
+        v.struct_cursor = 0;
+        assert!(!v.structure_text(), "the first row is a heading");
+        v.struct_cursor = at;
+        assert!(v.structure_text());
+        let shown = texts(&mut v, 80, 10).join("\n");
+        assert!(shown.contains("\"class_type\": \"KSampler\""), "{shown}");
+        assert!(shown.lines().count() > 3, "laid out, not one line: {shown}");
     }
 
     /// A form's `{ … }` of binary data scrolled half off the top: the rows still on screen

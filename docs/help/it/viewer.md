@@ -246,7 +246,17 @@ Lo stesso tasto risponde anche per i file che non sono programmi:
 - **una foto** — JPEG, PNG, GIF: le dimensioni, e per un JPEG l'EXIF — fotocamera, obiettivo,
   quando è stata scattata, esposizione, diaframma, ISO — e **dove è stata scattata**, su una
   riga a sé, perché è la cosa di una foto che più spesso non si sa di stare mandando; il testo
-  e la data di un PNG;
+  (compresso o no) e la data di un PNG; dimensioni, animazione ed EXIF di un WebP;
+- **un'immagine fatta da un modello** — una sezione **AI generation** con cosa è stato usato e
+  come: lo strumento (ComfyUI, AUTOMATIC1111, Forge, Fooocus, SwarmUI, InvokeAI, NovelAI), il
+  modello, le LoRA con il loro peso, gli encoder di testo e il VAE, il prompt e quello
+  negativo, il seed, gli step, cfg e guidance di Flux, il sampler, lo scheduler e le
+  dimensioni. Il grafo di ComfyUI viene seguito a ritroso dal sampler — `KSampler`, oppure
+  `SamplerCustomAdvanced` di Flux attraverso `RandomNoise`, `FluxGuidance`, `BasicScheduler`,
+  `UNETLoader` e `DualCLIPLoader` — così il riassunto è quello che è girato davvero. `Enter`
+  sulla riga *prompt (graph)* o *workflow* lo apre tutto, il JSON impaginato, e `F4` torna
+  indietro. Un'immagine con le **content credentials** (C2PA) dice chi ha firmato la
+  dichiarazione e se la dichiara generata;
 - **un documento d'ufficio** — `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`: titolo,
   autore e chi l'ha salvato per ultimo, quando è stato creato e modificato, quante revisioni,
   pagine, parole o diapositive, l'azienda e il programma che l'ha scritto;

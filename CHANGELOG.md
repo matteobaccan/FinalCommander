@@ -8,6 +8,16 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **How a picture was made, in `F11`.** A picture from an image model gets an *AI
+  generation* section: the tool (ComfyUI, AUTOMATIC1111, Forge, Fooocus, SwarmUI, InvokeAI,
+  NovelAI), the model, its LoRAs, the text encoders and the VAE, the prompt and the negative,
+  the seed, the steps, cfg and Flux guidance, the sampler, the scheduler and the size.
+  ComfyUI's graph is followed back from the sampler, Flux's `SamplerCustomAdvanced` included,
+  so the summary is what ran; `Enter` on the graph or the workflow opens it laid out as JSON.
+  Content credentials (C2PA) say who signed and whether the picture is called generated. PNG
+  text that is compressed (`zTXt`, compressed `iTXt`) is read now, up to the size a workflow
+  takes, and WebP files say their size, animation and EXIF.
+
 - **The AI conversation, easier to steer.** `Esc` stops a question while the model is still
   answering, and nothing of it is written. `F8` lists the files of the context, each with its
   size, to take one out — or all of them — and with none left starts a new conversation. `F7`

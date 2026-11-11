@@ -791,6 +791,7 @@ viewer-structure-hint-tab = Tab trae las teclas aquí
 viewer-no-structure = nada que descodificar: el panel no conoce este formato
 viewer-no-target = esta fila no apunta a ningún lugar del archivo
 viewer-form-opened = El formulario, como el texto que Delphi muestra de él. F4 vuelve a los bytes.
+viewer-metadata-opened = El texto entero, dispuesto para leerlo. F4 vuelve a los bytes.
 viewer-went-to = movido a { $offset }
 viewer-in-panel = el panel está en { $name }
 viewer-not-in-panel = { $name } no está en este panel

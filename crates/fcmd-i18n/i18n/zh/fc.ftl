@@ -779,6 +779,7 @@ viewer-structure-hint-tab = Tab 把按键交到这里
 viewer-no-structure = 没有可解析的内容：本面板不认识这种格式
 viewer-no-target = 这一行在文件中没有对应位置
 viewer-form-opened = 窗体，以 Delphi 显示的文本形式。F4 回到字节。
+viewer-metadata-opened = 完整文本，已排版便于阅读。F4 回到字节。
 viewer-went-to = 已跳转到 { $offset }
 viewer-in-panel = 面板已定位到 { $name }
 viewer-not-in-panel = 此面板中没有 { $name }

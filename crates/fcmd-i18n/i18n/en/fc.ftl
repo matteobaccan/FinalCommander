@@ -799,6 +799,7 @@ viewer-structure-hint-tab = Tab moves the keys here
 viewer-no-structure = nothing to decode: this is not a format the pane knows
 viewer-no-target = this row points nowhere in the file
 viewer-form-opened = The form, as the text Delphi shows for it. F4 goes back to the bytes.
+viewer-metadata-opened = The whole text, laid out to read. F4 goes back to the bytes.
 viewer-went-to = went to { $offset }
 viewer-in-panel = the panel is on { $name }
 viewer-not-in-panel = { $name } is not in this panel

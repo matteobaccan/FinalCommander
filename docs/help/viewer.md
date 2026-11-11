@@ -233,7 +233,17 @@ The same key answers for the files that are not programs:
 - **a photo** — JPEG, PNG, GIF: the size, and for a JPEG the EXIF — camera, lens, when it was
   taken, exposure, aperture, ISO — and **where it was taken**, on a row of its own, because
   that is the thing in a photo people most often do not know they are sending; a PNG's text
-  and time;
+  (compressed or not) and time; a WebP's size, animation and EXIF;
+- **a picture an image model made** — an **AI generation** section with what it was made
+  with and how: the tool (ComfyUI, AUTOMATIC1111, Forge, Fooocus, SwarmUI, InvokeAI, NovelAI),
+  the model, its LoRAs and their weights, the text encoders and the VAE, the prompt and the
+  negative one, the seed, the steps, cfg and Flux guidance, the sampler, the scheduler and the
+  size. ComfyUI's graph is followed back from the sampler — `KSampler`, or Flux's
+  `SamplerCustomAdvanced` through `RandomNoise`, `FluxGuidance`, `BasicScheduler`,
+  `UNETLoader` and `DualCLIPLoader` — so the summary is what actually ran. `Enter` on the
+  *prompt (graph)* or *workflow* row opens the whole of it, the JSON laid out, and `F4` goes
+  back. A picture with **content credentials** (C2PA) says who signed the claim and whether it
+  calls the picture generated;
 - **an office document** — `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`: the title, the
   author and who saved it last, when it was made and changed, how many revisions, pages, words
   or slides, the company and the program that wrote it;

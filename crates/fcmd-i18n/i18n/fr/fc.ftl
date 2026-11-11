@@ -791,6 +791,7 @@ viewer-structure-hint-tab = Tab amène les touches ici
 viewer-no-structure = rien à décoder : le panneau ne connaît pas ce format
 viewer-no-target = cette ligne ne pointe nulle part dans le fichier
 viewer-form-opened = La fiche, comme le texte que Delphi en montre. F4 revient aux octets.
+viewer-metadata-opened = Le texte entier, mis en page pour le lire. F4 revient aux octets.
 viewer-went-to = positionné à { $offset }
 viewer-in-panel = le panneau est sur { $name }
 viewer-not-in-panel = { $name } n'est pas dans ce panneau

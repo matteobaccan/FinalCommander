@@ -22,6 +22,9 @@ pub(crate) fn read(src: &mut dyn Bytes, head: &[u8], len: u64) -> Option<Structu
     if head.starts_with(b"\x89PNG\r\n\x1a\n") {
         return Some(png(src, len));
     }
+    if head.starts_with(b"RIFF") && head.get(8..12) == Some(b"WEBP") {
+        return Some(webp(src, len));
+    }
     if head.starts_with(b"GIF87a") || head.starts_with(b"GIF89a") {
         return Some(gif(head));
     }
@@ -85,6 +88,8 @@ fn field(label: impl Into<String>, value: impl Into<String>) -> Row {
 fn jpeg(b: &[u8], len: u64) -> Structure {
     let mut rows = vec![Row::group("JPEG")];
     let mut exif = Vec::new();
+    let mut texts = Vec::new();
+    let mut c2pa: Vec<u8> = Vec::new();
     let mut size = None;
     let mut at = 2usize;
     let mut cut = false;
@@ -141,6 +146,12 @@ fn jpeg(b: &[u8], len: u64) -> Structure {
             }
             0xE1 if body.starts_with(b"Exif\0\0") => {
                 exif = exif_rows(&body[6..]);
+                texts = crate::aigen::exif_texts(&body[6..], (at + 4 + 6) as u64);
+            }
+            // APP11 is JUMBF, which is where C2PA keeps its manifest, in as many segments as
+            // it takes.
+            0xEB if body.starts_with(b"JP") && body.len() > 8 => {
+                c2pa.extend_from_slice(&body[8..]);
             }
             0xFE => {
                 let c = text(body);
@@ -158,6 +169,8 @@ fn jpeg(b: &[u8], len: u64) -> Structure {
         rows.push(Row::group("EXIF"));
         rows.extend(exif);
     }
+    let c2pa = (find(&c2pa, b"c2pa").is_some()).then_some(c2pa);
+    rows.extend(crate::aigen::rows(&texts, c2pa.as_deref()));
     let summary = match size {
         Some((w, h)) => format!("JPEG · {w} × {h}"),
         None => "JPEG".into(),
@@ -393,6 +406,8 @@ fn degrees(parts: &[f64]) -> Option<f64> {
 fn png(src: &mut dyn Bytes, len: u64) -> Structure {
     let mut rows = vec![Row::group("PNG")];
     let mut tags = Vec::new();
+    let mut texts = Vec::new();
+    let mut c2pa: Option<Vec<u8>> = None;
     let mut summary = "PNG".to_string();
     let mut at = 8u64;
     let mut truncated = false;
@@ -456,38 +471,36 @@ fn png(src: &mut dyn Bytes, len: u64) -> Structure {
                     ));
                 }
             }
-            b"tEXt" if small() => {
+            // The text chunks, compressed or not, up to the size of a workflow: an image
+            // model's settings are kept here, and a graph can run to hundreds of kilobytes.
+            b"tEXt" | b"zTXt" | b"iTXt" if size as usize <= crate::aigen::TEXT_LIMIT => {
                 let b = src.at(at + 8, size as usize);
-                if let Some(nul) = b.iter().position(|&c| c == 0) {
-                    let key = String::from_utf8_lossy(&b[..nul]).into_owned();
-                    let value: String = b[nul + 1..].iter().map(|&c| c as char).collect();
-                    tags.push(field(key, value.trim().to_string()));
+                if let Some((key, value)) = crate::aigen::chunk_text(&kind, &b) {
+                    let shown = value.trim();
+                    if key == "XML:com.adobe.xmp" {
+                        // XMP is a page of XML: it is there, and that is what to say.
+                        tags.push(field("XMP", format!("{} bytes", value.len())));
+                    } else if !shown.is_empty() {
+                        let line = if shown.len() > 200 || shown.contains('\n') {
+                            let head: String = shown
+                                .split_whitespace()
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                                .chars()
+                                .take(120)
+                                .collect();
+                            format!("{head}… ({} bytes)", shown.len())
+                        } else {
+                            shown.to_string()
+                        };
+                        tags.push(field(key.clone(), line));
+                    }
+                    texts.push(crate::aigen::Text { key, value, at });
                 }
             }
-            // International text, when it is not compressed: the compressed kind would need
-            // an inflater for a caption.
-            b"iTXt" if small() => {
-                let b = src.at(at + 8, size as usize);
-                if let Some(nul) = b.iter().position(|&c| c == 0) {
-                    let key = String::from_utf8_lossy(&b[..nul]).into_owned();
-                    if b.get(nul + 1) == Some(&0) {
-                        let rest = b.get(nul + 3..).unwrap_or(&[]);
-                        let mut parts = rest.splitn(3, |&c| c == 0);
-                        let _lang = parts.next();
-                        let _translated = parts.next();
-                        let value = parts
-                            .next()
-                            .map(|v| String::from_utf8_lossy(v).into_owned());
-                        if let Some(v) = value.filter(|v| !v.trim().is_empty()) {
-                            // XMP is a page of XML: it is there, and that is what to say.
-                            if key == "XML:com.adobe.xmp" {
-                                tags.push(field("XMP", format!("{} bytes", v.len())));
-                            } else {
-                                tags.push(field(key, v.trim().to_string()));
-                            }
-                        }
-                    }
-                }
+            // C2PA's manifest store.
+            b"caBX" if size <= 16 * 1024 * 1024 => {
+                c2pa = Some(src.at(at + 8, size as usize));
             }
             b"eXIf" if small() => {
                 let b = src.at(at + 8, size as usize);
@@ -515,7 +528,106 @@ fn png(src: &mut dyn Bytes, len: u64) -> Structure {
         }
         rows.extend(tags);
     }
+    rows.extend(crate::aigen::rows(&texts, c2pa.as_deref()));
     structure("PNG", summary, rows, truncated)
+}
+
+/// A WebP: the size from its first image chunk, animation, the EXIF and XMP it carries, and
+/// what an image model wrote into the EXIF.
+fn webp(src: &mut dyn Bytes, len: u64) -> Structure {
+    let mut rows = vec![Row::group("WebP")];
+    let mut summary = "WebP".to_string();
+    let mut texts = Vec::new();
+    let mut exif = Vec::new();
+    let mut c2pa: Option<Vec<u8>> = None;
+    let mut at = 12u64;
+    let mut truncated = false;
+    let mut sized = false;
+    for _ in 0..4096 {
+        if at + 8 > len {
+            break;
+        }
+        let head = src.at(at, 8);
+        let (Some(kind), Some(size)) = (head.get(..4), le32(&head, 4)) else {
+            truncated = true;
+            break;
+        };
+        let kind: [u8; 4] = kind.try_into().unwrap_or([0; 4]);
+        let size = size as u64;
+        if at + 8 + size > len {
+            truncated = true;
+            break;
+        }
+        let body_at = at + 8;
+        let mut say_size = |rows: &mut Vec<Row>, w: u32, h: u32, how: &str| {
+            if !sized {
+                sized = true;
+                summary = format!("WebP · {w} × {h}");
+                rows.push(field("size", format!("{w} × {h}")));
+                rows.push(field("encoding", how.to_string()));
+            }
+        };
+        match &kind {
+            b"VP8X" => {
+                let b = src.at(body_at, 10);
+                if b.len() == 10 {
+                    let w = u32::from_le_bytes([b[4], b[5], b[6], 0]) + 1;
+                    let h = u32::from_le_bytes([b[7], b[8], b[9], 0]) + 1;
+                    let how = if b[0] & 0x02 != 0 {
+                        "extended, animated"
+                    } else {
+                        "extended"
+                    };
+                    say_size(&mut rows, w, h, how);
+                }
+            }
+            b"VP8 " => {
+                let b = src.at(body_at, 10);
+                if b.len() == 10 && b[3..6] == [0x9D, 0x01, 0x2A] {
+                    let w = u32::from(u16::from_le_bytes([b[6], b[7]]) & 0x3FFF);
+                    let h = u32::from(u16::from_le_bytes([b[8], b[9]]) & 0x3FFF);
+                    say_size(&mut rows, w, h, "lossy");
+                }
+            }
+            b"VP8L" => {
+                let b = src.at(body_at, 5);
+                if b.len() == 5 && b[0] == 0x2F {
+                    let bits = u32::from_le_bytes([b[1], b[2], b[3], b[4]]);
+                    say_size(
+                        &mut rows,
+                        (bits & 0x3FFF) + 1,
+                        ((bits >> 14) & 0x3FFF) + 1,
+                        "lossless",
+                    );
+                }
+            }
+            b"ANIM" => rows.push(field("animated", "yes")),
+            b"EXIF" if size <= 16 * 1024 * 1024 => {
+                let mut b = src.at(body_at, size as usize);
+                let mut base = body_at;
+                // Some writers put the JPEG marker's `Exif\0\0` in front; the spec says not to.
+                if b.starts_with(b"Exif\0\0") {
+                    b.drain(..6);
+                    base += 6;
+                }
+                exif = exif_rows(&b);
+                texts = crate::aigen::exif_texts(&b, base);
+            }
+            b"XMP " => rows.push(field("XMP", format!("{size} bytes"))),
+            b"C2PA" if size <= 16 * 1024 * 1024 => c2pa = Some(src.at(body_at, size as usize)),
+            _ => {}
+        }
+        // Chunks are padded to an even length.
+        at = body_at + size + (size & 1);
+    }
+    // The camera fields of a WebP from ComfyUI hold its graphs, not a camera.
+    exif.retain(|r| !r.value.starts_with("prompt:") && !r.value.starts_with("workflow:"));
+    if !exif.is_empty() {
+        rows.push(Row::group("EXIF"));
+        rows.extend(exif);
+    }
+    rows.extend(crate::aigen::rows(&texts, c2pa.as_deref()));
+    structure("WebP", summary, rows, truncated)
 }
 
 fn gif(head: &[u8]) -> Structure {

@@ -5788,6 +5788,12 @@ impl App {
             },
             _ => false,
         };
+        // `Enter` on a text an image model left in the picture: the whole of it, to read.
+        if target.is_some() && self.live_viewer_mut().is_some_and(|v| v.structure_text()) {
+            let msg = self.i18n.t("viewer-metadata-opened");
+            self.set_status(msg);
+            return handled;
+        }
         // `Enter` on a row that points nowhere says so instead of moving the file silently.
         if let Some(target) = target {
             match target {

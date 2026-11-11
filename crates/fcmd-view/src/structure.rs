@@ -24,6 +24,9 @@ pub enum RowKind {
     Field,
     /// A row of a table (a section, a segment, an import) — these are what `Enter` follows.
     Entry,
+    /// A text the file carries whole — an image model's prompt, a workflow — which `Enter`
+    /// opens to read rather than going to its bytes.
+    Text,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
