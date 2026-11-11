@@ -168,6 +168,20 @@ adding it to the `PATH`: the panel then says it is missing, and adding that fold
 `PATH` is the fix. *External programs* in the `F9` dialog of `Alt+F1`
 (`drives.panels.tools`) takes the row away; `Ctrl+7` there hides every panel row at once.
 
+# What a copy keeps
+
+```toml
+[operations]
+preserve = ["mtime", "mode", "xattrs"]
+```
+
+`operations.preserve` lists what a copy keeps of a file beside its bytes: `mtime` is the time
+it was last written, `mode` its permissions, `xattrs` its extended attributes — the tags and
+labels a desktop writes (the chapter on files says which, system by system). All three are
+kept unless the list says less, and an empty list keeps none. Each is a box of the `F5`
+dialog, which opens as this list says, so one copy can still be told otherwise. From the
+command line it is written with commas: `--set operations.preserve=mtime,mode`.
+
 # A copy that remembers nothing
 
 `fcmd --no-save` starts with your histories and panels as usual but writes nothing back when it

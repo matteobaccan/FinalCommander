@@ -1679,3 +1679,4 @@ opt-sort-case = Регистр букв при сортировке
 opt-sort-case-auto = как в этой системе
 opt-sort-case-yes = различать
 opt-sort-case-no = один алфавит
+copy-keep-xattrs = Сохранять расширенные атрибуты

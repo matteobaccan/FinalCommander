@@ -24,6 +24,7 @@ mod unix;
 mod volume;
 #[cfg(windows)]
 mod windows;
+pub mod xattr;
 
 pub use copy::{have_system_copy, system_copy};
 pub use device::{geometry, is_device_path, Geometry};

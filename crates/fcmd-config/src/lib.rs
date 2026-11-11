@@ -229,6 +229,39 @@ impl Default for General {
     }
 }
 
+/// `[operations]`: what a copy and a move do without being asked each time.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OperationsCfg {
+    /// What a copy keeps of the file it copies, beside its bytes: `mtime` for the time it
+    /// was last written, `mode` for its permissions, `xattrs` for its extended attributes —
+    /// the tags and labels of a desktop. All three unless the list says otherwise, and each
+    /// is a box of the copy dialog that starts as this says, so one copy can still differ.
+    ///
+    /// A list of what is kept rather than three switches because that is how one says it
+    /// (`cp --preserve=mode,timestamps`), and because the day there is a fourth thing to
+    /// keep it is one more word here and not one more key.
+    pub preserve: Vec<String>,
+}
+
+/// Every word `operations.preserve` knows, in the order they are written by default.
+pub const PRESERVE_NAMES: [&str; 3] = ["mtime", "mode", "xattrs"];
+
+impl Default for OperationsCfg {
+    fn default() -> Self {
+        OperationsCfg {
+            preserve: PRESERVE_NAMES.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+}
+
+impl OperationsCfg {
+    /// Is this one of the things a copy keeps? `what` is one of [`PRESERVE_NAMES`].
+    pub fn keeps(&self, what: &str) -> bool {
+        self.preserve.iter().any(|name| name.trim() == what)
+    }
+}
+
 /// How typing in a panel behaves: FAR filters with `Alt`+letters, mc with bare letters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -1745,6 +1778,7 @@ pub fn command_exists(program: &str) -> bool {
 pub struct Config {
     pub general: General,
     pub panel: PanelCfg,
+    pub operations: OperationsCfg,
     pub ui: UiCfg,
     /// `[[theme]]` blocks: themes live in the config file, not in a themes directory.
     #[serde(rename = "theme")]
@@ -2110,6 +2144,26 @@ impl Config {
             "general.confirm_delete" => self.general.confirm_delete = parse_bool(value)?,
             "general.use_trash" => self.general.use_trash = parse_bool(value)?,
             "general.system_copy" => self.general.system_copy = parse_bool(value)?,
+            // A list, written as `sort_chain` is: the words with commas between them, and
+            // nothing at all for a copy that keeps the bytes and no more.
+            "operations.preserve" => {
+                let names: Vec<String> = value
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .collect();
+                if let Some(odd) = names
+                    .iter()
+                    .find(|name| !PRESERVE_NAMES.contains(&name.as_str()))
+                {
+                    return Err(format!(
+                        "`{odd}` is not one of {}",
+                        PRESERVE_NAMES.join(", ")
+                    ));
+                }
+                self.operations.preserve = names;
+            }
             "general.update_check" => self.general.update_check = parse_bool(value)?,
             "general.job_queue" => {
                 self.general.job_queue = match value {
@@ -2360,6 +2414,43 @@ attrs = "-h"
             odd.panel.sort_case_sensitive(),
             Config::default().panel.sort_case_sensitive()
         );
+    }
+
+    #[test]
+    fn a_copy_keeps_times_permissions_and_extended_attributes_unless_the_list_says_less() {
+        let mut cfg = Config::default();
+        for what in PRESERVE_NAMES {
+            assert!(cfg.operations.keeps(what), "{what} is kept by default");
+        }
+        // From the file: the list is the whole answer, so what it leaves out is not kept.
+        let (read, warnings) = Config::parse(
+            "fcmd.toml",
+            "[operations]\npreserve = [\"mtime\", \"mode\"]\n",
+        )
+        .expect("it reads");
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert!(read.operations.keeps("mtime") && read.operations.keeps("mode"));
+        assert!(!read.operations.keeps("xattrs"));
+        // And back out for Save setup.
+        let written = read.dump();
+        let (again, _) = Config::parse("fcmd.toml", &written).expect("it reads back");
+        assert_eq!(again.operations, read.operations, "{written}");
+
+        // By name, the way `--set` and the settings list write it.
+        cfg.set("operations.preserve", "xattrs, mtime")
+            .expect("two words");
+        assert!(cfg.operations.keeps("xattrs") && cfg.operations.keeps("mtime"));
+        assert!(!cfg.operations.keeps("mode"));
+        cfg.set("operations.preserve", "")
+            .expect("nothing is an answer");
+        assert!(PRESERVE_NAMES
+            .iter()
+            .all(|what| !cfg.operations.keeps(what)));
+        // A word it does not know is refused whole, and what was there stays.
+        cfg.set("operations.preserve", "mode").expect("one word");
+        let refused = cfg.set("operations.preserve", "mode, owner");
+        assert!(refused.is_err(), "{refused:?}");
+        assert_eq!(cfg.operations.preserve, ["mode"]);
     }
 
     #[test]

@@ -172,6 +172,21 @@ nessun'altra parte. L'installatore di 7-Zip per Windows, per esempio, mette `7z.
 è aggiungere quella cartella al `PATH`. *Programmi esterni* nel dialogo `F9` di `Alt+F1`
 (`drives.panels.tools`) toglie la riga; `Ctrl+7` lì nasconde tutte le righe dei pannelli.
 
+# Cosa conserva una copia
+
+```toml
+[operations]
+preserve = ["mtime", "mode", "xattrs"]
+```
+
+`operations.preserve` elenca cosa una copia conserva di un file oltre ai suoi byte: `mtime` è
+la data dell'ultima scrittura, `mode` i permessi, `xattrs` gli attributi estesi — le etichette
+che scrive un desktop (il capitolo sui file dice quali, sistema per sistema). Si conservano
+tutti e tre a meno che l'elenco dica meno, e un elenco vuoto non conserva niente. Ognuno è una
+casella del dialogo di `F5`, che si apre come dice questo elenco: una singola copia può sempre
+fare diversamente. Dalla riga di comando si scrive con le virgole:
+`--set operations.preserve=mtime,mode`.
+
 # Una copia che non ricorda niente
 
 `fcmd --no-save` parte con le tue cronologie e i pannelli come al solito ma non scrive niente

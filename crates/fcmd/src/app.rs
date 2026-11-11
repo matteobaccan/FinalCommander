@@ -10729,6 +10729,11 @@ impl App {
                     self.last_copy.verify,
                     &self.last_copy.filter,
                     self.last_copy.on_error,
+                    fcmd_jobs::Preserve {
+                        mtime: self.cfg.operations.keeps("mtime"),
+                        mode: self.cfg.operations.keeps("mode"),
+                        xattrs: self.cfg.operations.keeps("xattrs"),
+                    },
                     &self.i18n,
                 )));
             }
@@ -15980,6 +15985,7 @@ impl App {
             preserve: fcmd_jobs::Preserve {
                 mtime: form.toggle_value("copy.times"),
                 mode: form.toggle_value("copy.mode"),
+                xattrs: form.toggle_value("copy.xattrs"),
             },
             follow_symlinks: form.toggle_value("copy.follow_links"),
             only_newer: form.toggle_value("copy.only_newer"),
@@ -35839,6 +35845,7 @@ run = ["echo one", "echo two", "echo three"]
         assert!(spec.options.follow_symlinks);
         assert!(!spec.options.preserve.mtime, "the box was turned off");
         assert!(spec.options.preserve.mode, "and this one was left on");
+        assert!(spec.options.preserve.xattrs, "as the tags were");
         assert!(spec.options.verify, "every file read back");
         assert_eq!(spec.options.on_error, fcmd_jobs::ErrorPolicy::Stop);
         let masks = spec.options.filter.as_ref().expect("a filter was typed");
@@ -35857,6 +35864,34 @@ run = ["echo one", "echo two", "echo three"]
         assert!(form.toggle_value("copy.only_newer"));
         assert!(form.toggle_value("copy.verify"));
         assert_eq!(form.text_value("copy.filter"), "*.txt");
+    }
+
+    /// `operations.preserve` is what the three boxes start as, and a box is still a box: the
+    /// configuration says what a copy keeps unless this copy is told otherwise.
+    #[test]
+    fn the_copy_dialog_starts_from_what_the_configuration_says_a_copy_keeps() {
+        let mut app = app();
+        app.cfg
+            .set("operations.preserve", "mtime")
+            .expect("one word of the three");
+        press(&mut app, "Down");
+        press(&mut app, "Down"); // a.txt
+        press(&mut app, "F5");
+        {
+            let Mode::Form(form) = &app.mode else {
+                panic!("the dialog is open")
+            };
+            assert!(form.toggle_value("copy.times"));
+            assert!(!form.toggle_value("copy.mode"));
+            assert!(!form.toggle_value("copy.xattrs"));
+        }
+        // Turned back on for this one copy.
+        set_toggle(&mut app, "copy.xattrs", true);
+        press(&mut app, "Enter");
+        let (_, spec) = job_request(&mut app);
+        assert!(spec.options.preserve.mtime);
+        assert!(!spec.options.preserve.mode);
+        assert!(spec.options.preserve.xattrs);
     }
 
     /// A mask that does not parse is said so about while the dialog is still on screen, not

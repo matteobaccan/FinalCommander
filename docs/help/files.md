@@ -30,6 +30,24 @@ press `Enter`, and nothing below the first line applies:
 * **Copy what a link points at, not the link** is off, and deliberately: a copy that turned
   links into copies of their targets would duplicate a tree the first time you tried it.
 * **Keep the times** and **Keep the permissions** are on.
+* **Keep the extended attributes** is on too. These are the named values a filesystem keeps
+  beside a file's bytes, and where a desktop puts what it knows about a file: the tags you
+  gave it in Dolphin or the Finder, its coloured label, the address it was downloaded from.
+  A copy that carried only the bytes would arrive untagged. They are copied for files and
+  for folders, and a move to another disk — which is a copy and then a delete — takes them
+  along as well. A destination with nowhere to keep them (a FAT stick, a share, a server, an
+  archive) gets the file without them and the copy is not an error for it: they are a
+  courtesy, as the times are.
+
+  On Linux what is copied is the `user.` attributes, which is where tags and the like are
+  written. The `security.`, `system.` and `trusted.` ones — SELinux labels, capabilities,
+  ACLs — say what a file is allowed on the system it was on, and stay there, as they do with
+  `cp`. On macOS everything is copied, as the Finder does it, and that includes the mark that
+  says a file came from the internet: a downloaded file is still a downloaded file after it
+  has been copied. Windows has nothing of this kind — NTFS streams are another thing, and are
+  not copied.
+
+  What the three *Keep* boxes start as is `operations.preserve` in the configuration.
 * A copy that was interrupted goes on where it stopped. A file is written under
   `name.fcmd-part` until it is whole; `Esc` takes that away, but a failure, a crash or a
   killed program leave it, and copying the same file to the same place again continues from

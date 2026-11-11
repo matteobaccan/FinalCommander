@@ -16,8 +16,11 @@ authors.workspace = true
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31.3", features = ["fs", "user", "zerocopy", "term", "signal"] }
 
-# How much memory the machine has, which on macOS is a `sysctl` and nothing else.
-[target.'cfg(target_os = "macos")'.dependencies]
+# How much memory the machine has, which on macOS is a `sysctl` and nothing else; and on
+# Linux and macOS alike the extended attributes of `xattr.rs` (`llistxattr` and its kin, or
+# `listxattr` with `XATTR_NOFOLLOW`), which `nix` has no wrapper for. Already in the tree
+# under `nix` on both.
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 libc = "0.2"
 
 # The three calls Windows needs for the same answers: `GetDiskFreeSpaceExW` for the bytes,
@@ -64,3 +67,7 @@ windows-sys = { version = "0.61", features = [
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_WindowsAndMessaging",
 ] }
+
+# A directory of its own for every test that tags a file (`xattr.rs`).
+[dev-dependencies]
+tempfile = "3"

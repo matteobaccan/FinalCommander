@@ -264,6 +264,15 @@ impl JobFs for RoutedFs {
         self.run(async move { remote.apply_meta(path, &facts).await })
     }
 
+    /// Between two local files only. SFTP version 3 has no call for extended attributes, FTP
+    /// and WebDAV have no such idea, so a copy with a server at either end carries none.
+    fn copy_xattrs(&self, src: &VPath, dst: &VPath) -> io::Result<()> {
+        if src.is_local() && dst.is_local() {
+            return self.local.copy_xattrs(src, dst);
+        }
+        Ok(())
+    }
+
     /// A file on a server has a mode and a modification time, and SFTP can set both. There
     /// is nothing there for Windows' four bits, so those rows are not offered for a remote
     /// path; read-only is, because it is the write bits.

@@ -54,7 +54,7 @@ columns_brief = 3
 
 [operations]
 copy_buffer = "auto"
-preserve = ["mtime", "mode"]    # + atime, btime, owner, xattr, acl, hardlinks
+preserve = ["mtime", "mode", "xattrs"]   # read today; atime, btime, owner, acl, hardlinks are not
 verify = false
 on_conflict = "ask"
 concurrency = { local = 1, remote = 4 }   # what the binary reads today is general.job_queue

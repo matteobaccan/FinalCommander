@@ -34,7 +34,6 @@ says what the decision stands on.
 | --- | --- | --- |
 | File attributes | `Ctrl+A` | FAR's *System properties* button, which hands the file to the shell's own property sheet; the NTFS compressed and encrypted bits; and a picker for the owner row, which takes a name or a number and completes neither. |
 | The files themselves on the clipboard | `Ctrl+Shift+C`/`X` | No terminal can be asked to carry a file — `OSC 52` carries text. This is window-system work, and it is what `fcmd-platform` would be for. |
-| Extended attributes on copy | `F5`, `F6` | A copy does not carry a file's extended attributes (xattrs), so tags set by the Finder or Dolphin are lost when fcmd copies the file. Reading and writing them belongs in `fcmd-platform`; `operations.preserve` would name them. |
 | Descriptions | `Ctrl+Z` | Writing one *inside* an archive, which is a rebuild of the archive rather than a write to a file. |
 | Formats through a program on the machine | `Enter` on a `.rar`, `.iso`, `.cab`… | A selection extracted through the job engine, with the bar counting bytes as they land; `Test` on `Alt+F6`; a table for RARLAB's `rar`, verified on a machine that has it (`docs/05-multiarc.md` §10). Writing is not on this list: it is decided against (§9). |
 | `cab` read here | `Enter` | Read through `7z` today, so not on a machine without it. `cpio` and `rpm` went the same way in 0.30.0; `cab` is the one of the three that wants a crate (`docs/05-multiarc.md` §9). |

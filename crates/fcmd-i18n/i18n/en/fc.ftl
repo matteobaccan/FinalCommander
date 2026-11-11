@@ -1703,3 +1703,4 @@ opt-sort-case = Upper and lower case in the sort
 opt-sort-case-auto = as this system does
 opt-sort-case-yes = tell them apart
 opt-sort-case-no = one alphabet
+copy-keep-xattrs = Keep the extended attributes

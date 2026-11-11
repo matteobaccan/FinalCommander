@@ -234,6 +234,15 @@ impl<F: JobFs> JobFs for ArcFs<F> {
         self.inner.apply_meta(path, facts, preserve)
     }
 
+    /// An archive's entries carry no extended attributes this could read or write, so only a
+    /// copy with both ends outside one has any to take along.
+    fn copy_xattrs(&self, src: &VPath, dst: &VPath) -> io::Result<()> {
+        if src.in_container() || dst.in_container() {
+            return Ok(());
+        }
+        self.inner.copy_xattrs(src, dst)
+    }
+
     /// An entry's permissions and times are the archive's, and writing them means writing the
     /// archive again for nothing: `fcmd_arc::Change` has no variant for metadata, and a dialog
     /// that offered it would have nothing to do. Outside a container this is the inner

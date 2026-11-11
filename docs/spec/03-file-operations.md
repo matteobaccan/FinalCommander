@@ -83,7 +83,7 @@ is remembered for the next dialog with the others.
 | Buffer | adaptive 64 KiB…8 MiB based on measured throughput; direct I/O never forced |
 | Fast paths | **Shipped (0.18.0)** behind `general.system_copy`, see §3b: `copy_file_range` (Linux), `fcopyfile` (macOS), `CopyFileExW` (Windows); server-side copy on SFTP/S3 where supported, which the providers already do |
 | Sparse files | holes detected (`SEEK_HOLE`) and preserved; option to materialise |
-| Metadata | mtime always; atime/btime, mode, owner/group, ACLs, xattrs/ADS, compression/encryption flags per option set (default: mtime+mode) |
+| Metadata | what `operations.preserve` lists, which is what the three *Keep* boxes of the copy dialog start as: `mtime`, `mode`, `xattrs`, all three by default (`Preserve`). Applied after the data and as a courtesy: one that cannot be applied does not fail the copy. Extended attributes are §3d. Not built: atime/btime, owner/group, ACLs, compression/encryption flags |
 | Symlinks | copy as link (default), follow, or ask; relative links rewritten when the target moves inside the copied tree (option) |
 | Hard links | links inside one job preserved (inode map) when `preserve_hardlinks = true` |
 | Verify | **Shipped (0.31.0)** as *Read every file back and compare it* in the copy dialog (`JobOptions::verify`): after each file, both sides are read again and compared by SHA-256, the hash already in the tree for checksums, rather than blake3, which would be a dependency for one option. A copy that differs is removed and reported as that file's error; a move deletes its source only after its copy compared the same. A side that cannot be read a chunk at a time — a server, a bucket, an entry in an archive — leaves the copy standing and counted as *not verified*, which the summary says |
@@ -94,6 +94,41 @@ is remembered for the next dialog with the others.
 Move: same-filesystem → `rename`; otherwise copy+verify+delete, and the delete step only runs
 after a successful verify. A cross-device Move that fails halfway leaves every file either at
 the source or fully at the target — never both-partial.
+
+### 3d. Extended attributes (`Preserve::xattrs`)
+
+A copy between two local paths carries the source's extended attributes, so a file tagged in
+Dolphin (`user.xdg.tags`) or the Finder arrives tagged. `fcmd_platform::xattr` has the three
+calls — list, get, set, each on the path itself and never through a link — for Linux
+(`llistxattr` and its kin) and macOS (`listxattr` with `XATTR_NOFOLLOW`); on every other
+platform a file lists none. `JobFs::copy_xattrs(src, dst)` is the engine's side of it, with a
+default that carries nothing, which is the answer of a server, a bucket and an archive.
+
+* **When.** For a file, after its data and *before* its permissions: a read-only source makes
+  a read-only copy, and that could no longer be tagged. For a directory, when it is created
+  rather than at the settle with its times — nothing a child does disturbs an attribute, and
+  by the settle a move has already removed the source. A move that can rename renames, and
+  the attributes travel with the inode; one that cannot (another device) is this copy.
+* **Best effort.** A destination that keeps no attributes (FAT, a share, a `tmpfs` mounted
+  without them) refuses, and the file is copied all the same, with no question and no error:
+  the same courtesy as the times. A destination that refuses with "not supported" is asked
+  once per file, not once per attribute.
+* **Which, on Linux: `user.*` only.** `security.*` (SELinux labels, file capabilities),
+  `system.*` (ACLs) and `trusted.*` say what a file is allowed on the system it was on, and a
+  file manager that carried them elsewhere would be granting what nobody granted. `cp` leaves
+  them behind too, short of `--preserve=all`.
+* **Which, on macOS: all of them**, as the Finder copies: tags, the label, *where from*, the
+  resource fork, and `com.apple.quarantine` with them. Keeping the quarantine mark is a
+  decision: a file that came from the internet is still one after it has been copied, and
+  dropping the mark would make a copy a way round Gatekeeper.
+* **Through links.** With *Copy what a link points at* the attributes are the target's, since
+  the bytes were. A link copied as a link carries none: Linux keeps no user attributes on one.
+* **Not Windows.** NTFS alternate data streams are another model and out of the core
+  (`docs/BACKLOG.md`, Settled).
+
+Not covered, and said so: the search-and-replace in files and the editor's save both write a
+new file and rename it over the old one, and the attributes of the old one are not carried
+across that rename.
 
 ### 3c. Going on with an interrupted copy (`JobOptions::resume`, shipped 0.31.0)
 

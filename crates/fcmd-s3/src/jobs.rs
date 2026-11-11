@@ -274,6 +274,15 @@ impl<F: JobFs> JobFs for ObjectFs<F> {
         Ok(())
     }
 
+    /// An object has metadata of its own kind and no extended attributes, so only a copy
+    /// with neither end in a bucket has any to take along.
+    fn copy_xattrs(&self, src: &VPath, dst: &VPath) -> io::Result<()> {
+        if mine(src) || mine(dst) {
+            return Ok(());
+        }
+        self.inner.copy_xattrs(src, dst)
+    }
+
     /// There is nothing here to set. An object carries the time the service wrote it, and a
     /// bucket's access is its policy — not a mode, and not this program's to change — so a
     /// request to change either is refused rather than silently doing nothing.

@@ -1693,3 +1693,4 @@ opt-sort-case = Majuscules et minuscules dans le tri
 opt-sort-case-auto = comme ce système
 opt-sort-case-yes = les distinguer
 opt-sort-case-no = un seul alphabet
+copy-keep-xattrs = Garder les attributs étendus

@@ -31,7 +31,24 @@ percorso, premi `Enter`, e niente sotto la prima riga si applica.
 * **Copia quello a cui punta un link, non il link** è spento, e deliberatamente: una copia che
   trasformasse i link in copie dei loro obiettivi duplicherebbe un albero la prima volta che ci
   provi.
-* **Conserva gli orari** e **Conserva i permessi** sono accesi.
+* **Conserva le date** e **Conserva i permessi** sono accesi.
+* Anche **Conserva gli attributi estesi** è acceso. Sono i valori con un nome che un file
+  system tiene accanto ai byte di un file, ed è lì che un desktop scrive quello che sa di un
+  file: le etichette che gli hai dato in Dolphin o nel Finder, il suo colore, l'indirizzo da
+  cui è stato scaricato. Una copia che portasse solo i byte arriverebbe senza etichette. Si
+  copiano per i file e per le cartelle, e li porta con sé anche uno spostamento su un altro
+  disco, che è una copia seguita da una cancellazione. Una destinazione che non ha dove
+  tenerli (una chiavetta FAT, una condivisione, un server, un archivio) riceve il file senza,
+  e per questo la copia non è un errore: sono una cortesia, come le date.
+
+  Su Linux si copiano gli attributi `user.`, che è dove si scrivono le etichette e simili.
+  Quelli `security.`, `system.` e `trusted.` — etichette SELinux, capability, ACL — dicono
+  cosa è permesso a un file sul sistema in cui si trovava, e restano lì, come con `cp`. Su
+  macOS si copia tutto, come fa il Finder, compreso il segno che dice che un file viene da
+  internet: un file scaricato resta un file scaricato anche dopo essere stato copiato.
+  Windows non ha niente del genere — i flussi di NTFS sono un'altra cosa, e non si copiano.
+
+  Lo stato iniziale delle tre caselle *Conserva* è `operations.preserve` nella configurazione.
 * Una copia interrotta riprende da dove si era fermata. Un file viene scritto come
   `nome.fcmd-part` finché non è completo; `Esc` lo toglie, ma un errore, un crash o il programma
   chiuso a forza lo lasciano, e copiare di nuovo lo stesso file nello stesso posto continua da

@@ -1693,3 +1693,4 @@ opt-sort-case = Groß- und Kleinschreibung beim Sortieren
 opt-sort-case-auto = wie dieses System
 opt-sort-case-yes = unterscheiden
 opt-sort-case-no = ein Alphabet
+copy-keep-xattrs = Erweiterte Attribute behalten

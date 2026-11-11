@@ -1631,3 +1631,4 @@ opt-sort-case = 排序时的大小写
 opt-sort-case-auto = 按本系统的习惯
 opt-sort-case-yes = 区分
 opt-sort-case-no = 不区分
+copy-keep-xattrs = 保留扩展属性

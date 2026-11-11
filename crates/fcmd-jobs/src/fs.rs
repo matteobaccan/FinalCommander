@@ -47,6 +47,21 @@ pub trait JobFs: Send + Sync {
     fn same_file(&self, a: &VPath, b: &VPath) -> bool;
     fn apply_meta(&self, path: &VPath, facts: &Facts, preserve: Preserve) -> io::Result<()>;
 
+    /// Give `dst` the extended attributes `src` carries: the tags, labels and marks a desktop
+    /// keeps beside a file's bytes, which a copy of the bytes alone leaves behind.
+    ///
+    /// A courtesy like [`JobFs::apply_meta`], and asked for separately only because it needs
+    /// both ends where that needs the destination and the source's [`Facts`]. An error says
+    /// that something could not be carried — a destination with nowhere to keep attributes
+    /// is the usual one — and the engine does not lose the copy over it.
+    ///
+    /// The default carries nothing and says so without complaint: a server, a bucket and an
+    /// archive have no such thing, and that is not a failure of the copy.
+    fn copy_xattrs(&self, src: &VPath, dst: &VPath) -> io::Result<()> {
+        let _ = (src, dst);
+        Ok(())
+    }
+
     /// Change what the attributes dialog asked to change.
     ///
     /// This is [`JobFs::apply_meta`]'s other half, and the difference is who asked. A copy
@@ -289,6 +304,36 @@ impl CopyHow {
     }
 }
 
+/// Is this extended attribute one a copy takes with it?
+///
+/// On Linux only the `user.` namespace, which is where a desktop writes (`user.xdg.tags`,
+/// `user.xdg.origin.url`, `user.baloo.rating`) and the only one that is the user's to write.
+/// `security.` holds SELinux labels and file capabilities, `system.` the ACLs, `trusted.`
+/// whatever root keeps there: each is a statement about what a file is *allowed*, made by
+/// the system where the file was, and a file manager that carried them to another place
+/// would be granting things nobody granted — which is why `cp` leaves them behind too
+/// unless it is told `--preserve=all`.
+///
+/// On macOS there are no namespaces and everything goes, which is what the Finder does: the
+/// tags and the label, the *where from*, the resource fork, and the quarantine mark with
+/// them. That last one is deliberate. A file that came from the internet is still a file
+/// that came from the internet after it has been copied, and a file manager that quietly
+/// washed the mark off would be a way round Gatekeeper.
+fn carries_xattr(name: &std::ffi::OsStr) -> bool {
+    !cfg!(target_os = "linux") || name.as_encoded_bytes().starts_with(b"user.")
+}
+
+/// The path itself, or what it points at when it is a link. A link that leads nowhere stays
+/// as it is, and whoever uses it finds that out.
+fn behind_link(path: &std::path::Path) -> PathBuf {
+    match fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => {
+            fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+        }
+        _ => path.to_path_buf(),
+    }
+}
+
 /// Suffix of the temporary file a copy writes into. A destination never appears under its final
 /// name until it is complete.
 pub const PART_SUFFIX: &str = ".fcmd-part";
@@ -418,6 +463,34 @@ impl JobFs for LocalFs {
             }
         }
         Ok(())
+    }
+
+    /// Every attribute worth carrying is tried, whatever happened to the one before, and the
+    /// first refusal is what comes back — except a destination that keeps no attributes at
+    /// all, which is asked once and not once per name.
+    fn copy_xattrs(&self, src: &VPath, dst: &VPath) -> io::Result<()> {
+        not_mine(src)?;
+        not_mine(dst)?;
+        // The data was read through a link when the source is one (`follow_symlinks`), and
+        // written through one when the destination already was; the attributes go the same
+        // way, since the calls underneath only ever speak about the path itself.
+        let (src, dst) = (behind_link(&src.os()), behind_link(&dst.os()));
+        let mut refused = None;
+        for name in fcmd_platform::xattr::list(&src)? {
+            if !carries_xattr(&name) {
+                continue;
+            }
+            let carried = fcmd_platform::xattr::get(&src, &name)
+                .and_then(|value| fcmd_platform::xattr::set(&dst, &name, &value));
+            if let Err(e) = carried {
+                let nowhere = e.kind() == io::ErrorKind::Unsupported;
+                refused.get_or_insert(e);
+                if nowhere {
+                    break;
+                }
+            }
+        }
+        refused.map_or(Ok(()), Err)
     }
 
     fn set_attrs(&self, path: &VPath, change: &crate::attrs::Change) -> io::Result<()> {
@@ -1039,6 +1112,83 @@ pub fn restore_from_trash(paths: &[std::path::PathBuf]) -> Result<usize, String>
 mod tests {
     use super::*;
     use fcmd_core::Scheme;
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn the_attributes_of_a_file_are_carried_one_by_one_and_a_refusal_is_reported() {
+        use fcmd_platform::xattr;
+        let dir = tempfile::tempdir().unwrap();
+        let (src, dst) = (dir.path().join("src.txt"), dir.path().join("dst.txt"));
+        fs::write(&src, b"words").unwrap();
+        fs::write(&dst, b"words").unwrap();
+        if let Err(e) = xattr::set(&src, "user.xdg.tags".as_ref(), b"one,two") {
+            eprintln!("skipped: no user attributes under {:?} ({e})", dir.path());
+            return;
+        }
+        xattr::set(&src, "user.fcmd.empty".as_ref(), b"").unwrap();
+        // The destination had one of its own and one of the same name: the first stays, the
+        // second becomes the source's.
+        xattr::set(&dst, "user.fcmd.own".as_ref(), b"mine").unwrap();
+        xattr::set(&dst, "user.xdg.tags".as_ref(), b"old").unwrap();
+
+        // What comes back is not asserted on here or below: macOS may have put an
+        // attribute of its own on a file it watched being made, and will not let anybody
+        // write that one. What the test put there is what has to arrive.
+        let _ = LocalFs.copy_xattrs(&VPath::local(&src), &VPath::local(&dst));
+        assert_eq!(
+            xattr::get(&dst, "user.xdg.tags".as_ref()).unwrap(),
+            b"one,two"
+        );
+        assert_eq!(xattr::get(&dst, "user.fcmd.empty".as_ref()).unwrap(), b"");
+        assert_eq!(xattr::get(&dst, "user.fcmd.own".as_ref()).unwrap(), b"mine");
+
+        // Through a link at either end, since that is how the bytes went.
+        let (link, other) = (dir.path().join("link"), dir.path().join("other.txt"));
+        std::os::unix::fs::symlink(&src, &link).unwrap();
+        fs::write(&other, b"").unwrap();
+        let _ = LocalFs.copy_xattrs(&VPath::local(&link), &VPath::local(&other));
+        assert_eq!(
+            xattr::get(&other, "user.xdg.tags".as_ref()).unwrap(),
+            b"one,two"
+        );
+
+        // Nowhere to put them is an error for whoever wants to know, and a source with
+        // nothing to carry is not — which only Linux can promise of a file just made.
+        let gone = dir.path().join("gone.txt");
+        assert!(LocalFs
+            .copy_xattrs(&VPath::local(&src), &VPath::local(&gone))
+            .is_err());
+        let plain = dir.path().join("plain.txt");
+        fs::write(&plain, b"").unwrap();
+        let nothing = LocalFs.copy_xattrs(&VPath::local(&plain), &VPath::local(&gone));
+        if cfg!(target_os = "linux") {
+            nothing.expect("nothing to carry, so nothing to refuse");
+        }
+    }
+
+    #[test]
+    fn only_the_users_own_namespace_is_carried_on_linux_and_everything_elsewhere() {
+        let carried = |name: &str| carries_xattr(std::ffi::OsStr::new(name));
+        assert!(carried("user.xdg.tags"));
+        assert!(carried("user.baloo.rating"));
+        // What a system says a file may do stays where the system said it.
+        for name in [
+            "security.selinux",
+            "security.capability",
+            "system.posix_acl_access",
+            "trusted.overlay.opaque",
+            "username",
+        ] {
+            assert_eq!(carried(name), !cfg!(target_os = "linux"), "{name}");
+        }
+        // The Finder's own, quarantine included: copied on macOS as the Finder copies them.
+        for name in [
+            "com.apple.metadata:_kMDItemUserTags",
+            "com.apple.quarantine",
+        ] {
+            assert_eq!(carried(name), !cfg!(target_os = "linux"), "{name}");
+        }
+    }
 
     /// A provider that implements only the calls the trait requires, so the operations a
     /// filesystem may not be able to do can be checked to refuse rather than guess. Every

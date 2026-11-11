@@ -1233,6 +1233,7 @@ impl Form {
         verify: bool,
         filter: &str,
         on_error: &str,
+        keep: fcmd_jobs::Preserve,
         i18n: &I18n,
     ) -> Form {
         let t = |id: &str| i18n.t(id);
@@ -1276,8 +1277,14 @@ impl Form {
             // Off, and FAR's default too: a copy that silently turned links into copies of
             // what they point at would duplicate a tree the first time somebody tried it.
             Field::toggle("copy.follow_links", t("copy-follow-links"), follow_links),
-            Field::toggle("copy.times", t("copy-keep-times"), true),
-            Field::toggle("copy.mode", t("copy-keep-mode"), true),
+            // The three start as `operations.preserve` says, which is all three unless the
+            // configuration was told otherwise.
+            Field::toggle("copy.times", t("copy-keep-times"), keep.mtime),
+            Field::toggle("copy.mode", t("copy-keep-mode"), keep.mode),
+            // The tags and labels a desktop keeps beside the bytes. A destination with
+            // nowhere to put them takes the file without them and the copy says nothing:
+            // it is a courtesy, like the other two.
+            Field::toggle("copy.xattrs", t("copy-keep-xattrs"), keep.xattrs),
             // Every file read back and compared before it counts — and before a move takes
             // the original away. Off by default: it reads everything twice.
             Field::toggle("copy.verify", t("copy-verify"), verify),

@@ -379,6 +379,13 @@ fn attempt(
                 }
             }
             if let Some(src) = &unit.src {
+                // A directory's tags now rather than with its times at the end. Nothing a
+                // child does can disturb them, the permissions settled later may make the
+                // directory one that cannot be written to, and by then a move has already
+                // taken the source away.
+                if !dry && spec.options.preserve.xattrs {
+                    let _ = fs.copy_xattrs(src, &unit.dst);
+                }
                 state.dir_meta.push((unit.dst.clone(), src.clone()));
             }
             state.outcome.dirs += 1;
@@ -473,6 +480,13 @@ fn attempt(
                     // A concatenation inherits nothing: the destination is no longer a copy of
                     // the source, so its own times and permissions are the right ones to keep.
                     if !append {
+                        // Before the permissions: a read-only source makes a read-only
+                        // copy, and a file that cannot be written cannot be tagged either.
+                        // Refused or not, the copy is a copy — a FAT stick keeps no
+                        // attributes and that is no reason to leave the file behind.
+                        if spec.options.preserve.xattrs {
+                            let _ = fs.copy_xattrs(&src, &dst);
+                        }
                         if let Ok(facts) = fs.facts(&src) {
                             let _ = fs.apply_meta(&dst, &facts, spec.options.preserve);
                         }
@@ -918,6 +932,289 @@ mod tests {
         let cancel = CancelToken::new();
         let p = plan(&LocalFs, spec, &cancel).expect("plan");
         execute(&LocalFs, spec, p, reporter, &cancel)
+    }
+
+    /// The local filesystem bent into the two shapes the tests about attributes need: one
+    /// where nothing can be renamed, which is what another device looks like to the engine,
+    /// and one with nowhere to keep an attribute, which is a FAT stick.
+    #[derive(Default)]
+    struct Shaped {
+        other_device: bool,
+        no_room_for_tags: bool,
+        asked_to_tag: std::sync::atomic::AtomicUsize,
+    }
+
+    impl JobFs for Shaped {
+        fn facts(&self, p: &VPath) -> std::io::Result<crate::Facts> {
+            LocalFs.facts(p)
+        }
+        fn facts_following(&self, p: &VPath) -> std::io::Result<crate::Facts> {
+            LocalFs.facts_following(p)
+        }
+        fn exists(&self, p: &VPath) -> bool {
+            LocalFs.exists(p)
+        }
+        fn read_dir(&self, p: &VPath) -> std::io::Result<Vec<(std::ffi::OsString, crate::Facts)>> {
+            LocalFs.read_dir(p)
+        }
+        fn create_dir(&self, p: &VPath) -> std::io::Result<()> {
+            LocalFs.create_dir(p)
+        }
+        fn create_dir_all(&self, p: &VPath) -> std::io::Result<()> {
+            LocalFs.create_dir_all(p)
+        }
+        fn rename(&self, from: &VPath, to: &VPath) -> std::io::Result<()> {
+            if self.other_device {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::CrossesDevices,
+                    "another device",
+                ));
+            }
+            LocalFs.rename(from, to)
+        }
+        fn remove_file(&self, p: &VPath) -> std::io::Result<()> {
+            LocalFs.remove_file(p)
+        }
+        fn remove_dir(&self, p: &VPath) -> std::io::Result<()> {
+            LocalFs.remove_dir(p)
+        }
+        fn read_link(&self, p: &VPath) -> std::io::Result<std::path::PathBuf> {
+            LocalFs.read_link(p)
+        }
+        fn symlink(&self, target: &std::path::Path, link: &VPath) -> std::io::Result<()> {
+            LocalFs.symlink(target, link)
+        }
+        fn same_file(&self, a: &VPath, b: &VPath) -> bool {
+            LocalFs.same_file(a, b)
+        }
+        fn apply_meta(&self, p: &VPath, f: &crate::Facts, pr: Preserve) -> std::io::Result<()> {
+            LocalFs.apply_meta(p, f, pr)
+        }
+        fn copy_xattrs(&self, src: &VPath, dst: &VPath) -> std::io::Result<()> {
+            self.asked_to_tag
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if self.no_room_for_tags {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "Operation not supported",
+                ));
+            }
+            LocalFs.copy_xattrs(src, dst)
+        }
+        fn copy_file(
+            &self,
+            src: &VPath,
+            dst: &VPath,
+            how: crate::fs::CopyHow,
+            on_bytes: &mut dyn FnMut(u64) -> bool,
+        ) -> std::io::Result<u64> {
+            LocalFs.copy_file(src, dst, how, on_bytes)
+        }
+    }
+
+    /// Can the directory the tests write in keep an attribute an ordinary user may set? A
+    /// `tmpfs` without them, an overlay on a CI runner and every platform but Linux and
+    /// macOS cannot, and there the tests about carrying them have nothing to look at.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    fn keeps_xattrs(dir: &tempfile::TempDir) -> bool {
+        let probe = dir.path().join("probe");
+        stdfs::write(&probe, b"").unwrap();
+        let kept = fcmd_platform::xattr::set(&probe, "user.fcmd.probe".as_ref(), b"1");
+        let _ = stdfs::remove_file(&probe);
+        if let Err(e) = &kept {
+            eprintln!("skipped: no user attributes under {:?} ({e})", dir.path());
+        }
+        kept.is_ok()
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    fn tag(path: &std::path::Path, name: &str, value: &[u8]) {
+        fcmd_platform::xattr::set(path, name.as_ref(), value).expect("the attribute is set");
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    fn tag_of(path: &std::path::Path, name: &str) -> Option<Vec<u8>> {
+        fcmd_platform::xattr::get(path, name.as_ref()).ok()
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn a_copy_takes_the_tags_of_files_and_folders_with_it() {
+        let dir = tree();
+        if !keeps_xattrs(&dir) {
+            return;
+        }
+        // What Dolphin writes for a tag, and what a browser writes for where a file came from.
+        tag(
+            &dir.path().join("src/a.txt"),
+            "user.xdg.tags",
+            b"holiday,2026",
+        );
+        tag(
+            &dir.path().join("src/a.txt"),
+            "user.xdg.origin.url",
+            b"https://example.org/a.txt",
+        );
+        tag(&dir.path().join("src/sub"), "user.xdg.tags", b"folder");
+        let when = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        touch(&dir.path().join("src/a.txt"), when);
+        // A read-only source, made so last because nothing above could be done to one: the
+        // attributes have to land on the copy before the permissions do.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let ro = stdfs::Permissions::from_mode(0o444);
+            stdfs::set_permissions(dir.path().join("src/a.txt"), ro).unwrap();
+        }
+
+        let spec = JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local(dir.path().join("src"))],
+            Some(VPath::local(dir.path().join("dst"))),
+        );
+        let out = run(&spec, &mut Scripted::new(vec![]));
+        assert!(out.is_clean(), "{out:?}");
+
+        let copy = dir.path().join("dst/src/a.txt");
+        assert_eq!(
+            tag_of(&copy, "user.xdg.tags").as_deref(),
+            Some(&b"holiday,2026"[..])
+        );
+        assert_eq!(
+            tag_of(&copy, "user.xdg.origin.url").as_deref(),
+            Some(&b"https://example.org/a.txt"[..])
+        );
+        assert_eq!(
+            tag_of(&dir.path().join("dst/src/sub"), "user.xdg.tags").as_deref(),
+            Some(&b"folder"[..])
+        );
+        // An untagged file gains nothing, and tagging did not cost the copy its time.
+        assert_eq!(
+            tag_of(&dir.path().join("dst/src/sub/b.txt"), "user.xdg.tags"),
+            None
+        );
+        assert_eq!(
+            LocalFs.facts(&VPath::local(&copy)).unwrap().mtime,
+            Some(when)
+        );
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn a_copy_told_not_to_keep_them_leaves_the_tags_behind() {
+        let dir = tree();
+        if !keeps_xattrs(&dir) {
+            return;
+        }
+        tag(&dir.path().join("src/a.txt"), "user.xdg.tags", b"holiday");
+        tag(&dir.path().join("src"), "user.xdg.tags", b"folder");
+        let spec = JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local(dir.path().join("src"))],
+            Some(VPath::local(dir.path().join("dst"))),
+        )
+        .with_options(JobOptions {
+            preserve: Preserve {
+                xattrs: false,
+                ..Preserve::default()
+            },
+            ..JobOptions::default()
+        });
+        let out = run(&spec, &mut Scripted::new(vec![]));
+        assert!(out.is_clean(), "{out:?}");
+        assert_eq!(
+            stdfs::read(dir.path().join("dst/src/a.txt")).unwrap(),
+            b"aaaa"
+        );
+        assert_eq!(
+            tag_of(&dir.path().join("dst/src/a.txt"), "user.xdg.tags"),
+            None
+        );
+        assert_eq!(tag_of(&dir.path().join("dst/src"), "user.xdg.tags"), None);
+    }
+
+    /// A move that cannot rename — another device — copies and then deletes, and what it
+    /// copies has to arrive tagged, because by the end there is no source left to ask.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn a_move_that_has_to_copy_keeps_the_tags() {
+        let dir = tree();
+        if !keeps_xattrs(&dir) {
+            return;
+        }
+        tag(&dir.path().join("src/a.txt"), "user.xdg.tags", b"holiday");
+        tag(&dir.path().join("src/sub"), "user.xdg.tags", b"folder");
+        let spec = JobSpec::new(
+            JobKind::Move,
+            vec![VPath::local(dir.path().join("src"))],
+            Some(VPath::local(dir.path().join("dst"))),
+        );
+        let cancel = CancelToken::new();
+        let fs = Shaped {
+            other_device: true,
+            ..Shaped::default()
+        };
+        let p = plan(&fs, &spec, &cancel).expect("plan");
+        let out = execute(&fs, &spec, p, &mut Scripted::new(vec![]), &cancel);
+        assert!(out.is_clean(), "{out:?}");
+        assert!(!dir.path().join("src").exists(), "the move left its source");
+        assert_eq!(
+            tag_of(&dir.path().join("dst/src/a.txt"), "user.xdg.tags").as_deref(),
+            Some(&b"holiday"[..])
+        );
+        assert_eq!(
+            tag_of(&dir.path().join("dst/src/sub"), "user.xdg.tags").as_deref(),
+            Some(&b"folder"[..])
+        );
+    }
+
+    /// A FAT stick, a share, a `tmpfs` mounted without them: the destination keeps no
+    /// attributes and says so for every one. The files are what was asked for, and they
+    /// arrive — on every platform, since the refusal here is the filesystem layer's own.
+    #[test]
+    fn a_destination_that_refuses_the_attributes_still_gets_the_files() {
+        use std::sync::atomic::Ordering;
+
+        let dir = tree();
+        let when = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        touch(&dir.path().join("src/a.txt"), when);
+        let spec = JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local(dir.path().join("src"))],
+            Some(VPath::local(dir.path().join("dst"))),
+        );
+        let fs = Shaped {
+            no_room_for_tags: true,
+            ..Shaped::default()
+        };
+        let cancel = CancelToken::new();
+        let p = plan(&fs, &spec, &cancel).expect("plan");
+        let mut reporter = Scripted::new(vec![]);
+        let out = execute(&fs, &spec, p, &mut reporter, &cancel);
+
+        assert!(
+            out.is_clean(),
+            "a refused attribute failed the copy: {out:?}"
+        );
+        assert!(reporter.asked.is_empty(), "and nobody is asked about it");
+        assert_eq!((out.files, out.dirs, out.bytes), (2, 2, 6));
+        assert_eq!(
+            stdfs::read(dir.path().join("dst/src/a.txt")).unwrap(),
+            b"aaaa"
+        );
+        assert_eq!(
+            stdfs::read(dir.path().join("dst/src/sub/b.txt")).unwrap(),
+            b"bb"
+        );
+        // Asked for every file and every folder, and the rest of the metadata still applied.
+        assert_eq!(fs.asked_to_tag.load(Ordering::Relaxed), 4);
+        assert_eq!(
+            LocalFs
+                .facts(&VPath::local(dir.path().join("dst/src/a.txt")))
+                .unwrap()
+                .mtime,
+            Some(when)
+        );
     }
 
     #[test]
@@ -1519,6 +1816,7 @@ mod tests {
             preserve: Preserve {
                 mtime: false,
                 mode: false,
+                ..Preserve::default()
             },
             ..JobOptions::default()
         });
@@ -1905,6 +2203,7 @@ mod tests {
             preserve: Preserve {
                 mtime: false,
                 mode: false,
+                ..Preserve::default()
             },
             ..JobOptions::default()
         });

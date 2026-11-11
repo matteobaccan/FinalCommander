@@ -113,6 +113,11 @@ pub enum ErrorPolicy {
 pub struct Preserve {
     pub mtime: bool,
     pub mode: bool,
+    /// The extended attributes: the tags and labels a desktop keeps beside a file's bytes.
+    /// Linux and macOS; there is nothing of the kind to carry anywhere else. On by default,
+    /// because a tag is the user's own work and a copy that drops it has lost something
+    /// nobody was asked about.
+    pub xattrs: bool,
 }
 
 impl Default for Preserve {
@@ -120,6 +125,7 @@ impl Default for Preserve {
         Preserve {
             mtime: true,
             mode: true,
+            xattrs: true,
         }
     }
 }
@@ -322,7 +328,7 @@ mod tests {
     fn defaults_are_the_cautious_ones() {
         let o = JobOptions::default();
         assert_eq!(o.on_conflict, ConflictPolicy::Ask);
-        assert!(o.preserve.mtime && o.preserve.mode);
+        assert!(o.preserve.mtime && o.preserve.mode && o.preserve.xattrs);
         assert!(
             !o.follow_symlinks,
             "a symlink is copied as a link by default"
