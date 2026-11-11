@@ -35,6 +35,13 @@ pub enum Request {
         panel: usize,
         path: VPath,
     },
+    /// Walk the whole tree under `root` and add up every folder in it, for the disk usage
+    /// map (SPEC 06 §12). The walk reports how far it has got and answers once, at the end.
+    UsageTree {
+        id: u64,
+        root: VPath,
+        cancel: CancelToken,
+    },
     /// Look for files with the same content under `roots` (SPEC 06 §13).
     Dupes {
         panel: usize,
@@ -1313,6 +1320,17 @@ pub enum Event {
         panel: usize,
         root: VPath,
         branch: fcmd_jobs::branch::Branch,
+    },
+    /// How far the walk for the disk usage map has got.
+    UsageProgress {
+        id: u64,
+        files: u64,
+        bytes: u64,
+    },
+    /// The walk for the disk usage map is back; `None` when it was stopped.
+    UsageTree {
+        id: u64,
+        tree: Option<fcmd_jobs::usage::Tree>,
     },
     /// Free space on the device a panel's directory is on, which the read reports separately
     /// because a listing is the same work whether or not the platform can answer this.
@@ -2643,6 +2661,8 @@ pub enum Mode {
     },
     /// Two files side by side, with what differs marked (SPEC 05 §3).
     Diff(Box<fcmd_view::Diff>),
+    /// Where the space of a whole tree goes, as a map and as a list (SPEC 06 §12).
+    Usage(Box<crate::treemap::UsageView>),
     /// `Alt+Ins`: the screen as it was, with a rectangle of it to copy (SPEC 06 §11b).
     Grab(Box<crate::grab::Grab>),
     /// `Ctrl+Alt+E`: a real terminal with a shell in it (SPEC 06 §4).
@@ -3026,6 +3046,9 @@ pub struct App {
     pub queue: crate::queue::Queue,
     /// Stops the branch walk that is running when another one is asked for.
     branch_cancel: CancelToken,
+    /// Which walk for the disk usage map is the one on screen: an abandoned one may still
+    /// answer, and its answer is for a screen that has gone.
+    usage_seq: u64,
     /// The file the split dialog is about, and the piece size it was last answered with.
     split_source: Option<VPath>,
     last_split_size: String,
@@ -3530,6 +3553,7 @@ impl App {
             resuming: None,
             queue: Default::default(),
             branch_cancel: CancelToken::new(),
+            usage_seq: 0,
             split_source: None,
             last_split_size: "100M".to_string(),
             last_split_count: String::new(),
@@ -4882,6 +4906,20 @@ impl App {
                 root,
                 branch,
             } => self.branch_arrived(panel, root, branch),
+            Event::UsageProgress { id, files, bytes } => {
+                if let Mode::Usage(view) = &mut self.mode {
+                    if view.id == id && view.tree.is_none() {
+                        view.progress = (files, bytes);
+                    }
+                }
+            }
+            Event::UsageTree { id, tree } => {
+                if let (Mode::Usage(view), Some(tree)) = (&mut self.mode, tree) {
+                    if view.id == id {
+                        view.arrived(tree);
+                    }
+                }
+            }
             Event::JobQuestion {
                 id,
                 question,
@@ -5637,6 +5675,10 @@ impl App {
             Mode::Diff(view) => {
                 self.mode = Mode::Diff(view);
                 self.diff_key(key);
+            }
+            Mode::Usage(view) => {
+                self.mode = Mode::Usage(view);
+                self.usage_key(key);
             }
             Mode::Grab(grab) => {
                 self.mode = Mode::Grab(grab);
@@ -17615,6 +17657,141 @@ impl App {
         self.open_pick(PickKind::Usage, side);
     }
 
+    /// `Tab` in the disk usage list: the whole tree under this folder, as a map (SPEC 06 §12).
+    ///
+    /// The list asks one folder at a time and is on the screen at once; this asks the whole
+    /// tree, which takes as long as the tree is deep, so the walk is a worker's and the screen
+    /// says how far it has got until the answer is there. `Esc` stops it.
+    fn open_usage_tree(&mut self, side: usize) {
+        let root = self.panels[side].cwd.clone();
+        self.usage_seq += 1;
+        let cancel = CancelToken::new();
+        self.requests.push(Request::UsageTree {
+            id: self.usage_seq,
+            root: root.clone(),
+            cancel: cancel.clone(),
+        });
+        self.mode = Mode::Usage(Box::new(crate::treemap::UsageView::new(
+            self.usage_seq,
+            side,
+            root,
+            cancel,
+        )));
+    }
+
+    /// The keys of the disk usage map and of its list (SPEC 06 §12).
+    ///
+    /// The arrows go from rectangle to rectangle on the map and from row to row in the list;
+    /// `Enter` looks into a folder and `Backspace` comes back out, `Tab` changes between the
+    /// two views of the same folder, and `G` — or `Enter` on a file — closes the screen with
+    /// the panel's cursor on what was chosen.
+    fn usage_key(&mut self, key: Key) {
+        use crate::treemap::Way;
+        use fcmd_jobs::usage::Kind;
+
+        let Mode::Usage(view) = &mut self.mode else {
+            return;
+        };
+        if matches!(key.code, KeyCode::Esc | KeyCode::F(10)) {
+            // A walk still running is told to stop: nobody is waiting for its answer.
+            view.cancel.cancel();
+            self.mode = Mode::Normal;
+            return;
+        }
+        if view.tree.is_none() {
+            return;
+        }
+        let page = view.list_height().max(1) as i64;
+        let mut error: Option<&'static str> = None;
+        // Where the panel is to go, and whether what is there is a folder to go into.
+        let mut go: Option<(VPath, bool)> = None;
+        let chosen = |view: &crate::treemap::UsageView| -> Option<(VPath, Kind)> {
+            let row = view.chosen()?;
+            let kind = view.tree.as_ref()?.node(row).kind;
+            Some((view.path_of(row), kind))
+        };
+        match key.code {
+            KeyCode::Tab => {
+                view.list = !view.list;
+                view.move_by(0);
+            }
+            KeyCode::Up if view.list => view.move_by(-1),
+            KeyCode::Down if view.list => view.move_by(1),
+            KeyCode::PageUp if view.list => view.move_by(-page),
+            KeyCode::PageDown if view.list => view.move_by(page),
+            KeyCode::Home => view.move_to(0),
+            KeyCode::End if view.list => view.move_to(usize::MAX),
+            KeyCode::Up => {
+                view.step(Way::Up);
+            }
+            KeyCode::Down => {
+                view.step(Way::Down);
+            }
+            KeyCode::Left => {
+                if !view.list {
+                    view.step(Way::Left);
+                } else if !view.ascend() {
+                    error = Some("usage-map-top");
+                }
+            }
+            KeyCode::Right => {
+                if !view.list {
+                    view.step(Way::Right);
+                }
+            }
+            KeyCode::Backspace => {
+                if !view.ascend() {
+                    error = Some("usage-map-top");
+                }
+            }
+            KeyCode::Enter => match chosen(view) {
+                Some((_, Kind::Dir)) => {
+                    view.descend();
+                }
+                Some((path, Kind::File)) => go = Some((path, false)),
+                // The rectangle that stands for the rows too small to draw: the list is
+                // where they can be told apart, so `Enter` on it shows them there.
+                Some((_, Kind::Rest)) | None => {
+                    if !view.list {
+                        view.list = true;
+                        view.move_by(0);
+                    }
+                }
+            },
+            KeyCode::Char('g') | KeyCode::Char('G') => match chosen(view) {
+                Some((path, Kind::Dir)) => go = Some((path, true)),
+                Some((path, Kind::File)) => go = Some((path, false)),
+                Some((_, Kind::Rest)) | None => error = Some("usage-map-no-file"),
+            },
+            _ => {}
+        }
+        let side = view.side;
+        if let Some(id) = error {
+            let m = self.i18n.t(id);
+            self.set_error(m);
+        }
+        if let Some((path, folder)) = go {
+            self.mode = Mode::Normal;
+            self.active = side;
+            if folder {
+                self.goto(path);
+            } else if let Some(parent) = path.parent() {
+                // The folder is read by a worker; the cursor lands on the file when the
+                // listing is there, and at once when the panel is already in that folder.
+                let name = path.display_name();
+                if self.panels[side].cwd.normalised() == parent.normalised() {
+                    if let Some(row) = self.panels[side].listing.row_of_name(&name) {
+                        self.panels[side].cursor_to(row);
+                        self.scroll();
+                    }
+                } else {
+                    self.goto(parent);
+                    self.panels[side].want_cursor = Some(name);
+                }
+            }
+        }
+    }
+
     /// `Ctrl+Shift+F6`: rename what is selected from one pattern (SPEC 03 §8).
     ///
     /// The files are taken in the order the panel shows them, which is the order the counter
@@ -23757,6 +23934,12 @@ impl App {
             }
             // The page about dialogs, with the list waiting behind it.
             KeyCode::F(1) if key.mods == Mods::NONE => self.open_dialog_help(),
+            // The disk usage list is one level of one folder; `Tab` asks for the whole tree
+            // under it and shows it as a map (SPEC 06 §12).
+            KeyCode::Tab if kind == PickKind::Usage => {
+                let side = pick.side;
+                self.open_usage_tree(side);
+            }
             // The rows slide sideways, for a list of paths wider than the box. FAR's keys.
             KeyCode::Left if key.mods.contains(Mods::ALT) => pick.scroll_sideways(-1),
             KeyCode::Right if key.mods.contains(Mods::ALT) => pick.scroll_sideways(1),
@@ -34961,6 +35144,127 @@ mod tests {
                 .iter()
                 .any(|r| matches!(r, Request::Read { path, .. } if path.display_name() == "docs")),
             "Enter goes into the folder: {:?}",
+            app.requests
+        );
+    }
+
+    /// `Tab` in the disk usage list asks for the whole tree, the screen says it is measuring
+    /// until the walk answers, and then `Enter` and `Backspace` walk the tree, `Tab` changes
+    /// between the map and the list, and `Enter` on a file leaves the panel on it.
+    #[test]
+    fn the_usage_map_is_walked_by_a_worker_and_enter_on_a_file_moves_the_panel() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("big/inner")).unwrap();
+        std::fs::write(dir.path().join("big/inner/film.mkv"), vec![0u8; 4000]).unwrap();
+        std::fs::write(dir.path().join("big/notes.txt"), vec![0u8; 1000]).unwrap();
+        std::fs::write(dir.path().join("small.rs"), vec![0u8; 2000]).unwrap();
+        let mut app = editing_app(dir.path());
+        let cwd = app.panels[0].cwd.clone();
+        press(&mut app, "Alt+Shift+F3");
+        app.requests.clear();
+        press(&mut app, "Tab");
+        let Mode::Usage(view) = &app.mode else {
+            panic!("no map: {:?}", app.mode)
+        };
+        assert!(view.tree.is_none(), "nothing is walked by the key itself");
+        let Some(Request::UsageTree { id, root, cancel }) = app
+            .take_requests()
+            .into_iter()
+            .find(|r| matches!(r, Request::UsageTree { .. }))
+        else {
+            panic!("no walk was asked for")
+        };
+        assert_eq!(root, cwd);
+        // The walk reports, and the screen keeps the figure.
+        app.handle_event(Event::UsageProgress {
+            id,
+            files: 2,
+            bytes: 5000,
+        });
+        assert!(matches!(&app.mode, Mode::Usage(v) if v.progress == (2, 5000)));
+        // An answer that is another walk's is not this screen's.
+        let tree = fcmd_jobs::usage::walk(&fcmd_jobs::LocalFs, &root, &cancel, &mut |_, _| {});
+        app.handle_event(Event::UsageTree {
+            id: id + 1,
+            tree: tree.clone(),
+        });
+        assert!(matches!(&app.mode, Mode::Usage(v) if v.tree.is_none()));
+        app.handle_event(Event::UsageTree { id, tree });
+
+        let chosen = |app: &App| -> String {
+            let Mode::Usage(view) = &app.mode else {
+                panic!("the map closed: {:?}", app.mode)
+            };
+            let tree = view.tree.as_ref().expect("the tree is there");
+            tree.node(view.chosen().expect("a row")).name.clone()
+        };
+        assert_eq!(chosen(&app), "big", "the largest first");
+        press(&mut app, "Backspace");
+        assert!(app.status_error, "nothing above the folder that was asked");
+        press(&mut app, "Enter");
+        assert_eq!(chosen(&app), "inner");
+        press(&mut app, "Enter");
+        assert_eq!(chosen(&app), "film.mkv");
+        press(&mut app, "Backspace");
+        assert_eq!(chosen(&app), "inner", "back on the folder that was left");
+        // The list of the same folder, where the arrows are rows.
+        press(&mut app, "Tab");
+        assert!(matches!(&app.mode, Mode::Usage(v) if v.list));
+        press(&mut app, "Down");
+        assert_eq!(chosen(&app), "notes.txt");
+        app.requests.clear();
+        press(&mut app, "Enter");
+        assert!(matches!(app.mode, Mode::Normal), "{:?}", app.mode);
+        let want = cwd.join("big");
+        assert!(
+            app.requests
+                .iter()
+                .any(|r| matches!(r, Request::Read { path, .. } if *path == want)),
+            "the panel goes to the file's folder: {:?}",
+            app.requests
+        );
+        assert_eq!(app.panels[0].want_cursor.as_deref(), Some("notes.txt"));
+    }
+
+    /// `Esc` while the tree is still being walked stops the walk and closes the screen, and
+    /// `G` on a folder takes the panel into it.
+    #[test]
+    fn the_usage_map_stops_its_walk_on_esc_and_g_goes_to_a_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("docs")).unwrap();
+        std::fs::write(dir.path().join("docs/a.md"), vec![0u8; 100]).unwrap();
+        let mut app = editing_app(dir.path());
+        let cwd = app.panels[0].cwd.clone();
+        press(&mut app, "Alt+Shift+F3");
+        press(&mut app, "Tab");
+        let cancel = match &app.mode {
+            Mode::Usage(view) => view.cancel.clone(),
+            other => panic!("no map: {other:?}"),
+        };
+        // Any other key waits for the walk; `Esc` ends it.
+        press(&mut app, "Enter");
+        assert!(matches!(app.mode, Mode::Usage(_)));
+        assert!(!cancel.is_cancelled());
+        press(&mut app, "Esc");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert!(cancel.is_cancelled(), "the worker is told to stop");
+
+        press(&mut app, "Alt+Shift+F3");
+        app.requests.clear();
+        press(&mut app, "Tab");
+        let Some(Request::UsageTree { id, root, cancel }) = app.take_requests().pop() else {
+            panic!("no walk was asked for")
+        };
+        let tree = fcmd_jobs::usage::walk(&fcmd_jobs::LocalFs, &root, &cancel, &mut |_, _| {});
+        app.handle_event(Event::UsageTree { id, tree });
+        press(&mut app, "g");
+        assert!(matches!(app.mode, Mode::Normal));
+        let want = cwd.join("docs");
+        assert!(
+            app.requests
+                .iter()
+                .any(|r| matches!(r, Request::Read { path, .. } if *path == want)),
+            "{:?}",
             app.requests
         );
     }

@@ -146,8 +146,8 @@ They cannot show a version of the program that no longer exists.
 | **A bucket as a panel** (`s3://logs/2024/08/`): the folders are common prefixes the service computes, and the footer says when the listing is not all of it. | **The help** (`F1`): the keys of the screen you are on, each with what it does, generated from the keymap in force. |
 | <img src="docs/shots/git.svg" alt="The git panel: what changed, staged apart from not staged, each row saying in words what happened to the file" width="420"> | <img src="docs/shots/ai.svg" alt="The AI panel: a conversation rendered as Markdown, the questions on the right, the model and the context window on the frame" width="420"> |
 | **Git in a panel** (`Alt+F1` → *Git*): what changed, staged apart from not staged, in words; `F5` stages, `F6` unstages, `F7` commits, `F8` discards, `F3` is the side-by-side diff. | **The AI panel** (`Alt+F1` → *AI*): the conversation itself, in Markdown, questions on the right and answers as they are written; the frame names the model and how full its context window is. |
-| <img src="docs/shots/diff.svg" alt="The side-by-side diff with the removed line painted red and the added lines painted green" width="420"> | |
-| **The side-by-side diff** (`Ctrl+Shift+D`, or `F3` in the git panel): a line that went is painted red, a line that came green, and the part of a changed line that differs is marked. | |
+| <img src="docs/shots/diff.svg" alt="The side-by-side diff with the removed line painted red and the added lines painted green" width="420"> | <img src="docs/shots/usage.svg" alt="The disk usage map: a folder's rows as rectangles sized by what they hold, each folder showing what it is made of" width="420"> |
+| **The side-by-side diff** (`Ctrl+Shift+D`, or `F3` in the git panel): a line that went is painted red, a line that came green, and the part of a changed line that differs is marked. | **Where the space went** (`Alt+Shift+F3`, then `Tab`): the whole tree measured once and drawn as a map, each rectangle in the colour its name has in the panel; `Enter` goes into a folder, `Backspace` comes back. |
 
 ## Git and AI, each in a panel
 

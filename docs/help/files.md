@@ -338,6 +338,28 @@ rather than counting as empty. `Enter` on a folder goes into it, where the same 
 same question one level down; on a file it puts the panel's cursor there. The sizes stay in
 the panel afterwards, so sorting it by size agrees with the list.
 
+`Tab` in that list asks about the whole tree under the folder at once and draws it as a map:
+every row of the folder is a rectangle as large as its share of the space, in the colour its
+name has in the panel — an archive is the colour of an archive, a folder of a folder — and a
+folder's rectangle shows what the folder is made of, one level down. The tree is walked once,
+in the background; until the answer is there the screen says how many files it has seen and
+`Esc` stops it. Then:
+
+| Key | What it does |
+| --- | --- |
+| the arrows | from one rectangle to the one beside it |
+| `Enter` | into the folder under the cursor; on a file, closes the map with the panel's cursor on that file |
+| `Backspace` | back to the folder above, with the cursor on the one just left |
+| `Tab` | the same folder as a list, largest first, with bars and shares — and back to the map |
+| `G` | closes the map with the panel in the folder under the cursor, or on the file |
+| `Esc` | closes the map |
+
+What is too small to have a cell of its own is one rectangle that says how many rows it stands
+for; `Enter` on it opens the list, where they can be told apart. A folder of thousands of
+files keeps its 256 largest by name and counts the rest as one row, so nothing is missing
+from a total. Going in and out of folders never touches the disk again: the sizes were added
+up once.
+
 # Files that are the same
 
 *Commands → Find duplicate files* looks under the folder the panel is in — or under what is

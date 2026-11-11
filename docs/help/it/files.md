@@ -350,6 +350,28 @@ entra, e lì lo stesso tasto fa la stessa domanda un livello più giù; su un fi
 cursore del pannello. Le dimensioni restano poi nel pannello, così ordinarlo per dimensione dà
 lo stesso ordine dell'elenco.
 
+`Tab` in quell'elenco chiede di tutto l'albero sotto la cartella in una volta e lo disegna come
+una mappa: ogni riga della cartella è un rettangolo grande quanto la sua quota di spazio, nel
+colore che il suo nome ha nel pannello — un archivio ha il colore degli archivi, una cartella
+quello delle cartelle — e il rettangolo di una cartella mostra di che cosa è fatta, un livello
+più giù. L'albero viene percorso una volta sola, in background; finché la risposta non c'è lo
+schermo dice quanti file ha visto, ed `Esc` ferma tutto. Poi:
+
+| Tasto | Che cosa fa |
+| --- | --- |
+| le frecce | da un rettangolo a quello accanto |
+| `Enter` | dentro la cartella sotto il cursore; su un file chiude la mappa con il cursore del pannello su quel file |
+| `Backspace` | torna alla cartella sopra, con il cursore su quella appena lasciata |
+| `Tab` | la stessa cartella come elenco, dal più grande, con barre e quote — e di nuovo la mappa |
+| `G` | chiude la mappa con il pannello nella cartella sotto il cursore, o sul file |
+| `Esc` | chiude la mappa |
+
+Ciò che è troppo piccolo per avere una cella sua è un solo rettangolo che dice quante righe
+rappresenta; `Enter` lì apre l'elenco, dove si distinguono. Una cartella con migliaia di file
+tiene per nome i 256 più grandi e conta gli altri come una riga sola, così a nessun totale
+manca nulla. Entrare e uscire dalle cartelle non tocca più il disco: le dimensioni sono state
+sommate una volta sola.
+
 # File uguali
 
 *Comandi → Trova file duplicati* cerca sotto la cartella del pannello — o sotto ciò che è

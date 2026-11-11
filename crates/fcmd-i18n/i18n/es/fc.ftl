@@ -105,7 +105,7 @@ msg-bookmark-removed = { $path } quitada
 msg-bookmark-known = esa carpeta ya está en la lista
 msg-dirsize = { $path }: { $bytes } en { $files } archivos
 msg-dirsize-many = midiendo { $count } carpetas…
-usage-title = Uso del disco: { $path } · { $size }
+usage-title = Uso del disco: { $path } · { $size } · Tab: todo el árbol como mapa
 usage-not-here = el uso de una carpeta se mide en un disco, no dentro de un archivo comprimido ni en una lista de archivos encontrados
 msg-dirsize-no-folder = aquí no hay ninguna carpeta que medir
 
@@ -1855,3 +1855,17 @@ ai-find-ready = la búsqueda del modelo está en el diálogo: lee las filas, cor
 ai-find-waiting = la búsqueda del modelo está lista: Alt+F7 abre el diálogo con ella
 ai-find-unreadable = el modelo no respondió con una búsqueda: su respuesta está en la carpeta de respuestas (ai:), y no se buscó nada
 ai-find-left-out = { $said } — NO en las filas, porque no pueden expresarlo: { $what }
+# treemap and compare
+usage-map-title = Uso del disco, todo el árbol: { $path }
+usage-map-walking = Midiendo… archivos: { $files }, { $size } hasta ahora
+usage-map-where = { $path } · { $size } · archivos: { $files }
+usage-map-unreadable = carpetas no leídas: { $count }
+usage-map-rest = archivos más pequeños: { $count }
+usage-map-others = otros: { $count }
+usage-map-empty = Nada en esta carpeta ocupa espacio
+usage-map-chosen = { $name } · { $size } · { $share }%
+usage-map-hint = ←↑↓→ · Intro entrar · BkSp subir · Tab lista · G panel allí · Esc
+usage-map-hint-list = ↑↓ · Intro entrar · BkSp subir · Tab mapa · G panel allí · Esc
+usage-map-hint-walking = Esc detiene
+usage-map-top = Esta es la carpeta medida: aquí no hay nada por encima
+usage-map-no-file = Esta fila son muchos archivos pequeños, no uno al que pueda ir el panel

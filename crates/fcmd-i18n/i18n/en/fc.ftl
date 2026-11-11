@@ -110,7 +110,7 @@ msg-bookmark-removed = { $path } given up
 msg-bookmark-known = that folder is already in the list
 msg-dirsize = { $path }: { $bytes } in { $files } files
 msg-dirsize-many = measuring { $count } folders…
-usage-title = Disk usage: { $path } · { $size }
+usage-title = Disk usage: { $path } · { $size } · Tab: the whole tree as a map
 usage-not-here = the disk usage of a folder is measured on a disk, not inside an archive or a list of found files
 msg-dirsize-no-folder = there is no folder here to measure
 
@@ -1865,3 +1865,17 @@ ai-find-ready = the model's search is in the dialog: read the rows, change what 
 ai-find-waiting = the model's search is ready: Alt+F7 opens the dialog with it
 ai-find-unreadable = the model did not answer with a search: its answer is in the answers' folder (ai:), and nothing was searched
 ai-find-left-out = { $said } — NOT in the rows, because they cannot say it: { $what }
+# treemap and compare
+usage-map-title = Disk usage, the whole tree: { $path }
+usage-map-walking = Measuring… files: { $files }, { $size } so far
+usage-map-where = { $path } · { $size } · files: { $files }
+usage-map-unreadable = folders not read: { $count }
+usage-map-rest = smaller files: { $count }
+usage-map-others = others: { $count }
+usage-map-empty = Nothing in this folder takes any space
+usage-map-chosen = { $name } · { $size } · { $share }%
+usage-map-hint = ←↑↓→ · Enter into · BkSp up · Tab list · G panel there · Esc
+usage-map-hint-list = ↑↓ · Enter into · BkSp up · Tab map · G panel there · Esc
+usage-map-hint-walking = Esc stops
+usage-map-top = This is the folder that was measured: there is nothing above it here
+usage-map-no-file = This row is many small files, not one the panel can go to

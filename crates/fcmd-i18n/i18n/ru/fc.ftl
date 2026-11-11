@@ -105,7 +105,7 @@ msg-bookmark-removed = { $path } убрана
 msg-bookmark-known = эта папка уже в списке
 msg-dirsize = { $path }: { $bytes } в { $files } файлах
 msg-dirsize-many = измеряю { $count } папок…
-usage-title = Занятое место: { $path } · { $size }
+usage-title = Занятое место: { $path } · { $size } · Tab: всё дерево картой
 usage-not-here = занятое место измеряется на диске, а не внутри архива или в списке найденных файлов
 msg-dirsize-no-folder = здесь нечего измерять
 
@@ -1841,3 +1841,17 @@ ai-find-ready = поиск от модели — в диалоге: прочти
 ai-find-waiting = поиск от модели готов: Alt+F7 откроет диалог с ним
 ai-find-unreadable = модель ответила не поиском: её ответ — в папке ответов (ai:), и ничего не искалось
 ai-find-left-out = { $said } — НЕ в строках, потому что они этого не выражают: { $what }
+# treemap and compare
+usage-map-title = Занятое место, всё дерево: { $path }
+usage-map-walking = Измеряю… файлов: { $files }, пока { $size }
+usage-map-where = { $path } · { $size } · файлов: { $files }
+usage-map-unreadable = непрочитанных папок: { $count }
+usage-map-rest = файлов поменьше: { $count }
+usage-map-others = прочих: { $count }
+usage-map-empty = В этой папке ничто не занимает места
+usage-map-chosen = { $name } · { $size } · { $share }%
+usage-map-hint = ←↑↓→ · Enter внутрь · BkSp вверх · Tab список · G панель туда · Esc
+usage-map-hint-list = ↑↓ · Enter внутрь · BkSp вверх · Tab карта · G панель туда · Esc
+usage-map-hint-walking = Esc останавливает
+usage-map-top = Это измеренная папка: выше здесь ничего нет
+usage-map-no-file = Эта строка — много мелких файлов, а не один, к которому может перейти панель

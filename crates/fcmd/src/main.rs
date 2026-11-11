@@ -29,6 +29,7 @@ mod tabs;
 mod termkeys;
 mod tools;
 mod tree;
+mod treemap;
 mod undo;
 mod vault;
 mod video;
@@ -2338,6 +2339,33 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                                 branch,
                             });
                         }
+                    });
+                }
+                Request::UsageTree { id, root, cancel } => {
+                    let tx = tx.clone();
+                    let fs = ArcFs::new(
+                        archives.clone(),
+                        ObjectFs::new(
+                            objects.clone(),
+                            RoutedFs::new(pool.clone(), runtime.handle().clone()),
+                            runtime.handle().clone(),
+                        ),
+                    );
+                    runtime.spawn_blocking(move || {
+                        // The screen hears how far the walk has got a few times a second and
+                        // no more: a folder is read in microseconds, and an event for each
+                        // would be a queue the loop spends the walk draining.
+                        let mut told = std::time::Instant::now();
+                        let progress = tx.clone();
+                        let tree =
+                            fcmd_jobs::usage::walk(&fs, &root, &cancel, &mut |files, bytes| {
+                                if told.elapsed() >= std::time::Duration::from_millis(150) {
+                                    told = std::time::Instant::now();
+                                    let _ =
+                                        progress.send(Event::UsageProgress { id, files, bytes });
+                                }
+                            });
+                        let _ = tx.send(Event::UsageTree { id, tree });
                     });
                 }
                 Request::DirSize { panel, path } => {
@@ -7335,6 +7363,13 @@ dir_attr = "D"
                 // `ffmpeg` is not run for every test that opens a container: the ones about
                 // films run it themselves, where it is installed.
                 Request::VideoFrame { .. } | Request::VideoPlay { .. } => {}
+                // The whole tree is walked where it is asked, as the branch view is: what a
+                // test then sees is the map, as the screen does a moment later.
+                Request::UsageTree { id, root, cancel } => {
+                    let tree =
+                        fcmd_jobs::usage::walk(&fcmd_jobs::LocalFs, &root, &cancel, &mut |_, _| {});
+                    app.handle_event(Event::UsageTree { id, tree });
+                }
                 Request::DirSize { .. }
                 | Request::UpdateCheck { .. }
                 | Request::ToolVersions { .. }

@@ -105,7 +105,7 @@ msg-bookmark-removed = { $path } rimossa
 msg-bookmark-known = quella cartella è già nell’elenco
 msg-dirsize = { $path }: { $bytes } in { $files } file
 msg-dirsize-many = misuro { $count } cartelle…
-usage-title = Occupazione del disco: { $path } · { $size }
+usage-title = Occupazione del disco: { $path } · { $size } · Tab: tutto l'albero come mappa
 usage-not-here = l'occupazione si misura su un disco, non dentro un archivio o in un elenco di file trovati
 msg-dirsize-no-folder = qui non c'è nessuna cartella da misurare
 
@@ -1856,3 +1856,17 @@ ai-find-ready = la ricerca proposta dal modello è nel dialogo: leggi le righe, 
 ai-find-waiting = la ricerca proposta dal modello è pronta: Alt+F7 apre il dialogo con quella
 ai-find-unreadable = il modello non ha risposto con una ricerca: la risposta è nella cartella delle risposte (ai:), e niente è stato cercato
 ai-find-left-out = { $said } — NON nelle righe, perché non lo sanno dire: { $what }
+# treemap and compare
+usage-map-title = Occupazione del disco, tutto l'albero: { $path }
+usage-map-walking = Misuro… file: { $files }, { $size } finora
+usage-map-where = { $path } · { $size } · file: { $files }
+usage-map-unreadable = cartelle non lette: { $count }
+usage-map-rest = file più piccoli: { $count }
+usage-map-others = altri: { $count }
+usage-map-empty = Niente in questa cartella occupa spazio
+usage-map-chosen = { $name } · { $size } · { $share }%
+usage-map-hint = ←↑↓→ · Invio entra · BkSp su · Tab elenco · G pannello lì · Esc
+usage-map-hint-list = ↑↓ · Invio entra · BkSp su · Tab mappa · G pannello lì · Esc
+usage-map-hint-walking = Esc ferma
+usage-map-top = Questa è la cartella misurata: qui sopra non c'è altro
+usage-map-no-file = Questa riga sono molti file piccoli, non uno su cui portare il pannello

@@ -105,7 +105,7 @@ msg-bookmark-removed = { $path } retiré
 msg-bookmark-known = ce dossier est déjà dans la liste
 msg-dirsize = { $path } : { $bytes } dans { $files } fichiers
 msg-dirsize-many = mesure de { $count } dossiers…
-usage-title = Occupation du disque : { $path } · { $size }
+usage-title = Occupation du disque : { $path } · { $size } · Tab : tout l'arbre en carte
 usage-not-here = l'occupation d'un dossier se mesure sur un disque, pas dans une archive ni dans une liste de fichiers trouvés
 msg-dirsize-no-folder = il n'y a aucun dossier à mesurer ici
 
@@ -1855,3 +1855,17 @@ ai-find-ready = la recherche du modèle est dans le dialogue : lisez les lignes,
 ai-find-waiting = la recherche du modèle est prête : Alt+F7 ouvre le dialogue avec elle
 ai-find-unreadable = le modèle n'a pas répondu par une recherche : sa réponse est dans le dossier des réponses (ai:), et rien n'a été cherché
 ai-find-left-out = { $said } — PAS dans les lignes, qui ne savent pas le dire : { $what }
+# treemap and compare
+usage-map-title = Occupation du disque, tout l'arbre : { $path }
+usage-map-walking = Mesure… fichiers : { $files }, { $size } jusqu'ici
+usage-map-where = { $path } · { $size } · fichiers : { $files }
+usage-map-unreadable = dossiers non lus : { $count }
+usage-map-rest = fichiers plus petits : { $count }
+usage-map-others = autres : { $count }
+usage-map-empty = Rien dans ce dossier n'occupe de place
+usage-map-chosen = { $name } · { $size } · { $share } %
+usage-map-hint = ←↑↓→ · Entrée entrer · BkSp remonter · Tab liste · G panneau ici · Échap
+usage-map-hint-list = ↑↓ · Entrée entrer · BkSp remonter · Tab carte · G panneau ici · Échap
+usage-map-hint-walking = Échap arrête
+usage-map-top = C'est le dossier mesuré : il n'y a rien au-dessus ici
+usage-map-no-file = Cette ligne représente beaucoup de petits fichiers, pas un seul où mener le panneau

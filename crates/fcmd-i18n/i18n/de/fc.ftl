@@ -105,7 +105,7 @@ msg-bookmark-removed = { $path } entfernt
 msg-bookmark-known = dieser Ordner ist schon in der Liste
 msg-dirsize = { $path }: { $bytes } in { $files } Dateien
 msg-dirsize-many = { $count } Ordner werden gemessen …
-usage-title = Speicherbelegung: { $path } · { $size }
+usage-title = Speicherbelegung: { $path } · { $size } · Tab: der ganze Baum als Karte
 usage-not-here = die Belegung eines Ordners wird auf einem Datenträger gemessen, nicht in einem Archiv oder einer Fundliste
 msg-dirsize-no-folder = hier gibt es keinen Ordner zu messen
 
@@ -1855,3 +1855,17 @@ ai-find-ready = die Suche des Modells steht im Dialog: Zeilen lesen, Falsches ä
 ai-find-waiting = die Suche des Modells ist bereit: Alt+F7 öffnet den Dialog damit
 ai-find-unreadable = das Modell hat nicht mit einer Suche geantwortet: die Antwort liegt im Antwortordner (ai:), und es wurde nichts gesucht
 ai-find-left-out = { $said } — NICHT in den Zeilen, weil sie es nicht ausdrücken können: { $what }
+# treemap and compare
+usage-map-title = Speicherbelegung, der ganze Baum: { $path }
+usage-map-walking = Messe… Dateien: { $files }, bisher { $size }
+usage-map-where = { $path } · { $size } · Dateien: { $files }
+usage-map-unreadable = nicht gelesene Ordner: { $count }
+usage-map-rest = kleinere Dateien: { $count }
+usage-map-others = weitere: { $count }
+usage-map-empty = Nichts in diesem Ordner belegt Platz
+usage-map-chosen = { $name } · { $size } · { $share }%
+usage-map-hint = ←↑↓→ · Enter hinein · BkSp hinauf · Tab Liste · G Panel dorthin · Esc
+usage-map-hint-list = ↑↓ · Enter hinein · BkSp hinauf · Tab Karte · G Panel dorthin · Esc
+usage-map-hint-walking = Esc bricht ab
+usage-map-top = Das ist der gemessene Ordner: darüber gibt es hier nichts
+usage-map-no-file = Diese Zeile steht für viele kleine Dateien, nicht für eine, zu der das Panel gehen kann

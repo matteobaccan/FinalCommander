@@ -808,8 +808,48 @@ on a file it puts the panel's cursor there. The list filters as you type, like e
 Inside an archive and in a list of found files it is refused: the sizes there are what an index
 says, not what a disk holds.
 
-Still to come: a tree of the whole walk at once, rather than one level at a time, and the
-treemap some tools draw.
+**The whole tree, as a map** (0.45). `Tab` in the list asks the other question — not what is
+in this folder, but where under it the space went — and that needs every folder's total
+before the first rectangle can be drawn. So it is one walk, a worker's
+(`fcmd_jobs::usage::walk`, over the job's own filesystem), which reports the files and bytes
+seen a few times a second and answers once; the screen says how far it has got and `Esc`
+cancels it. Half a tree is never shown: a map of the folders the walk happened to reach would
+lie about every one it did not. Links are neither followed nor counted, as `F3` does, so the
+two agree about what a folder weighs.
+
+*Aggregated once.* The walk adds every row into its parents in one backwards pass and leaves
+each folder's rows largest first; the screen never sums, never sorts and never reads a disk.
+A folder keeps its 256 largest files by name (`usage::KEPT`) and counts the others as one row
+that says how many they were — a folder of a million thumbnails is a million rectangles
+nobody could tell apart, and the total still has to be right.
+
+*Laid out per view.* The map is a squarified treemap (Bruls, Huizing and van Wijk) of the
+rows of one folder, computed in `fcmd::treemap` when the folder or the room changes and kept
+until one of them does; a frame that changes neither only paints. The arithmetic is done on a
+surface twice as high as the cell count, because a cell is about twice as tall as it is wide
+and "as square as possible" is a statement about the screen; edges are rounded to cells from
+their exact positions, so the rectangles tile the area with no gap and no overlap. A row whose
+share is under one cell gets no rectangle; those, and anything past the 160th row, are one
+rectangle at the end that says how many rows it stands for, and `Enter` on it opens the list.
+A folder's rectangle of at least six cells by four shows the folder's own rows inside it by
+the same rule, one level and no more: enough to see what a folder is made of, not enough to
+draw a rectangle one cannot read.
+
+*Colour by kind.* A rectangle wears the colour its name has in the panel — the `[[highlight]]`
+groups asked first, then the built-in kinds — turned round: the name's colour behind, the
+panel's ground in front. Its left and bottom edges are an eighth-block line of the panel's
+ground, which is what keeps two neighbours of one colour two rectangles. The cursor's
+rectangle is in the cursor's colours.
+
+*Keys.* The arrows go to the rectangle across that edge, opposite the middle of the one the
+cursor is in. `Enter` goes into a folder and `Backspace` comes back out, with the cursor on
+the folder just left; `Enter` on a file closes the map with the panel's cursor on that file.
+`G` does the same for whatever is under the cursor — the panel into the folder, or onto the
+file. `Tab` shows the same folder as a list, largest first with bars and shares, and back;
+there `↑ ↓ PgUp PgDn Home End` are the rows and `←` is `Backspace`. `Esc` closes. There is no
+key of its own in the keymap: it is the second view of `panel.usage`, reached from the first.
+
+Still to come: deleting from the map, and a walk that goes on after the screen is closed.
 
 ## 13. Duplicate files
 

@@ -105,7 +105,7 @@ msg-bookmark-removed = 已移除 { $path }
 msg-bookmark-known = 该文件夹已在列表中
 msg-dirsize = { $path }：{ $bytes }，共 { $files } 个文件
 msg-dirsize-many = 正在统计 { $count } 个文件夹…
-usage-title = 磁盘占用：{ $path } · { $size }
+usage-title = 磁盘占用：{ $path } · { $size } · Tab：整棵树的地图
 usage-not-here = 文件夹的占用只能在磁盘上测量，不能在压缩包内或搜索结果列表中测量
 msg-dirsize-no-folder = 这里没有可统计的文件夹
 
@@ -1793,3 +1793,17 @@ ai-find-ready = 模型给出的搜索已填入对话框：请阅读各行，改�
 ai-find-waiting = 模型给出的搜索已就绪：Alt+F7 以它打开对话框
 ai-find-unreadable = 模型没有以搜索条件作答：其回答在回答文件夹 (ai:) 中，未进行任何搜索
 ai-find-left-out = { $said } — 未写入各行，因为它们无法表达：{ $what }
+# treemap and compare
+usage-map-title = 磁盘占用，整棵目录树：{ $path }
+usage-map-walking = 正在测量… 文件数：{ $files }，目前 { $size }
+usage-map-where = { $path } · { $size } · 文件数：{ $files }
+usage-map-unreadable = 无法读取的文件夹：{ $count }
+usage-map-rest = 较小的文件：{ $count }
+usage-map-others = 其他：{ $count }
+usage-map-empty = 此文件夹中没有占用空间的内容
+usage-map-chosen = { $name } · { $size } · { $share }%
+usage-map-hint = ←↑↓→ · Enter 进入 · BkSp 向上 · Tab 列表 · G 面板定位 · Esc
+usage-map-hint-list = ↑↓ · Enter 进入 · BkSp 向上 · Tab 地图 · G 面板定位 · Esc
+usage-map-hint-walking = Esc 停止
+usage-map-top = 这就是被测量的文件夹：这里没有更上一层
+usage-map-no-file = 这一行代表许多小文件，面板无法定位到其中某一个

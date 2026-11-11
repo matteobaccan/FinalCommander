@@ -628,6 +628,16 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         draw_diff(app, view, buf, screen);
         return None;
     }
+    // The disk usage map is told its room before it is drawn: the rectangles are laid out
+    // for that room once and kept, and the keys walk the same ones the frame shows.
+    if let Mode::Usage(view) = &mut app.mode {
+        let inner = screen.inner();
+        view.fit(inner.w, inner.h.saturating_sub(3));
+    }
+    if let Mode::Usage(view) = &app.mode {
+        draw_usage(app, view, buf, screen);
+        return None;
+    }
     // The grabber draws the screen it was opened on, not the program: the whole point is
     // that what gets copied is what was there (SPEC 06 §11b).
     if let Mode::Grab(grab) = &app.mode {
@@ -696,6 +706,7 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         }
         Mode::Job(_) => None,    // handled above, through `Mode::job()`
         Mode::Diff(_) => None,   // handled above, through `Mode::diff()`
+        Mode::Usage(_) => None,  // handled above, once it has been told its room
         Mode::Grab(_) => None,   // handled above, on the frame it was opened with
         Mode::Viewer(_) => None, // handled above, before the panels are drawn
         Mode::Editor(_) | Mode::Hex(_) => None, // handled above, before the panels are drawn
@@ -3147,6 +3158,293 @@ fn draw_diff(app: &App, view: &fcmd_view::Diff, buf: &mut Buffer, screen: Rect) 
     }
 }
 
+/// The colour a row of the disk usage tree has in the panel: the highlight groups asked first,
+/// then the built-in kinds, exactly as a listing of the same folder would paint the name.
+fn usage_ink(
+    app: &App,
+    node: &fcmd_jobs::usage::Node,
+    now: std::time::SystemTime,
+) -> fcmd_ui::Color {
+    use fcmd_jobs::usage::Kind;
+    let mut flags = fcmd_core::EntryFlags::empty();
+    if node.exec {
+        flags.insert(fcmd_core::EntryFlags::EXECUTABLE);
+    }
+    let entry = fcmd_core::Entry {
+        name: std::ffi::OsString::from(&node.name),
+        kind: match node.kind {
+            Kind::Dir => fcmd_core::EntryKind::Dir,
+            Kind::File | Kind::Rest => fcmd_core::EntryKind::File,
+        },
+        size: node.size,
+        mtime: None,
+        btime: None,
+        atime: None,
+        flags,
+        id: fcmd_core::EntryId::Name(0),
+        link_target: None,
+    };
+    let paint = app.highlight.paint_at(&entry, now, &app.theme);
+    paint.fg.unwrap_or(app.theme.color(paint.key))
+}
+
+/// Where the space of a whole tree goes: the map, or the list of the same folder (SPEC 06
+/// §12).
+///
+/// A rectangle is painted in the colour its name has in the panel, turned round — the name's
+/// colour behind, the panel's ground in front — so an archive is the colour of an archive at
+/// any size. Its left and bottom edges are a thin line of the panel's ground, which is what
+/// keeps two neighbours of one colour two rectangles.
+fn draw_usage(app: &App, view: &crate::treemap::UsageView, buf: &mut Buffer, screen: Rect) {
+    use crate::treemap::Tile;
+    use fcmd_jobs::usage::Kind;
+
+    let base = app.theme.panel();
+    let frame = app.theme.fg_on("panel.frame", "panel.bg");
+    let dim = app.theme.fg_on("panel.footer.fg", "panel.bg");
+    let picked = app.theme.fg_on("cursor.fg", "cursor.bg");
+    let ground = app.theme.color("panel.bg");
+
+    buf.fill(screen, ' ', base);
+    let title = app
+        .i18n
+        .t_args("usage-map-title", &[("path", view.root.to_string().into())]);
+    buf.draw_frame(screen, frame, Some(&title));
+    let inner = screen.inner();
+    if inner.h < 4 || inner.w < 20 {
+        return;
+    }
+    let foot_y = inner.y + inner.h - 1;
+    let Some(tree) = &view.tree else {
+        // Still walking: how far it has got, and the one key there is.
+        let text = app.i18n.t_args(
+            "usage-map-walking",
+            &[
+                ("files", (view.progress.0 as i64).into()),
+                ("size", fcmd_core::format_size(view.progress.1).into()),
+            ],
+        );
+        let text = fcmd_ui::truncate_cols(&text, inner.w as usize);
+        let x = inner.x
+            + (inner
+                .w
+                .saturating_sub(fcmd_ui::buffer::str_cells(&text) as u16))
+                / 2;
+        buf.put_str(x, inner.y + inner.h / 2, &text, base, inner.w);
+        let hint = app.i18n.t("usage-map-hint-walking");
+        buf.put_str(inner.x, foot_y, &hint, dim, inner.w);
+        return;
+    };
+    let node = tree.node(view.at);
+    let mut head = app.i18n.t_args(
+        "usage-map-where",
+        &[
+            ("path", view.path_of(view.at).to_string().into()),
+            ("size", fcmd_core::format_size(node.size).into()),
+            ("files", (node.files as i64).into()),
+        ],
+    );
+    if tree.unreadable > 0 {
+        head.push_str(" · ");
+        head.push_str(&app.i18n.t_args(
+            "usage-map-unreadable",
+            &[("count", (tree.unreadable as i64).into())],
+        ));
+    }
+    buf.put_str(
+        inner.x,
+        inner.y,
+        &fcmd_ui::elide_middle(&head, inner.w as usize),
+        dim,
+        inner.w,
+    );
+
+    let area = Rect::new(inner.x, inner.y + 1, inner.w, inner.h - 3);
+    let now = std::time::SystemTime::now();
+    let rows = view.rows();
+    // What a row is called on the screen: a folder with its slash, the row that stands for a
+    // folder's many small files in words.
+    let label = |row: u32| -> String {
+        let n = tree.node(row);
+        match n.kind {
+            Kind::Dir => format!("{}/", n.name),
+            Kind::File => n.name.clone(),
+            Kind::Rest => app
+                .i18n
+                .t_args("usage-map-rest", &[("count", (n.files as i64).into())]),
+        }
+    };
+    if rows.is_empty() || node.size == 0 && !view.list {
+        let text = app.i18n.t("usage-map-empty");
+        buf.put_str(area.x, area.y, &text, base, area.w);
+    } else if view.list {
+        const BAR: usize = 20;
+        // The size, the bar and the share take what they take; the name has the rest.
+        let fixed = 1 + 9 + 2 + BAR + 2 + 6;
+        let name_w = (area.w as usize).saturating_sub(fixed).max(8);
+        for (i, row) in rows.iter().enumerate().skip(view.top).take(area.h as usize) {
+            let y = area.y + (i - view.top) as u16;
+            let n = tree.node(*row);
+            let share = if node.size == 0 {
+                0.0
+            } else {
+                n.size as f64 / node.size as f64
+            };
+            let full = ((share * BAR as f64).round() as usize).min(BAR);
+            let name = fcmd_ui::truncate_cols(&label(*row), name_w);
+            let rest = format!(
+                " {:>9}  {}{}  {:>5.1}%",
+                fcmd_core::format_size(n.size),
+                "█".repeat(full),
+                "░".repeat(BAR - full),
+                share * 100.0
+            );
+            let (name_style, rest_style) = if i == view.cursor {
+                buf.fill(Rect::new(area.x, y, area.w, 1), ' ', picked);
+                (picked, picked)
+            } else {
+                (Style::new(usage_ink(app, n, now), ground), base)
+            };
+            buf.put_str(area.x, y, &name, name_style, name_w as u16);
+            buf.put_str(
+                area.x + name_w.min(area.w as usize) as u16,
+                y,
+                &rest,
+                rest_style,
+                area.w.saturating_sub(name_w as u16),
+            );
+        }
+    } else {
+        let chosen = view.chosen_tile().copied();
+        for tile in view.tiles() {
+            let rect = Rect::new(area.x + tile.x, area.y + tile.y, tile.w, tile.h);
+            let (text, size, style) = if tile.row == Tile::OTHERS {
+                let (count, bytes) = view.others();
+                (
+                    app.i18n
+                        .t_args("usage-map-others", &[("count", (count as i64).into())]),
+                    bytes,
+                    base,
+                )
+            } else {
+                let n = tree.node(rows[tile.row]);
+                (
+                    label(rows[tile.row]),
+                    n.size,
+                    Style::new(ground, usage_ink(app, n, now)),
+                )
+            };
+            let style = if chosen == Some(*tile) { picked } else { style };
+            buf.fill(rect, ' ', style);
+            // The two thin edges, where there is room to give a cell to one.
+            let edged = tile.w >= 2;
+            if edged {
+                for y in rect.y..rect.bottom() {
+                    buf.set(rect.x, y, '▏', style);
+                }
+            }
+            if tile.h >= 2 {
+                for x in rect.x..rect.right() {
+                    buf.set(x, rect.bottom() - 1, '▁', style);
+                }
+            }
+            let x = rect.x + u16::from(edged);
+            let room = tile.w - u16::from(edged);
+            buf.put_str(
+                x,
+                rect.y,
+                &fcmd_ui::truncate_cols(&text, room as usize),
+                style.bold(),
+                room,
+            );
+            // The size beside the name where there is room for both, and otherwise under
+            // it, in a rectangle tall enough to have a line that is not its bottom edge.
+            let used = fcmd_ui::buffer::str_cells(&text) as u16;
+            let size = fcmd_core::format_size(size);
+            let size_w = fcmd_ui::buffer::str_cells(&size) as u16;
+            if room >= used + 2 + size_w {
+                buf.put_str(x + used + 2, rect.y, &size, style, size_w);
+            } else if tile.h >= 3 && !view.nests(tile) {
+                buf.put_str(
+                    x,
+                    rect.y + 1,
+                    &fcmd_ui::truncate_cols(&size, room as usize),
+                    style,
+                    room,
+                );
+            }
+        }
+        // What the folders are made of, inside their rectangles: the same colours and the
+        // same two edges, the names where they fit. The cursor's folder keeps its own frame
+        // in the cursor's colours around them.
+        for part in view.inner() {
+            let n = tree.node(part.node);
+            let style = Style::new(ground, usage_ink(app, n, now));
+            let rect = Rect::new(area.x + part.x, area.y + part.y, part.w, part.h);
+            buf.fill(rect, ' ', style);
+            let edged = part.w >= 2;
+            if edged {
+                for y in rect.y..rect.bottom() {
+                    buf.set(rect.x, y, '▏', style);
+                }
+            }
+            if part.h >= 2 {
+                for x in rect.x..rect.right() {
+                    buf.set(x, rect.bottom() - 1, '▁', style);
+                }
+            }
+            let room = part.w - u16::from(edged);
+            if room >= 3 {
+                buf.put_str(
+                    rect.x + u16::from(edged),
+                    rect.y,
+                    &fcmd_ui::truncate_cols(&label(part.node), room as usize),
+                    style,
+                    room,
+                );
+            }
+        }
+    }
+
+    // The foot: what the cursor is on, and under it the keys.
+    let foot = match view.chosen() {
+        Some(row) if node.size > 0 => {
+            let n = tree.node(row);
+            app.i18n.t_args(
+                "usage-map-chosen",
+                &[
+                    ("name", label(row).into()),
+                    ("size", fcmd_core::format_size(n.size).into()),
+                    (
+                        "share",
+                        format!("{:.1}", n.size as f64 * 100.0 / node.size as f64).into(),
+                    ),
+                ],
+            )
+        }
+        _ => String::new(),
+    };
+    let keys = app.i18n.t(if view.list {
+        "usage-map-hint-list"
+    } else {
+        "usage-map-hint"
+    });
+    buf.put_str(
+        inner.x,
+        foot_y - 1,
+        &fcmd_ui::elide_middle(&foot, inner.w as usize),
+        base,
+        inner.w,
+    );
+    buf.put_str(
+        inner.x,
+        foot_y,
+        &fcmd_ui::truncate_cols(&keys, inner.w as usize),
+        dim,
+        inner.w,
+    );
+}
+
 fn draw_sync(app: &App, view: &crate::app::SyncView, buf: &mut Buffer, screen: Rect) {
     use fcmd_jobs::sync::{Action, Verdict};
 
@@ -4460,6 +4758,53 @@ mod tests {
             fcmd_core::diff::Ignore::default(),
         )));
         write("diff", &shot(&mut git_app, 100, 30));
+        git_app.mode = Mode::Normal;
+
+        // ---- where the space of a whole tree goes, as a map --------------------------------
+        // The sizes are lengths and nothing else: a file made as long as a film without a
+        // byte of it written, which is what lets the picture be of gigabytes.
+        let usage = work.join("usage");
+        const M: u64 = 1 << 20;
+        for (path, size) in [
+            ("videos/holiday-2024.mkv", 4300 * M),
+            ("videos/wedding.mp4", 2900 * M),
+            ("videos/clips/harbour.mp4", 640 * M),
+            ("videos/clips/storm.mp4", 520 * M),
+            ("vm/debian-12.qcow2", 5600 * M),
+            ("vm/debian-12.iso", 630 * M),
+            ("backups/home-2024-07.tar.zst", 3100 * M),
+            ("backups/home-2024-06.tar.zst", 2900 * M),
+            ("backups/mail.7z", 1200 * M),
+            ("photos/2024/raw.zip", 1900 * M),
+            ("photos/2024/IMG_0412.jpg", 9 * M),
+            ("photos/2023/album.zip", 1400 * M),
+            ("music.zip", 950 * M),
+            ("setup.exe", 300 * M),
+            ("notes.txt", 2 * M),
+            ("todo.md", M),
+        ] {
+            let at = usage.join(path);
+            std::fs::create_dir_all(at.parent().expect("a folder")).expect("the folder");
+            std::fs::File::create(&at)
+                .and_then(|f| f.set_len(size))
+                .expect("the file");
+        }
+        let cancel = fcmd_core::CancelToken::new();
+        let tree = fcmd_jobs::usage::walk(
+            &fcmd_jobs::LocalFs,
+            &VPath::local(&usage),
+            &cancel,
+            &mut |_, _| {},
+        )
+        .expect("nobody cancelled");
+        // The folder is a temporary one that differs between runs: the picture names a fixed
+        // one, which is all the screen ever shows of it.
+        let mut map =
+            crate::treemap::UsageView::new(1, 0, VPath::local("/home/mb/archive"), cancel);
+        map.arrived(tree);
+        map.cursor = 2;
+        git_app.mode = Mode::Usage(Box::new(map));
+        write("usage", &shot(&mut git_app, 100, 30));
         git_app.mode = Mode::Normal;
 
         // ---- the AI panel: the conversation itself, as it goes ---------------------------
@@ -5985,6 +6330,95 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
             "a line in both is plain"
         );
         assert_ne!(buf.get(x, y).unwrap().style.bg, added);
+    }
+
+    /// A tree walked off a real folder, on the screen as the map: the largest rectangle is
+    /// the largest folder and wears its colour, the cursor's is in the cursor's colours, and
+    /// `Tab` shows the same folder as a list with bars.
+    fn usage_view(dir: &std::path::Path) -> crate::treemap::UsageView {
+        std::fs::create_dir_all(dir.join("films")).unwrap();
+        std::fs::write(dir.join("films/long.mkv"), vec![0u8; 6000]).unwrap();
+        std::fs::write(dir.join("pack.zip"), vec![0u8; 3000]).unwrap();
+        std::fs::write(dir.join("notes.txt"), vec![0u8; 1000]).unwrap();
+        let root = VPath::local(dir);
+        let cancel = fcmd_core::CancelToken::new();
+        let tree = fcmd_jobs::usage::walk(&fcmd_jobs::LocalFs, &root, &cancel, &mut |_, _| {})
+            .expect("nobody cancelled");
+        let mut view = crate::treemap::UsageView::new(1, 0, root, cancel);
+        view.arrived(tree);
+        view
+    }
+
+    #[test]
+    fn the_usage_map_draws_a_rectangle_per_row_in_the_rows_own_colour() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app("far", "en");
+        app.mode = Mode::Usage(Box::new(usage_view(dir.path())));
+        let buf = frame_buf(&mut app, 80, 24);
+        let text = buf.to_text();
+        assert!(text.contains("Disk usage, the whole tree"), "{text}");
+        assert!(text.contains("files: 3"), "{text}");
+        for name in ["films/", "pack.zip", "notes.txt"] {
+            assert!(text.contains(name), "{name} has no rectangle:\n{text}");
+        }
+        assert!(text.contains("Tab list"), "the keys are on the foot line");
+        let find = |word: &str| {
+            (0..24u16)
+                .find_map(|y| {
+                    let line: String = (0..80)
+                        .filter_map(|x| buf.get(x, y))
+                        .map(|c| c.ch)
+                        .collect();
+                    line.find(word)
+                        .map(|x| (line[..x].chars().count() as u16, y))
+                })
+                .unwrap_or_else(|| panic!("{word} is not on screen"))
+        };
+        // The cursor starts on the largest, which is drawn as the cursor is everywhere.
+        let (x, y) = find("films/");
+        assert_eq!(
+            buf.get(x, y).unwrap().style.bg,
+            app.theme.color("cursor.bg")
+        );
+        // An archive is the colour archives have in the panel, behind the name here.
+        let (x, y) = find("pack.zip");
+        assert_eq!(
+            buf.get(x, y).unwrap().style.bg,
+            app.theme.color("file.archive")
+        );
+        assert_eq!(buf.get(x, y).unwrap().style.fg, app.theme.color("panel.bg"));
+        // Six tenths of the map is the folder's: its rectangle is the biggest by far.
+        let Mode::Usage(view) = &app.mode else {
+            panic!("the map closed")
+        };
+        let tiles = view.tiles();
+        assert_eq!(tiles.len(), 3);
+        let cells = |i: usize| tiles[i].w as u32 * tiles[i].h as u32;
+        assert!(cells(0) > cells(1) && cells(1) > cells(2), "{tiles:?}");
+
+        if let Mode::Usage(view) = &mut app.mode {
+            view.list = true;
+        }
+        let text = frame(&mut app, 80, 24);
+        assert!(text.contains("60.0%"), "{text}");
+        assert!(text.contains('█') && text.contains("Tab map"), "{text}");
+    }
+
+    /// Until the walk answers, the screen says how far it has got and what stops it.
+    #[test]
+    fn the_usage_map_says_how_far_the_walk_has_got() {
+        let mut app = app("far", "en");
+        let mut view = crate::treemap::UsageView::new(
+            1,
+            0,
+            VPath::local("somewhere"),
+            fcmd_core::CancelToken::new(),
+        );
+        view.progress = (1234, 5 * 1024 * 1024);
+        app.mode = Mode::Usage(Box::new(view));
+        let text = frame(&mut app, 80, 24);
+        assert!(text.contains("files: 1234"), "{text}");
+        assert!(text.contains("Esc stops"), "{text}");
     }
 
     fn frame_buf(app: &mut App, w: u16, h: u16) -> Buffer {

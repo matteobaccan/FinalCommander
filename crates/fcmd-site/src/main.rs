@@ -324,6 +324,7 @@ fn landing(lang: &Text) -> String {
         ("git.svg", "Alt+F1 · Git"),
         ("ai.svg", "Alt+F1 · AI"),
         ("diff.svg", "Ctrl+Shift+D"),
+        ("usage.svg", "Alt+Shift+F3 · Tab"),
         ("help.svg", "F1"),
     ] {
         body.push_str(&format!(
@@ -407,6 +408,7 @@ const HELP_SHOTS: &[(&str, usize, &str, &str)] = &[
     ("panels.md", 1, "branch.svg", "Ctrl+Alt+B"),
     ("files.md", 0, "menu.svg", "F9"),
     ("files.md", 4, "split.svg", ".001 · .002 · .crc"),
+    ("files.md", 8, "usage.svg", "Alt+Shift+F3 · Tab"),
     ("files.md", 14, "git.svg", "Alt+F1 · Git"),
     ("viewer.md", 0, "viewer.svg", "F3"),
     ("viewer.md", 2, "picture.svg", "F3 · BMP"),

@@ -125,7 +125,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | find file | Alt+F7 | Alt+? | Ctrl+S | Alt+F7 |
 | branch view (every file below, flat) | — | — | Ctrl+B | **Ctrl+Alt+B** — `Ctrl+B` is the key bar in FAR's grammar; the same key goes back |
 | git: what changed, log, blame, branches | — | — | — | **Ctrl+Alt+G** — FAR has these as plugins (GitKit); a menu of the four |
-| disk usage | — | Ctrl+Space on a dir | Alt+Shift+S | `F3` on a directory computes its size; **Alt+Shift+F3** shows every entry of the folder by size, with bars |
+| disk usage | — | Ctrl+Space on a dir | Alt+Shift+S | `F3` on a directory computes its size; **Alt+Shift+F3** shows every entry of the folder by size, with bars, and `Tab` there draws the whole tree as a map |
 | job queue | — | — | F2 in the copy dialog queues; a button opens the list | **Alt+Shift+F5** lists the jobs; `B` in a progress box sends the job to the background |
 | jobs a crash left unfinished | — | — | — | **Alt+Shift+F6** lists the copies and moves whose journal outlived their session: `Enter` goes on with one, `Del` discards it |
 | compare directories | Commands menu, no default key (marks what is missing or newer in the other panel; names, sizes and times only, no subfolders) | — | Alt+Shift+C | Commands menu, no default key, as in FAR |
