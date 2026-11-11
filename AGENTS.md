@@ -332,9 +332,22 @@ files rather than guessing what its dialog says.
 ## What is worth doing next: the roadmap after 0.40
 
 Set out on 11 November 2026, after 0.40.0, from `docs/BACKLOG.md`, `docs/06-ai-study.md` and
-what the users have asked for. One theme per release, each about a session of work and cut
-when it is finished; what is half done when the time is up is closed or moved to the next one,
-never shipped half. Issues come first whenever one is open, and a red CI before anything.
+what the users have asked for. Issues come first whenever one is open, and a red CI before
+anything.
+
+**How it is worked, decided by the author on 11 November 2026, until 1.0:**
+
+- **Continuously, and released by what is ready, not by theme.** The list below is an order
+  of priority. A feature reaches `main` only finished (tests, help in both languages, spec,
+  `CHANGELOG.md`); a release is cut when at least one is in and CI is green on that commit —
+  a minor number for a feature, a patch for fixes alone — without asking first, and the
+  author is told afterwards. Renovate's merges alone still never make one.
+- **At least 24 hours between two releases**, counted from the previous one's publication.
+- **Sub-agents in parallel, only until 1.0.** At most two at a time — a compiled working copy
+  is about 9 GB and the machine has four cores — each in a worktree of its own on work that
+  lives in its own crates. The coordinating session alone integrates, runs the full gate,
+  writes `CHANGELOG.md`, pushes and releases; a sub-agent commits on its own branch, as the
+  author, and reports. After 1.0 the work goes back to a single agent, in sequence.
 
 - **0.41 — the editor, properly.** Search and replace with whole words, capture references in
   the replacement and a list of every match (6.4); a burst of typing undone as one step, with
