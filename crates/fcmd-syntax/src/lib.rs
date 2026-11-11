@@ -267,6 +267,25 @@ impl Syntax {
                 return (spans, state);
             }
 
+            // Pascal writes a hexadecimal number `$0000FF` and a character by its code `#13`:
+            // both are numbers, the sign included, or `$FF` would be a word and `#13` nothing.
+            if self.case_insensitive
+                && (ch == '$' || ch == '#')
+                && !is_word_byte(prev_byte(bytes, i))
+                && text[i + 1..].starts_with(|c: char| {
+                    c.is_ascii_digit() || (ch == '$' && c.is_ascii_hexdigit())
+                })
+            {
+                let end = scan_number(text, i + 1);
+                spans.push(Span {
+                    start: i,
+                    end,
+                    class: Class::Number,
+                });
+                i = end;
+                continue;
+            }
+
             if ch.is_ascii_digit() && !is_word_byte(prev_byte(bytes, i)) {
                 let end = scan_number(text, i);
                 spans.push(Span {
@@ -288,7 +307,10 @@ impl Syntax {
                 } else {
                     word
                 };
-                let class = if self.keywords.contains(&word) {
+                // A word straight after a dot is a member — `E.Message`, `Reader.Read` — and
+                // not the keyword it happens to be spelt like; two dots are a range, `0..end`.
+                let member = text[..i].ends_with('.') && !text[..i].ends_with("..");
+                let class = if !member && self.keywords.contains(&word) {
                     Some(Class::Keyword)
                 } else if self.types.contains(&word) {
                     Some(Class::Type)
@@ -865,6 +887,80 @@ mod tests {
 
     /// Rust nests block comments and C does not, which is a real difference and the one
     /// place where getting it wrong colours the rest of a file.
+    /// What the Delphi IDE draws as a keyword, read off its own editor: the reserved words
+    /// in any case, `as` and the cast `string(…)`, the directives where it puts them; and
+    /// what it leaves alone — `Exit`, `True`, a member after a dot.
+    #[test]
+    fn pascal_keywords_are_the_ones_delphi_shows() {
+        let pas = tables::of_name("Main.pas").expect("Pascal");
+        let words = |line: &str| -> Vec<String> {
+            classes(pas, line)
+                .into_iter()
+                .filter(|(_, c)| *c == Class::Keyword)
+                .map(|(t, _)| t)
+                .collect()
+        };
+        assert_eq!(
+            words("Var x: integer; begin if (Sender as TButton).Tag = 1 then exit; end"),
+            ["Var", "begin", "if", "as", "then", "end"]
+        );
+        assert_eq!(
+            words("ALMemo.Lines.Add(string(LTmpData + ' = ' + LData));"),
+            ["string"]
+        );
+        assert_eq!(
+            words("while True do begin try inherited; finally Str.Free; end end"),
+            [
+                "while",
+                "do",
+                "begin",
+                "try",
+                "inherited",
+                "finally",
+                "end",
+                "end"
+            ]
+        );
+        assert_eq!(
+            words("function GetFrac: UInt64; inline; overload; static;"),
+            ["function", "inline", "overload", "static"]
+        );
+        assert_eq!(
+            words("property Sign: Boolean read GetSign write SetSign;"),
+            ["property", "read", "write"]
+        );
+        // `E.Message` and `Reader.Read` are members, not the directive they are spelt like;
+        // `0..9` is still a range.
+        assert!(words("Writeln(E.ClassName, E.Message); x := s.Read;").is_empty());
+        // `$0000ff` and `#13` are numbers, sign and all.
+        let spans = classes(pas, "Pixels[X,Y] := $0000ff; c := #13;");
+        assert!(
+            spans.contains(&("$0000ff".into(), Class::Number)),
+            "{spans:?}"
+        );
+        assert!(spans.contains(&("#13".into(), Class::Number)), "{spans:?}");
+    }
+
+    /// A form saved as text: only the words that shape it are keywords; `False`, `claBlack`
+    /// and the sets are values, drawn as text, as the IDE draws them.
+    #[test]
+    fn a_text_form_marks_only_its_structure() {
+        let dfm = tables::of_name("MainClientMobile.fmx").expect("form");
+        let words = |line: &str| -> Vec<String> {
+            classes(dfm, line)
+                .into_iter()
+                .filter(|(_, c)| *c == Class::Keyword)
+                .map(|(t, _)| t)
+                .collect()
+        };
+        assert_eq!(words("object BottomToolBar: TToolBar"), ["object"]);
+        assert!(words("  Visible = False").is_empty());
+        assert!(words("  Fill.Color = claBlack").is_empty());
+        assert_eq!(words("  end"), ["end"]);
+        let spans = classes(dfm, "  Position.Y = 702.000000000000000000");
+        assert!(spans.contains(&("702.000000000000000000".into(), Class::Number)));
+    }
+
     #[test]
     fn pascal_has_two_block_comments_directives_and_words_in_any_case() {
         let pas = tables::of_name("unit1.PAS").expect("Pascal");

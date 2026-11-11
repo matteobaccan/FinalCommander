@@ -331,8 +331,18 @@ parte *Delphi*: quale dei due l'ha compilato, i package che richiede, quante uni
 loro nomi, e ogni form al suo interno con nome e classe. `Invio` su una form la apre come
 testo, come se fosse la sua `.dfm`.
 
-**Sorgenti e progetti.** `.pas`, `.dpr`, `.dpk`, `.lpr`, `.pp` e `.inc` sono colorati come
-Pascal; `.dproj`, `.groupproj` e `.cbproj` come XML; `.dof` e `.dsk` come INI.
+**Sorgenti.** `.pas`, `.dpr`, `.dpk`, `.lpr`, `.pp` e `.inc` sono colorati come Pascal, con
+le parole riservate e le direttive di Delphi come parole chiave in qualunque maiuscolo, `$FF`
+e `#13` come numeri, e le direttive `{$…}` distinte dai commenti; un membro dopo un punto —
+`E.Message` — è un nome, non la direttiva che si scrive uguale. Una linea sottile scende lungo
+ogni `begin … end`, `try … end`, `case`, `repeat … until` e `class` o `record` dichiarati, come
+la disegna l'IDE, e lungo ogni `object … end` di una form. Un `{ … }` di dati binari in una
+form, o qualunque commento aperto sopra la finestra, tiene il suo colore quando la sua prima
+riga esce dallo schermo. Il tema `delphi-dark-2027` dà a tutto il programma i colori scuri
+dell'IDE.
+
+**Progetti.** `.dproj`, `.groupproj` e `.cbproj` sono colorati come XML; `.dof` e `.dsk` come
+INI.
 
 **Quello che l'IDE lascia in giro.** Il gruppo `<delphi>` — `*.~*`, `__history`, `__recovery`,
 `*.dcu`, `*.identcache`, `*.local`, `*.dsk` e il resto — è disegnato spento, come i file

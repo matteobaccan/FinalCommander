@@ -364,8 +364,9 @@ crates are all called, and it is four letters. Please do not "fix" it to somethi
 
 ## Themes and languages
 
-Seven themes are compiled in — `commander` (the classic blue, default), `far` (FAR's own
-colours), `black`, `white`, `matrix`, `tron`, `blade` — and `[[theme]]` blocks in `fcmd.toml` are read at startup,
+Nine themes are compiled in — `commander` (the classic blue, default), `far` (FAR's own
+colours), `black` (black only, light text), `white`, `matrix`, `tron`, `blade`, `github-dark`
+(GitHub's dark terminal colours) and `delphi-dark-2027` (the Delphi IDE's dark theme) — and `[[theme]]` blocks in `fcmd.toml` are read at startup,
 hot-reloaded, may `inherit` a built-in one, and replace a built-in with the same id.
 
 The interface ships in English, Italian, German, French, Spanish, Russian and Simplified

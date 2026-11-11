@@ -23,7 +23,16 @@ fn runs_with_no_configuration_at_all() {
     let missing = dir.path().join("fcmd.toml");
     let (stdout, stderr, ok) = run(&["--config", missing.to_str().unwrap(), "--list-themes"]);
     assert!(ok, "{stderr}");
-    for id in ["commander", "black", "white", "matrix", "tron", "blade"] {
+    for id in [
+        "commander",
+        "black",
+        "white",
+        "matrix",
+        "tron",
+        "blade",
+        "github-dark",
+        "delphi-dark-2027",
+    ] {
         assert!(stdout.contains(id), "{id} missing from:\n{stdout}");
     }
     assert!(stdout.contains("built-in"), "{stdout}");
@@ -93,8 +102,8 @@ inherit = "commander"
     assert!(ok, "{stderr}");
     assert!(stdout.contains("Mine"), "{stdout}");
     assert!(stdout.contains("fcmd.toml"), "{stdout}");
-    // Still seven: the block replaced the built-in rather than adding an eighth.
-    assert_eq!(stdout.lines().count(), 7, "{stdout}");
+    // Still nine: the block replaced the built-in rather than adding a tenth.
+    assert_eq!(stdout.lines().count(), 9, "{stdout}");
 }
 
 #[test]

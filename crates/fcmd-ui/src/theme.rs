@@ -46,6 +46,56 @@ struct ThemeFile {
     palette: BTreeMap<String, String>,
     #[serde(default)]
     colors: BTreeMap<String, String>,
+    /// How a key's text is drawn besides its colour: `"bold"`, `"italic"`, `"underline"`, or
+    /// several of them in one string. The keys are the colour keys.
+    #[serde(default)]
+    styles: BTreeMap<String, String>,
+}
+
+/// What a theme asks of a key's text besides its colour.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Attrs {
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: bool,
+}
+
+impl Attrs {
+    fn parse(text: &str) -> Option<Attrs> {
+        let mut out = Attrs::default();
+        for word in text.split(|c: char| c == ',' || c.is_whitespace()) {
+            match word.trim().to_ascii_lowercase().as_str() {
+                "" | "normal" => {}
+                "bold" => out.bold = true,
+                "italic" => out.italic = true,
+                "underline" => out.underline = true,
+                _ => return None,
+            }
+        }
+        Some(out)
+    }
+
+    fn words(self) -> String {
+        let mut words = Vec::new();
+        if self.bold {
+            words.push("bold");
+        }
+        if self.italic {
+            words.push("italic");
+        }
+        if self.underline {
+            words.push("underline");
+        }
+        words.join(" ")
+    }
+
+    /// The same style with these attributes added.
+    pub fn on(self, mut style: Style) -> Style {
+        style.bold |= self.bold;
+        style.italic |= self.italic;
+        style.underline |= self.underline;
+        style
+    }
 }
 
 /// A resolved theme: a flat map of semantic keys to colours.
@@ -61,6 +111,7 @@ pub struct Theme {
     pub variant: Variant,
     pub source: ThemeSource,
     colors: BTreeMap<String, Color>,
+    styles: BTreeMap<String, Attrs>,
     warnings: Vec<String>,
 }
 
@@ -74,7 +125,7 @@ pub enum ThemeSource {
     Plugin(String),
 }
 
-/// The seven themes compiled into the binary. `commander` is the default.
+/// The nine themes compiled into the binary. `commander` is the default.
 pub const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("commander", include_str!("../themes/commander.toml")),
     ("far", include_str!("../themes/far.toml")),
@@ -83,6 +134,11 @@ pub const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("matrix", include_str!("../themes/matrix.toml")),
     ("tron", include_str!("../themes/tron.toml")),
     ("blade", include_str!("../themes/blade.toml")),
+    ("github-dark", include_str!("../themes/github-dark.toml")),
+    (
+        "delphi-dark-2027",
+        include_str!("../themes/delphi-dark-2027.toml"),
+    ),
 ];
 
 pub const DEFAULT_THEME: &str = "commander";
@@ -177,6 +233,9 @@ const DEFAULTS: &[(&str, Color)] = &[
     ("diff.removed.bg", Color::Ansi(1)),
     ("diff.added.bg", Color::Ansi(2)),
     ("syntax.text", Color::Default),
+    // The line down a Pascal block, from the word that opens it to its `end`: a colour that
+    // is seen without being read.
+    ("syntax.guide", Color::Ansi(8)),
     ("cmdline.fg", Color::Default),
     ("cmdline.bg", Color::Default),
     // What the completion would add, drawn after the caret and not in the line (SPEC 06
@@ -260,6 +319,7 @@ impl Theme {
                 variant: Variant::default(),
                 source: ThemeSource::BuiltIn,
                 colors: BTreeMap::new(),
+                styles: BTreeMap::new(),
                 warnings: Vec::new(),
             }
         } else {
@@ -306,6 +366,20 @@ impl Theme {
             theme.colors.insert(key.clone(), color);
         }
 
+        for (key, value) in &parsed.styles {
+            let attrs = Attrs::parse(value).ok_or_else(|| ThemeError::BadColor {
+                file: file.to_string(),
+                key: format!("styles.{key}"),
+                value: value.clone(),
+            })?;
+            if !DEFAULTS.iter().any(|(k, _)| k == key) {
+                theme.warnings.push(format!(
+                    "{file}: unknown theme key `styles.{key}` (ignored)"
+                ));
+            }
+            theme.styles.insert(key.clone(), attrs);
+        }
+
         if theme.name.is_empty() {
             theme.name = theme.id.clone();
         }
@@ -328,9 +402,21 @@ impl Theme {
             .unwrap_or(Color::Default)
     }
 
+    /// What the theme asks of a key's text besides its colour: bold, italic, underlined.
+    pub fn attrs(&self, key: &str) -> Attrs {
+        self.styles.get(key).copied().unwrap_or_default()
+    }
+
+    /// `base` with the key's colour as its foreground and the key's attributes on top: how
+    /// a syntax class or a file kind is drawn.
+    pub fn styled(&self, key: &str, base: Style) -> Style {
+        self.attrs(key).on(base.with_fg(self.color(key)))
+    }
+
     /// `fg_key` on the panel background, as a ready-to-use style.
     pub fn fg_on(&self, fg_key: &str, bg_key: &str) -> Style {
-        Style::new(self.color(fg_key), self.color(bg_key))
+        self.attrs(fg_key)
+            .on(Style::new(self.color(fg_key), self.color(bg_key)))
     }
 
     pub fn panel(&self) -> Style {
@@ -421,6 +507,14 @@ impl Theme {
             ),
         );
         table.insert("colors".into(), toml::Value::Table(colors));
+        if !self.styles.is_empty() {
+            let styles: toml::Table = self
+                .styles
+                .iter()
+                .map(|(k, a)| (k.clone(), toml::Value::String(a.words())))
+                .collect();
+            table.insert("styles".into(), toml::Value::Table(styles));
+        }
         table
     }
 
@@ -444,11 +538,17 @@ impl Theme {
         for (key, _) in DEFAULTS {
             s.push_str(&format!("\"{key}\" = \"{}\"\n", self.color(key)));
         }
+        if !self.styles.is_empty() {
+            s.push_str("\n[theme.styles]\n");
+            for (key, attrs) in &self.styles {
+                s.push_str(&format!("\"{key}\" = \"{}\"\n", attrs.words()));
+            }
+        }
         s
     }
 }
 
-/// Every theme available in this run: the seven built-ins plus whatever was found on disk.
+/// Every theme available in this run: the nine built-ins plus whatever was found on disk.
 /// A file theme with the id of a built-in replaces it, so a user can retune `commander`
 /// without renaming it.
 #[derive(Debug, Clone)]
@@ -543,7 +643,7 @@ mod tests {
     #[test]
     fn every_builtin_theme_loads_and_defines_every_key() {
         let set = ThemeSet::builtin_only();
-        assert_eq!(set.len(), 7);
+        assert_eq!(set.len(), 9);
         assert_eq!(
             set.ids(),
             vec![
@@ -553,7 +653,9 @@ mod tests {
                 "white",
                 "matrix",
                 "tron",
-                "blade"
+                "blade",
+                "github-dark",
+                "delphi-dark-2027"
             ]
         );
         for theme in set.iter() {
@@ -577,9 +679,94 @@ mod tests {
     fn white_is_light_and_the_rest_are_dark() {
         let set = ThemeSet::builtin_only();
         assert_eq!(set.get("white").unwrap().variant, Variant::Light);
-        for id in ["commander", "far", "black", "matrix", "tron", "blade"] {
+        for id in [
+            "commander",
+            "far",
+            "black",
+            "matrix",
+            "tron",
+            "blade",
+            "github-dark",
+            "delphi-dark-2027",
+        ] {
             assert_eq!(set.get(id).unwrap().variant, Variant::Dark, "{id}");
         }
+    }
+
+    /// WCAG's contrast ratio between two colours given as RGB.
+    fn contrast(a: Color, b: Color) -> f64 {
+        fn lum(c: Color) -> f64 {
+            let Color::Rgb(r, g, b) = c else {
+                panic!("{c:?} is not an RGB colour")
+            };
+            let ch = |v: u8| {
+                let v = v as f64 / 255.0;
+                if v <= 0.03928 {
+                    v / 12.92
+                } else {
+                    ((v + 0.055) / 1.055).powf(2.4)
+                }
+            };
+            0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b)
+        }
+        let (x, y) = (lum(a), lum(b));
+        (x.max(y) + 0.05) / (x.min(y) + 0.05)
+    }
+
+    /// The black theme paints no ground but black, and everything on it is light enough to
+    /// read: 7:1 for the text, 4.5:1 for what is only glanced at.
+    #[test]
+    fn the_black_theme_is_black_behind_everything_and_light_on_top() {
+        let t = Theme::builtin("black").unwrap();
+        let black = Color::Rgb(0, 0, 0);
+        for key in Theme::keys() {
+            let c = t.color(key);
+            if key.ends_with(".bg") || key == "panel.bg" {
+                assert_eq!(c, black, "{key} is a ground and is not black");
+            } else if [
+                "panel.fg",
+                "viewer.fg",
+                "editor.fg",
+                "cmdline.fg",
+                "dialog.fg",
+            ]
+            .contains(&key)
+            {
+                assert!(contrast(c, black) >= 7.0, "{key}: {}", contrast(c, black));
+            } else if !key.ends_with("frame") && key != "panel.scrollbar.fg" {
+                assert!(contrast(c, black) >= 4.5, "{key}: {}", contrast(c, black));
+            }
+        }
+        // The cursor has no bar to stand out with: its text does, bold and underlined.
+        let cursor = t.fg_on("cursor.fg", "cursor.bg");
+        assert!(cursor.bold && cursor.underline);
+        assert!(t.attrs("syntax.comment").italic);
+    }
+
+    /// `[styles]` adds bold, italic and underline to a key, and survives an export.
+    #[test]
+    fn a_theme_says_how_a_key_is_drawn_besides_its_colour() {
+        let t = Theme::from_toml(
+            "t.toml",
+            r##"
+            id = "t"
+            [colors]
+            "syntax.keyword" = "#ffffff"
+            [styles]
+            "syntax.keyword" = "bold italic"
+            "cursor.fg" = "underline"
+            "##,
+        )
+        .unwrap();
+        let k = t.styled("syntax.keyword", Style::default());
+        assert!(k.bold && k.italic && !k.underline);
+        assert!(t.fg_on("cursor.fg", "cursor.bg").underline);
+        assert!(!t.attrs("panel.fg").bold);
+        let again = Theme::from_table("fcmd.toml", &t.to_table()).unwrap();
+        assert_eq!(again.attrs("syntax.keyword"), t.attrs("syntax.keyword"));
+        assert!(
+            Theme::from_toml("b.toml", "id = \"b\"\n[styles]\n\"panel.fg\" = \"blink\"\n").is_err()
+        );
     }
 
     #[test]
@@ -673,7 +860,7 @@ mod tests {
                 "##,
             )],
         );
-        assert_eq!(set.len(), 7, "the config theme replaced the built-in one");
+        assert_eq!(set.len(), 9, "the config theme replaced the built-in one");
         let t = set.get("commander").unwrap();
         assert_eq!(t.name, "Mine");
         assert_eq!(t.color("panel.bg"), Color::Rgb(1, 2, 3));
@@ -692,7 +879,7 @@ mod tests {
                 "##,
             )],
         );
-        assert_eq!(set.len(), 7, "the broken theme was not added");
+        assert_eq!(set.len(), 9, "the broken theme was not added");
         assert_eq!(set.load_errors.len(), 1);
         assert!(
             set.load_errors[0].contains("chartreuse"),
@@ -715,7 +902,8 @@ mod tests {
     fn theme_cycling_wraps() {
         let set = ThemeSet::builtin_only();
         assert_eq!(set.next_after("commander").id, "far");
-        assert_eq!(set.next_after("blade").id, "commander");
+        assert_eq!(set.next_after("blade").id, "github-dark");
+        assert_eq!(set.next_after("delphi-dark-2027").id, "commander");
         assert_eq!(set.next_after("nonexistent").id, "far");
     }
 

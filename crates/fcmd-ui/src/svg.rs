@@ -84,6 +84,8 @@ pub fn to_svg(buf: &Buffer) -> String {
             }
             let fg = cell_fg(buf, x, y);
             let bold = cell.style.bold;
+            let italic = cell.style.italic;
+            let underline = cell.style.underline;
             let mut chars: Vec<(f32, char)> = Vec::new();
             while x < w {
                 let Some(cell) = buf.get(x, y) else { break };
@@ -91,7 +93,11 @@ pub fn to_svg(buf: &Buffer) -> String {
                     x += 1;
                     continue;
                 }
-                if cell_fg(buf, x, y) != fg || cell.style.bold != bold {
+                if cell_fg(buf, x, y) != fg
+                    || cell.style.bold != bold
+                    || cell.style.italic != italic
+                    || cell.style.underline != underline
+                {
                     break;
                 }
                 chars.push((x as f32 * CELL_W, cell.ch));
@@ -103,15 +109,23 @@ pub fn to_svg(buf: &Buffer) -> String {
                 continue;
             };
             let chars = &chars[first..=last];
+            let attrs = [
+                (bold, " font-weight=\"bold\""),
+                (italic, " font-style=\"italic\""),
+                (underline, " text-decoration=\"underline\""),
+            ]
+            .iter()
+            .filter(|(on, _)| *on)
+            .map(|(_, a)| *a)
+            .collect::<String>();
             out.push_str(&format!(
-                "<text xml:space=\"preserve\" x=\"{}\" y=\"{:.1}\" fill=\"{fg}\"{}>{}</text>\n",
+                "<text xml:space=\"preserve\" x=\"{}\" y=\"{:.1}\" fill=\"{fg}\"{attrs}>{}</text>\n",
                 chars
                     .iter()
                     .map(|(x, _)| format!("{x:.1}"))
                     .collect::<Vec<_>>()
                     .join(" "),
                 y as f32 * CELL_H + BASELINE,
-                if bold { " font-weight=\"bold\"" } else { "" },
                 escape(&chars.iter().map(|(_, c)| *c).collect::<String>())
             ));
         }

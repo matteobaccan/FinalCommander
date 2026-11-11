@@ -519,17 +519,23 @@ hidden = "#808080"
   | --- | --- |
   | `commander` | the classic orthodox blue: dark blue panels, cyan text, yellow selection, cyan key bar — the default |
   | `far` | FAR Manager's own default palette, element for element, from `far/palette.cpp` of `FarGroup/FarManager` (BSD-3-Clause): the sixteen console colours, a cyan bar on the active panel's path, yellow column titles, cyan menus with yellow shortcuts, light grey dialogs with cyan input fields, red warning dialogs. For a user who wants the screen they already know |
-  | `black` | near-monochrome dark: black background, grey text, white cursor; for low-contrast terminals and e-ink |
+  | `black` | black behind everything and nothing else: no bars, no grey grounds; every part told apart by the colour and weight of light text (7:1 against black for what is read), the cursor the brightest text on screen, bold and underlined |
   | `white` | light theme: white background, dark text, blue accents; readable in daylight and on projectors |
   | `matrix` | green phosphor on black, bright green cursor, dim green chrome |
   | `tron` | neon on black: cyan and orange accents, thin bright highlights |
   | `blade` | amber/teal on near-black, warm selection — "blade" |
+  | `github-dark` | GitHub's dark terminal palette as terminalcolors.com publishes it: `#010409` ground, `#e6edf3` text, its sixteen colours and `#264f78` selection; dialogs and menus in the same interface's greys |
+  | `delphi-dark-2027` | the Delphi IDE's dark theme, read off its editor: charcoal page, cream bold keywords, olive italic comments, azure `{$…}` directives, blue strings, pink numbers, cornflower selection; the IDE's chrome for panels and menus |
 
 - **External themes** are `[[theme]]` blocks in `fcmd.toml` (or themes a plugin declares). They
   are read at startup and hot-reloaded when the file changes; a block with the id of a built-in
   overrides it, so a user can retune `commander` without renaming it. `ui.theme = "<id>"`
   selects, `app.theme.next` cycles through everything available, and `fcmd --list-themes` prints
   the resolved list with where each came from (`built-in`, the config file, or `plugin:<id>`).
+- Besides colours a theme may say how a key's text is drawn: a `[styles]` table maps a colour
+  key to `"bold"`, `"italic"`, `"underline"` or several of them (`"bold underline"`). It is what
+  lets a theme with one background everywhere show the cursor, and an IDE's theme draw its
+  keywords bold and its comments slanted; a terminal without italics shows the colour alone.
 - A theme file may `inherit = "<id>"` and override single keys; unknown keys are a warning, not
   a failure, so a theme written for a later version still loads.
 - `fcmd --export-theme <id>` prints a built-in theme as a ready-to-paste `[[theme]]` block

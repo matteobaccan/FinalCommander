@@ -49,6 +49,10 @@ pub struct Style {
     pub bg: Color,
     pub bold: bool,
     pub reverse: bool,
+    /// Slanted, where the terminal has it: what a theme asks for its comments.
+    pub italic: bool,
+    /// A line under the text: how a theme with one background everywhere shows the cursor.
+    pub underline: bool,
 }
 
 impl Style {
@@ -58,6 +62,8 @@ impl Style {
             bg,
             bold: false,
             reverse: false,
+            italic: false,
+            underline: false,
         }
     }
 

@@ -208,6 +208,15 @@ const DFM_LIMIT: u64 = 16 * 1024 * 1024;
 /// broken.
 const BASE64_MIN: usize = 16;
 
+/// How far above the window the viewer reads to know what the first row starts inside: a
+/// block comment opened up there still colours the rows on screen. A megabyte covers the
+/// biggest picture a form carries as text and is read in a moment.
+const SYNTAX_LOOKBACK: u64 = 1024 * 1024;
+
+/// How far above the window the block guides look for the blocks that are open: a unit's
+/// longest routine fits many times over.
+const GUIDE_LOOKBACK: u64 = 256 * 1024;
+
 pub struct Viewer {
     source: Box<dyn Source>,
     pub path: VPath,
@@ -303,6 +312,10 @@ pub struct Viewer {
     pub struct_focus: bool,
     /// Name of the producer when the content is generated (`javap`, `IL`, `wasm2wat`, …).
     pub derived: Option<String>,
+    /// Where the last colouring scan stopped and what it was inside there: the offset of the
+    /// first row then on screen, the syntax and the code page it was read with. Scrolling
+    /// down a line carries on from here instead of reading the whole stretch above again.
+    syntax_memo: Option<(u64, &'static str, Codepage, fcmd_syntax::State)>,
     /// Set when the file was too large to parse and we are sweeping raw bytes; carries the
     /// limit, for the status line.
     raw_disasm: Option<u64>,
@@ -396,6 +409,7 @@ impl Viewer {
             struct_top: 0,
             struct_focus: false,
             derived: None,
+            syntax_memo: None,
             raw_disasm: None,
             disasm_trail: Vec::new(),
             pattern: None,
@@ -1953,6 +1967,108 @@ impl Viewer {
         out
     }
 
+    /// What the first row on screen starts inside, for the colouring: a block comment opened
+    /// above the window — a form's `{ … }` of binary data, a `/* … */` licence — goes on
+    /// colouring the rows under it after it has scrolled off.
+    ///
+    /// The lines above are read back at most [`SYNTAX_LOOKBACK`] bytes, so a two-gigabyte log
+    /// still opens at once; a comment opened further up than that is not seen, which is the
+    /// same answer the viewer gave before for every comment. Moving down carries on from where
+    /// the last scan stopped, so scrolling a long file line by line reads each line once.
+    pub fn syntax_state_at_top(&mut self, syntax: &fcmd_syntax::Syntax) -> fcmd_syntax::State {
+        let top = self.top;
+        if self.mode != Mode::Text || top == 0 {
+            return fcmd_syntax::State::default();
+        }
+        let (mut from, mut state) = match self.syntax_memo {
+            Some((at, name, cp, state))
+                if name == syntax.name
+                    && cp == self.codepage
+                    && at <= top
+                    && top - at <= SYNTAX_LOOKBACK =>
+            {
+                (at, state)
+            }
+            _ => {
+                let start = top.saturating_sub(SYNTAX_LOOKBACK);
+                // Half a line is no line to scan: start at the first whole one.
+                let start = if start == 0 {
+                    0
+                } else {
+                    crate::nav::read_line(&mut *self.source, start - 1).1
+                };
+                (start.min(top), fcmd_syntax::State::default())
+            }
+        };
+        while from < top {
+            let (bytes, next) = read_line(&mut *self.source, from);
+            if next <= from {
+                break;
+            }
+            let text = self.codepage.decode(&bytes);
+            state = syntax.line(&text, state).1;
+            from = next;
+        }
+        self.syntax_memo = Some((top, syntax.name, self.codepage, state));
+        state
+    }
+
+    /// The block guides of the rows on screen, one entry per row, with the columns already
+    /// shifted for the horizontal scroll: `None` where they are not drawn — a syntax without
+    /// blocks, a mode that is not text, or wrapped lines, where a row is not a line.
+    ///
+    /// The lines above the window are read back as far as [`GUIDE_LOOKBACK`], so a block
+    /// opened up there still has its line down the screen.
+    pub fn block_guides(
+        &mut self,
+        syntax: &fcmd_syntax::Syntax,
+        height: u16,
+    ) -> Option<Vec<crate::guides::Guides>> {
+        if self.mode != Mode::Text || self.wrap != Wrap::Off || !crate::guides::applies(syntax) {
+            return None;
+        }
+        let top = self.top;
+        let len = self.source.len();
+        let start = top.saturating_sub(GUIDE_LOOKBACK);
+        let mut at = if start == 0 {
+            0
+        } else {
+            crate::nav::read_line(&mut *self.source, start - 1).1
+        };
+        let mut lines = Vec::new();
+        let mut from = 0;
+        while at < len {
+            if at >= top && from == 0 && !lines.is_empty() {
+                from = lines.len();
+            }
+            if at >= top && lines.len() - from >= height as usize {
+                break;
+            }
+            let (bytes, next) = read_line(&mut *self.source, at);
+            lines.push(expand_tabs(&self.codepage.decode(&bytes), self.tab_width));
+            if next <= at {
+                break;
+            }
+            at = next;
+        }
+        let col = self.col;
+        let shift = |cols: Vec<usize>| -> Vec<usize> {
+            cols.into_iter()
+                .filter(|c| *c >= col)
+                .map(|c| c - col)
+                .collect()
+        };
+        Some(
+            crate::guides::guides(syntax, &lines, from)
+                .into_iter()
+                .map(|g| crate::guides::Guides {
+                    through: shift(g.through),
+                    ends: shift(g.ends),
+                })
+                .collect(),
+        )
+    }
+
     fn rows_text(&mut self, width: u16, height: u16) -> Vec<Row> {
         let width = width.max(1) as usize;
         let len = self.source.len();
@@ -2532,6 +2648,39 @@ mod tests {
 
     fn texts(v: &mut Viewer, w: u16, h: u16) -> Vec<String> {
         v.rows(w, h).into_iter().map(|r| r.text).collect()
+    }
+
+    /// A form's `{ … }` of binary data scrolled half off the top: the rows still on screen
+    /// are inside the block, and they stay its colour.
+    #[test]
+    fn a_block_opened_above_the_window_still_colours_the_rows_under_it() {
+        let mut text = String::from("object Image4: TImage\n  PNG = {\n");
+        for _ in 0..40 {
+            text.push_str("    89504E470D0A1A0A0000000D49484452\n");
+        }
+        text.push_str("    4E44AE426082}\n  Align = Left\nend\n");
+        let mut v = Viewer::new(
+            Box::new(BytesSource::new(text.into_bytes())),
+            VPath::local("BarCode_Client.fmx"),
+        );
+        let syntax = fcmd_syntax::of_name("BarCode_Client.fmx").expect("a form has a syntax");
+        assert_eq!(v.syntax_state_at_top(syntax), fcmd_syntax::State::default());
+        // Down past the line that opens the block, one line at a time and then in one jump:
+        // both ways land inside it.
+        for _ in 0..10 {
+            v.scroll(1, 80, 5);
+        }
+        let stepped = v.syntax_state_at_top(syntax);
+        assert_ne!(stepped, fcmd_syntax::State::default(), "inside the block");
+        v.syntax_memo = None;
+        assert_eq!(
+            v.syntax_state_at_top(syntax),
+            stepped,
+            "the same from scratch"
+        );
+        // And past its end, out of it again.
+        v.to_end(80, 2);
+        assert_eq!(v.syntax_state_at_top(syntax), fcmd_syntax::State::default());
     }
 
     /// A viewer on a Markdown file, which is what `renders_markdown` asks about.

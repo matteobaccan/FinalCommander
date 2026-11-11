@@ -230,10 +230,7 @@ fn draw_selected_bar(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, y: u1
     let room = p.area.w.saturating_sub(4) as usize;
     let text = truncate_cols(&text, room);
     let tw = text.width() as u16;
-    let style = Style::new(
-        theme.color("panel.info.selected.fg"),
-        theme.color("panel.info.selected.bg"),
-    );
+    let style = theme.fg_on("panel.info.selected.fg", "panel.info.selected.bg");
     let x = p.area.x + 2 + (room as u16).saturating_sub(tw) / 2;
     buf.put_str(x, y, &text, style, tw);
 }
@@ -244,22 +241,16 @@ fn draw_selected_bar(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, y: u1
 pub fn draw_pane(buf: &mut Buffer, theme: &Theme, area: Rect, title: &str, focused: bool) -> Rect {
     let base = theme.panel();
     buf.fill(area, ' ', base);
-    let frame = Style::new(theme.color("panel.frame"), theme.color("panel.bg"));
+    let frame = theme.fg_on("panel.frame", "panel.bg");
     // FAR draws the panels themselves with a double line, and everything laid over them
     // with a single one.
     buf.draw_bordered(area, frame, None, Border::Double);
 
     // The title is elided in the middle, so both ends of a long path stay readable.
     let style = if focused {
-        Style::new(
-            theme.color("panel.title.active.fg"),
-            theme.color("panel.title.active.bg"),
-        )
+        theme.fg_on("panel.title.active.fg", "panel.title.active.bg")
     } else {
-        Style::new(
-            theme.color("panel.header.inactive.fg"),
-            theme.color("panel.header.bg"),
-        )
+        theme.fg_on("panel.header.inactive.fg", "panel.header.bg")
     };
     let room = area.w.saturating_sub(4) as usize;
     let title = elide_middle(title, room);
@@ -276,7 +267,7 @@ fn draw_panel_status(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, statu
     if area.h < 6 {
         return;
     }
-    let frame = Style::new(theme.color("panel.frame"), theme.color("panel.bg"));
+    let frame = theme.fg_on("panel.frame", "panel.bg");
     let rule = area.bottom() - 3;
     // The panel's frame is double, so the rule meets it the way FAR's does: `╟───╢`.
     buf.set(area.x, rule, '╟', frame);
@@ -312,7 +303,7 @@ fn draw_scrollbar(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: R
     if total <= per_screen || inner.h == 0 {
         return;
     }
-    let style = Style::new(theme.color("panel.scrollbar.fg"), theme.color("panel.bg"));
+    let style = theme.fg_on("panel.scrollbar.fg", "panel.bg");
     let x = p.area.right() - 1;
     let track = inner.h as usize;
     let thumb = ((per_screen * track) / total).clamp(1, track);
@@ -381,7 +372,7 @@ fn box_size(screen: Rect, inner_w: u16, inner_h: u16) -> BoxSize {
 /// column and one row inside it.
 fn dialog_box(buf: &mut Buffer, theme: &Theme, area: Rect, size: BoxSize, title: &str) -> Rect {
     let style = theme.dialog();
-    let frame = Style::new(theme.color("dialog.frame"), theme.color("dialog.bg"));
+    let frame = theme.fg_on("dialog.frame", "dialog.bg");
     buf.fill(area, ' ', style);
     let inner = Rect::new(
         area.x + size.px,
@@ -398,7 +389,7 @@ fn dialog_box(buf: &mut Buffer, theme: &Theme, area: Rect, size: BoxSize, title:
 /// The single rule across a dialog's double frame, joined to it: `╟───╢`. What FAR draws
 /// between a message and its buttons, and between the groups of a form.
 pub fn dialog_rule(buf: &mut Buffer, theme: &Theme, frame: Rect, y: u16) {
-    let ink = Style::new(theme.color("dialog.frame"), theme.color("dialog.bg"));
+    let ink = theme.fg_on("dialog.frame", "dialog.bg");
     if frame.w < 2 {
         return;
     }
@@ -422,7 +413,7 @@ fn centre(buf: &mut Buffer, x: u16, y: u16, w: u16, text: &str, style: Style) {
 /// The sort-mode letter, and a `*` when a filter is on: lower case for ascending order and
 /// upper case for descending, in the column-title colour, exactly where FAR puts it.
 fn draw_sort_mark(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, y: u16) {
-    let style = Style::new(theme.color("panel.column.fg"), theme.color("panel.bg"));
+    let style = theme.fg_on("panel.column.fg", "panel.bg");
     let letter = p.sort_label.chars().next().unwrap_or('n');
     let letter = if p.sort_reverse {
         letter.to_ascii_uppercase()
@@ -437,11 +428,11 @@ fn draw_sort_mark(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, y: u16) 
 
 /// `Name | Size | Date | Time` under the top frame, with the sort letter at its left.
 fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect) {
-    let style = Style::new(theme.color("panel.column.fg"), theme.color("panel.bg"));
+    let style = theme.fg_on("panel.column.fg", "panel.bg");
     let y = inner.y;
     buf.fill(Rect::new(inner.x, y, inner.w, 1), ' ', style);
     draw_sort_mark(buf, theme, p, y);
-    let frame = Style::new(theme.color("panel.frame"), theme.color("panel.bg"));
+    let frame = theme.fg_on("panel.frame", "panel.bg");
     for x in column_rules(p, inner) {
         buf.set(x, y, '│', frame);
     }
@@ -518,7 +509,7 @@ fn row_style(
         } else {
             ("cursor.inactive.fg", "cursor.inactive.bg")
         };
-        let mut s = Style::new(theme.color(cfg), theme.color(cbg));
+        let mut s = theme.fg_on(cfg, cbg);
         if selected {
             // FAR's Panel.Cursor.Selected: yellow on the cursor bar.
             s.fg = theme.color("selected.fg");
@@ -528,7 +519,13 @@ fn row_style(
         }
         s
     } else {
-        Style::new(fg, paint.bg.unwrap_or_else(|| theme.color("panel.bg")))
+        // What the theme asks of the kind besides its colour: a folder in bold, a mark that
+        // is a weight and not only a hue.
+        let key = if selected { "selected.fg" } else { paint.key };
+        theme.attrs(key).on(Style::new(
+            fg,
+            paint.bg.unwrap_or_else(|| theme.color("panel.bg")),
+        ))
     }
 }
 
@@ -1302,8 +1299,8 @@ fn draw_footer(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
     let area = p.area;
     let y = area.bottom() - 1;
     let room = area.w.saturating_sub(4) as usize;
-    let style = Style::new(theme.color("panel.footer.fg"), theme.color("panel.bg"));
-    let frame = Style::new(theme.color("panel.frame"), theme.color("panel.bg"));
+    let style = theme.fg_on("panel.footer.fg", "panel.bg");
+    let frame = theme.fg_on("panel.frame", "panel.bg");
 
     let totals = &p.listing.totals;
     // A listing the provider cut short says so for as long as it is on screen. The note
@@ -1381,11 +1378,8 @@ pub const KEYBAR_SLOTS: usize = 12;
 /// so a bar with room to spare ends in the background rather than in a cyan tail.
 pub fn draw_keybar(buf: &mut Buffer, theme: &Theme, area: Rect, labels: &[(u8, &str)]) {
     let bar = theme.keybar();
-    let num = Style::new(theme.color("keybar.num.fg"), theme.color("keybar.num.bg"));
-    let background = Style::new(
-        theme.color("keybar.background.fg"),
-        theme.color("keybar.background.bg"),
-    );
+    let num = theme.fg_on("keybar.num.fg", "keybar.num.bg");
+    let background = theme.fg_on("keybar.background.fg", "keybar.background.bg");
     buf.fill(area, ' ', background);
     if labels.is_empty() {
         return;
@@ -1420,7 +1414,7 @@ pub fn draw_keybar(buf: &mut Buffer, theme: &Theme, area: Rect, labels: &[(u8, &
 
 /// One-line status/message bar.
 pub fn draw_status(buf: &mut Buffer, theme: &Theme, area: Rect, text: &str, error: bool) {
-    let mut style = Style::new(theme.color("status.fg"), theme.color("status.bg"));
+    let mut style = theme.fg_on("status.fg", "status.bg");
     if error {
         style.fg = theme.color("error.fg");
         style.bold = true;
@@ -1444,7 +1438,7 @@ pub fn draw_cmdline(
     text: &str,
     cursor: usize,
 ) -> u16 {
-    let style = Style::new(theme.color("cmdline.fg"), theme.color("cmdline.bg"));
+    let style = theme.fg_on("cmdline.fg", "cmdline.bg");
     buf.fill(area, ' ', style);
     let pw = buf.put_str(area.x, area.y, prompt, style.bold(), area.w);
     let avail = area.w.saturating_sub(pw);
@@ -1551,15 +1545,15 @@ fn over_in(
 
     let (style, frame, hint_ink) = if menu {
         (
-            Style::new(theme.color("menu.fg"), theme.color("menu.bg")),
-            Style::new(theme.color("menu.frame"), theme.color("menu.bg")),
-            Style::new(theme.color("menu.title.fg"), theme.color("menu.bg")),
+            theme.fg_on("menu.fg", "menu.bg"),
+            theme.fg_on("menu.frame", "menu.bg"),
+            theme.fg_on("menu.title.fg", "menu.bg"),
         )
     } else {
         (
             theme.dialog(),
-            Style::new(theme.color("dialog.frame"), theme.color("dialog.bg")),
-            Style::new(theme.color("dialog.title"), theme.color("dialog.bg")),
+            theme.fg_on("dialog.frame", "dialog.bg"),
+            theme.fg_on("dialog.title", "dialog.bg"),
         )
     };
     let inner = if menu {
@@ -1619,7 +1613,7 @@ pub fn draw_prompt(
     let area = Rect::new(x, y, w, h);
     let frame = dialog_box(buf, theme, area, size, title);
     let field = Rect::new(frame.x + 2, frame.y + 1, frame.w.saturating_sub(4), 1);
-    let input = Style::new(theme.color("dialog.edit.fg"), theme.color("dialog.edit.bg"));
+    let input = theme.fg_on("dialog.edit.fg", "dialog.edit.bg");
     buf.fill(field, ' ', input);
     let shown = truncate_cols(text, field.w as usize);
     buf.put_str(field.x, field.y, &shown, input, field.w);
@@ -1646,13 +1640,9 @@ pub fn draw_prompt_at(
     let w = area.w;
     let style = theme.dialog();
     buf.fill(area, ' ', style);
-    buf.draw_frame(
-        area,
-        Style::new(theme.color("dialog.frame"), theme.color("dialog.bg")),
-        Some(title),
-    );
+    buf.draw_frame(area, theme.fg_on("dialog.frame", "dialog.bg"), Some(title));
     let field = Rect::new(area.x + 2, area.y + 1, w - 4, 1);
-    let input = Style::new(theme.color("dialog.edit.fg"), theme.color("dialog.edit.bg"));
+    let input = theme.fg_on("dialog.edit.fg", "dialog.edit.bg");
     buf.fill(field, ' ', input);
     let shown = truncate_cols(text, field.w as usize);
     buf.put_str(field.x, field.y, &shown, input, field.w);
@@ -1721,7 +1711,7 @@ pub fn draw_progress(
     let outer = Rect::new(x, y, w, h);
 
     let style = theme.dialog();
-    let accent = Style::new(theme.color("dialog.title"), theme.color("dialog.bg"));
+    let accent = theme.fg_on("dialog.title", "dialog.bg");
     // FAR's box, like every other dialog; the rest of this works inside the frame.
     let area = dialog_box(buf, theme, outer, size, view.title);
 
@@ -1790,15 +1780,10 @@ pub fn draw_buttons(
     labels: &[String],
     selected: usize,
 ) -> Vec<u16> {
-    let normal = Style::new(
-        theme.color("dialog.button.fg"),
-        theme.color("dialog.button.bg"),
-    );
-    let active = Style::new(
-        theme.color("dialog.button.selected.fg"),
-        theme.color("dialog.button.selected.bg"),
-    )
-    .bold();
+    let normal = theme.fg_on("dialog.button.fg", "dialog.button.bg");
+    let active = theme
+        .fg_on("dialog.button.selected.fg", "dialog.button.selected.bg")
+        .bold();
     let total = buttons_width(labels);
     let mut x = area.x + (area.w as usize).saturating_sub(total) as u16 / 2;
     let mut starts = Vec::with_capacity(labels.len());
@@ -2866,7 +2851,7 @@ mod tests {
         let theme = Theme::builtin("far").unwrap();
         let mut buf = Buffer::new(40, 12);
         // Something bright behind the dialog, so the darkening is visible.
-        let bright = Style::new(theme.color("panel.fg"), theme.color("panel.bg"));
+        let bright = theme.fg_on("panel.fg", "panel.bg");
         buf.clear(bright);
         let screen = buf.area();
         let frame = draw_dialog(&mut buf, &theme, screen, "T", &["hello".into()], None);
@@ -3009,11 +2994,8 @@ pub fn draw_menu_bar(
     titles: &[String],
     active: usize,
 ) -> Vec<u16> {
-    let bar = Style::new(theme.color("hmenu.fg"), theme.color("hmenu.bg"));
-    let picked = Style::new(
-        theme.color("hmenu.selected.fg"),
-        theme.color("hmenu.selected.bg"),
-    );
+    let bar = theme.fg_on("hmenu.fg", "hmenu.bg");
+    let picked = theme.fg_on("hmenu.selected.fg", "hmenu.selected.bg");
     buf.fill(area, ' ', bar);
     let mut x = area.x + 2;
     let mut starts = Vec::with_capacity(titles.len());
@@ -3068,17 +3050,11 @@ pub fn draw_tabs(buf: &mut Buffer, theme: &Theme, row: &TabRow) {
     if area.w == 0 || area.h == 0 || row.labels.is_empty() {
         return;
     }
-    let bar = Style::new(theme.color("panel.tab.fg"), theme.color("panel.tab.bg"));
+    let bar = theme.fg_on("panel.tab.fg", "panel.tab.bg");
     let picked = if row.focused {
-        Style::new(
-            theme.color("panel.tab.active.fg"),
-            theme.color("panel.tab.active.bg"),
-        )
+        theme.fg_on("panel.tab.active.fg", "panel.tab.active.bg")
     } else {
-        Style::new(
-            theme.color("panel.header.inactive.fg"),
-            theme.color("panel.tab.bg"),
-        )
+        theme.fg_on("panel.header.inactive.fg", "panel.tab.bg")
     };
     buf.fill(area, ' ', bar);
 
@@ -3166,13 +3142,10 @@ pub fn draw_menu(
 
     // A menu has its own colours, not the dialog ones: in FAR the dropdowns are cyan with
     // yellow shortcuts while dialogs are grey.
-    let style = Style::new(theme.color("menu.fg"), theme.color("menu.bg"));
-    let frame = Style::new(theme.color("menu.frame"), theme.color("menu.bg"));
-    let picked = Style::new(
-        theme.color("menu.selected.fg"),
-        theme.color("menu.selected.bg"),
-    );
-    let keys_style = Style::new(theme.color("menu.hotkey.fg"), theme.color("menu.bg"));
+    let style = theme.fg_on("menu.fg", "menu.bg");
+    let frame = theme.fg_on("menu.frame", "menu.bg");
+    let picked = theme.fg_on("menu.selected.fg", "menu.selected.bg");
+    let keys_style = theme.fg_on("menu.hotkey.fg", "menu.bg");
     buf.fill(area, ' ', style);
     // FAR's dropdown: a double frame, and the rules between the groups joined to it.
     buf.draw_bordered(area, frame, None, crate::buffer::Border::Double);
@@ -3349,8 +3322,8 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
     let area = Rect::new(x.max(screen.x), y.max(screen.y), w, h);
 
     let style = theme.dialog();
-    let frame_ink = Style::new(theme.color("dialog.frame"), theme.color("dialog.bg"));
-    let picked = Style::new(theme.color("cursor.fg"), theme.color("cursor.bg"));
+    let frame_ink = theme.fg_on("dialog.frame", "dialog.bg");
+    let picked = theme.fg_on("cursor.fg", "cursor.bg");
     // What the caller is given back is the frame: the content is one column and one row in
     // from it, which is what every caller's caret arithmetic already says.
     let frame = dialog_box(buf, theme, area, size, title);
@@ -3365,9 +3338,9 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
             let ink = if i == tab {
                 picked
             } else if page.enabled {
-                Style::new(theme.color("dialog.fg"), theme.color("dialog.bg"))
+                theme.fg_on("dialog.fg", "dialog.bg")
             } else {
-                Style::new(theme.color("panel.footer.fg"), theme.color("dialog.bg"))
+                theme.fg_on("panel.footer.fg", "dialog.bg")
             };
             let label = format!(" {} ", page.label);
             let width = label.width() as u16;
@@ -3425,10 +3398,7 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
             let tail: String = row.text.chars().skip(from).collect();
             let x = frame.x + 2 + before.width() as u16;
             let room = (frame.x + frame.w - 2).saturating_sub(x);
-            let ink = Style::new(
-                theme.color("editor.selected.fg"),
-                theme.color("editor.selected.bg"),
-            );
+            let ink = theme.fg_on("editor.selected.fg", "editor.selected.bg");
             buf.put_str(x, ry, &tail, ink, room);
         }
     }

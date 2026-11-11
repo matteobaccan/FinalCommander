@@ -722,9 +722,17 @@ unterminated string, a Markdown fence. That is what makes both callers possible:
   lines further down, throwing it away from the first line an edit touched. Closing a comment
   uncolours the lines below it in the same frame, and a file of a million lines costs the
   scan of what is on screen plus whatever is above it, once.
-- The **viewer** starts the scan at the first row on screen, because it never reads more of a
-  file than it shows. A block comment opened above the window is therefore not carried; that
-  is the price of opening a two-gigabyte log instantly, and it is paid only by the viewer.
+- The **viewer** reads back at most a megabyte above the first row on screen to know what that
+  row starts inside, and remembers where it stopped, so scrolling down reads each line once.
+  A block comment opened within that megabyte — a form's `{ … }` of binary data, a licence in
+  `/* … */` — keeps colouring the rows under it after its first line has scrolled off; one
+  opened further up is not seen, which is the price of opening a two-gigabyte log instantly.
+- **Block guides.** For Pascal and the forms written in it, the viewer draws a thin line down
+  each open block, as the Delphi IDE does: from the line that opens it (`begin`, `try`,
+  `case`, `repeat`, `asm`, a `class` or `record` declared with a body; `object`, `inherited`,
+  `inline` and `item` in a form) to its `end` or `until`, in the column where that line starts,
+  one per nested block, only through blank cells and never in the text that is copied. The
+  colour is `syntax.guide`; wrapped lines have none, a row there not being a line.
 
 Recognition is by file name. The classes are `keyword`, `type`, `string`, `number`,
 `comment`, `preproc`, `tag`, `attr`, `entity`, `function`; each is a `syntax.*` theme key, and

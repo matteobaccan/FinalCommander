@@ -202,6 +202,12 @@ impl Term {
                 if cell.style.reverse {
                     queue!(self.out, SetAttribute(Attribute::Reverse))?;
                 }
+                if cell.style.italic {
+                    queue!(self.out, SetAttribute(Attribute::Italic))?;
+                }
+                if cell.style.underline {
+                    queue!(self.out, SetAttribute(Attribute::Underlined))?;
+                }
                 last_style = Some(cell.style);
             }
             queue!(self.out, Print(cell.ch))?;

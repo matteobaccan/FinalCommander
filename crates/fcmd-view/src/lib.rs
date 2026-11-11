@@ -10,6 +10,7 @@ pub mod decode;
 pub mod dfm;
 pub mod diff;
 pub mod disasm;
+pub mod guides;
 pub mod il;
 pub mod jvm;
 pub mod markdown;

@@ -405,7 +405,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         // The line an output search found is drawn the way the cursor row is, so the eye
         // goes to it on a screen of a build's worth of text.
         let hit = app.output_hit.as_ref().map(|(at, _)| *at);
-        let marked = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
+        let marked = app.theme.fg_on("cursor.fg", "cursor.bg");
         for (i, line) in app.user_screen[start..end].iter().enumerate() {
             let text = fcmd_ui::truncate_cols(line, w as usize);
             let y = area.y + i as u16;
@@ -422,7 +422,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     let mut cursor = None;
     if cmd_h == 1 {
         let y = menu_h + full_h + prompt_extra;
-        let style = Style::new(app.theme.color("cmdline.fg"), app.theme.color("cmdline.bg"));
+        let style = app.theme.fg_on("cmdline.fg", "cmdline.bg");
         let skip = prompt_lines.len() - 1 - prompt_extra as usize;
         for (i, line) in prompt_lines[skip..prompt_lines.len() - 1]
             .iter()
@@ -453,7 +453,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             };
             let (x0, x1) = (width(from), width(to));
             let marked: String = app.cmd.text.chars().take(to).skip(from).collect();
-            let ink = Style::new(app.theme.color("cmdline.bg"), app.theme.color("cmdline.fg"));
+            let ink = app.theme.fg_on("cmdline.bg", "cmdline.fg");
             if x0 < room {
                 buf.put_str(
                     prompt_w + x0,
@@ -474,10 +474,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         // What the best answer would add, after the caret and dimmed: it is not in the line,
         // so `Enter` runs what was typed and `→` is what takes it (SPEC 06 §7.4).
         if let Some(hint) = app.completion_hint() {
-            let dim = Style::new(
-                app.theme.color("cmdline.hint.fg"),
-                app.theme.color("cmdline.bg"),
-            );
+            let dim = app.theme.fg_on("cmdline.hint.fg", "cmdline.bg");
             let left = room.saturating_sub(caret);
             if left > 0 {
                 buf.put_str(
@@ -513,17 +510,15 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                 let x = prompt_w.min(w.saturating_sub(box_w));
                 let top = y - rows as u16;
                 let area = Rect::new(x, top, box_w, rows as u16);
-                let style = Style::new(app.theme.color("dialog.fg"), app.theme.color("dialog.bg"));
+                let style = app.theme.fg_on("dialog.fg", "dialog.bg");
                 buf.fill(area, ' ', style);
                 // The window onto the list, so the cursor is always on a row that is drawn.
                 let first = c.cursor.saturating_sub(rows.saturating_sub(1));
                 for (i, row) in c.rows.iter().skip(first).take(rows).enumerate() {
                     let here = first + i == c.cursor;
                     let style = if here {
-                        Style::new(
-                            app.theme.color("dialog.button.selected.fg"),
-                            app.theme.color("dialog.button.selected.bg"),
-                        )
+                        app.theme
+                            .fg_on("dialog.button.selected.fg", "dialog.button.selected.bg")
                     } else {
                         style
                     };
@@ -572,8 +567,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             let width = unicode_width::UnicodeWidthStr::width(mark.as_str()) as u16;
             if width > 0 && width < w {
                 // While recording, the corner is drawn as an error is: it has to be noticed.
-                let mut style =
-                    Style::new(app.theme.color("status.fg"), app.theme.color("status.bg"));
+                let mut style = app.theme.fg_on("status.fg", "status.bg");
                 if app.recording.is_some() {
                     style.fg = app.theme.color("error.fg");
                     style.bold = true;
@@ -598,9 +592,9 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     // end of the menu bar when that is always on. Four characters and a space either side,
     // which is the whole of what a clock in a file manager has to be.
     let corner = if app.cfg.ui.menu_bar {
-        Style::new(app.theme.color("hmenu.fg"), app.theme.color("hmenu.bg"))
+        app.theme.fg_on("hmenu.fg", "hmenu.bg")
     } else {
-        Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"))
+        app.theme.fg_on("panel.frame", "panel.bg")
     };
     let mut right = w;
     if app.cfg.ui.clock && w > 10 {
@@ -887,10 +881,7 @@ fn draw_terminal(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         }
     });
 
-    let style = Style::new(
-        app.theme.color("panel.header.fg"),
-        app.theme.color("status.bg"),
-    );
+    let style = app.theme.fg_on("panel.header.fg", "status.bg");
     buf.fill(header, ' ', style);
     let what = title.unwrap_or(name);
     let hint = app
@@ -914,10 +905,7 @@ fn draw_user_screen(app: &App, buf: &mut Buffer, scroll: usize) {
     let base = app.theme.panel();
     buf.fill(Rect::new(0, 0, w, h.saturating_sub(keybar_h)), ' ', base);
 
-    let header = Style::new(
-        app.theme.color("panel.header.fg"),
-        app.theme.color("status.bg"),
-    );
+    let header = app.theme.fg_on("panel.header.fg", "status.bg");
     buf.fill(Rect::new(0, 0, w, 1), ' ', header);
     let title = app.i18n.t_args(
         "user-screen-title",
@@ -932,10 +920,7 @@ fn draw_user_screen(app: &App, buf: &mut Buffer, scroll: usize) {
     if app.user_screen.is_empty() {
         buf.put_str(1, body.y, &app.i18n.t("user-screen-empty"), base, w - 1);
     }
-    let heading = Style::new(
-        app.theme.color("panel.column.fg"),
-        app.theme.color("panel.bg"),
-    );
+    let heading = app.theme.fg_on("panel.column.fg", "panel.bg");
     for (i, line) in app
         .user_screen
         .iter()
@@ -964,20 +949,11 @@ fn draw_user_screen(app: &App, buf: &mut Buffer, scroll: usize) {
 /// and a row that points somewhere is what `Enter` follows.
 fn draw_structure(app: &App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer, area: Rect) {
     let base = app.theme.panel();
-    let frame = Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"));
-    let group = Style::new(
-        app.theme.color("panel.column.fg"),
-        app.theme.color("panel.bg"),
-    );
-    let dim = Style::new(
-        app.theme.color("panel.footer.fg"),
-        app.theme.color("panel.bg"),
-    );
-    let picked = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
-    let unfocused = Style::new(
-        app.theme.color("cursor.inactive.fg"),
-        app.theme.color("cursor.inactive.bg"),
-    );
+    let frame = app.theme.fg_on("panel.frame", "panel.bg");
+    let group = app.theme.fg_on("panel.column.fg", "panel.bg");
+    let dim = app.theme.fg_on("panel.footer.fg", "panel.bg");
+    let picked = app.theme.fg_on("cursor.fg", "cursor.bg");
+    let unfocused = app.theme.fg_on("cursor.inactive.fg", "cursor.inactive.bg");
 
     buf.fill(area, ' ', base);
     for y in area.y..area.bottom() {
@@ -1246,7 +1222,7 @@ fn draw_pick(
     // The rules between groups of rows, drawn across the frame and joined to it the way the
     // panel's own separators are: `lines()` leaves them blank because only this knows where
     // the frame is.
-    let frame = Style::new(app.theme.color("menu.frame"), app.theme.color("menu.bg"));
+    let frame = app.theme.fg_on("menu.frame", "menu.bg");
     for i in 0..shown.len() {
         if !pick.rows.get(start + i).is_some_and(|r| r.separator) {
             continue;
@@ -1288,10 +1264,7 @@ fn draw_pick(
     // is the half of the row anybody who uses it twice a day actually reads.
     let keyed = pick.rows.iter().any(|r| r.hotkey.is_some());
     if keyed {
-        let ink = Style::new(
-            app.theme.color("menu.hotkey.fg"),
-            app.theme.color("menu.bg"),
-        );
+        let ink = app.theme.fg_on("menu.hotkey.fg", "menu.bg");
         for (i, row) in pick.rows.iter().skip(start).take(shown.len()).enumerate() {
             let Some(key) = row.hotkey else { continue };
             if start + i == pick.cursor {
@@ -1306,10 +1279,7 @@ fn draw_pick(
         }
     }
 
-    let style = Style::new(
-        app.theme.color("menu.selected.fg"),
-        app.theme.color("menu.selected.bg"),
-    );
+    let style = app.theme.fg_on("menu.selected.fg", "menu.selected.bg");
     let row = pick.cursor.saturating_sub(start);
     let y = area.y + 1 + row as u16;
     if row < shown.len() && y < area.y + area.h.saturating_sub(1) {
@@ -1318,10 +1288,7 @@ fn draw_pick(
         buf.put_str(area.x + 1, y, &text, style, width as u16);
         // The key stays yellow on the row one is standing on, as it does in FAR's menus.
         if let Some(key) = pick.rows.get(pick.cursor).and_then(|r| r.hotkey) {
-            let ink = Style::new(
-                app.theme.color("menu.hotkey.fg"),
-                app.theme.color("menu.selected.bg"),
-            );
+            let ink = app.theme.fg_on("menu.hotkey.fg", "menu.selected.bg");
             buf.put_str(area.x + 4, y, &key.to_string(), ink, 1);
         }
     }
@@ -1645,21 +1612,14 @@ fn draw_hex(
     );
     buf.put_str(w.saturating_sub(status_w), 0, &status, header, status_w);
 
-    let changed = Style::new(app.theme.color("selected.fg"), app.theme.color("panel.bg"));
-    let marked = Style::new(
-        app.theme.color("panel.info.selected.fg"),
-        app.theme.color("panel.info.selected.bg"),
-    );
+    let changed = app.theme.fg_on("selected.fg", "panel.bg");
+    let marked = app
+        .theme
+        .fg_on("panel.info.selected.fg", "panel.info.selected.bg");
     // `Editor.Text.Selected`: a marked block, which in FAR's palette is the status
     // line's colour rather than the panel cursor's.
-    let on = Style::new(
-        app.theme.color("editor.selected.fg"),
-        app.theme.color("editor.selected.bg"),
-    );
-    let offset_style = Style::new(
-        app.theme.color("panel.column.fg"),
-        app.theme.color("panel.bg"),
-    );
+    let on = app.theme.fg_on("editor.selected.fg", "editor.selected.bg");
+    let offset_style = app.theme.fg_on("panel.column.fg", "panel.bg");
     let mut cursor_at = None;
 
     for row in 0..body.h {
@@ -1721,7 +1681,7 @@ fn draw_hex(
         let rows = (changes.len() as u16).min(4) + 1;
         let top = body.y + body.h - rows;
         buf.fill(Rect::new(0, top, w, rows), ' ', base);
-        let rule = Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"));
+        let rule = app.theme.fg_on("panel.frame", "panel.bg");
         buf.put_str(0, top, &"─".repeat(w as usize), rule, w);
         for (i, change) in changes.iter().take(4).enumerate() {
             let hex = |bytes: &[u8]| {
@@ -1795,10 +1755,7 @@ fn draw_editor(
     let visible = editor.scroll_into_view(body.h as usize, body.w as usize);
     // `Editor.Text.Selected`: a marked block, which in FAR's palette is the status
     // line's colour rather than the panel cursor's.
-    let selected = Style::new(
-        app.theme.color("editor.selected.fg"),
-        app.theme.color("editor.selected.bg"),
-    );
+    let selected = app.theme.fg_on("editor.selected.fg", "editor.selected.bg");
 
     // Where the text ended up, for the mouse: a click puts the caret there and the wheel
     // scrolls. The editor draws its lines from column zero, so this is the body as it is.
@@ -1832,7 +1789,7 @@ fn draw_editor(
                 if slice.is_empty() {
                     continue;
                 }
-                let style = base.with_fg(app.theme.color(span.class.theme_key()));
+                let style = app.theme.styled(span.class.theme_key(), base);
                 let room = body.w - from as u16;
                 buf.put_str(from as u16, y, &slice, style, room);
             }
@@ -2089,7 +2046,7 @@ fn draw_quick_view(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
         );
     }
     let name = viewer.path.display_name();
-    let foot = Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"));
+    let foot = app.theme.fg_on("panel.frame", "panel.bg");
     let name = fcmd_ui::elide_middle(&name, area.w.saturating_sub(4) as usize);
     let nw = unicode_width::UnicodeWidthStr::width(name.as_str()) as u16;
     buf.put_str(
@@ -2153,8 +2110,8 @@ fn draw_ai_chat(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
             if x >= width {
                 continue;
             }
-            let mut style = base.with_fg(app.theme.color(span.class.theme_key()));
-            style.bold = span.bold;
+            let mut style = app.theme.styled(span.class.theme_key(), base);
+            style.bold |= span.bold;
             buf.put_str(x0 + x, y, text, style, width - x);
         }
     }
@@ -2173,10 +2130,7 @@ fn draw_tree(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
     let title = format!("{}  {root}", app.i18n.t("panel-tree"));
     let inner = widgets::draw_pane(buf, &app.theme, area, &title, index == app.active);
     let base = app.theme.panel();
-    let on = Style::new(
-        app.theme.color("panel.cursor.fg"),
-        app.theme.color("panel.cursor.bg"),
-    );
+    let on = app.theme.fg_on("panel.cursor.fg", "panel.cursor.bg");
     let Some(tree) = app.trees[index].as_ref() else {
         return;
     };
@@ -2420,10 +2374,7 @@ fn draw_info(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
 /// a folder both want them: the labels in the header colour, aligned on the widest of them.
 fn draw_pairs(app: &App, buf: &mut Buffer, inner: Rect, lines: &[(String, String)]) {
     let base = app.theme.panel();
-    let label = Style::new(
-        app.theme.color("panel.header.fg"),
-        app.theme.color("panel.bg"),
-    );
+    let label = app.theme.fg_on("panel.header.fg", "panel.bg");
     let width = lines
         .iter()
         .map(|(k, _)| unicode_width::UnicodeWidthStr::width(k.as_str()))
@@ -2541,20 +2492,25 @@ fn draw_viewer(app: &mut App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer) 
 
     // Content. `Viewer.Text.Selected` marks a search hit — its own role in FAR's palette,
     // which the panel's background had no business being half of.
-    let hit = Style::new(
-        app.theme.color("viewer.selected.fg"),
-        app.theme.color("viewer.selected.bg"),
-    )
-    .bold();
+    let hit = app
+        .theme
+        .fg_on("viewer.selected.fg", "viewer.selected.bg")
+        .bold();
     let rows = viewer.rows(body.w, body.h);
     // The syntax, where the file is one we recognise and the mode is the one that shows it
-    // as text. The scan starts at the first row on screen rather than at the start of the
-    // file: the viewer never reads more than it shows, so a block comment opened above the
-    // window is not carried — which is the price of opening a two-gigabyte log instantly.
+    // as text. What the first row starts inside is read from the lines above it, a bounded
+    // stretch of them, so a block comment opened above the window — a form's binary data —
+    // keeps its colour when its first line scrolls off.
     let syntax = (app.cfg.ui.syntax && viewer.mode == fcmd_view::Mode::Text)
         .then(|| fcmd_syntax::of_name(&viewer.path.display_name()))
         .flatten();
-    let mut state = fcmd_syntax::State::default();
+    let mut state = match syntax {
+        Some(syntax) => viewer.syntax_state_at_top(syntax),
+        None => fcmd_syntax::State::default(),
+    };
+    // The lines down the blocks of a Pascal unit or a form, as the Delphi IDE draws them.
+    let guides = syntax.and_then(|syntax| viewer.block_guides(syntax, body.h));
+    let guide = app.theme.fg_on("syntax.guide", "viewer.bg");
     // In a table the row under the cursor is drawn as a panel draws its cursor, and a marked
     // row in the colour a panel marks a file with: the same two things, said the same way.
     let table = viewer.mode == fcmd_view::Mode::Table;
@@ -2596,8 +2552,8 @@ fn draw_viewer(app: &mut App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer) 
             if x >= body.w {
                 continue;
             }
-            let mut style = base.with_fg(app.theme.color(span.class.theme_key()));
-            style.bold = span.bold;
+            let mut style = app.theme.styled(span.class.theme_key(), base);
+            style.bold |= span.bold;
             buf.put_str(x, y, text, style, body.w - x);
         }
         // The bytes and the instructions get colours of their own, from the same theme keys
@@ -2627,8 +2583,18 @@ fn draw_viewer(app: &mut App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer) 
                     .filter_map(unicode_width::UnicodeWidthChar::width)
                     .sum::<usize>() as u16;
                 if x < body.w && !text.is_empty() {
-                    let style = base.with_fg(app.theme.color(span.class.theme_key()));
+                    let style = app.theme.styled(span.class.theme_key(), base);
                     buf.put_str(x, y, text, style, body.w - x);
+                }
+            }
+        }
+        if let Some(g) = guides.as_ref().and_then(|g| g.get(i)) {
+            for (cols, glyph) in [(&g.through, "│"), (&g.ends, "└")] {
+                for &c in cols {
+                    let blank = row.text.chars().nth(c).is_none_or(char::is_whitespace);
+                    if blank && (c as u16) < body.w {
+                        buf.put_str(c as u16, y, glyph, guide, 1);
+                    }
                 }
             }
         }
@@ -2662,10 +2628,7 @@ fn draw_viewer(app: &mut App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer) 
     // rendered Markdown page each answer differently — so the thumb is one row and the
     // position is the percentage the status line already shows.
     if let Some(x) = bar {
-        let style = Style::new(
-            app.theme.color("panel.scrollbar.fg"),
-            app.theme.color("viewer.bg"),
-        );
+        let style = app.theme.fg_on("panel.scrollbar.fg", "viewer.bg");
         let track = body.h as usize;
         let at = (usize::from(status.percent.min(100)) * track.saturating_sub(1) + 50) / 100;
         for i in 0..track {
@@ -2743,12 +2706,9 @@ fn cursor_line(app: &App, panel: &crate::panel::Panel) -> String {
 /// used as one or the other, and a swatch that showed one of them would be half an answer.
 fn draw_palette(app: &App, view: &crate::app::PaletteView, buf: &mut Buffer, screen: Rect) {
     let base = app.theme.panel();
-    let frame = Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"));
-    let dim = Style::new(
-        app.theme.color("panel.footer.fg"),
-        app.theme.color("panel.bg"),
-    );
-    let picked = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
+    let frame = app.theme.fg_on("panel.frame", "panel.bg");
+    let dim = app.theme.fg_on("panel.footer.fg", "panel.bg");
+    let picked = app.theme.fg_on("cursor.fg", "cursor.bg");
 
     buf.fill(screen, ' ', base);
     let title = app
@@ -2837,10 +2797,7 @@ fn draw_grab(app: &App, grab: &crate::grab::Grab, buf: &mut Buffer) -> Option<(u
     let (w, h) = (buf.width(), buf.height());
     // The frame as it was. A terminal resized since the key was pressed leaves a margin,
     // which is filled rather than left as whatever was under it.
-    buf.clear(Style::new(
-        app.theme.color("panel.fg"),
-        app.theme.color("panel.bg"),
-    ));
+    buf.clear(app.theme.fg_on("panel.fg", "panel.bg"));
     for y in 0..h.min(grab.height()) {
         for x in 0..w.min(grab.width()) {
             if let Some(cell) = grab.screen.get(x, y) {
@@ -2850,10 +2807,7 @@ fn draw_grab(app: &App, grab: &crate::grab::Grab, buf: &mut Buffer) -> Option<(u
     }
     // What is marked, in the colours a selection has everywhere else.
     let area = grab.area();
-    let marked = Style::new(
-        app.theme.color("selected.fg"),
-        app.theme.color("selected.bg"),
-    );
+    let marked = app.theme.fg_on("selected.fg", "selected.bg");
     for y in area.y..area.bottom().min(h) {
         for x in area.x..area.right().min(w) {
             if let Some(cell) = buf.cell_mut(x, y) {
@@ -2866,7 +2820,7 @@ fn draw_grab(app: &App, grab: &crate::grab::Grab, buf: &mut Buffer) -> Option<(u
     if h > 0 {
         let hint = app.i18n.t("grab-hint");
         let hint = fcmd_ui::truncate_cols(&hint, w as usize);
-        let style = Style::new(app.theme.color("status.fg"), app.theme.color("status.bg"));
+        let style = app.theme.fg_on("status.fg", "status.bg");
         buf.fill(Rect::new(0, h - 1, w, 1), ' ', style);
         buf.put_str(0, h - 1, &hint, style, w);
     }
@@ -2880,28 +2834,27 @@ fn draw_diff(app: &App, view: &fcmd_view::Diff, buf: &mut Buffer, screen: Rect) 
     use fcmd_view::Side;
 
     let base = app.theme.panel();
-    let frame = Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"));
-    let dim = Style::new(
-        app.theme.color("panel.footer.fg"),
-        app.theme.color("panel.bg"),
-    );
+    let frame = app.theme.fg_on("panel.frame", "panel.bg");
+    let dim = app.theme.fg_on("panel.footer.fg", "panel.bg");
     // A diff's own two colours, the ones a `.diff` has in the viewer: what the left side has
     // and the right does not is red, what the right side brings is green. A changed line is
     // both — red on the left, green on the right — with the part that differs marked.
     // The whole line is painted, not only its sign, so a change is seen from across the
     // room; the sign stays for a screen without colour and for a copy of the text.
-    let removed = Style::new(
-        app.theme.color("diff.line.fg"),
-        app.theme.color("diff.removed.bg"),
-    );
-    let added = Style::new(
-        app.theme.color("diff.line.fg"),
-        app.theme.color("diff.added.bg"),
-    );
-    let inner_mark = Style::new(
-        app.theme.color("selected.fg"),
-        app.theme.color("selected.bg"),
-    );
+    // A theme that paints no backgrounds at all — the black one — leaves the two lines the
+    // panel's own ground, and then the text itself carries the red and the green.
+    let painted = |bg: &str| app.theme.color(bg) != app.theme.color("panel.bg");
+    let removed = if painted("diff.removed.bg") {
+        app.theme.fg_on("diff.line.fg", "diff.removed.bg")
+    } else {
+        app.theme.fg_on("syntax.removed", "panel.bg")
+    };
+    let added = if painted("diff.added.bg") {
+        app.theme.fg_on("diff.line.fg", "diff.added.bg")
+    } else {
+        app.theme.fg_on("syntax.added", "panel.bg")
+    };
+    let inner_mark = app.theme.fg_on("selected.fg", "selected.bg");
 
     buf.fill(screen, ' ', base);
     let title = app.i18n.t("diff-title");
@@ -3047,14 +3000,11 @@ fn draw_sync(app: &App, view: &crate::app::SyncView, buf: &mut Buffer, screen: R
     use fcmd_jobs::sync::{Action, Verdict};
 
     let base = app.theme.panel();
-    let frame = Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"));
-    let dim = Style::new(
-        app.theme.color("panel.footer.fg"),
-        app.theme.color("panel.bg"),
-    );
-    let picked = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
-    let gone = Style::new(app.theme.color("file.exec"), app.theme.color("panel.bg"));
-    let clash = Style::new(app.theme.color("selected.fg"), app.theme.color("panel.bg"));
+    let frame = app.theme.fg_on("panel.frame", "panel.bg");
+    let dim = app.theme.fg_on("panel.footer.fg", "panel.bg");
+    let picked = app.theme.fg_on("cursor.fg", "cursor.bg");
+    let gone = app.theme.fg_on("file.exec", "panel.bg");
+    let clash = app.theme.fg_on("selected.fg", "panel.bg");
 
     buf.fill(screen, ' ', base);
     let title = app.i18n.t("sync-title");
@@ -3183,12 +3133,9 @@ fn draw_sync(app: &App, view: &crate::app::SyncView, buf: &mut Buffer, screen: R
 
 fn draw_find(app: &App, view: &crate::app::FindView, buf: &mut Buffer, screen: Rect) {
     let base = app.theme.panel();
-    let frame = Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"));
-    let dim = Style::new(
-        app.theme.color("panel.footer.fg"),
-        app.theme.color("panel.bg"),
-    );
-    let picked = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
+    let frame = app.theme.fg_on("panel.frame", "panel.bg");
+    let dim = app.theme.fg_on("panel.footer.fg", "panel.bg");
+    let picked = app.theme.fg_on("cursor.fg", "cursor.bg");
 
     buf.fill(screen, ' ', base);
     buf.draw_frame(screen, frame, Some(&view.label));
@@ -3274,10 +3221,7 @@ fn draw_find(app: &App, view: &crate::app::FindView, buf: &mut Buffer, screen: R
         inner.x,
         inner.bottom() - 1,
         &fcmd_ui::truncate_cols(&hint, inner.w as usize),
-        Style::new(
-            app.theme.color("panel.column.fg"),
-            app.theme.color("panel.bg"),
-        ),
+        app.theme.fg_on("panel.column.fg", "panel.bg"),
         inner.w,
     );
 }
@@ -3313,7 +3257,7 @@ fn draw_sites(app: &App, buf: &mut Buffer, screen: Rect, cursor: usize) {
     let area = widgets::draw_dialog(buf, &app.theme, screen, &title, &lines, Some(&hint));
 
     // Highlight the row under the cursor, skipping the group headings.
-    let selected = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
+    let selected = app.theme.fg_on("cursor.fg", "cursor.bg");
     let mut row = 0usize;
     for (index, line) in lines.iter().enumerate() {
         if line.starts_with('[') {
@@ -3389,10 +3333,7 @@ fn draw_learn_keys(app: &App, learn: &crate::app::LearnKeys, buf: &mut Buffer, s
     let title = app.i18n.t("learn-title");
     buf.draw_bordered(
         area,
-        Style::new(
-            app.theme.color("dialog.frame"),
-            app.theme.color("dialog.bg"),
-        ),
+        app.theme.fg_on("dialog.frame", "dialog.bg"),
         Some(&title),
         fcmd_ui::Border::Double,
     );
@@ -3489,10 +3430,7 @@ fn draw_help(
     };
     buf.draw_bordered(
         area,
-        Style::new(
-            app.theme.color("dialog.frame"),
-            app.theme.color("dialog.bg"),
-        ),
+        app.theme.fg_on("dialog.frame", "dialog.bg"),
         Some(&title),
         fcmd_ui::Border::Double,
     );
@@ -3506,10 +3444,7 @@ fn draw_help(
         // In the index the row under the cursor is drawn as chosen, because the index is a
         // list one picks from rather than a page one reads.
         if index && scroll + row == at {
-            let style = Style::new(
-                app.theme.color("menu.selected.fg"),
-                app.theme.color("menu.selected.bg"),
-            );
+            let style = app.theme.fg_on("menu.selected.fg", "menu.selected.bg");
             let text = format!(
                 " {text:<w$}",
                 text = line.text,
@@ -3562,10 +3497,7 @@ fn draw_help(
         inner.x,
         area.bottom() - 1,
         &fcmd_ui::truncate_cols(&hint, inner.w as usize),
-        Style::new(
-            app.theme.color("dialog.title"),
-            app.theme.color("dialog.bg"),
-        ),
+        app.theme.fg_on("dialog.title", "dialog.bg"),
         inner.w,
     );
 }
@@ -4917,7 +4849,16 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
 
     #[test]
     fn every_theme_renders_a_frame_without_panicking() {
-        for id in ["commander", "black", "white", "matrix", "tron", "blade"] {
+        for id in [
+            "commander",
+            "black",
+            "white",
+            "matrix",
+            "tron",
+            "blade",
+            "github-dark",
+            "delphi-dark-2027",
+        ] {
             let mut app = app(id, "en");
             let out = frame(&mut app, 60, 15);
             assert!(out.contains("src"), "theme {id} rendered nothing: {out}");
@@ -7144,7 +7085,16 @@ third line
     fn every_theme_and_language_renders_the_editor() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("t.txt"), b"hello\n").unwrap();
-        for id in ["commander", "black", "white", "matrix", "tron", "blade"] {
+        for id in [
+            "commander",
+            "black",
+            "white",
+            "matrix",
+            "tron",
+            "blade",
+            "github-dark",
+            "delphi-dark-2027",
+        ] {
             for (tag, _) in fcmd_i18n::LANGUAGES {
                 let mut app = app_on_disk(dir.path());
                 app.theme = Theme::builtin(id).unwrap();

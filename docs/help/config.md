@@ -227,12 +227,23 @@ table.
 
 # Colours
 
-`Ctrl+Shift+T` steps through the themes; the menu offers them as a list. Seven ship with the
-program; one of your own is a `[[theme]]` block of colour names in `fcmd.toml`, or comes with a
+`Ctrl+Shift+T` steps through the themes; the menu offers them as a list. Nine ship with the
+program — among them `black`, black behind everything with light text, `github-dark`, GitHub's
+dark terminal colours, and `delphi-dark-2027`, the Delphi IDE's dark theme; one of your own is a `[[theme]]` block of colour names in `fcmd.toml`, or comes with a
 plugin, and is found at startup — there is nothing to register and nothing to rebuild.
 `fcmd --list-themes` says which themes there are and where each came from.
 
 The default theme is FAR's own palette, taken from its source rather than from a screenshot.
+
+Besides colours, a theme may make a key's text bold, italic or underlined, in a `[styles]`
+table of its own:
+
+```toml
+[theme.styles]
+"syntax.keyword" = "bold"
+"syntax.comment" = "italic"
+"cursor.fg" = "bold underline"
+```
 
 # Colouring files by what they are
 

@@ -317,7 +317,15 @@ their names, and every form inside it by name and class. `Enter` on a form opens
 as if it were its own `.dfm`.
 
 **Sources and projects.** `.pas`, `.dpr`, `.dpk`, `.lpr`, `.pp` and `.inc` are coloured as
-Pascal; `.dproj`, `.groupproj` and `.cbproj` as XML; `.dof` and `.dsk` as INI.
+Pascal, with Delphi's own reserved words and directives as keywords in any case, `$FF` and
+`#13` as numbers, and `{$…}` directives apart from comments; a member after a dot —
+`E.Message` — is a name, not the directive it is spelt like. A thin line runs down each
+`begin … end`, `try … end`, `case`, `repeat … until` and declared `class` or `record`, as the
+IDE draws it, and down each `object … end` of a form. A `{ … }` of binary data in a form, or
+any comment opened above the window, keeps its colour when its first line scrolls off. The
+theme `delphi-dark-2027` gives the whole program the IDE's dark colours.
+
+**Projects.** `.dproj`, `.groupproj` and `.cbproj` are coloured as XML; `.dof` and `.dsk` as INI.
 
 **What the IDE leaves behind.** The group `<delphi>` — `*.~*`, `__history`, `__recovery`,
 `*.dcu`, `*.identcache`, `*.local`, `*.dsk` and the rest — is drawn dim, as temporary files

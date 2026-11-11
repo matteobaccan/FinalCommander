@@ -234,12 +234,23 @@ diversa.
 
 # I colori
 
-`Ctrl+Shift+T` passa da un tema all'altro; il menu li offre come elenco. Sette arrivano col
-programma; uno tuo è un blocco `[[theme]]` di nomi di colore in `fcmd.toml`, oppure arriva con
+`Ctrl+Shift+T` passa da un tema all'altro; il menu li offre come elenco. Nove arrivano col
+programma — fra questi `black`, solo nero dietro e testi chiari, `github-dark`, i colori del
+terminale scuro di GitHub, e `delphi-dark-2027`, il tema scuro dell'IDE di Delphi; uno tuo è un blocco `[[theme]]` di nomi di colore in `fcmd.toml`, oppure arriva con
 un plugin, e viene trovato all'avvio — non c'è niente da registrare e niente da ricompilare.
 `fcmd --list-themes` dice quali temi ci sono e da dove arriva ciascuno.
 
 Il tema per default è la tavolozza di FAR, presa dal suo codice e non da uno screenshot.
+
+Oltre ai colori, un tema può rendere il testo di una chiave grassetto, corsivo o sottolineato,
+in una tabella `[styles]` sua:
+
+```toml
+[theme.styles]
+"syntax.keyword" = "bold"
+"syntax.comment" = "italic"
+"cursor.fg" = "bold underline"
+```
 
 # Colorare i file per quello che sono
 

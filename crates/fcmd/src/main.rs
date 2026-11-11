@@ -79,7 +79,7 @@ struct Cli {
     #[arg(long, value_name = "DIR")]
     plugins: Option<PathBuf>,
 
-    /// Theme id (commander, far, black, white, matrix, tron, blade, or an external one).
+    /// Theme id (commander, far, black, white, matrix, tron, blade, github-dark, delphi-dark-2027, or an external one).
     #[arg(long, value_name = "ID")]
     theme: Option<String>,
 
