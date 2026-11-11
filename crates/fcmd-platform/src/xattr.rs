@@ -146,12 +146,23 @@ mod sys {
         Err(last.unwrap_or_else(|| io::Error::other("the attribute kept changing")))
     }
 
+    /// Where the kernel may write: nowhere for an empty buffer. A null pointer is what asks
+    /// for the size alone; macOS answers the dangling pointer of an empty slice with `ERANGE`
+    /// instead, as if the room were merely too small.
+    fn room<T>(buf: &mut [u8]) -> *mut T {
+        if buf.is_empty() {
+            std::ptr::null_mut()
+        } else {
+            buf.as_mut_ptr().cast()
+        }
+    }
+
     #[cfg(target_os = "linux")]
     fn raw_list(path: &CStr, buf: &mut [u8]) -> isize {
         // SAFETY: `path` is a NUL-terminated string that outlives the call. The kernel writes
         // at most `buf.len()` bytes into `buf`, and with a length of zero writes nothing and
-        // only reports the size, so the dangling pointer of an empty slice is never used.
-        unsafe { libc::llistxattr(path.as_ptr(), buf.as_mut_ptr().cast(), buf.len()) }
+        // only reports the size, and an empty one is passed as a null pointer (`room`).
+        unsafe { libc::llistxattr(path.as_ptr(), room(buf), buf.len()) }
     }
 
     #[cfg(target_os = "linux")]
@@ -159,14 +170,7 @@ mod sys {
         // SAFETY: `path` and `name` are NUL-terminated strings that outlive the call. The
         // kernel writes at most `buf.len()` bytes into `buf`, and with a length of zero
         // writes nothing and only reports the size.
-        unsafe {
-            libc::lgetxattr(
-                path.as_ptr(),
-                name.as_ptr(),
-                buf.as_mut_ptr().cast(),
-                buf.len(),
-            )
-        }
+        unsafe { libc::lgetxattr(path.as_ptr(), name.as_ptr(), room(buf), buf.len()) }
     }
 
     #[cfg(target_os = "linux")]
@@ -190,14 +194,7 @@ mod sys {
         // SAFETY: `path` is a NUL-terminated string that outlives the call. The kernel writes
         // at most `buf.len()` bytes into `buf`, and with a length of zero writes nothing and
         // only reports the size. `XATTR_NOFOLLOW` is what makes this the link itself.
-        unsafe {
-            libc::listxattr(
-                path.as_ptr(),
-                buf.as_mut_ptr().cast(),
-                buf.len(),
-                libc::XATTR_NOFOLLOW,
-            )
-        }
+        unsafe { libc::listxattr(path.as_ptr(), room(buf), buf.len(), libc::XATTR_NOFOLLOW) }
     }
 
     #[cfg(target_os = "macos")]
@@ -210,7 +207,7 @@ mod sys {
             libc::getxattr(
                 path.as_ptr(),
                 name.as_ptr(),
-                buf.as_mut_ptr().cast(),
+                room(buf),
                 buf.len(),
                 0,
                 libc::XATTR_NOFOLLOW,
