@@ -621,7 +621,9 @@ mod tests {
                 let path = entry.expect("an entry").path();
                 let name = path.file_name().unwrap().to_string_lossy().into_owned();
                 if path.is_dir() {
-                    if !matches!(name.as_str(), "target" | ".git" | "node_modules") {
+                    // Hidden folders are never the repository's own text: `.git`, and the
+                    // working copies tools keep beside it, whose docs may be half written.
+                    if name != "target" && name != "node_modules" && !name.starts_with('.') {
                         stack.push(path);
                     }
                     continue;

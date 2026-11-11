@@ -6,7 +6,27 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Editor: replace in one dialog** (`Ctrl+F7`). What to look for, what to put there, text or
+  regular expression, case, whole words and *Preserve style*, with two buttons: *Replace all*,
+  which is one `Ctrl+Z`, and *Replace next*, which changes the hit under the cursor and selects
+  the one after it. In a regular expression the replacement can use what the groups caught —
+  `$1`, `${name}`, `$$` for a dollar. *Preserve style* is FAR's: replacing `foo` with `bar`
+  turns `Foo` into `Bar` and `FOO` into `BAR` as well.
+- **Editor: every match as a list.** The search dialog (`F7`) has a third button, *All
+  matches*: each line with a hit, with its number. Type to narrow it, `Enter` goes to the line.
+- **Editor: a burst of typing is one undo step**, as in FAR — and so is a run of `Backspace`
+  or of `Del`. Moving the cursor, `Enter` or any command ends the step. `editor.undo_depth`
+  sets how many steps a file keeps (1000 by default).
+
 ### Changed
+
+- *Whole words only* in the editor means what it says for anything, not only for words: a hit
+  counts when no letter, digit or underscore stands right before or after it, so `++` can be
+  found as a whole word and `set` is still not found inside `offset`.
+- A plain replacement in the editor is taken literally: a `$1` typed there is a dollar and a
+  one. Only a regular expression's replacement refers to groups.
 
 - **Tar is read and written by our own code.** The `tar` crate is gone: `fcmd-arc` reads v7,
   ustar, GNU (long names and links, base-256 sizes) and PAX archives itself, and writes ustar
@@ -15,6 +35,16 @@ Notable changes, newest first. The format follows
   member from the old archive to the new one instead of holding it in memory, and a damaged
   header or an archive cut in the middle of a member is said to be one. Checked against GNU tar
   in both directions.
+
+### Fixed
+
+- A list opened from the editor — the characters (`Alt+Shift+C`), the kept replacements
+  (`Alt+Shift+F7`) — was not drawn over it: it answered keys nobody could see.
+- A command given right after typing was undone together with the typing, and `Backspace`
+  together with the word it was correcting.
+- `Alt+F7` with `editor.cursor_after_match` on found the same hit again instead of the one
+  before it.
+- The editor's help said `Ctrl+Y` redoes; it deletes the line, and redo is `Ctrl+Shift+Z`.
 
 ## [0.40.0] — 2026-11-11
 

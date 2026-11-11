@@ -343,6 +343,8 @@ anything.
   a minor number for a feature, a patch for fixes alone — without asking first, and the
   author is told afterwards. Renovate's merges alone still never make one.
 - **At least 24 hours between two releases**, counted from the previous one's publication.
+- **1.0 is the goal, and then a stop.** Once 1.0 is out, no new feature is started: only pull
+  requests and issues, to make it stable, before any release after it.
 - **Sub-agents in parallel, only until 1.0.** At most two at a time — a compiled working copy
   is about 9 GB and the machine has four cores — each in a worktree of its own on work that
   lives in its own crates. The coordinating session alone integrates, runs the full gate,
