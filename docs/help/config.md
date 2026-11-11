@@ -501,7 +501,8 @@ A plugin is a folder in `fcmd-plugins/`, beside the settings (`fcmd --paths` say
 a `plugin.toml` in it. It is found at startup: nothing to register, nothing to build. It can
 bring **data** — themes, keymaps, `[[assoc]]` blocks, `[[decompile]]` rules, `[[mask-group]]`
 lists, all in the same words `fcmd.toml` uses — and **commands**: a `[[command]]` names a
-program in the plugin's folder, and `F11` lists the commands for the screen you are on.
+program in the plugin's folder, and `F11` lists the commands for the screen you are on — in the panels `Ctrl+Shift+F11` as
+well, which the key bar shows while both are held.
 
 A command runs as a program of its own, never inside fcmd, so a plugin that crashes crashes
 alone. It is told where the panels are and what is selected, in the environment and as JSON on

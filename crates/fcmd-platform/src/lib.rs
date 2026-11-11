@@ -32,7 +32,7 @@ pub use process::{details, kill, processes, Details, Process};
 pub use programs::{programs, Program};
 pub use service::{control, services, Service, ServiceAction, ServiceError, ServiceState};
 pub use socket::{sockets, Socket};
-pub use volume::{volume, Volume, VolumeKind};
+pub use volume::{drive_kind, volume, Volume, VolumeKind};
 
 use std::path::Path;
 

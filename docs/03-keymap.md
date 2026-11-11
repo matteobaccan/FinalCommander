@@ -24,7 +24,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | F8 | delete (to trash per settings) | delete | delete | delete/trash | **delete, to the system's wastebasket when `general.use_trash` says so (it does by default)** |
 | F9 | menu bar | pull-down menus | left menu? | terminal | menu bar |
 | F10 | quit | quit | exit? | quit | quit |
-| F11 | plugin commands | — | — | — | plugin/command palette |
+| F11 | plugin commands | — | — | — | plugin commands; also **Ctrl+Shift+F11** |
 | F12 | — | screen list | custom filter? | — | panel/tab list |
 
 ## 2. Shift + F-keys
@@ -249,13 +249,14 @@ Alt+Shift+arrows (column block) are handled by the editor itself and are not bin
 
 | Action | FC |
 | --- | --- |
-| open or close the pane | **F11** |
+| open or close the pane | **F11**, **Shift+F11** |
 | move the keys between the bytes and the pane | **Tab** |
 | inside the pane | ↑↓ PgUp PgDn Home End |
 | take the bytes to the row's offset | **Enter** (a row that points nowhere says so) |
 
-FAR has no equivalent: its `F11` is the plugin menu, which in the viewer we leave free because
-there are no plugins yet. When they arrive the pane moves rather than the plugin menu.
+FAR has no equivalent: its `F11` is the plugin menu. In the viewer `F11` stays the pane, with
+`Shift+F11` beside it; in the panels the plugin commands answer to `F11` and to `Ctrl+Shift+F11`,
+so that both have a key that does not move whichever screen gives `F11` away.
 
 ## 8c. The menu bar and the dialogs (shipped, SPEC 10)
 

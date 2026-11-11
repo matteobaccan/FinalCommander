@@ -797,6 +797,16 @@ site-bad-port = `{ $port }` is not a number
 site-stored = connection stored: { $name } (Shift+F9 to keep it)
 # ------------------------------------------------- structure pane (SPEC 05 §1.8)
 key-struct = Struct
+key-markdown = MD
+key-table = Table
+key-filter = Filter
+key-decompile = Decomp
+key-next = Next
+key-prev = Prev
+key-codepages = CodePg
+key-goto = GoTo
+key-to-panel = Panel
+key-blame = Blame
 viewer-structure = Structure
 viewer-structure-hint = ↑↓ row · Enter go to · Tab content · F11 close
 viewer-structure-hint-tab = Tab moves the keys here
@@ -1662,3 +1672,6 @@ undo-done =
         [one] one name back where it was
        *[other] { $count } names back where they were
     }
+slow-drives = the drive list took { $secs } s
+slow-drives-late = the drive list waited { $secs } s: { $drives } did not answer in time and are shown without details — a network drive whose server is not there?
+slow-listing = reading { $what } took { $secs } s

@@ -789,6 +789,16 @@ site-bad-port = `{ $port }` ist keine Zahl
 site-stored = Verbindung gespeichert: { $name } (Shift+F9 behält sie)
 # ------------------------------------------------- Strukturfenster (SPEC 05 §1.8)
 key-struct = Strukt
+key-markdown = MD
+key-table = Tabelle
+key-filter = Filter
+key-decompile = Dekomp
+key-next = Weiter
+key-prev = Zurück
+key-codepages = CodeSt
+key-goto = GeheZu
+key-to-panel = Panel
+key-blame = Blame
 viewer-structure = Struktur
 viewer-structure-hint = ↑↓ Zeile · Eingabe springen · Tab Inhalt · F11 schließen
 viewer-structure-hint-tab = Tab bringt die Tasten hierher
@@ -1652,3 +1662,6 @@ undo-done =
         [one] ein Name wieder an seinem Platz
        *[other] { $count } Namen wieder an ihrem Platz
     }
+slow-drives = die Laufwerksliste brauchte { $secs } s
+slow-drives-late = die Laufwerksliste wartete { $secs } s: { $drives } antworteten nicht rechtzeitig und stehen ohne Angaben da — ein Netzlaufwerk ohne Server?
+slow-listing = { $what } zu lesen brauchte { $secs } s

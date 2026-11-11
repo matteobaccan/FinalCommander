@@ -579,6 +579,10 @@ impl GitRow {
     }
 }
 
+/// How long something the user waits for may take before the status line says how long it
+/// took: long enough not to fire on an ordinary disk, short enough to catch a network one.
+pub const SLOW: std::time::Duration = std::time::Duration::from_millis(1500);
+
 /// What a question to a language model is for, which decides where its answer goes
 /// (SPEC 06 §14): read in the viewer, put on the command line, or offered as a commit message.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2455,6 +2459,8 @@ pub struct App {
     pub diff_git: Option<(PathBuf, bool)>,
     /// Where the diff was when a hunk went into the index, to come back to.
     pub diff_top: Option<usize>,
+    /// When each panel's listing was asked for, to say so when it took long.
+    pub read_started: [Option<std::time::Instant>; 2],
     /// Has an `Esc` already said there is something unwritten? The second one leaves anyway,
     /// which is how a screen with no dialog of its own asks "are you sure".
     diff_warned: bool,
@@ -2900,6 +2906,7 @@ impl App {
             held: Mods::NONE,
             attr_targets: Vec::new(),
             attr_owner: None,
+            read_started: [None, None],
             diff_top: None,
             diff_git: None,
             diff_paths: None,
@@ -3093,6 +3100,7 @@ impl App {
         let generation = self.panels[index].generation + 1;
         self.panels[index].generation = generation;
         self.panels[index].loading = true;
+        self.read_started[index] = Some(std::time::Instant::now());
         // The programs from elsewhere are not files: re-reading that list is looking for
         // them again, which is what `Ctrl+R` there is for after installing one.
         if self.panels[index].temp_origin() == Some(":tools") {
@@ -3608,6 +3616,15 @@ impl App {
                 // A listing from a directory we have already left is dropped.
                 if self.panels[panel].generation != generation {
                     return;
+                }
+                // A folder that took long to read says so, with the time, so that "it is slow"
+                // comes with a number and a place when somebody reports it.
+                if let Some(start) = self.read_started[panel].take() {
+                    let took = start.elapsed();
+                    if took >= SLOW && result.is_ok() {
+                        let dir = self.panels[panel].cwd.to_string();
+                        self.note_slow("slow-listing", &dir, took);
+                    }
                 }
                 match result {
                     Ok(entries) => {
@@ -8835,8 +8852,47 @@ impl App {
     /// then the plugin panels under them, numbered, because a number is how anyone who uses
     /// it twice a day picks one. Ours are the open connections and the object stores that are
     /// configured.
+    #[cfg(test)]
     fn drive_list(&self, side: usize) -> Pick {
-        self.drive_pick(side, crate::drives::list())
+        self.drive_list_timed(side).0
+    }
+
+    /// The same, with how long the system took to describe its drives and which of them did
+    /// not answer in time.
+    fn drive_list_timed(&self, side: usize) -> (Pick, std::time::Duration, Vec<String>) {
+        let start = std::time::Instant::now();
+        let (found, late) = crate::drives::list_timed();
+        let took = start.elapsed();
+        (self.drive_pick(side, found), took, late)
+    }
+
+    /// Say on the status line that something took long — what, where and how long — so a
+    /// slow machine is something a user can report with the number in it.
+    fn note_slow(&mut self, id: &str, what: &str, took: std::time::Duration) {
+        let m = self.i18n.t_args(
+            id,
+            &[
+                ("what", what.to_string().into()),
+                ("secs", format!("{:.1}", took.as_secs_f64()).into()),
+            ],
+        );
+        self.set_status(m);
+    }
+
+    /// The drive dialog's wait, said when it was long or a drive kept it waiting.
+    fn note_slow_drives(&mut self, took: std::time::Duration, late: &[String]) {
+        if !late.is_empty() {
+            let m = self.i18n.t_args(
+                "slow-drives-late",
+                &[
+                    ("drives", late.join(", ").into()),
+                    ("secs", format!("{:.1}", took.as_secs_f64()).into()),
+                ],
+            );
+            self.set_status(m);
+        } else if took >= SLOW {
+            self.note_slow("slow-drives", "", took);
+        }
     }
 
     /// The dialog for a list of drives the caller found: `drive_list` asks the system, and the
@@ -20151,7 +20207,8 @@ impl App {
     /// it was on — the row is what one is looking at, and a column going away is no reason to
     /// lose it. A row that is no longer there leaves the cursor where it was sitting.
     fn reopen_drives(&mut self, side: usize, was: Option<String>, cursor: usize) {
-        let mut pick = self.drive_list(side);
+        let (mut pick, took, late) = self.drive_list_timed(side);
+        self.note_slow_drives(took, &late);
         pick.cursor = was
             .and_then(|value| pick.rows.iter().position(|r| r.value == value))
             .unwrap_or_else(|| cursor.min(pick.rows.len().saturating_sub(1)));
@@ -20230,7 +20287,11 @@ impl App {
                     .collect(),
                 side,
             ),
-            PickKind::Drives => self.drive_list(side),
+            PickKind::Drives => {
+                let (pick, took, late) = self.drive_list_timed(side);
+                self.note_slow_drives(took, &late);
+                pick
+            }
             // Built by `help_search`, which knows what was looked for.
             PickKind::HelpHits => return,
             PickKind::Jobs => {
@@ -25378,6 +25439,24 @@ impl App {
         ]
     }
 
+    /// The viewer's bar with a modifier held: what each function key does with it, read off
+    /// the keymap in force, as the panels' bar is.
+    pub fn keybar_viewer_for(&self, mods: Mods) -> Vec<(u8, String)> {
+        if mods == Mods::NONE {
+            return self.keybar_viewer();
+        }
+        (1..=12u8)
+            .filter_map(|n| {
+                let key = Key {
+                    code: KeyCode::F(n),
+                    mods,
+                };
+                let cmd = self.keymap.resolve(&[Scope::Viewer, Scope::Global], key)?;
+                Some((n, self.i18n.t(keybar_label(cmd)?)))
+            })
+            .collect()
+    }
+
     /// What `F4` offers next. It is a wheel rather than a toggle, so the bar says where the
     /// next turn lands rather than naming one destination for ever.
     fn viewer_toggle_key(&self) -> &'static str {
@@ -26215,6 +26294,21 @@ fn keybar_label(cmd: Command) -> Option<&'static str> {
         Command::CmdHistory => "key-history",
         Command::PanelHistory => "key-folders",
         Command::PluginCommands => "key-plugins",
+        // The viewer's, for its bar with a modifier held.
+        Command::ViewerStructure => "key-struct",
+        Command::ViewerMarkdown => "key-markdown",
+        Command::ViewerTable => "key-table",
+        Command::ViewerHex => "key-hex",
+        Command::ViewerFilter => "key-filter",
+        Command::ViewerDecompile => "key-decompile",
+        Command::ViewerSearchNext => "key-next",
+        Command::ViewerSearchPrev => "key-prev",
+        Command::ViewerCodepageList => "key-codepages",
+        Command::ViewerGoto => "key-goto",
+        Command::ViewerToPanel => "key-to-panel",
+        Command::ViewerTableSort => "key-sort",
+        Command::ViewerTableFilter => "key-filter",
+        Command::ViewerBlame => "key-blame",
         _ => return None,
     })
 }
@@ -37533,6 +37627,51 @@ abcdefghij
             result: Err("nope".into()),
         });
         assert!(app.ai_busy.is_none());
+    }
+
+    /// The drive dialog's wait is said when a drive kept it waiting, naming the drive.
+    #[test]
+    fn a_slow_drive_is_named_on_the_status_line() {
+        let mut app = app();
+        app.note_slow_drives(std::time::Duration::from_millis(1600), &["Z:\\".into()]);
+        assert!(
+            app.status.contains("Z:\\") && app.status.contains("1.6"),
+            "{}",
+            app.status
+        );
+        app.status.clear();
+        app.note_slow_drives(std::time::Duration::from_millis(200), &[]);
+        assert!(app.status.is_empty(), "a quick list says nothing");
+    }
+
+    /// `Shift+F11` in the viewer is the structure, `Ctrl+Shift+F11` in the panels the plugins'
+    /// commands, and each bar says so while its modifier is held.
+    #[test]
+    fn the_new_f11_keys_are_on_the_bars() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "x").unwrap();
+        let mut app = app_on_disk(dir.path());
+        let mut both = Mods::CTRL;
+        both.insert(Mods::SHIFT);
+        assert!(app
+            .keybar_for(both)
+            .iter()
+            .any(|(n, s)| *n == 11 && s == "Plugin"));
+        app.panels[0].cursor = app.panels[0].listing.row_of_name("a.txt").unwrap();
+        press(&mut app, "F3");
+        assert!(app
+            .keybar_viewer_for(Mods::SHIFT)
+            .iter()
+            .any(|(n, s)| *n == 11 && s == "Struct"));
+        // A text file has no structure, so what is checked is where the key goes.
+        let key = Key {
+            code: KeyCode::F(11),
+            mods: Mods::SHIFT,
+        };
+        assert_eq!(
+            app.keymap.resolve(&[Scope::Viewer, Scope::Global], key),
+            Some(Command::ViewerStructure)
+        );
     }
 
     /// `Ctrl+Alt+G` in the viewer asks git who wrote the file, and the answer opens on the

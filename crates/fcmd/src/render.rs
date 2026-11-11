@@ -2643,7 +2643,7 @@ fn draw_viewer(app: &mut App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer) 
     if keybar_h == 1 {
         let labels = app
             .keybar_dialog(app.held)
-            .unwrap_or_else(|| app.keybar_viewer());
+            .unwrap_or_else(|| app.keybar_viewer_for(app.held));
         let refs: Vec<(u8, &str)> = labels.iter().map(|(n, s)| (*n, s.as_str())).collect();
         widgets::draw_keybar(buf, &app.theme, Rect::new(0, h - 1, w, 1), &refs);
     }

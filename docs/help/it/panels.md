@@ -20,6 +20,12 @@ quanto è grande e quanto ne resta. Quali di queste colonne vengano disegnate lo
 casella per ciascuno (NetBox, processi, socket, programmi installati, servizi, programmi
 esterni, pannello temporaneo), così la lista tiene solo quello che usi.
 
+Tutti i dischi vengono interrogati insieme e il dialogo li aspetta al massimo un secondo e
+mezzo. Un disco di rete il cui server non c'è può metterci molti secondi a dirlo: compare con
+il solo tipo, e la riga di stato lo nomina e dice quanto ha atteso la lista. Anche una cartella
+che richiede più di un secondo e mezzo per essere letta viene nominata lì, con il tempo — vale
+la pena segnalarlo se succede dove non dovrebbe.
+
 Un disco su cui l'*altro* pannello è già aperto si apre dove sta quel pannello, non in cima
 al disco. Due pannelli su un disco solo è il modo in cui si lavora su un disco — un albero
 da una parte, una destinazione dall'altra — e arrivare nella radice vorrebbe dire riscendere

@@ -519,7 +519,7 @@ dove), con dentro un `plugin.toml`. Viene trovato all'avvio: niente da registrar
 compilare. Può portare **dati** — temi, keymap, blocchi `[[assoc]]`, regole `[[decompile]]`,
 liste `[[mask-group]]`, con le stesse parole di `fcmd.toml` — e **comandi**: un `[[command]]`
 nomina un programma nella cartella del plugin, e `F11` elenca i comandi per lo schermo in cui
-sei.
+sei — nei pannelli anche `Ctrl+Shift+F11`, che la barra dei tasti mostra mentre li tieni premuti.
 
 Un comando gira come programma a sé, mai dentro fcmd, così un plugin che va in crash ci va da
 solo. Riceve dove sono i pannelli e cosa è selezionato, nell'ambiente e come JSON sul suo

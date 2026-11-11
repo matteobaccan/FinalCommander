@@ -18,6 +18,12 @@ those columns are drawn is yours to choose, with `F9` inside the dialog — and 
 the panels that are not disks the list offers: a box for each (NetBox, processes, sockets,
 installed programs, services, external programs, the temporary panel), so the list holds only what you use.
 
+Every drive is asked at once and the dialog waits for them a second and a half at most. A
+network drive whose server is not there can take many seconds to say so; it is listed with
+only its kind, and the status line names it and says how long the list waited. A folder that
+takes more than a second and a half to read is named there too, with the time — worth
+reporting if it happens where it should not.
+
 A drive the *other* panel is already on opens where that panel is, not at the top of the
 disk. Two panels on one disk is how one works on a disk — a tree on one side, a target on
 the other — and landing on the root would mean walking back down a path that is already on

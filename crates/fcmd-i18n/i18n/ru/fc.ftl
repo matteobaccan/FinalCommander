@@ -789,6 +789,16 @@ site-bad-port = «{ $port }» — не число
 site-stored = соединение сохранено: { $name } (Shift+F9 — записать)
 # ------------------------------------------------- панель структуры (SPEC 05 §1.8)
 key-struct = Структ
+key-markdown = MD
+key-table = Табл
+key-filter = Фильтр
+key-decompile = Декомп
+key-next = Далее
+key-prev = Назад
+key-codepages = Кодир
+key-goto = Перейт
+key-to-panel = Панель
+key-blame = Blame
 viewer-structure = Структура
 viewer-structure-hint = ↑↓ строка · Enter — перейти · Tab — содержимое · F11 — закрыть
 viewer-structure-hint-tab = Tab передаёт клавиши сюда
@@ -1638,3 +1648,6 @@ undo-restore = { $count ->
        *[other] Вернуть { $count } изображений с метаданными:
     }
 undo-done = возвращено на место: { $count }
+slow-drives = список дисков занял { $secs } с
+slow-drives-late = список дисков ждал { $secs } с: { $drives } не ответили вовремя и показаны без подробностей — сетевой диск без сервера?
+slow-listing = чтение { $what } заняло { $secs } с

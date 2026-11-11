@@ -789,6 +789,16 @@ site-bad-port = «{ $port }» no es un número
 site-stored = conexión guardada: { $name } (Shift+F9 para conservarla)
 # ------------------------------------------------- panel de estructura (SPEC 05 §1.8)
 key-struct = Estruc
+key-markdown = MD
+key-table = Tabla
+key-filter = Filtro
+key-decompile = Decomp
+key-next = Sig
+key-prev = Ant
+key-codepages = PágCod
+key-goto = IrA
+key-to-panel = Panel
+key-blame = Blame
 viewer-structure = Estructura
 viewer-structure-hint = ↑↓ fila · Intro ir a · Tab contenido · F11 cierra
 viewer-structure-hint-tab = Tab trae las teclas aquí
@@ -1652,3 +1662,6 @@ undo-done =
         [one] un nombre de vuelta en su sitio
        *[other] { $count } nombres de vuelta en su sitio
     }
+slow-drives = la lista de unidades tardó { $secs } s
+slow-drives-late = la lista de unidades esperó { $secs } s: { $drives } no respondieron a tiempo y se muestran sin detalles — ¿una unidad de red sin servidor?
+slow-listing = leer { $what } tardó { $secs } s

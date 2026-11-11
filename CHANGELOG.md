@@ -36,9 +36,20 @@ Notable changes, newest first. The format follows
   lists the conversations kept so far, newest first by their first question, to go on with one.
   The frame says about how many tokens the next question will take (`next ≈ 2.1k`), and a
   question that would not fit the model's window stops at a dialog that says so first.
+- **Slowness said on the status line.** A drive list or a folder that kept the program
+  waiting more than a second and a half says so, with the time and what it was waiting for,
+  so that it can be reported.
+- **`Shift+F11` in the viewer** opens the structure like `F11`, and **`Ctrl+Shift+F11` in the
+  panels** lists the plugins' commands like `F11`. The viewer's key bar now changes with the
+  modifiers held, as the panels' already did, and names every viewer command it can.
 
 ### Changed
 
+- **`Alt+F1` no longer waits on a drive that does not answer.** Every drive is asked at the
+  same time, and one that has not answered after a second and a half — a network drive whose
+  server is gone, typically, which Windows can take seconds to give up on — is listed with
+  only its kind and named on the status line. The list used to ask one drive after another,
+  so two such drives could keep it closed for six seconds or more.
 - **The command line runs in the shell you configure.** `[term] shell` now counts for what is
   typed on the command line too, not only for the terminal pane, and each shell is asked the
   way it expects: `cmd /C`, PowerShell (`pwsh`, `powershell`) with `-Command`, the rest with

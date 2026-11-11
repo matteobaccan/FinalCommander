@@ -789,6 +789,16 @@ site-bad-port = « { $port } » n'est pas un nombre
 site-stored = connexion enregistrée : { $name } (Shift+F9 pour la garder)
 # ------------------------------------------------- panneau structure (SPEC 05 §1.8)
 key-struct = Struct
+key-markdown = MD
+key-table = Table
+key-filter = Filtre
+key-decompile = Décomp
+key-next = Suiv
+key-prev = Préc
+key-codepages = PageC
+key-goto = AllerA
+key-to-panel = Panneau
+key-blame = Blame
 viewer-structure = Structure
 viewer-structure-hint = ↑↓ ligne · Entrée aller à · Tab contenu · F11 ferme
 viewer-structure-hint-tab = Tab amène les touches ici
@@ -1652,3 +1662,6 @@ undo-done =
         [one] un nom de retour à sa place
        *[other] { $count } noms de retour à leur place
     }
+slow-drives = la liste des lecteurs a pris { $secs } s
+slow-drives-late = la liste des lecteurs a attendu { $secs } s : { $drives } n’ont pas répondu à temps et sont montrés sans détails — un lecteur réseau dont le serveur est absent ?
+slow-listing = lire { $what } a pris { $secs } s

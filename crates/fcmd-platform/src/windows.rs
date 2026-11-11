@@ -979,6 +979,21 @@ pub fn sockets() -> Vec<super::Socket> {
 /// Three calls, each allowed to fail on its own. An empty CD drive answers the first and
 /// refuses the second, which is not an error — it is why the columns are optional.
 #[cfg(windows)]
+pub fn drive_kind(path: &Path) -> Option<super::VolumeKind> {
+    use windows_sys::Win32::Storage::FileSystem::GetDriveTypeW;
+    let root = wide(path);
+    // SAFETY: `root` is a NUL-terminated wide string that outlives the call.
+    match unsafe { GetDriveTypeW(root.as_ptr()) } {
+        2 => Some(super::VolumeKind::Removable),
+        3 => Some(super::VolumeKind::Fixed),
+        4 => Some(super::VolumeKind::Network),
+        5 => Some(super::VolumeKind::Optical),
+        6 => Some(super::VolumeKind::Memory),
+        _ => None,
+    }
+}
+
+#[cfg(windows)]
 pub fn volume(path: &Path) -> Option<super::Volume> {
     use windows_sys::Win32::Foundation::{ERROR_SUCCESS, MAX_PATH};
     use windows_sys::Win32::NetworkManagement::WNet::WNetGetConnectionW;

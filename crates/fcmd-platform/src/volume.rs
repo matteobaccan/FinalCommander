@@ -37,6 +37,21 @@ pub struct Volume {
     pub ready: bool,
 }
 
+/// Only what kind of drive a root is (`C:\`): the one question a drive answers at once even
+/// when it is a network letter whose server has gone, which the full description waits on.
+/// `None` where this platform has no drive letters, or there is no drive there.
+pub fn drive_kind(path: &Path) -> Option<VolumeKind> {
+    #[cfg(windows)]
+    {
+        super::windows::drive_kind(path)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        None
+    }
+}
+
 /// Describe the volume at a root path (`C:\`), or `None` where this platform has nothing to
 /// add to what the mount table already said.
 pub fn volume(path: &Path) -> Option<Volume> {

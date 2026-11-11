@@ -939,7 +939,7 @@ scope = "viewer"
 cmd = "viewer.back"
 
 [[bind]]
-keys = ["F11"]
+keys = ["F11", "Shift+F11"]
 scope = "viewer"
 cmd = "viewer.structure"
 
@@ -1436,7 +1436,7 @@ cmd = "macro.list"
 
 # The commands the loaded plugins provide. FAR's own key for it.
 [[bind]]
-keys = ["F11"]
+keys = ["F11", "Ctrl+Shift+F11"]
 scope = "panel"
 cmd = "plugin.commands"
 

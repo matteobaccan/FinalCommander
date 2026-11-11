@@ -59,12 +59,20 @@ impl Kind {
 }
 
 /// Everything mounted, as the dialog shows it.
-pub fn list() -> Vec<Drive> {
-    let mut drives = platform();
+/// How long the dialog waits for one drive to describe itself before it lists it with what
+/// is known and says which one kept it waiting.
+pub const PATIENCE: std::time::Duration = std::time::Duration::from_millis(1500);
+
+/// The drives, and the ones that did not answer within [`PATIENCE`]: a network letter whose
+/// server has gone, a stale NFS mount, a card reader that spins up. Each drive is asked on a
+/// thread of its own, so the wait is the slowest one's and never more than the patience —
+/// not the sum of them all, which is what made the dialog take seconds to open.
+pub fn list_timed() -> (Vec<Drive>, Vec<String>) {
+    let (mut drives, late) = platform();
     if let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
         let home = home.to_string_lossy().into_owned();
         if !home.is_empty() && !drives.iter().any(|d| d.path == home) {
-            let mut row = Drive {
+            let mut rows = vec![Drive {
                 path: home,
                 kind: Kind::Home,
                 label: None,
@@ -72,23 +80,75 @@ pub fn list() -> Vec<Drive> {
                 device: None,
                 total: None,
                 free: None,
-            };
-            fill_space(&mut row);
-            drives.push(row);
+            }];
+            fill_spaces(&mut rows);
+            drives.extend(rows);
         }
     }
-    drives
+    (drives, late)
+}
+
+/// Ask `ask` about each item on a thread of its own, and keep what came back within the
+/// patience; the items that did not answer are the second list.
+fn in_parallel<T, R>(items: Vec<T>, ask: fn(&T) -> R) -> (Vec<(T, Option<R>)>, Vec<usize>)
+where
+    T: Send + Clone + 'static,
+    R: Send + 'static,
+{
+    let (tx, rx) = std::sync::mpsc::channel();
+    for (at, item) in items.iter().cloned().enumerate() {
+        let tx = tx.clone();
+        // Not scoped: a drive that never answers keeps its thread, and the dialog does not
+        // wait for it.
+        std::thread::spawn(move || {
+            let _ = tx.send((at, ask(&item)));
+        });
+    }
+    drop(tx);
+    let deadline = std::time::Instant::now() + PATIENCE;
+    let mut answers: Vec<Option<R>> = items.iter().map(|_| None).collect();
+    let mut got = 0;
+    while got < items.len() {
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        match rx.recv_timeout(left) {
+            Ok((at, r)) => {
+                answers[at] = Some(r);
+                got += 1;
+            }
+            Err(_) => break,
+        }
+    }
+    let late = answers
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| a.is_none())
+        .map(|(i, _)| i)
+        .collect();
+    (items.into_iter().zip(answers).collect(), late)
+}
+
+/// The sizes of every drive, each asked in parallel; one that does not answer in time keeps
+/// its row, without sizes.
+fn fill_spaces(drives: &mut [Drive]) -> Vec<String> {
+    let paths: Vec<String> = drives.iter().map(|d| d.path.clone()).collect();
+    let (answers, late) = in_parallel(paths, |p| fcmd_platform::disk(std::path::Path::new(p)));
+    for (drive, (_, answer)) in drives.iter_mut().zip(answers) {
+        if let Some(Some(d)) = answer {
+            drive.total = Some(d.total);
+            drive.free = Some(d.free);
+        }
+    }
+    late.into_iter().map(|i| drives[i].path.clone()).collect()
 }
 
 #[cfg(target_os = "linux")]
-fn platform() -> Vec<Drive> {
+fn platform() -> (Vec<Drive>, Vec<String>) {
     let text = std::fs::read_to_string("/proc/mounts").unwrap_or_default();
     let labels = linux_labels();
     let mut drives = parse_mounts(&text, &labels, &is_removable);
-    for drive in &mut drives {
-        fill_space(drive);
-    }
-    drives
+    // A mount whose server has gone answers `statvfs` after a timeout of its own, if at all.
+    let late = fill_spaces(&mut drives);
+    (drives, late)
 }
 
 /// `/dev/disk/by-label/Backup -> ../../sdb1`, read back as `/dev/sdb1 -> Backup`.
@@ -110,7 +170,7 @@ fn linux_labels() -> HashMap<String, String> {
 }
 
 #[cfg(target_os = "macos")]
-fn platform() -> Vec<Drive> {
+fn platform() -> (Vec<Drive>, Vec<String>) {
     // `getmntinfo` is not in the crate we already depend on, and a dialog is not a reason to
     // add another: on macOS every mounted volume but the root one appears under `/Volumes`,
     // which is what the Finder shows too.
@@ -147,60 +207,88 @@ fn platform() -> Vec<Drive> {
             });
         }
     }
-    for drive in &mut drives {
-        fill_space(drive);
+    let late = fill_spaces(&mut drives);
+    for drive in drives.iter_mut().filter(|d| !late.contains(&d.path)) {
         drive.fs = filesystem_name(&drive.path);
         if drive.fs.as_deref() == Some("msdos") || drive.fs.as_deref() == Some("exfat") {
             // Not proof of a stick, but on macOS it is what one almost always is.
             drive.kind = Kind::Removable;
         }
     }
-    drives
+    (drives, late)
 }
 
 #[cfg(windows)]
-fn platform() -> Vec<Drive> {
+fn platform() -> (Vec<Drive>, Vec<String>) {
     // Every letter the system will describe, which is not the same as every letter that can
     // be opened: a CD drive with nothing in it answers `GetDriveTypeW` and refuses
     // everything else, and FAR lists it — that is what its "show CD-ROM" switch is about.
-    (b'A'..=b'Z')
+    //
+    // The kind is asked first, of every letter: it answers at once. The rest — the label, the
+    // file system, the share, the sizes — can wait for a server that is not there, so each
+    // letter is asked on a thread of its own and one that is too slow is listed with what
+    // its kind alone says.
+    let kind_of = |k: fcmd_platform::VolumeKind| match k {
+        fcmd_platform::VolumeKind::Removable => Some(Kind::Removable),
+        fcmd_platform::VolumeKind::Fixed => Some(Kind::Fixed),
+        fcmd_platform::VolumeKind::Network => Some(Kind::Network),
+        fcmd_platform::VolumeKind::Optical => Some(Kind::Optical),
+        fcmd_platform::VolumeKind::Memory => Some(Kind::Memory),
+        // "Cannot say" and "there is no such root" are both "there is no drive here".
+        fcmd_platform::VolumeKind::Unknown => None,
+    };
+    let letters: Vec<(String, Kind)> = (b'A'..=b'Z')
         .map(|letter| format!("{}:\\", letter as char))
         .filter_map(|path| {
-            let volume = fcmd_platform::volume(std::path::Path::new(&path))?;
-            let kind = match volume.kind? {
-                fcmd_platform::VolumeKind::Removable => Kind::Removable,
-                fcmd_platform::VolumeKind::Fixed => Kind::Fixed,
-                fcmd_platform::VolumeKind::Network => Kind::Network,
-                fcmd_platform::VolumeKind::Optical => Kind::Optical,
-                fcmd_platform::VolumeKind::Memory => Kind::Memory,
-                // "Cannot say" and "there is no such root" are both "there is no drive
-                // here", and a row for it would be a row that goes nowhere.
-                fcmd_platform::VolumeKind::Unknown => return None,
-            };
-            let mut drive = Drive {
-                path,
-                kind,
-                label: volume.label,
-                fs: volume.fs,
-                // The share behind a mapped letter, which is the one thing a letter does not
-                // say about itself.
-                device: volume.share,
-                total: None,
-                free: None,
-            };
+            let kind = fcmd_platform::drive_kind(std::path::Path::new(&path)).and_then(kind_of)?;
+            Some((path, kind))
+        })
+        .collect();
+    let (answers, late) = in_parallel(letters, |(path, kind)| {
+        let mut drive = Drive {
+            path: path.clone(),
+            kind: *kind,
+            label: None,
+            fs: None,
+            device: None,
+            total: None,
+            free: None,
+        };
+        if let Some(volume) = fcmd_platform::volume(std::path::Path::new(path)) {
+            drive.label = volume.label;
+            drive.fs = volume.fs;
+            // The share behind a mapped letter, which is the one thing a letter does not say
+            // about itself.
+            drive.device = volume.share;
             // Only a drive with something in it is asked how big it is. Asking an empty one
             // is what puts "There is no disk in the drive" on the screen, in a dialog box,
             // in front of whatever the user was doing.
             if volume.ready {
                 fill_space(&mut drive);
             }
-            Some(drive)
+        }
+        drive
+    });
+    let late_paths = late.iter().map(|&i| answers[i].0 .0.clone()).collect();
+    let drives = answers
+        .into_iter()
+        .map(|((path, kind), answer)| {
+            answer.unwrap_or(Drive {
+                path,
+                kind,
+                label: None,
+                fs: None,
+                device: None,
+                total: None,
+                free: None,
+            })
         })
-        .collect()
+        .collect();
+    (drives, late_paths)
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
-fn platform() -> Vec<Drive> {
+fn platform() -> (Vec<Drive>, Vec<String>) {
     let mut root = Drive {
         path: "/".to_string(),
         kind: Kind::Fixed,
@@ -211,12 +299,13 @@ fn platform() -> Vec<Drive> {
         free: None,
     };
     fill_space(&mut root);
-    vec![root]
+    (vec![root], Vec::new())
 }
 
 /// The two sizes, through `fcmd-platform`, which is where the per-platform call lives and
 /// the reason this one has no `#[cfg]` of its own any more. What is free is what an
 /// unprivileged process may really use, as the panel frame already reports.
+#[cfg_attr(any(target_os = "linux", target_os = "macos"), allow(dead_code))]
 fn fill_space(drive: &mut Drive) {
     if let Some(d) = fcmd_platform::disk(std::path::Path::new(drive.path.as_str())) {
         drive.total = Some(d.total);
@@ -399,6 +488,22 @@ fn unescape(raw: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One drive that does not answer keeps nobody waiting longer than the patience, and is
+    /// named; the others are all there.
+    #[test]
+    fn a_drive_that_does_not_answer_is_named_and_not_waited_for() {
+        let start = std::time::Instant::now();
+        let (answers, late) = in_parallel(vec![1u64, 2, 30], |n| {
+            std::thread::sleep(std::time::Duration::from_millis(*n * 100));
+            *n * 10
+        });
+        assert!(start.elapsed() < PATIENCE + std::time::Duration::from_millis(500));
+        assert_eq!(late, vec![2]);
+        assert_eq!(answers[0].1, Some(10));
+        assert_eq!(answers[1].1, Some(20));
+        assert_eq!(answers[2].1, None);
+    }
 
     #[test]
     fn the_mount_table_becomes_the_rows_of_the_dialog() {

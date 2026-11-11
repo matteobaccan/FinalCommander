@@ -211,7 +211,7 @@ Su un disassemblato `F7` cerca le *istruzioni*, non i byte: `call` trova tutte l
 `mov *, eax` tutti gli spostamenti in quel registro, e `*` sta per quello che c'è fra i pezzi
 del modello.
 
-`F11` apre la struttura di un eseguibile: ELF, PE, Mach-O, `ar` e le famiglie più vecchie — NE,
+`F11` (o `Shift+F11`, che le abitudini di FAR lasciano libero) apre la struttura di un eseguibile: ELF, PE, Mach-O, `ar` e le famiglie più vecchie — NE,
 LE e LX, e il TE di cui è fatto il firmware UEFI — ogni campo di testata con i
 byte grezzi accanto al significato, le sezioni, gli import e gli export, e i simboli — che poi
 danno il nome alle funzioni nel disassemblato. `Enter` su una posizione prende i byte che stanno

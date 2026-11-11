@@ -789,6 +789,16 @@ site-bad-port = `{ $port }` non è un numero
 site-stored = connessione salvata: { $name } (Shift+F9 per conservarla)
 # ------------------------------------------------- pannello struttura (SPEC 05 §1.8)
 key-struct = Strutt
+key-markdown = MD
+key-table = Tabella
+key-filter = Filtro
+key-decompile = Decomp
+key-next = Avanti
+key-prev = Indietr
+key-codepages = CodePg
+key-goto = VaiA
+key-to-panel = Pannel
+key-blame = Blame
 viewer-structure = Struttura
 viewer-structure-hint = ↑↓ riga · Invio vai a · Tab contenuto · F11 chiude
 viewer-structure-hint-tab = Tab porta i tasti qui
@@ -1653,3 +1663,6 @@ undo-done =
         [one] un nome di nuovo dov'era
        *[other] { $count } nomi di nuovo dov'erano
     }
+slow-drives = l'elenco dei dischi ha richiesto { $secs } s
+slow-drives-late = l'elenco dei dischi ha aspettato { $secs } s: { $drives } non hanno risposto in tempo e sono mostrati senza dettagli — un disco di rete con il server spento?
+slow-listing = leggere { $what } ha richiesto { $secs } s
