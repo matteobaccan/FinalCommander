@@ -6,6 +6,44 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.39.5] - 2026-11-11
+
+### Added
+
+- **Two themes.** `delphi-dark-2027`, the Delphi IDE's dark theme for the whole program: a
+  charcoal page, reserved words in a cream bold, comments olive and slanted, `{$…}` directives
+  azure, strings blue, numbers pink, a cornflower selection, and the IDE's greys and blue for
+  panels, menus and dialogs. `github-dark`, GitHub's dark terminal colours as
+  terminalcolors.com publishes them.
+- **Lines down Pascal's blocks**, as the Delphi IDE draws them: from the line that opens a
+  `begin`, `try`, `case`, `repeat`, `asm` or a declared `class` or `record` to its `end`, one
+  per nested block, and down each `object … end` of a form; in the viewer, in the colour
+  `syntax.guide` every theme now has.
+- **Bold, italic and underline in a theme.** A `[styles]` table says how a key's text is
+  drawn besides its colour (`"syntax.keyword" = "bold"`, `"syntax.comment" = "italic"`,
+  `"cursor.fg" = "bold underline"`); exported themes keep it.
+
+### Changed
+
+- **The `black` theme is black behind everything**, and nothing else: no grey bars, no boxes.
+  Every part is told apart by light text — 7:1 against black for what is read — folders bold
+  white, programs green, archives orange, links cyan, the selection yellow; the cursor is the
+  brightest text on the screen, bold and underlined, and the side-by-side diff colours its
+  lines' text instead of their ground.
+- **Delphi's keywords as Delphi has them**, from Embarcadero's reserved words and directives
+  (RAD Studio 13): `string`, `as`, `inline`, `static`, `read`, `write`, `strict`, `sealed`
+  and the rest are keywords in any case; `Exit`, `True`, `Result` are names again, and so is a
+  member after a dot (`E.Message`, `Reader.Read`). `$0000FF` and `#13` are numbers. In a form
+  only `object`, `inherited`, `inline`, `end` and `item` are keywords: `False` and the sets are
+  values, as the IDE draws them.
+
+### Fixed
+
+- **A block comment kept its colour only while its first line was on screen.** The viewer
+  started colouring at the first row it showed, so scrolling a form's `{ … }` of binary data
+  off the top turned the hex below into numbers and names. It now reads back up to a megabyte
+  to know what the first row starts inside, and carries on from there as it scrolls.
+
 ## [0.39.4] - 2026-11-09
 
 ### Added
