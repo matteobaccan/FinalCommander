@@ -590,14 +590,32 @@ fn shift_name(name: &str, by: usize) -> String {
     name.chars().skip(by).collect()
 }
 
-/// What the extension column takes out of the name field in the full view: four columns for
-/// the extension itself and one that keeps it off the end of the name. Four because `toml`,
-/// `json`, `html` and `yaml` are the longest extensions common enough to size a column for;
-/// anything longer stays in the name, where it is read as part of it anyway.
-const EXT_W: u16 = 5;
+/// The narrowest field an aligned extension gets, as in FAR: `md` and `c` start where `exe`
+/// does, so the short ones line up on the left of a three-letter column, and a longer one
+/// simply reaches further left.
+const EXT_MIN: usize = 3;
 
-/// A name split the way the full view draws it: what goes in the name field, and the
-/// extension that goes in the column of its own, right-aligned against the size.
+/// Where a split name's pieces go in a field `w` wide: the gap after the stem and the gap
+/// after the extension. `None` when the whole name does not fit, which is FAR's rule too: a
+/// name that has to be cut is drawn whole, cut, rather than losing its middle to a column.
+///
+/// The extension sits in a field of at least `EXT_MIN` at the right end, left-aligned in it;
+/// when that leaves no space after the stem it goes flush right instead, so that a stem and
+/// its extension never run together.
+fn ext_layout(stem_w: usize, ext_w: usize, w: usize) -> Option<(usize, usize)> {
+    if stem_w + 1 + ext_w > w {
+        return None;
+    }
+    let field = ext_w.max(EXT_MIN);
+    if stem_w + field < w {
+        Some((w - stem_w - field, field - ext_w))
+    } else {
+        Some((w - stem_w - ext_w, 0))
+    }
+}
+
+/// A name split the way the full view draws it: the stem at the left of the name field, and
+/// the extension at its right.
 ///
 /// `None` for everything that has no extension to speak of — a directory (a folder named
 /// `docs.old` is not a `.old` file), a dotfile, whose leading dot starts a name rather than
@@ -628,7 +646,9 @@ fn ext_of<'a>(name: &'a str, e: &Entry) -> Option<(&'a str, &'a str)> {
     let cut = name.rfind('.')?;
     let (stem, dotted) = name.split_at(cut);
     let ext = &dotted[1..];
-    if stem.is_empty() || ext.is_empty() || ext.width() > (EXT_W - 1) as usize {
+    // A dot followed by a space is a sentence, not a type: `Mr. Smith's letter` has no
+    // extension. FAR draws the line in the same place.
+    if stem.is_empty() || ext.is_empty() || ext.contains(' ') {
         return None;
     }
     Some((stem, ext))
@@ -928,22 +948,24 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
             let (col, w) = (cell.col, cell.w);
             match col {
                 Col::Name => {
-                    // The extension in a column of its own, as FAR draws the full view: the
-                    // names line up down the left and the extensions down the right of the
-                    // same field. Not while the names are being scrolled sideways — the field
-                    // is then a window onto one long name and there is no room to keep a
-                    // column in it — and not in the detailed view, which has columns of its
-                    // own after the time.
-                    let split = if split_ext_in_name && p.name_scroll == 0 && w > EXT_W + 3 {
-                        split_ext(&name, e, flags)
+                    // The extension at the right of the field, as FAR draws the full view: the
+                    // names line up down the left and the extensions down the right, however
+                    // long either is, as long as the whole name fits. Not while the names are
+                    // being scrolled sideways — the field is then a window onto one long name
+                    // — and not in the detailed view, which has columns of its own after the
+                    // time.
+                    let split = if split_ext_in_name && p.name_scroll == 0 {
+                        split_ext(&name, e, flags).and_then(|(stem, ext)| {
+                            let (gap, _) = ext_layout(stem.width(), ext.width(), w as usize)?;
+                            Some((stem, ext, gap))
+                        })
                     } else {
                         None
                     };
                     match split {
-                        Some((stem, ext)) => {
-                            let stem_w = w - EXT_W;
-                            buf.put_str(x, y, &truncate_cols(stem, stem_w as usize), style, stem_w);
-                            put_right(buf, x + stem_w, y, EXT_W, ext, style);
+                        Some((stem, ext, gap)) => {
+                            let line = format!("{stem}{:gap$}{ext}", "");
+                            buf.put_str(x, y, &line, style, w);
                         }
                         None => {
                             buf.put_str(x, y, &truncate_cols(&name, w as usize), style, w);
@@ -2396,31 +2418,57 @@ mod tests {
     }
 
     #[test]
-    fn the_full_view_puts_the_extension_in_a_column_of_its_own() {
+    fn the_full_view_lines_the_extensions_up_on_the_right() {
         let listing = Listing::new(
             vec![
                 Entry::parent_entry(),
                 entry("docs.old", EntryKind::Dir, 0),
                 entry("Cargo.toml", EntryKind::File, 412),
                 entry(".gitignore", EntryKind::File, 40),
-                entry("notes", EntryKind::File, 10),
                 entry("db.backup", EntryKind::File, 10),
+                entry("a.md", EntryKind::File, 10),
+                entry("Mr. Smith", EntryKind::File, 10),
             ],
             1,
         );
         let out = render_listing(&listing, ViewMode::Full, 0, &Selection::default());
-        // The name on the left, the extension right-aligned against the size column.
+        // The name on the left, the extension against the size column.
         assert!(out.contains("Cargo      toml"), "{out}");
+        // Where each piece of a row ends and starts, in columns.
+        let end_of = |piece: &str| {
+            let line = out.lines().find(|l| l.contains(piece)).unwrap();
+            let at = line.find(piece).unwrap();
+            line[..at].chars().count() + piece.chars().count()
+        };
+        // An extension of any length reaches the same right edge, as in FAR…
+        assert_eq!(end_of("backup"), end_of("toml"), "{out}");
+        // …and a short one starts where a three-letter one would, so `md` sits under `exe`.
+        assert_eq!(end_of(" md") + 1, end_of("toml"), "{out}");
+        // A dot followed by a space ends a sentence; it does not start an extension.
+        assert!(out.contains("Mr. Smith"), "{out}");
         // A folder with a dot in its name is not a file with an extension.
         assert!(out.contains("docs.old"), "{out}");
         // A dotfile's leading dot starts its name; there is nothing to move right.
         assert!(out.contains(".gitignore"), "{out}");
-        assert!(out.contains("notes"), "{out}");
-        // An extension too long for the column stays where it was written.
-        assert!(out.contains("db.backup"), "{out}");
         // In the other views the name is whole, extension and all.
         let brief = render_listing(&listing, ViewMode::Brief, 0, &Selection::default());
         assert!(brief.contains("Cargo.toml"), "{brief}");
+    }
+
+    /// FAR's arithmetic, case by case: a three-wide field at least, the extension at its
+    /// left; flush right when the field would touch the stem; nothing when the name is cut.
+    #[test]
+    fn an_extension_is_placed_the_way_far_places_it() {
+        // `a` + `md` in 10: field of 3 at the right, `md` at its left, one space after.
+        assert_eq!(ext_layout(1, 2, 10), Some((6, 1)));
+        // A long extension takes its own width.
+        assert_eq!(ext_layout(1, 9, 20), Some((10, 0)));
+        // `abcdefg.md` in 10: the field would touch the stem, so `md` goes flush right.
+        assert_eq!(ext_layout(7, 2, 10), Some((1, 0)));
+        // A name exactly as wide as the field still splits, with the dot's column between.
+        assert_eq!(ext_layout(3, 4, 8), Some((1, 0)));
+        // One that does not fit is not split at all.
+        assert_eq!(ext_layout(5, 4, 9), None);
     }
 
     #[test]

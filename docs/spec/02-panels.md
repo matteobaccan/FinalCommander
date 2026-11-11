@@ -80,9 +80,12 @@ columns of names), `Ctrl+2` medium (two), `Ctrl+3` full, `Ctrl+4` wide (name and
 columns), `Ctrl+5` detailed. The full view draws the extension in a column of its own, as FAR
 does: the names run down the left of the name field and the extensions down its right, against
 the size column, which is what makes a directory of one kind of file read as a list rather than
-as a paragraph. Five columns of the field, four of them the extension — a directory (`docs.old`
-is a folder, not a `.old` file), a dotfile, and an extension too long for the column keep their
-name whole across both. A mode says how many columns it draws and whether it shows a size,
+as a paragraph. FAR's arithmetic (`filelist.cpp`): the extension sits left-aligned in a field
+of at least three columns at the right end of the name field, so `md` starts where `exe` does
+and `deployproj` reaches further left; when that field would touch the stem the extension goes
+flush right instead. A directory (`docs.old` is a folder, not a `.old` file), a dotfile, an
+extension with a space in it (`Mr. Smith`) and a name wider than the field keep their name
+whole. A mode says how many columns it draws and whether it shows a size,
 so the layout follows from the mode rather than from a width guess, and a column too narrow for
 what it holds falls back to fewer columns. **The custom sets are shipped** (§3a): each of the
 ten modes is re-definable from the configuration, on its own digit.

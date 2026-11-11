@@ -86,10 +86,11 @@ dettagliata. Le viste a più colonne scorrono in basso lungo una colonna e poi p
 quella dopo, come negli originali. La vista dettagliata aggiunge, a quello che mostra la
 completa, la data in cui il file è stato creato e quella in cui è stato letto l'ultima volta, e
 gli attributi dopo di esse — su un pannello troppo stretto per tutto questo le date in più
-vanno via per prime, così il nome resta leggibile. La vista completa tiene l'estensione in una
-colonna tutta sua, contro la dimensione: i nomi lungo il bordo sinistro, le estensioni lungo il
-destro. Una cartella con un punto nel nome, un file che comincia per punto e un'estensione
-troppo lunga per la colonna tengono il nome intero.
+vanno via per prime, così il nome resta leggibile. La vista completa disegna
+l'estensione contro la dimensione, come FAR: i nomi lungo il bordo sinistro, le estensioni lungo
+il destro, una corta che comincia dove comincerebbe una di tre lettere e una lunga che si
+allunga verso sinistra. Una cartella con un punto nel nome, un file che comincia per punto, un
+punto seguito da uno spazio (`Sig. Rossi`) e un nome troppo lungo per il campo restano interi.
 
 `Ctrl+8` mostra a chi appartengono i file: nome, dimensione, proprietario, gruppo. I due nomi
 prendono lo spazio che aveva la data, e su un pannello stretto il gruppo se ne va prima del

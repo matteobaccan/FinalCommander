@@ -45,6 +45,11 @@ Notable changes, newest first. The format follows
 
 ### Changed
 
+- **Extensions of any length line up, as in FAR.** The full view used to keep a column of
+  four for the extension, so `dproj`, `manifest` or `deployproj` stayed in the name; now an
+  extension sits at the right of the name field whatever its length, a short one starting
+  where a three-letter one would, and only a name too wide for the field is drawn whole. A
+  dot followed by a space no longer counts as an extension.
 - **`Alt+F1` no longer waits on a drive that does not answer.** Every drive is asked at the
   same time, and one that has not answered after a second and a half — a network drive whose
   server is gone, typically, which Windows can take seconds to give up on — is listed with

@@ -80,10 +80,11 @@ out of the table, because none of it is somewhere to put a file.
 multi-column views run down a column and then across, as the originals do. The detailed view
 adds, to what the full one shows, the date the file was made and the date it was last read,
 and the attributes after them — on a panel too narrow for all of that the extra dates go
-first, so the name stays readable. The full view keeps
-the extension in a column of its own, against the size: names down the left, extensions down
-the right. A folder with a dot in its name, a dotfile and an extension too long for the column
-keep their name whole.
+first, so the name stays readable. The full view draws
+the extension against the size, as FAR does: names down the left, extensions down the right,
+a short one starting where a three-letter one would and a long one reaching further left. A
+folder with a dot in its name, a dotfile, a dot followed by a space (`Mr. Smith`) and a name
+too long for the field keep their name whole.
 
 `Ctrl+8` shows who the files belong to: name, size, owner, group. The two names take the room
 the date had, and on a narrow panel the group goes before the owner does. Finding out costs a

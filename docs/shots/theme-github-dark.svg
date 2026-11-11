@@ -116,7 +116,7 @@
 <rect x="747.6" y="126.0" width="16.8" height="18" fill="#000204"/>
 <rect x="764.4" y="126.0" width="75.6" height="18" fill="#010409"/>
 <text xml:space="preserve" x="0.0" y="139.6" fill="#30363d">║</text>
-<text xml:space="preserve" x="8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6" y="139.6" fill="#e6edf3">Project1.dproj</text>
+<text xml:space="preserve" x="8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4" y="139.6" fill="#e6edf3">Project1        dproj</text>
 <text xml:space="preserve" x="184.8" y="139.6" fill="#30363d">│</text>
 <text xml:space="preserve" x="235.2 243.6 252.0 260.4" y="139.6" fill="#e6edf3">11 B</text>
 <text xml:space="preserve" x="268.8" y="139.6" fill="#30363d">│</text>
