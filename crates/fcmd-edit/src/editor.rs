@@ -2436,7 +2436,9 @@ mod tests {
         e.cursor = Position::new(2, 0);
         assert!(e.reflow(80).unwrap());
         assert_eq!(e.buffer.line(2), "  one two three four five six");
+        // A text with no line in it takes the platform's end of line; the lines are what count.
         let mut e = editor("a extraordinarily b");
+        e.buffer.eol = crate::Eol::Lf;
         assert!(e.reflow(5).unwrap());
         assert_eq!(e.buffer.to_text(), "a\nextraordinarily\nb");
 
@@ -2509,6 +2511,8 @@ mod tests {
     #[test]
     fn text_read_in_at_the_cursor_does_not_type_over_the_block() {
         let mut e = editor("alpha beta");
+        // One line has no end of line of its own, and the platform's is not what is tested.
+        e.buffer.eol = crate::Eol::Lf;
         e.move_to(Position::new(0, 0), false, BlockKind::Stream);
         e.move_to(Position::new(0, 5), true, BlockKind::Stream);
         e.insert_at_cursor("X\nY").unwrap();

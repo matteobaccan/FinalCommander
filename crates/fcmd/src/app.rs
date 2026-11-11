@@ -53567,6 +53567,14 @@ abcdefghij
     #[test]
     fn emptying_the_wastebasket_asks_with_cancel_lit() {
         let mut app = app_in_the_wastebasket();
+        // Where no program may read the wastebasket (macOS) there is nothing to empty, and
+        // the key says so rather than asking.
+        if !fcmd_jobs::wastebasket::SUPPORTED {
+            press(&mut app, "F7");
+            assert!(app.mode.is_normal());
+            assert!(app.status_error, "{}", app.status);
+            return;
+        }
         press(&mut app, "F7");
         let Mode::Confirm(confirm) = &app.mode else {
             panic!("emptying did not ask: {:?}", app.mode)
@@ -53582,10 +53590,6 @@ abcdefghij
         // The menu's command is the same question, from any panel.
         app.active = 1;
         app.run(Command::ToolTrashEmpty);
-        if !fcmd_jobs::wastebasket::SUPPORTED {
-            assert!(app.status_error);
-            return;
-        }
         press(&mut app, "Left");
         press(&mut app, "Enter");
         assert_eq!(trash_asks(&mut app), vec![TrashAsk::Empty]);
