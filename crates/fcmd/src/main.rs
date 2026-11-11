@@ -6789,11 +6789,15 @@ dir_attr = "D"
         std::fs::write(&a, &lines).unwrap();
         run(&["add", "a.txt"]).unwrap();
         run(&["commit", "-q", "-m", "first"]).unwrap();
+        // The edits change the file's size. Git takes a file whose size and time match its
+        // index entry as unchanged without reading it, and a test runs fast enough to rewrite
+        // the file in the same instant it was committed: with edits of the same length the
+        // work tree could look clean to `git diff` under load.
         std::fs::write(
             &a,
             lines
-                .replace("line 2\n", "LINE 2\n")
-                .replace("line 11\n", "LINE 11\n"),
+                .replace("line 2\n", "LINE TWO\n")
+                .replace("line 11\n", "LINE ELEVEN\n"),
         )
         .unwrap();
         let sides = |staged| {
@@ -6827,11 +6831,14 @@ dir_attr = "D"
         )
         .expect("the hunk goes in");
         let cached = String::from_utf8(run(&["diff", "--cached"]).unwrap().stdout).unwrap();
-        assert!(cached.contains("+LINE 2"), "{cached}");
-        assert!(!cached.contains("LINE 11"), "only the one hunk: {cached}");
+        assert!(cached.contains("+LINE TWO"), "{cached}");
+        assert!(
+            !cached.contains("LINE ELEVEN"),
+            "only the one hunk: {cached}"
+        );
         let left = String::from_utf8(run(&["diff"]).unwrap().stdout).unwrap();
         assert!(
-            left.contains("+LINE 11") && !left.contains("LINE 2"),
+            left.contains("+LINE ELEVEN") && !left.contains("LINE TWO"),
             "{left}"
         );
         // And out again, from the diff of what is staged.

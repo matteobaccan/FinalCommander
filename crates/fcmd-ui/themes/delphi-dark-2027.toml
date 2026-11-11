@@ -7,21 +7,27 @@ variant = "dark"
 # apart from the comments, strings blue, numbers pink; a cornflower selection across the whole
 # row and a near-black blue line under the cursor. The rest of the screen — panels, menus,
 # dialogs — takes the IDE's own chrome: dark greys and its blue.
+#
+# The page and the code were measured against a screenshot of the IDE: a background with a
+# touch of blue in it (#2e2f33, not a neutral grey), identifiers in pure white rather than the
+# light grey of the chrome — most of what makes the IDE's code look sharp is that contrast —
+# and comments a soft green rather than a yellow olive.
 
 [palette]
-bg = "#2b2b2b"
+bg = "#2e2f33"
 chrome = "#252526"
 surface = "#2d2d30"
 border = "#4a4a4f"
 fg = "#dcdcdc"
+code = "#ffffff"
 dim = "#808080"
 bright = "#ffffff"
 blue = "#1e4f7a"
 cursorline = "#0f1a24"
 selection = "#7fa6f2"
 ink = "#101828"
-cream = "#ebd9b4"
-olive = "#c8c878"
+cream = "#f0dcbe"
+olive = "#96ae7a"
 azure = "#6cb4e8"
 string = "#5a9be6"
 pink = "#e87bb0"
@@ -70,13 +76,13 @@ amber = "#e0b060"
 
 # The editor's page. A marked block and a search hit are the IDE's cornflower, with dark text
 # on it so a line stays readable.
-"viewer.fg" = "fg"
+"viewer.fg" = "code"
 "viewer.bg" = "bg"
 "viewer.status.fg" = "fg"
 "viewer.status.bg" = "blue"
 "viewer.selected.fg" = "ink"
 "viewer.selected.bg" = "selection"
-"editor.fg" = "fg"
+"editor.fg" = "code"
 "editor.bg" = "bg"
 "editor.status.fg" = "fg"
 "editor.status.bg" = "blue"
@@ -84,9 +90,9 @@ amber = "#e0b060"
 "editor.selected.bg" = "selection"
 
 # The IDE's syntax colours, for every language and not only Pascal: names and calls stay the
-# text colour, as they do there.
+# code's white, as they do there.
 "syntax.keyword" = "cream"
-"syntax.type" = "fg"
+"syntax.type" = "code"
 "syntax.string" = "string"
 "syntax.number" = "pink"
 "syntax.comment" = "olive"
@@ -94,10 +100,10 @@ amber = "#e0b060"
 "syntax.tag" = "cream"
 "syntax.attr" = "azure"
 "syntax.entity" = "pink"
-"syntax.function" = "fg"
+"syntax.function" = "code"
 "syntax.added" = "green"
 "syntax.removed" = "red"
-"syntax.text" = "fg"
+"syntax.text" = "code"
 "syntax.guide" = "#4a5a70"
 "diff.line.fg" = "fg"
 "diff.removed.bg" = "#4a2020"
