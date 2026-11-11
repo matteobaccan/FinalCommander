@@ -2818,6 +2818,12 @@ both_ways = true
                 roots: vec!["/var/log".into()],
                 ..SavedSearch::default()
             }],
+            // And where the panels keep going, with how often and when last.
+            visits: vec![FolderVisit {
+                path: "/home/mb/src".into(),
+                count: 12,
+                last: 1_800_000_000,
+            }],
         };
         state.save(&paths).unwrap();
         let (back, problem) = State::load(&paths);
@@ -3272,6 +3278,22 @@ pub struct State {
     /// not wait for *Save setup* to survive.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub searches: Vec<SavedSearch>,
+    /// Every folder a panel went to, with how often and when last: what the list of
+    /// frequent folders is ranked from (SPEC 02 §11b). Capped by the program, best first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub visits: Vec<FolderVisit>,
+}
+
+/// One folder of the frequent-folders list, as the state file holds it.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FolderVisit {
+    pub path: String,
+    /// How many times a panel went there.
+    #[serde(default)]
+    pub count: u32,
+    /// When it last did, in seconds since the epoch.
+    #[serde(default)]
+    pub last: i64,
 }
 
 fn is_zero(n: &u64) -> bool {

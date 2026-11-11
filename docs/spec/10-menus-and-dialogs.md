@@ -119,7 +119,7 @@ extension, Unselect by this extension, Select all, Restore selection · Folder s
 ### 2.3 Commands
 
 Find file, Saved searches (`Alt+Shift+F7`, SPEC 06 §1c), Command history, View and edit
-history, Folders history (§4.4), Disk usage
+history, Folders history (§4.4), Frequent folders (§4.4a), Disk usage
 (`Alt+Shift+F3`, SPEC 06 §12), Jobs (`Alt+Shift+F5`, SPEC 03 §5), Branch view (`Ctrl+Alt+B`, SPEC 02 §3d) · Swap panels, Sync other
 panel, Panels on/off, Compare folders, Synchronise folders, Open a tunnel, Tunnels, Compare by
 content, Panelize a command's output, View through a command, Learn keys, View file
@@ -638,6 +638,12 @@ a list of them would be a list one can only look at.
 ### 4.4 Folders history (`Alt+F12`)
 
 Where this panel has been, newest first, without repeats. `Enter` goes back to it.
+
+### 4.4a Frequent folders (`Alt+Shift+F12`)
+
+The folders the panels go to most and most lately, best first (`02-panels.md` §11b), without
+the one the panel is in. Typing narrows it by letters in order; `Enter` goes there; `Del`
+takes the row out of the list. Its hint line names those keys.
 
 ### 4.4b Folder shortcuts (`Ctrl+D`)
 

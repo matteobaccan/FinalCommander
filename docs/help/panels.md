@@ -149,6 +149,15 @@ are on, which narrows as you type, and `Enter` goes there. It starts from what t
 read — kept between sessions — and reads the rest behind the dialog while you type. In the
 copy dialog the same `Alt+F10` fills the destination in.
 
+`Alt+Shift+F12` is for the folders you keep going back to. Every time a panel goes somewhere
+it is counted, and this list puts the folders you use most and most lately at the top —
+yesterday's project above last year's, without your keeping anything. Type a few letters of
+the path, in order and from anywhere in it (`fcsrc` for `work/fcmd/src`), and `Enter` goes to
+the best match, which is already under the cursor. `Del` takes a folder out of the list: one
+that is gone, or one you only ever passed through. It is the third of three lists: `Alt+F12`
+is where this panel has been, in order; `Ctrl+D` is the folders you chose to keep; this is
+the one that keeps itself.
+
 `Ctrl+H` shows the hidden files. `Ctrl+P` hides the panel you are not in, `Ctrl+F1` and
 `Ctrl+F2` hide the left or the right one to give the other the whole screen, and `Ctrl+O`
 takes both off to show what the commands have printed. With the panels off everything else

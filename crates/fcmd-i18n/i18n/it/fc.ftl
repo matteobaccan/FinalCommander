@@ -1789,3 +1789,7 @@ find-fuzzy = Nome approssimato: le lettere qui sopra, in ordine, il migliore per
 find-meta = Metadati (artist=bowie; camera=)
 find-index = Chiedi all'indice del sistema invece di scorrere (può non vedere i file nuovi)
 tools-for-index = l'indice che Alt+F7 può interrogare invece di scorrere il disco
+menu-frecent = Cartelle frequenti
+frecent-none = nessuna cartella visitata finora
+frecent-gone = { $path } tolta dalle cartelle frequenti
+frecent-hint = scrivi lettere del percorso · Invio vai · Canc dimentica · Esc chiudi

@@ -714,6 +714,45 @@ shortcut that waited for *Save setup* and vanished without it would be a bug, no
 Still owed: FAR's habit of inserting the path instead of going there when an edit line has
 the keys, and reordering the list.
 
+### 11b. The folders used most (`Alt+Shift+F12`)
+
+The history is where a panel has been, in the order it went there; the shortcuts are the
+folders somebody chose to keep. The third list is the one nobody keeps and everybody wants:
+the dozen folders the work happens in, reached by typing three letters of one. It is feature
+2.3, zoxide's idea, as a list.
+
+**What is recorded.** Every time a panel goes to a folder — `Enter`, `cd`, a shortcut, the
+tree, a drive, a result of a search — that folder's count goes up by one and the moment is
+stamped. It is the same call that writes the folder history (`App::panel_go` with the
+history on), so the two cannot disagree about what going somewhere is; walking back and
+forth *through* the history (`Alt+←`/`Alt+→`) is not going anywhere new and is not counted.
+Both panels and every tab feed one list, and it lives in the state file (`[[visits]]`:
+path, count, last), written best first so that it reads by eye the way the list shows it.
+
+**The order.** A folder's rank is its count weighed by how long ago the last visit was, in
+four steps: within the hour it counts four times, within the day twice, within the week
+half, older than that a quarter (`frecency::Visit::score`, whole numbers). So a folder
+opened every day for a year outranks one opened ten times this morning only until
+tomorrow, and a project finished last spring sinks without anybody tidying. Equal ranks go
+by the last visit, then by name. The list holds 500 folders; past that the lowest-ranked
+goes, never the one that has just come in.
+
+**The list.** `nav.goto.fuzzy` — `Alt+Shift+F12`, and *Commands → Frequent folders* —
+opens it over the panel, best first, without the folder the panel is already in. What is
+typed narrows it by letters in order anywhere in the path (`fcsrc` for
+`~/work/fcmd/src`), the matcher of SPEC 06 §1d, and the order stays the list's own: of the
+folders that match, the most used is on top and under the cursor, so the usual gesture is
+the key, three letters and `Enter`. `Enter` goes there, connecting first where the folder
+is on a server, as a shortcut does — and going there counts. `Del` takes the row out of
+the list for good: a folder that is gone, or one that was only ever passed through.
+
+**Why this key.** FAR has no such list. Its `Alt+F12` is the folder history and stays
+exactly that here; a switch inside that list to order it differently was the other
+candidate, and was not taken because the two lists are not one list in two orders — the
+history is one panel's and remembers every visit, this one is everybody's and remembers
+each folder once. So it is a command of its own, on the same key with `Shift`: beside the
+list it is most like, and not on `Alt` and a letter, which is the quick search's.
+
 ## 10. Screens (`F12`)
 
 A viewer or an editor is a **screen**, not a dialog: one steps away from it and comes back,

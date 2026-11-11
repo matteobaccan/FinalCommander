@@ -160,6 +160,15 @@ quello che l'albero ha già letto — conservato fra una sessione e l'altra — 
 dietro al dialogo mentre scrivi. Nel dialogo di copia lo stesso `Alt+F10` riempie la
 destinazione.
 
+`Alt+Shift+F12` è per le cartelle in cui torni sempre. Ogni volta che un pannello va da qualche
+parte viene contato, e questo elenco mette in cima le cartelle che usi di più e più di recente
+— il progetto di ieri sopra quello dell'anno scorso, senza che tu debba salvare niente. Scrivi
+qualche lettera del percorso, in ordine e da qualunque punto (`fcsrc` per `work/fcmd/src`), e
+`Enter` va al risultato migliore, che è già sotto il cursore. `Canc` toglie una cartella
+dall'elenco: una che non c'è più, o una da cui sei solo passato. È il terzo di tre elenchi:
+`Alt+F12` è dove questo pannello è stato, in ordine; `Ctrl+D` sono le cartelle che hai scelto
+di tenere; questo è quello che si tiene da solo.
+
 `Ctrl+H` mostra i file nascosti. `Ctrl+P` nasconde il pannello in cui non sei, `Ctrl+F1` e
 `Ctrl+F2` nascondono quello di sinistra o di destra per dare all'altro tutto lo schermo, e
 `Ctrl+O` li toglie entrambi per mostrare quello che hanno stampato i comandi. Con i pannelli

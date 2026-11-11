@@ -269,6 +269,7 @@ so that both have a key that does not move whichever screen gives `F11` away.
 | inside the bar | ←→ menus, ↑↓ entries, letter, Enter, Esc | the same |
 | drive / connection list | Alt+F1 left, Alt+F2 right | **Alt+F1** / **Alt+F2**, as a table: type, label, filesystem, size, free — then the connections and object stores, numbered |
 | folder history | Alt+F12 | **Alt+F12** |
+| the folders used most and most lately | — | **Alt+Shift+F12**: typed into by letters of the path, `Enter` goes, `Del` forgets (`nav.goto.fuzzy`) |
 | sort modes list | Ctrl+F12 | **Ctrl+F12** (choosing the current order again reverses it) |
 | reverse the order directly | — | **Ctrl+Shift+F12** |
 | themes | Options → Colors | **Ctrl+Shift+T** cycles · Options → Themes lists them |

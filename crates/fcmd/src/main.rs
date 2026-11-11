@@ -10,6 +10,7 @@ mod complete;
 mod drives;
 mod expand;
 mod form;
+mod frecency;
 mod grab;
 mod help;
 mod highlight;
@@ -765,6 +766,7 @@ fn run(cli: Cli) -> Result<()> {
         .collect();
     app.bookmarks = state.bookmarks;
     app.searches = state.searches;
+    app.visits = crate::frecency::Visits::from_state(&state.visits);
     // The tree comes up with what the last session walked, so `Ctrl+T` and `Alt+F10` are
     // useful before anything has been read again.
     app.tree_cache = crate::tree::Cache::from_state(&state.tree);
@@ -2360,6 +2362,7 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
         right_tab: app.tabs[1].current(),
         bookmarks: app.bookmarks.clone(),
         searches: app.searches.clone(),
+        visits: app.visits.to_state(crate::history::now()),
         // The tree's own cache, capped: a walk of a whole disk is worth keeping some of, and
         // a state file nobody can open is worth keeping none of.
         tree: app.tree_cache.to_state(crate::app::TREE_CACHE_KEPT),

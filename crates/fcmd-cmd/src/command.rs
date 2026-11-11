@@ -246,6 +246,8 @@ pub enum Command {
     NavBack,
     NavForward,
     NavGotoPath,
+    /// The folders used most and most lately, as a list one types into (SPEC 02 §11b).
+    NavGotoFuzzy,
     /// Put this panel's directory on folder shortcut `0`..`9` (SPEC 02 §11).
     NavBookmarkSet(u8),
     /// Go to the directory on folder shortcut `0`..`9`.
@@ -663,6 +665,7 @@ impl Command {
             Command::NavBack,
             Command::NavForward,
             Command::NavGotoPath,
+            Command::NavGotoFuzzy,
             Command::NavBookmarks,
             Command::SelToggle,
             Command::SelToggleUp,
@@ -982,6 +985,7 @@ impl Command {
             Command::NavBack => "nav.history.back".into(),
             Command::NavForward => "nav.history.forward".into(),
             Command::NavGotoPath => "nav.goto.path".into(),
+            Command::NavGotoFuzzy => "nav.goto.fuzzy".into(),
             Command::NavBookmarkSet(n) => format!("nav.bookmark.set({n})"),
             Command::NavBookmarkGo(n) => format!("nav.bookmark.go({n})"),
             Command::NavBookmarks => "nav.bookmarks".into(),
@@ -1270,6 +1274,7 @@ impl Command {
             ("nav.history.back", _) => Command::NavBack,
             ("nav.history.forward", _) => Command::NavForward,
             ("nav.goto.path", _) => Command::NavGotoPath,
+            ("nav.goto.fuzzy", _) => Command::NavGotoFuzzy,
             ("nav.bookmark.set", Some(a)) => Command::NavBookmarkSet(parse_digit(a)?),
             ("nav.bookmark.go", Some(a)) => Command::NavBookmarkGo(parse_digit(a)?),
             ("nav.bookmarks", _) => Command::NavBookmarks,

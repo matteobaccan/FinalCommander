@@ -160,6 +160,7 @@ impl Command {
             Command::NavBack => "back to where you were",
             Command::NavForward => "forward again",
             Command::NavGotoPath => "type a path to go to",
+            Command::NavGotoFuzzy => "the folders used most and most lately, to type into",
 
             Command::SelToggle => "select this row, and move on",
             Command::SelToggleUp => "select this row, and move up",

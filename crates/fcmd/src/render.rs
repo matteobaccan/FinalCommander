@@ -1082,6 +1082,7 @@ fn draw_pick(
     let hint = app.i18n.t(match pick.kind {
         crate::menu::PickKind::Drives => "drives-hint",
         crate::menu::PickKind::Bookmarks => "bookmarks-hint",
+        crate::menu::PickKind::Frecent => "frecent-hint",
         crate::menu::PickKind::Highlight => "hl-hint",
         crate::menu::PickKind::Filters => "filter-hint",
         crate::menu::PickKind::Git => "git-hint",
@@ -3965,6 +3966,38 @@ mod tests {
             line.contains("╢╟") || line.contains("╝╚"),
             "the box ran into the other panel: {line}"
         );
+    }
+
+    /// The frequent folders: the most used at the top, what was typed on the frame, and a
+    /// footer that names the list's own keys.
+    #[test]
+    fn the_frequent_folders_are_listed_best_first_with_their_own_footer() {
+        let mut app = app("far", "en");
+        let here = app.panels[0].cwd.clone();
+        let now = crate::history::now();
+        for (name, times) in [("rarely", 1), ("often", 5)] {
+            for _ in 0..times {
+                app.visits.visit(&here.join(name).to_string(), now);
+            }
+        }
+        app.run(fcmd_cmd::Command::NavGotoFuzzy);
+        let text = frame(&mut app, 100, 30);
+        assert!(text.contains("Frequent folders"), "{text}");
+        assert!(text.contains("Del forget"), "{text}");
+        let line_of = |name: &str| {
+            text.lines()
+                .position(|line| line.contains(name))
+                .unwrap_or_else(|| panic!("no {name} in\n{text}"))
+        };
+        assert!(line_of("often") < line_of("rarely"), "{text}");
+
+        // Typed letters are on the frame, and what does not hold them is gone.
+        press(&mut app, "f");
+        press(&mut app, "t");
+        press(&mut app, "n");
+        let text = frame(&mut app, 100, 30);
+        assert!(text.contains("Frequent folders: ftn"), "{text}");
+        assert!(text.contains("often") && !text.contains("rarely"), "{text}");
     }
 
     /// The find dialog says which keys keep a search and bring one back, because nothing

@@ -2958,10 +2958,18 @@ impl Pick {
         // what one is looking at now.
         self.left = 0;
         let needle = self.filter.to_lowercase();
+        // The frequent folders are found by letters in order rather than by a piece of the
+        // path as written: `fcsrc` for `~/work/fcmd/src`. The order stays the list's own,
+        // which is the point of it — of the folders that match, the one used most.
+        let letters =
+            (self.kind == PickKind::Frecent).then(|| fcmd_core::Fuzzy::new(&self.filter, false));
         self.rows = self
             .all
             .iter()
-            .filter(|row| needle.is_empty() || row.label.to_lowercase().contains(&needle))
+            .filter(|row| match &letters {
+                Some(letters) => letters.score(&row.label).is_some(),
+                None => needle.is_empty() || row.label.to_lowercase().contains(&needle),
+            })
             .cloned()
             .collect();
         self.cursor = self

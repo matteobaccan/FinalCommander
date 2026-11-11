@@ -1788,3 +1788,7 @@ find-fuzzy = Ungefährer Name: die Buchstaben oben, in dieser Reihenfolge, beste
 find-meta = Metadaten (artist=bowie; camera=)
 find-index = Den Index des Systems fragen statt zu durchsuchen (neue Dateien können fehlen)
 tools-for-index = der Index, den Alt+F7 statt einer Durchsuchung fragen kann
+menu-frecent = Häufige Ordner
+frecent-none = noch kein Ordner besucht
+frecent-gone = { $path } aus den häufigen Ordnern genommen
+frecent-hint = Buchstaben des Pfads tippen · Enter hin · Entf vergessen · Esc schließen

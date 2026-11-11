@@ -1261,6 +1261,13 @@ keys = ["Alt+F12"]
 scope = "panel"
 cmd = "panel.history"
 
+# The folders used most and most lately, beside the history of where this panel has been:
+# FAR has no such list, and its own `Alt+F12` stays what it is (SPEC 02 §11b).
+[[bind]]
+keys = ["Alt+Shift+F12"]
+scope = "panel"
+cmd = "nav.goto.fuzzy"
+
 [[bind]]
 keys = ["Alt+F8"]
 scope = "panel"

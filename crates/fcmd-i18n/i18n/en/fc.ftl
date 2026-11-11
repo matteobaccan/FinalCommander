@@ -1798,3 +1798,7 @@ find-fuzzy = Approximate name: the letters above, in order, best match first
 find-meta = Metadata (artist=bowie; camera=)
 find-index = Ask the system's index instead of walking (may miss new files)
 tools-for-index = the index Alt+F7 may ask instead of walking
+menu-frecent = Frequent folders
+frecent-none = no folder has been visited yet
+frecent-gone = { $path } taken out of the frequent folders
+frecent-hint = type letters of the path · Enter go there · Del forget · Esc close

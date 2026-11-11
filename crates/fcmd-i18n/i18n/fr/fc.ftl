@@ -1788,3 +1788,7 @@ find-fuzzy = Nom approché : les lettres ci-dessus, dans l’ordre, le meilleur 
 find-meta = Métadonnées (artist=bowie; camera=)
 find-index = Interroger l’index du système au lieu de parcourir (peut manquer les fichiers récents)
 tools-for-index = l’index qu’Alt+F7 peut interroger au lieu de parcourir
+menu-frecent = Dossiers fréquents
+frecent-none = aucun dossier visité pour l’instant
+frecent-gone = { $path } retiré des dossiers fréquents
+frecent-hint = tapez des lettres du chemin · Entrée y aller · Suppr oublier · Échap fermer

@@ -2896,6 +2896,9 @@ pub struct App {
     pub last_find: FindSpec,
     /// The searches kept under a name (SPEC 06 §1c), as the state file holds them.
     pub searches: Vec<fcmd_config::SavedSearch>,
+    /// Every folder the panels went to, counted and stamped: what `Alt+Shift+F12` ranks
+    /// (SPEC 02 §11b).
+    pub visits: crate::frecency::Visits,
     /// The find dialog waiting behind the question it asked — the name to keep a search
     /// under, or the list of the kept ones — so that answering or dismissing either puts the
     /// dialog back with what was typed into it.
@@ -3257,6 +3260,7 @@ impl App {
             output_hit: None,
             last_find: FindSpec::default(),
             searches: Vec::new(),
+            visits: crate::frecency::Visits::default(),
             search_form: None,
             search_keeping: None,
             search_cancel: [None, None],
@@ -11320,6 +11324,7 @@ impl App {
             }
             Command::PanelSortMenu => self.open_pick(PickKind::SortModes, self.active),
             Command::PanelHistory => self.open_pick(PickKind::FoldersHistory, self.active),
+            Command::NavGotoFuzzy => self.open_pick(PickKind::Frecent, self.active),
             Command::PanelUsage => self.open_usage(),
             Command::PanelBranch => self.toggle_branch(),
             Command::JobQueue => self.open_pick(PickKind::Jobs, self.active),
@@ -22081,6 +22086,24 @@ impl App {
                 self.bookmark_rows(side),
                 side,
             ),
+            PickKind::Frecent => {
+                // Best first, and without the folder the panel is already in: nobody
+                // opens a list of places to go in order to stay.
+                let here = self.panels[side].cwd.to_string();
+                let rows: Vec<PickRow> = self
+                    .visits
+                    .ranked(crate::history::now())
+                    .into_iter()
+                    .filter(|visit| visit.path != here)
+                    .map(|visit| PickRow::plain(visit.path.clone(), visit.path.clone(), false))
+                    .collect();
+                if rows.is_empty() {
+                    let m = self.i18n.t("frecent-none");
+                    self.set_status(m);
+                    return;
+                }
+                Pick::new(kind, self.plain("menu-frecent"), rows, side)
+            }
             PickKind::FoldersHistory => {
                 let panel = &self.panels[side];
                 let current = panel.cwd.to_string();
@@ -22372,6 +22395,25 @@ impl App {
                     }
                 }
                 self.open_ai_services();
+            }
+            // `Del` takes a folder out of the frequent ones: one that is gone, or one that
+            // was only ever passed through.
+            KeyCode::Delete if kind == PickKind::Frecent => {
+                let chosen = pick.chosen().map(|r| r.value.clone());
+                let (side, filter) = (pick.side, pick.filter.clone());
+                if let Some(path) = chosen {
+                    self.visits.forget(&path);
+                    self.mode = Mode::Normal;
+                    self.open_pick(PickKind::Frecent, side);
+                    // What had been typed is still what one is looking through.
+                    if let Mode::Pick(pick) = &mut self.mode {
+                        for ch in filter.chars() {
+                            pick.filter_push(ch);
+                        }
+                    }
+                    let m = self.i18n.t_args("frecent-gone", &[("path", path.into())]);
+                    self.set_status(m);
+                }
             }
             KeyCode::Esc | KeyCode::F(10) if kind == PickKind::SavedSearches => {
                 self.mode = match self.search_form.take() {
@@ -23129,7 +23171,10 @@ impl App {
                     self.set_status(msg);
                 }
             }
-            PickKind::Drives | PickKind::FoldersHistory | PickKind::Bookmarks => {
+            PickKind::Drives
+            | PickKind::FoldersHistory
+            | PickKind::Bookmarks
+            | PickKind::Frecent => {
                 self.active = pick.side;
                 // The rows that are not drives: a panel of something other than a directory.
                 match row.value.as_str() {
@@ -27587,8 +27632,12 @@ impl App {
         let text = path.to_string();
         if self.panels[index].go(path, push_history) {
             if push_history {
-                self.marks
-                    .touch(crate::history::FOLDERS, &text, crate::history::now());
+                let now = crate::history::now();
+                self.marks.touch(crate::history::FOLDERS, &text, now);
+                // The same moment counts for the frequent folders: going somewhere is what
+                // makes it a folder one goes to. Walking back and forth through the history
+                // is not going anywhere new, and is not counted, as it is not recorded.
+                self.visits.visit(&text, now);
             }
             return true;
         }
@@ -31310,6 +31359,110 @@ mod tests {
         assert!(
             matches!(&app.mode, Mode::Find(v) if v.rows[v.cursor].0.display_name() == "middling too")
         );
+    }
+
+    // ── the frequent folders (SPEC 02 §11b) ─────────────────────────────────────────────────
+
+    #[test]
+    fn going_somewhere_is_counted_and_the_list_puts_the_most_used_folder_first() {
+        let mut app = app();
+        let home = app.panel().cwd.clone();
+        let (work, docs, once) = (
+            home.join("work").join("fcmd"),
+            home.join("docs"),
+            home.join("once"),
+        );
+        // Nothing visited yet: the key says so rather than opening an empty list.
+        app.visits = crate::frecency::Visits::default();
+        press(&mut app, "Alt+Shift+F12");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert!(!app.status.is_empty());
+
+        for path in [&work, &docs, &work, &once, &work, &docs, &home] {
+            app.goto(path.clone());
+        }
+        // Stepping back through the history is not going anywhere new.
+        let before = app.visits.clone();
+        app.run(Command::NavBack);
+        assert_eq!(app.visits, before);
+        app.goto(home.clone());
+
+        press(&mut app, "Alt+Shift+F12");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no list: {}", app.status)
+        };
+        assert_eq!(pick.kind, PickKind::Frecent);
+        let rows: Vec<&str> = pick.rows.iter().map(|r| r.value.as_str()).collect();
+        // Three visits, two, one — and not the folder the panel is in already.
+        assert_eq!(
+            rows,
+            [work.to_string(), docs.to_string(), once.to_string()],
+            "{rows:?}"
+        );
+        assert_eq!(pick.cursor, 0, "the cursor starts on the best");
+
+        // Letters of the path, in order, narrow it; the order stays the list's own.
+        press(&mut app, "o");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        let narrowed: Vec<&str> = pick.rows.iter().map(|r| r.value.as_str()).collect();
+        assert!(
+            narrowed.contains(&docs.to_string().as_str()),
+            "{narrowed:?}"
+        );
+        assert!(
+            narrowed.contains(&once.to_string().as_str()),
+            "{narrowed:?}"
+        );
+        press(&mut app, "n");
+        press(&mut app, "c");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.rows.len(), 1);
+        assert_eq!(pick.rows[0].value, once.to_string());
+
+        // `Enter` goes there, and going there counts.
+        press(&mut app, "Enter");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert_eq!(app.panel().cwd, once);
+        let ranked = app.visits.ranked(crate::history::now());
+        assert_eq!(
+            ranked
+                .iter()
+                .find(|v| v.path == once.to_string())
+                .unwrap()
+                .count,
+            2
+        );
+    }
+
+    #[test]
+    fn del_takes_a_folder_out_of_the_frequent_ones() {
+        let mut app = app();
+        let home = app.panel().cwd.clone();
+        app.visits = crate::frecency::Visits::default();
+        for name in ["alpha", "beta", "alpha"] {
+            app.goto(home.join(name));
+        }
+        app.goto(home.clone());
+        press(&mut app, "Alt+Shift+F12");
+        press(&mut app, "Del");
+        // The list is still open, on what is left.
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.rows.len(), 1);
+        assert_eq!(pick.rows[0].value, home.join("beta").to_string());
+        assert!(!app
+            .visits
+            .ranked(0)
+            .iter()
+            .any(|v| v.path == home.join("alpha").to_string()));
+        // The last one gone, so is the list.
+        press(&mut app, "Del");
+        assert!(matches!(app.mode, Mode::Normal));
     }
 
     // ── an index as the source (SPEC 06 §1e) ────────────────────────────────────────────────

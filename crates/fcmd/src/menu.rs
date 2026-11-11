@@ -107,6 +107,8 @@ pub enum PickKind {
     FoldersHistory,
     /// The folders kept to hand (SPEC 02 §11).
     Bookmarks,
+    /// The folders used most and most lately, to type into (SPEC 02 §11b).
+    Frecent,
     /// What could open the file under the cursor (SPEC 06 §5).
     OpenWith,
     /// The command lines that have run.
@@ -546,6 +548,11 @@ pub fn menus() -> Vec<Menu> {
                     "menu-folders-history",
                     "Alt+F12",
                     Action::Run(Command::PanelHistory),
+                ),
+                item(
+                    "menu-frecent",
+                    "Alt+Shift+F12",
+                    Action::Run(Command::NavGotoFuzzy),
                 ),
                 item(
                     "menu-usage",
