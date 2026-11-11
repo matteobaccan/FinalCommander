@@ -1608,6 +1608,7 @@ key-git-branches = Ramas
 undo-title = Deshacer
 btn-undo = Deshacer
 menu-undo = Deshacer la última operación
+menu-strip-meta = Quitar los metadatos de las imágenes…
 undo-nothing = nada que deshacer: ninguna copia, movimiento, borrado a la papelera ni carpeta nueva desde que empezó el programa
 undo-copy =
     { $count ->
@@ -1625,6 +1626,23 @@ undo-trash =
        *[other] Recuperar los { $count } archivos de la papelera:
     }
 undo-mkdir = Quitar la carpeta nueva, si sigue vacía:
+strip-title = { $count ->
+        [one] Metadatos de una imagen
+       *[other] Metadatos de { $count } imágenes
+    }
+strip-all = Todo — texto, EXIF, XMP, IPTC, comentarios, C2PA
+strip-ai = Solo lo que escribió un modelo de imágenes — prompt, workflow, ajustes
+strip-camera = Todo menos el EXIF de la cámara y el copyright — sin GPS
+strip-hint = Intro: quitarlos; la imagen no se recodifica, Ctrl+Alt+Z la deja como estaba · Esc
+strip-nothing = ningún PNG, WebP o JPEG de este disco seleccionado o bajo el cursor
+strip-done = { $count ->
+        [one] una imagen
+       *[other] { $count } imágenes
+    } sin metadatos ({ $blocks } bloques quitados), { $clean } no tenían · Ctrl+Alt+Z las deja como estaban
+undo-restore = { $count ->
+        [one] Devolver la imagen con sus metadatos:
+       *[other] Devolver las { $count } imágenes con sus metadatos:
+    }
 undo-done =
     { $count ->
         [one] un nombre de vuelta en su sitio

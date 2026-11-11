@@ -1116,6 +1116,7 @@ fn draw_pick(
         crate::menu::PickKind::AiServices => "ai-services-hint",
         crate::menu::PickKind::AiContext => "ai-context-hint",
         crate::menu::PickKind::AiThreads => "ai-threads-hint",
+        crate::menu::PickKind::StripMeta => "strip-hint",
         crate::menu::PickKind::PluginsConfig => "plugins-config-hint",
         crate::menu::PickKind::ReplaceTemplates => "replace-tpl-hint",
         crate::menu::PickKind::Jobs => "jobs-hint",

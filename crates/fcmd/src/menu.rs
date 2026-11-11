@@ -116,6 +116,9 @@ pub enum PickKind {
     AiContext,
     /// The conversations kept so far (`F7` on an AI conversation): `Enter` goes on with one.
     AiThreads,
+    /// How to take a picture's metadata out (`file.strip_metadata`): all of it, only an image
+    /// model's, or all but the camera's.
+    StripMeta,
     /// Options → Plugins configuration: every plugin found, on, off or broken.
     PluginsConfig,
     /// The editor's replacements (`Alt+Shift+F7`): the named ones, then the recent pairs.
@@ -415,6 +418,7 @@ pub fn menus() -> Vec<Menu> {
                     Action::Run(Command::FileMultiRenameUndo),
                 ),
                 item("menu-undo", "Ctrl+Alt+Z", Action::Run(Command::FileUndo)),
+                item("menu-strip-meta", "", Action::Run(Command::FileStripMeta)),
                 item("menu-mkdir", "F7", Action::Run(Command::FileMkdir)),
                 item("menu-delete", "F8", Action::Run(Command::FileDelete)),
                 item(

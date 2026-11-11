@@ -1608,6 +1608,7 @@ key-git-branches = Zweige
 undo-title = Rückgängig
 btn-undo = Rückgängig
 menu-undo = Letzten Vorgang rückgängig
+menu-strip-meta = Bild-Metadaten entfernen…
 undo-nothing = nichts rückgängig zu machen: kein Kopieren, Verschieben, Löschen in den Papierkorb oder neuer Ordner seit dem Start
 undo-copy =
     { $count ->
@@ -1625,6 +1626,23 @@ undo-trash =
        *[other] Die { $count } Dateien aus dem Papierkorb zurückholen:
     }
 undo-mkdir = Den neuen Ordner entfernen, wenn er noch leer ist:
+strip-title = { $count ->
+        [one] Metadaten eines Bildes
+       *[other] Metadaten von { $count } Bildern
+    }
+strip-all = Alles — Text, EXIF, XMP, IPTC, Kommentare, C2PA
+strip-ai = Nur was ein Bildmodell geschrieben hat — Prompt, Workflow, Einstellungen
+strip-camera = Alles außer dem EXIF der Kamera und dem Copyright — kein GPS
+strip-hint = Enter: entfernen; das Bild wird nicht neu kodiert, Strg+Alt+Z stellt es wieder her · Esc
+strip-nothing = kein PNG, WebP oder JPEG auf diesem Datenträger ausgewählt oder unter dem Cursor
+strip-done = { $count ->
+        [one] ein Bild
+       *[other] { $count } Bilder
+    } ohne Metadaten ({ $blocks } Blöcke entfernt), { $clean } hatten keine · Strg+Alt+Z stellt sie wieder her
+undo-restore = { $count ->
+        [one] Das Bild mit seinen Metadaten zurückholen:
+       *[other] Die { $count } Bilder mit ihren Metadaten zurückholen:
+    }
 undo-done =
     { $count ->
         [one] ein Name wieder an seinem Platz

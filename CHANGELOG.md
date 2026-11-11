@@ -17,6 +17,12 @@ Notable changes, newest first. The format follows
   Content credentials (C2PA) say who signed and whether the picture is called generated. PNG
   text that is compressed (`zTXt`, compressed `iTXt`) is read now, up to the size a workflow
   takes, and WebP files say their size, animation and EXIF.
+- **Taking a picture's metadata out.** Files → *Strip picture metadata* on PNG, WebP and
+  JPEG files: all of it; only what an image model wrote (the graph, the workflow, the
+  settings, in text chunks and EXIF alike); or everything but the camera's EXIF and the
+  copyright, which takes the GPS position, serial numbers, maker notes and thumbnail with it.
+  Nothing is decoded or encoded again — the pixels are the same bytes, the colour profile and
+  the animation stay — and `Ctrl+Alt+Z` puts each picture back as it was.
 
 - **The AI conversation, easier to steer.** `Esc` stops a question while the model is still
   answering, and nothing of it is written. `F8` lists the files of the context, each with its

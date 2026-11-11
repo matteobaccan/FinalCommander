@@ -1618,6 +1618,7 @@ key-git-branches = Branch
 undo-title = Undo
 btn-undo = Undo
 menu-undo = Undo last operation
+menu-strip-meta = Strip picture metadata…
 undo-nothing = nothing to undo: no copy, move, delete to the wastebasket or new folder since the program started
 undo-copy =
     { $count ->
@@ -1635,6 +1636,23 @@ undo-trash =
        *[other] Put the { $count } files back from the wastebasket:
     }
 undo-mkdir = Remove the new folder, if it is still empty:
+strip-title = { $count ->
+        [one] Metadata of one picture
+       *[other] Metadata of { $count } pictures
+    }
+strip-all = All of it — text, EXIF, XMP, IPTC, comments, C2PA
+strip-ai = Only what an image model wrote — prompt, workflow, settings
+strip-camera = All but the camera’s EXIF and the copyright — no GPS
+strip-hint = Enter: take it out; the picture is not re-encoded, Ctrl+Alt+Z puts it back · Esc
+strip-nothing = no PNG, WebP or JPEG on this disk selected or under the cursor
+strip-done = { $count ->
+        [one] one picture
+       *[other] { $count } pictures
+    } without their metadata ({ $blocks } blocks out), { $clean } had none to take out · Ctrl+Alt+Z puts them back
+undo-restore = { $count ->
+        [one] Put the picture back with its metadata:
+       *[other] Put the { $count } pictures back with their metadata:
+    }
 undo-done =
     { $count ->
         [one] one name back where it was

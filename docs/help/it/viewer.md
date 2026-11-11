@@ -256,7 +256,11 @@ Lo stesso tasto risponde anche per i file che non sono programmi:
   `UNETLoader` e `DualCLIPLoader` — così il riassunto è quello che è girato davvero. `Enter`
   sulla riga *prompt (graph)* o *workflow* lo apre tutto, il JSON impaginato, e `F4` torna
   indietro. Un'immagine con le **content credentials** (C2PA) dice chi ha firmato la
-  dichiarazione e se la dichiara generata;
+  dichiarazione e se la dichiara generata. Per togliere tutto questo, **File → Togli i
+  metadati dalle immagini** (`file.strip_metadata`) sulle immagini del pannello: tutti, solo
+  quelli scritti dal modello, o tutti tranne l'EXIF della fotocamera e il copyright (la
+  posizione GPS se ne va). L'immagine non viene ricodificata — i pixel restano gli stessi byte
+  — e `Ctrl+Alt+Z` rimette i metadati;
 - **un documento d'ufficio** — `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`: titolo,
   autore e chi l'ha salvato per ultimo, quando è stato creato e modificato, quante revisioni,
   pagine, parole o diapositive, l'azienda e il programma che l'ha scritto;

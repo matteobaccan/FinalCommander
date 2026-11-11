@@ -1866,6 +1866,19 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         }
                     });
                 }
+                Request::StripMeta { files, how, backup } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let (done, removed, untouched, errors) =
+                            undo::strip_files(&files, how, &backup);
+                        let _ = tx.send(Event::StripDone {
+                            done,
+                            removed,
+                            untouched,
+                            errors,
+                        });
+                    });
+                }
                 Request::Undo { undo } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || {
@@ -6654,6 +6667,7 @@ dir_attr = "D"
                 | Request::SysLog
                 | Request::AiAsk { .. }
                 | Request::Undo { .. }
+                | Request::StripMeta { .. }
                 | Request::OpenUrl { .. }
                 | Request::Shell { .. }
                 | Request::Decompile { .. }

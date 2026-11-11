@@ -1609,6 +1609,7 @@ key-git-branches = Branch
 undo-title = Annulla
 btn-undo = Annulla
 menu-undo = Annulla l'ultima operazione
+menu-strip-meta = Togli i metadati dalle immagini…
 undo-nothing = niente da annullare: nessuna copia, spostamento, cancellazione nel cestino o nuova cartella da quando il programma è partito
 undo-copy =
     { $count ->
@@ -1626,6 +1627,23 @@ undo-trash =
        *[other] Recupera i { $count } file dal cestino:
     }
 undo-mkdir = Togli la nuova cartella, se è ancora vuota:
+strip-title = { $count ->
+        [one] Metadati di un'immagine
+       *[other] Metadati di { $count } immagini
+    }
+strip-all = Tutti — testo, EXIF, XMP, IPTC, commenti, C2PA
+strip-ai = Solo quelli scritti da un modello — prompt, workflow, impostazioni
+strip-camera = Tutti tranne l’EXIF della fotocamera e il copyright — niente GPS
+strip-hint = Enter: li toglie; l'immagine non viene ricodificata, Ctrl+Alt+Z la rimette com'era · Esc
+strip-nothing = nessun PNG, WebP o JPEG su questo disco selezionato o sotto il cursore
+strip-done = { $count ->
+        [one] un'immagine
+       *[other] { $count } immagini
+    } senza metadati ({ $blocks } blocchi tolti), { $clean } non ne avevano · Ctrl+Alt+Z le rimette com'erano
+undo-restore = { $count ->
+        [one] Rimetti l'immagine con i suoi metadati:
+       *[other] Rimetti le { $count } immagini con i loro metadati:
+    }
 undo-done =
     { $count ->
         [one] un nome di nuovo dov'era

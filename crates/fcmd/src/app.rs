@@ -83,6 +83,12 @@ pub enum Request {
     Undo {
         undo: crate::undo::Undo,
     },
+    /// Take the metadata out of these pictures, each first copied into `backup` for the undo.
+    StripMeta {
+        files: Vec<PathBuf>,
+        how: fcmd_view::strip::Strip,
+        backup: PathBuf,
+    },
     /// Run a `sql:` query on a database, its rows written as CSV for the viewer.
     SqlQuery {
         db: std::path::PathBuf,
@@ -894,6 +900,15 @@ pub enum Event {
     /// An undo that was not a job: how many names came back, or why none did.
     UndoDone {
         result: Result<usize, String>,
+    },
+    /// What taking the metadata out did: each picture changed with the copy it can be put
+    /// back from, how many blocks went, the pictures that had nothing to take out, and the
+    /// ones that could not be done.
+    StripDone {
+        done: Vec<(PathBuf, PathBuf)>,
+        removed: usize,
+        untouched: usize,
+        errors: Vec<String>,
     },
     /// A language model's answer, written into a Markdown file, or why there is none.
     AiDone {
@@ -2699,6 +2714,8 @@ pub struct App {
     pub last_rename: fcmd_core::rename::Options,
     /// The last multi-rename done, for `file.multirename.undo`: the folder and its plan.
     pub rename_undo: Option<(VPath, Vec<(String, String)>)>,
+    /// The pictures `file.strip_metadata` was asked about, while its dialog is open.
+    pub strip_files: Vec<PathBuf>,
     /// The day the daily release check last asked, and the release it last offered: see
     /// `fcmd_config::State::update_checked` and `update_offered`.
     pub update_checked: u64,
@@ -2990,6 +3007,7 @@ impl App {
             rename_existing: Default::default(),
             last_rename: Default::default(),
             rename_undo: None,
+            strip_files: Vec::new(),
             update_checked: 0,
             update_offered: String::new(),
             no_save: false,
@@ -3233,6 +3251,35 @@ impl App {
             Event::DupesFound { panel, found } => self.dupes_found(panel, found),
             Event::GitDone { panel, result } => self.git_done(panel, result),
             Event::TextReady { result } => self.git_done(self.active, result.map(GitOut::Text)),
+            Event::StripDone {
+                done,
+                removed,
+                untouched,
+                errors,
+            } => {
+                if !done.is_empty() {
+                    self.undo_stack.push(crate::undo::Undo::Restore {
+                        pairs: done.clone(),
+                    });
+                    if self.undo_stack.len() > crate::undo::KEEP {
+                        self.undo_stack.remove(0);
+                    }
+                }
+                let m = self.i18n.t_args(
+                    "strip-done",
+                    &[
+                        ("count", (done.len() as i64).into()),
+                        ("blocks", (removed as i64).into()),
+                        ("clean", (untouched as i64).into()),
+                    ],
+                );
+                match errors.first() {
+                    Some(e) => self.set_error(format!("{m} — {e}")),
+                    None => self.set_status(m),
+                }
+                self.read_panel(0);
+                self.read_panel(1);
+            }
             Event::UndoDone { result } => {
                 match result {
                     Ok(n) => {
@@ -9973,6 +10020,7 @@ impl App {
             Command::FileMultiRename => self.open_rename_form(),
             Command::FileMultiRenameUndo => self.undo_rename(),
             Command::FileUndo => self.ask_undo(),
+            Command::FileStripMeta => self.open_strip_meta(),
             Command::FileUnpack => self.open_unpack_form(),
             Command::NetTunnel => self.ask_tunnel(),
             Command::NetTunnels => {
@@ -15259,6 +15307,7 @@ impl App {
             crate::undo::Undo::Move { .. } => "undo-move",
             crate::undo::Undo::Trash { .. } => "undo-trash",
             crate::undo::Undo::Mkdir { .. } => "undo-mkdir",
+            crate::undo::Undo::Restore { .. } => "undo-restore",
         };
         let mut lines = vec![self
             .i18n
@@ -15277,6 +15326,72 @@ impl App {
             action: ConfirmAction::Undo,
             button: 0,
         });
+    }
+
+    /// `file.strip_metadata`: the pictures selected (or under the cursor) on this disk, and a
+    /// choice of what to take out of them.
+    fn open_strip_meta(&mut self) {
+        let files: Vec<PathBuf> = self
+            .job_sources()
+            .into_iter()
+            .filter(|p| p.is_local() && !p.in_container() && p.as_path().is_file())
+            .map(|p| p.as_path().to_path_buf())
+            .filter(|p| {
+                let ext = p
+                    .extension()
+                    .map(|e| e.to_string_lossy().to_ascii_lowercase())
+                    .unwrap_or_default();
+                matches!(
+                    ext.as_str(),
+                    "png" | "webp" | "jpg" | "jpeg" | "jpe" | "jfif"
+                )
+            })
+            .collect();
+        if files.is_empty() {
+            let m = self.i18n.t("strip-nothing");
+            self.set_error(m);
+            return;
+        }
+        let rows = vec![
+            PickRow::plain(self.i18n.t("strip-all"), "all", false),
+            PickRow::plain(self.i18n.t("strip-ai"), "ai", false),
+            PickRow::plain(self.i18n.t("strip-camera"), "camera", false),
+        ];
+        let title = self
+            .i18n
+            .t_args("strip-title", &[("count", (files.len() as i64).into())]);
+        self.strip_files = files;
+        self.mode = Mode::Pick(Box::new(Pick::new(
+            PickKind::StripMeta,
+            title,
+            rows,
+            self.active,
+        )));
+    }
+
+    /// The choice made: the work goes to a worker, each picture copied aside first so that
+    /// `Ctrl+Alt+Z` can put it back.
+    fn strip_meta(&mut self, value: &str) {
+        let how = match value {
+            "ai" => fcmd_view::strip::Strip::Ai,
+            "camera" => fcmd_view::strip::Strip::KeepCamera,
+            _ => fcmd_view::strip::Strip::All,
+        };
+        let files = std::mem::take(&mut self.strip_files);
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let backup = self
+            .paths
+            .config_file
+            .parent()
+            .map(|p| p.join("fcmd-undo"))
+            .unwrap_or_else(|| PathBuf::from("fcmd-undo"))
+            .join(format!("strip-{stamp}"));
+        self.requests
+            .push(Request::StripMeta { files, how, backup });
+        self.panel_mut().selection.clear();
     }
 
     /// Undo it: the opposite jobs through the queue, or the wastebasket and the empty folder
@@ -20022,7 +20137,7 @@ impl App {
             PickKind::CharMap => return,
             PickKind::ReplaceTemplates => return,
             PickKind::AiServices => return,
-            PickKind::AiContext | PickKind::AiThreads => return,
+            PickKind::AiContext | PickKind::AiThreads | PickKind::StripMeta => return,
             PickKind::PluginsConfig => return,
             // And `open_settings`, which knows which row the list was left on.
             PickKind::Settings => return,
@@ -21076,6 +21191,10 @@ impl App {
             PickKind::AiContext => {
                 let value = row.value.clone();
                 self.ai_context_drop(&value);
+            }
+            PickKind::StripMeta => {
+                let value = row.value.clone();
+                self.strip_meta(&value);
             }
             PickKind::AiThreads => {
                 let value = row.value.clone();
@@ -37339,6 +37458,51 @@ abcdefghij
             result: Err("nope".into()),
         });
         assert!(app.ai_busy.is_none());
+    }
+
+    /// `file.strip_metadata` on a picture: three ways to choose from, and the one chosen
+    /// goes to the worker with the picture and a place for the copy the undo needs.
+    #[test]
+    fn strip_metadata_asks_how_and_sends_the_pictures() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.png"), b"x").unwrap();
+        std::fs::write(dir.path().join("notes.txt"), b"x").unwrap();
+        let mut app = app_on_disk(dir.path());
+        let row = |app: &App, name: &str| {
+            (0..app.panels[0].listing.len())
+                .find(|&r| app.panels[0].listing.row(r).unwrap().name_str() == name)
+                .unwrap()
+        };
+        app.panels[0].cursor = row(&app, "notes.txt");
+        app.run(Command::FileStripMeta);
+        assert!(app.mode.is_normal(), "a text file has no picture metadata");
+        app.panels[0].cursor = row(&app, "a.png");
+        app.run(Command::FileStripMeta);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::StripMeta);
+        assert_eq!(pick.rows.len(), 3);
+        press(&mut app, "Down");
+        press(&mut app, "Enter");
+        let sent = app.take_requests().into_iter().find_map(|r| match r {
+            Request::StripMeta { files, how, backup } => Some((files, how, backup)),
+            _ => None,
+        });
+        let (files, how, backup) = sent.expect("the pictures went to the worker");
+        assert_eq!(files, vec![dir.path().join("a.png")]);
+        assert_eq!(how, fcmd_view::strip::Strip::Ai);
+        assert!(backup.to_string_lossy().contains("fcmd-undo"));
+        app.handle_event(Event::StripDone {
+            done: vec![(dir.path().join("a.png"), backup.join("0-a.png"))],
+            removed: 2,
+            untouched: 0,
+            errors: Vec::new(),
+        });
+        assert!(matches!(
+            app.undo_stack.last(),
+            Some(crate::undo::Undo::Restore { .. })
+        ));
     }
 
     /// `Esc` while a question is out stops it: the token it went with is cancelled, the wait

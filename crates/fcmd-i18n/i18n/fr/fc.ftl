@@ -1608,6 +1608,7 @@ key-git-branches = Branches
 undo-title = Annuler
 btn-undo = Annuler
 menu-undo = Annuler la dernière opération
+menu-strip-meta = Retirer les métadonnées des images…
 undo-nothing = rien à annuler : aucune copie, déplacement, suppression vers la corbeille ni nouveau dossier depuis le lancement
 undo-copy =
     { $count ->
@@ -1625,6 +1626,23 @@ undo-trash =
        *[other] Récupérer les { $count } fichiers dans la corbeille :
     }
 undo-mkdir = Retirer le nouveau dossier, s'il est encore vide :
+strip-title = { $count ->
+        [one] Métadonnées d’une image
+       *[other] Métadonnées de { $count } images
+    }
+strip-all = Tout — texte, EXIF, XMP, IPTC, commentaires, C2PA
+strip-ai = Seulement ce qu’un modèle d’images a écrit — prompt, workflow, réglages
+strip-camera = Tout sauf l’EXIF de l’appareil et le copyright — pas de GPS
+strip-hint = Entrée : les retirer ; l’image n’est pas réencodée, Ctrl+Alt+Z la remet comme avant · Échap
+strip-nothing = aucun PNG, WebP ou JPEG sur ce disque sélectionné ou sous le curseur
+strip-done = { $count ->
+        [one] une image
+       *[other] { $count } images
+    } sans métadonnées ({ $blocks } blocs retirés), { $clean } n’en avaient pas · Ctrl+Alt+Z les remet
+undo-restore = { $count ->
+        [one] Remettre l’image avec ses métadonnées :
+       *[other] Remettre les { $count } images avec leurs métadonnées :
+    }
 undo-done =
     { $count ->
         [one] un nom de retour à sa place

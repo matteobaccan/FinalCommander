@@ -227,6 +227,9 @@ impl Command {
             Command::FileUndo => {
                 "undo the last copy, move, delete to the wastebasket or new folder"
             }
+            Command::FileStripMeta => {
+                "take the metadata out of the selected pictures, the picture untouched"
+            }
             Command::FilePack => "put what is selected into a new archive",
             Command::FileUnpack => "take an archive apart",
             Command::ArcCommands => "what can be done with this archive",

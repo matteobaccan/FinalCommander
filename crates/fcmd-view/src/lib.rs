@@ -23,6 +23,7 @@ pub mod pdf;
 pub mod picture;
 pub mod search;
 pub mod source;
+pub mod strip;
 pub mod structure;
 pub mod table;
 mod tags;

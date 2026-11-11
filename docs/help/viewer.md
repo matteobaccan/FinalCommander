@@ -243,7 +243,11 @@ The same key answers for the files that are not programs:
   `UNETLoader` and `DualCLIPLoader` — so the summary is what actually ran. `Enter` on the
   *prompt (graph)* or *workflow* row opens the whole of it, the JSON laid out, and `F4` goes
   back. A picture with **content credentials** (C2PA) says who signed the claim and whether it
-  calls the picture generated;
+  calls the picture generated. To take any of this out, **Files → Strip picture metadata**
+  (`file.strip_metadata`) on the pictures in the panel: all of it, only what the image model
+  wrote, or all but the camera's EXIF and the copyright (the GPS position goes). The picture
+  is not encoded again — its pixels are the same bytes — and `Ctrl+Alt+Z` puts the metadata
+  back;
 - **an office document** — `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`: the title, the
   author and who saved it last, when it was made and changed, how many revisions, pages, words
   or slides, the company and the program that wrote it;

@@ -35,6 +35,8 @@ pub enum Undo {
     Trash { paths: Vec<PathBuf> },
     /// A folder `F7` made.
     Mkdir { dir: PathBuf },
+    /// Pictures whose metadata was taken out: `(the picture, the copy of it as it was)`.
+    Restore { pairs: Vec<(PathBuf, PathBuf)> },
 }
 
 /// How many operations are remembered. An undo is for what one just did, not for last week.
@@ -111,6 +113,7 @@ impl Undo {
             Undo::Move { pairs } => pairs.len(),
             Undo::Trash { paths } => paths.len(),
             Undo::Mkdir { .. } => 1,
+            Undo::Restore { pairs } => pairs.len(),
         }
     }
 
@@ -124,6 +127,7 @@ impl Undo {
                 .collect(),
             Undo::Trash { paths } => paths.iter().map(|p| p.display().to_string()).collect(),
             Undo::Mkdir { dir } => vec![dir.display().to_string()],
+            Undo::Restore { pairs } => pairs.iter().map(|(p, _)| p.display().to_string()).collect(),
         }
     }
 
@@ -163,7 +167,7 @@ impl Undo {
                 }
                 out
             }
-            Undo::Trash { .. } | Undo::Mkdir { .. } => Vec::new(),
+            Undo::Trash { .. } | Undo::Mkdir { .. } | Undo::Restore { .. } => Vec::new(),
         }
     }
 }
@@ -174,8 +178,75 @@ pub fn run(undo: &Undo) -> Result<usize, String> {
     match undo {
         Undo::Trash { paths } => fcmd_jobs::fs::restore_from_trash(paths),
         Undo::Mkdir { dir } => remove_if_empty(dir).map(|()| 1),
+        Undo::Restore { pairs } => restore(pairs),
         Undo::Copy { .. } | Undo::Move { .. } => Ok(0),
     }
+}
+
+/// Each picture put back as it was from the copy made before its metadata went, and the copy
+/// thrown away once it is back.
+fn restore(pairs: &[(PathBuf, PathBuf)]) -> Result<usize, String> {
+    let mut done = 0;
+    for (file, copy) in pairs {
+        std::fs::copy(copy, file).map_err(|e| format!("{}: {e}", file.display()))?;
+        let _ = std::fs::remove_file(copy);
+        if let Some(dir) = copy.parent() {
+            let _ = std::fs::remove_dir(dir);
+        }
+        done += 1;
+    }
+    Ok(done)
+}
+
+/// Take the metadata out of each picture, copying it aside first. A picture with nothing to
+/// take out is left alone, its file not even rewritten.
+pub fn strip_files(
+    files: &[PathBuf],
+    how: fcmd_view::strip::Strip,
+    backup: &Path,
+) -> (Vec<(PathBuf, PathBuf)>, usize, usize, Vec<String>) {
+    let mut done = Vec::new();
+    let (mut removed, mut untouched) = (0, 0);
+    let mut errors = Vec::new();
+    for (n, file) in files.iter().enumerate() {
+        let one = || -> Result<Option<(PathBuf, usize)>, String> {
+            let say = |e: std::io::Error| format!("{}: {e}", file.display());
+            let bytes = std::fs::read(file).map_err(say)?;
+            let out = fcmd_view::strip::strip(&bytes, how)
+                .map_err(|e| format!("{}: {e}", file.display()))?;
+            if out.removed.is_empty() {
+                return Ok(None);
+            }
+            std::fs::create_dir_all(backup).map_err(say)?;
+            let name = file
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let copy = backup.join(format!("{n}-{name}"));
+            std::fs::copy(file, &copy).map_err(say)?;
+            // Written beside it and renamed over it, so a failure halfway leaves the picture
+            // as it was rather than half of it.
+            let tmp = file.with_extension("fcmd-strip");
+            std::fs::write(&tmp, &out.bytes).map_err(say)?;
+            if let Ok(meta) = std::fs::metadata(file) {
+                let _ = std::fs::set_permissions(&tmp, meta.permissions());
+            }
+            std::fs::rename(&tmp, file).map_err(|e| {
+                let _ = std::fs::remove_file(&tmp);
+                say(e)
+            })?;
+            Ok(Some((copy, out.removed.len())))
+        };
+        match one() {
+            Ok(Some((copy, gone))) => {
+                done.push((file.clone(), copy));
+                removed += gone;
+            }
+            Ok(None) => untouched += 1,
+            Err(e) => errors.push(e),
+        }
+    }
+    (done, removed, untouched, errors)
 }
 
 fn remove_if_empty(dir: &Path) -> Result<(), String> {
@@ -253,6 +324,46 @@ mod tests {
         assert_eq!(undo.count(), 1);
         let jobs = undo.jobs();
         assert_eq!(jobs[0].target, Some(VPath::local(src.join("a"))));
+    }
+
+    /// A picture's metadata out, its copy aside, and the undo putting it back byte for byte;
+    /// a picture with nothing to take out is not even rewritten.
+    #[test]
+    fn stripping_a_picture_can_be_undone() {
+        fn chunk(kind: &[u8], body: &[u8]) -> Vec<u8> {
+            let mut c = (body.len() as u32).to_be_bytes().to_vec();
+            c.extend(kind);
+            c.extend(body);
+            c.extend([0, 0, 0, 0]);
+            c
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+        png.extend(chunk(b"IHDR", &[0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0]));
+        png.extend(chunk(b"tEXt", b"parameters\0a cat\nSteps: 20, Seed: 1"));
+        png.extend(chunk(b"IDAT", b"pixels"));
+        png.extend(chunk(b"IEND", b""));
+        let made = dir.path().join("made.png");
+        std::fs::write(&made, &png).unwrap();
+        let mut clean = b"\x89PNG\r\n\x1a\n".to_vec();
+        clean.extend(chunk(b"IEND", b""));
+        let plain = dir.path().join("plain.png");
+        std::fs::write(&plain, &clean).unwrap();
+        let backup = dir.path().join("backup");
+        let (done, removed, untouched, errors) = strip_files(
+            &[made.clone(), plain.clone()],
+            fcmd_view::strip::Strip::Ai,
+            &backup,
+        );
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!((done.len(), removed, untouched), (1, 1, 1));
+        let after = std::fs::read(&made).unwrap();
+        assert!(after.len() < png.len());
+        assert!(!after.windows(6).any(|w| w == b"Steps:"));
+        let undo = Undo::Restore { pairs: done };
+        assert_eq!(run(&undo), Ok(1));
+        assert_eq!(std::fs::read(&made).unwrap(), png);
+        assert!(!backup.exists(), "the copies go once they are back");
     }
 
     #[test]

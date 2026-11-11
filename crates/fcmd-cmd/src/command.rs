@@ -348,6 +348,9 @@ pub enum Command {
     FileMultiRenameUndo,
     /// Undo the last copy, move, delete to the wastebasket or new folder.
     FileUndo,
+    /// Take the metadata out of the selected pictures: everything, only what an image model
+    /// wrote, or all but the camera's EXIF and the copyright.
+    FileStripMeta,
     /// Put the selected files into a new archive (`Shift+F1`).
     FilePack,
     /// Take an archive apart, into a directory (`Shift+F2`).
@@ -733,6 +736,7 @@ impl Command {
             Command::FileMultiRename,
             Command::FileMultiRenameUndo,
             Command::FileUndo,
+            Command::FileStripMeta,
             Command::FilePack,
             Command::FileUnpack,
             Command::ArcCommands,
@@ -1037,6 +1041,7 @@ impl Command {
             Command::FileMultiRename => "file.multirename".into(),
             Command::FileMultiRenameUndo => "file.multirename.undo".into(),
             Command::FileUndo => "file.undo".into(),
+            Command::FileStripMeta => "file.strip_metadata".into(),
             Command::FilePack => "file.pack".into(),
             Command::FileUnpack => "file.unpack".into(),
             Command::ArcCommands => "arc.commands".into(),
@@ -1331,6 +1336,7 @@ impl Command {
             ("file.multirename", _) => Command::FileMultiRename,
             ("file.multirename.undo", _) => Command::FileMultiRenameUndo,
             ("file.undo", _) => Command::FileUndo,
+            ("file.strip_metadata", _) => Command::FileStripMeta,
             ("file.pack", _) => Command::FilePack,
             ("file.unpack", _) => Command::FileUnpack,
             ("arc.commands", _) => Command::ArcCommands,
