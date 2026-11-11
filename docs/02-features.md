@@ -245,6 +245,7 @@ something readable rather than only into instructions.
 | 7.15 | Asking a language model from the command line (`ai:`): OpenAI, Anthropic or Ollama, the token from an environment variable, files only after a dialog that names the host, answers kept as Markdown files | NEW | ✓ (SPEC 06 §14) |
 | 7.16 | Find files by approximate name: the letters in order anywhere in the name, results ranked best first | broot/NEW | ✓ a box in `Alt+F7` (SPEC 06 §1d) |
 | 7.17 | Find files by metadata: EXIF, ID3, document properties and the rest of what `F11` reads, as `field=value` conditions | TC/Wikipedia | ✓ a row in `Alt+F7` (SPEC 06 §1d) |
+| 7.18 | Indexed search: the system's own index (plocate/locate, Spotlight, Everything) asked for candidates instead of a walk, each checked again on the disk | Opus/NEW | ✓ a box in `Alt+F7`, `find.index` (SPEC 06 §1e) |
 
 ## 8. Shell & terminal integration
 

@@ -151,6 +151,55 @@ photograph, the directory at the end of a `.docx`), never whole. An entry of an 
 has no offsets to go to and is read whole, up to the same 64 MB a text search allows.
 Only plain files are opened: a pipe or a device would be read for ever.
 
+### 1e. An index as the source
+
+Every system keeps a list of its files somewhere, and asking it is milliseconds where a
+walk of the same disk is minutes. A box of the dialog — *Ask the system's index instead of
+walking* — makes the search ask one for its candidates.
+
+**A program, by the rule for programs from elsewhere** (SPEC 02 §14, *External
+programs*): nothing is linked and nobody's database is read. A program on the `PATH` is
+run and what it prints is read — `plocate`, or `locate`, on Linux; Spotlight's `mdfind` on
+macOS; `es`, the command line of voidtools' Everything, on Windows. Each is a row of the
+`:tools` panel like `7z` and `git`, with its card and, where a package is certain, its
+install line. `find.index` in the configuration says which: empty for the system's own,
+`off` for none ever (the box then leaves the dialog), or a command line of one's own whose
+output is one path per line or NUL-separated, with `{root}` for the folder to look under
+and `{name}` for the letters the name must hold — the line is split at spaces before the
+placeholders are filled, so a folder with a space in it stays one argument. The program
+is looked up by the worker, not when the dialog opens: finding one is a walk of the
+`PATH`, and nothing that touches the filesystem runs on the interface's thread.
+
+**Candidates, never results.** An index is as old as its last update and knows a path and
+little else. So it is asked as little as possible — the folder, and a *hint*: the longest
+run of plain letters in the mask, when the mask is one plain pattern (`*.rs` gives `.rs`;
+a list, an exclusion, a `<group>`, a regex or an approximate name give none) — and every
+path it prints is then looked at again on the disk and put through the whole query by the
+same function a walk's entries go through (`fcmd_find::find_among`, sharing `examine`
+with the walk), so the two sources cannot disagree about what matches. That is also where
+the scope is enforced: a path outside the folder, or deeper than "this folder" goes, is
+dropped whatever the index thinks, a path named twice is one result, and a file the index
+still lists but the disk no longer has is left out without being a problem. Hits stream
+as the program answers, and `Esc` stops the program as well as the search.
+
+**Optional by construction.** The search walks instead — and the reason is kept with the
+problems, so a slow answer explains itself — when there is no such program, when it will
+not start, when it ends badly having proposed nothing and said why (`plocate` without a
+database, Everything not running), when the folder is on a server or inside an archive,
+and when *Inside archives* is ticked, since no index has looked in one. `locate` ending
+with 1 and nothing to say is an answer, "nothing found", and is taken as one. When an
+index did answer, the frame of the results says which (`· plocate`).
+
+**What cannot be made up for** is what the index has not seen: a file created since its
+last update is not proposed and so is not found. The box says so, and it is off until it
+is ticked. A kept search remembers the box, and its panel asks the index again at every
+re-read.
+
+Tests need none of these programs: the questions each is asked are built by a function
+that is tested as text, the answer is parsed from bytes, the conditions run over a plain
+list of candidates, and the one test that runs a program runs `cat` (or `cmd /c type`) as
+a configured index.
+
 ## 2. Grep with jump-to-match
 
 `tool.grep` is a content-first search: pattern, file filter, context lines. Results are grouped

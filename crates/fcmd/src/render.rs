@@ -3983,6 +3983,7 @@ mod tests {
             "Approximate name",
             "Metadata",
             "Inside archives",
+            "Ask the system's index",
             "Cancel",
         ] {
             assert!(small.contains(part), "no {part:?} in\n{small}");

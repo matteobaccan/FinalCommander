@@ -1786,3 +1786,5 @@ find-saved-gone = Suche { $name } vergessen
 find-loaded = Suche { $name } geladen
 find-fuzzy = Ungefährer Name: die Buchstaben oben, in dieser Reihenfolge, bester Treffer zuerst
 find-meta = Metadaten (artist=bowie; camera=)
+find-index = Den Index des Systems fragen statt zu durchsuchen (neue Dateien können fehlen)
+tools-for-index = der Index, den Alt+F7 statt einer Durchsuchung fragen kann

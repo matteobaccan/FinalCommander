@@ -138,7 +138,6 @@ cannot be, kept so the question is not asked again.
 | Item | Seen in | What it is | Note |
 | --- | --- | --- | --- |
 | Tags, labels, ratings | Opus, File Ninja, Tabbles | Free tags, coloured labels, star ratings and status icons on files, as columns, filters and sort keys | **Parked by the author (11 November 2026): not now.** The study, for when it comes back: extended attributes in Dolphin's (`user.xdg.tags`, `user.baloo.rating`) and the Finder's formats on Linux and macOS, a `descript.ion`-like sidecar on Windows and wherever xattrs are missing, optionally XMP `Rating` inside pictures; no database of our own, which breaks the moment a file moves outside the program. About a release of work. |
-| Indexed search | Opus, File Ninja | Asking an index — Everything and Windows Search, Spotlight (`mdfind`), `plocate` — instead of walking | A source for `Alt+F7`, run as a program |
 | Boolean search | Wikipedia | Nested and/or/not over conditions | The conditions of `Alt+F7` are all *and*-ed today |
 | Metadata panel | superfile, Opus | A side panel showing a file's metadata (EXIF and the like, `exiftool` where present) as the cursor moves | `F11` shows it in the viewer today |
 | Editing metadata | Opus | Writing EXIF/ID3/document fields | Read-only today |

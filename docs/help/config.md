@@ -162,6 +162,7 @@ Why each one is a program and not part of fcmd:
 | `xdg-open` / `open` | opening a link in the browser | which browser is the desktop's choice, not fcmd's |
 | `journalctl` / `log` / `wevtutil` | *Commands → System log* | each system has one tool that knows its log |
 | `systemctl` / `launchctl` | the services panel | the service manager is the only thing that can start and stop a service |
+| `plocate` or `locate` / `mdfind` / `es` | the index `Alt+F7` may ask instead of walking (*Finding things*) | the list of a disk's files is the system's to keep up to date; a second one of our own would be a second service to run. Never needed: without one the search walks |
 
 A program counts as installed when it is on the `PATH`, by the same rule a shell uses, and
 nowhere else. 7-Zip's Windows installer, for one, puts `7z.exe` in *Program Files* without

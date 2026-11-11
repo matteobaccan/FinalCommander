@@ -915,6 +915,17 @@ impl ArcCfg {
     }
 }
 
+/// `[find]`: the find dialog's own settings (SPEC 06 §1e).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct FindCfg {
+    /// Which index `Alt+F7` may ask instead of walking. Empty is the system's own, where
+    /// one is on the `PATH` (`plocate` or `locate`, `mdfind`, Everything's `es`); `off` is
+    /// none, ever; anything else is a command line whose output is one path per line, with
+    /// `{root}` for the folder to look under and `{name}` for the letters the name holds.
+    pub index: String,
+}
+
 /// `[editor]`: how the editor behaves. The viewer's own settings are still to come.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -1894,6 +1905,7 @@ pub struct Config {
     pub drives: DrivesCfg,
     pub arc: ArcCfg,
     pub term: TermCfg,
+    pub find: FindCfg,
     pub editor: EditCfg,
     pub viewer: ViewCfg,
     /// `[[site]]` blocks: the netbox's site list.
@@ -2170,6 +2182,7 @@ impl Config {
             // has built yet and still refuses a typing mistake.
             "viewer.cell_width" => self.viewer.cell_width = parse_usize(value)?.min(64) as u16,
             "viewer.cell_height" => self.viewer.cell_height = parse_usize(value)?.min(64) as u16,
+            "find.index" => self.find.index = value.trim().to_string(),
             "term.shell" => self.term.shell = value.to_string(),
             "term.scrollback" => self.term.scrollback = parse_usize(value)?,
             "term.subshell" => self.term.subshell = parse_bool(value)?,
@@ -3299,6 +3312,9 @@ pub struct SavedSearch {
     pub directories: bool,
     #[serde(default)]
     pub in_archives: bool,
+    /// Ask the index rather than walk, where there is one (SPEC 06 §1e).
+    #[serde(default)]
+    pub index: bool,
     /// Where the scope pointed when the search was kept.
     #[serde(default)]
     pub roots: Vec<String>,

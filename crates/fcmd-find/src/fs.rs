@@ -39,6 +39,14 @@ pub trait FindFs: Send + Sync {
         None
     }
 
+    /// One path as a listing would have given it, for a search whose candidates come from
+    /// an index rather than from listings (SPEC 06 §1e). `None` for a path that is not
+    /// there — and, by default, for every path of a provider that cannot be asked.
+    fn stat(&self, path: &VPath) -> Option<Entry> {
+        let _ = path;
+        None
+    }
+
     /// Identity of a directory, with links followed. `None` means "this provider has no
     /// answer", and the walk falls back to the path it arrived by.
     fn visit_id(&self, dir: &VPath) -> Option<VisitId> {
@@ -88,6 +96,13 @@ impl FindFs for LocalVfs {
             fcmd_view::FileSource::open(path.as_path())
                 .map(|source| Box::new(source) as Box<dyn fcmd_view::Source>),
         )
+    }
+
+    fn stat(&self, path: &VPath) -> Option<Entry> {
+        if !path.is_local() {
+            return None;
+        }
+        local::stat_blocking(path).ok()
     }
 
     fn visit_id(&self, dir: &VPath) -> Option<VisitId> {

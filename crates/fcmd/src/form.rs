@@ -997,9 +997,9 @@ impl Form {
 
     /// Find file (SPEC 06 §1), filled in with what was searched for last — a search is very
     /// often the same one again with one thing changed.
-    pub fn find(last: &crate::app::FindSpec, i18n: &I18n) -> Form {
+    pub fn find(last: &crate::app::FindSpec, index: bool, i18n: &I18n) -> Form {
         let t = |id: &str| i18n.t(id);
-        let fields = vec![
+        let mut fields = vec![
             Field::text("find.mask", t("find-mask"), last.mask.clone()),
             // Right under the row it changes the meaning of.
             Field::toggle("find.fuzzy", t("find-fuzzy"), last.fuzzy),
@@ -1028,10 +1028,15 @@ impl Form {
             // Off unless asked for: opening every container of a whole drive is a search of a
             // different size, and one nobody should start by accident.
             Field::toggle("find.archives", t("find-archives"), last.in_archives),
-            Field::Separator,
-            // The two keys nothing else on the dialog would tell one about (SPEC 06 §1c).
-            Field::Dim(t("find-keys")),
         ];
+        // Asking the index is a row only where the configuration has not ruled it out; a
+        // dialog without the row answers "no" for it, which is the same thing.
+        if index {
+            fields.push(Field::toggle("find.index", t("find-index"), last.index));
+        }
+        fields.push(Field::Separator);
+        // The two keys nothing else on the dialog would tell one about (SPEC 06 §1c).
+        fields.push(Field::Dim(t("find-keys")));
         Form {
             pages: Vec::new(),
             page: 0,

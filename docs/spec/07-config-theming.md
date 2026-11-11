@@ -364,6 +364,19 @@ depth = 0                 # how deep when it does; 1 = the two directories, 0 = 
 prompt = "$p$r$g "
 ```
 
+## 2c-quinquies. `[find]`
+
+```toml
+[find]
+# Which index Alt+F7 may ask instead of walking, when its box is ticked (SPEC 06 §1e).
+# ""    the system's own, where one is on the PATH: plocate or locate, mdfind, es
+# "off" none, ever — the box leaves the dialog
+# or a command line that prints one path per line, {root} being the folder to look under
+# and {name} the letters the name must hold (which may be none):
+#   index = "fd --absolute-path --base-directory {root} {name}"
+index = ""
+```
+
 ## 2c-bis. `[drives]`
 
 Which columns the change-drive dialog shows and which drives it lists (SPEC 10 §4.3). FAR keeps

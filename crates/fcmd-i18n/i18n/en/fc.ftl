@@ -1796,3 +1796,5 @@ find-saved-gone = search { $name } forgotten
 find-loaded = search { $name } loaded
 find-fuzzy = Approximate name: the letters above, in order, best match first
 find-meta = Metadata (artist=bowie; camera=)
+find-index = Ask the system's index instead of walking (may miss new files)
+tools-for-index = the index Alt+F7 may ask instead of walking

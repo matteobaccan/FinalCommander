@@ -372,6 +372,18 @@ anywhere and in any case. Leave the field out to look in every row (`=bowie`, or
 kind of file it is: `format=jpeg`. It combines with the mask, the size and the text like
 everything else in the dialog.
 
+**A whole disk in a moment.** Tick *Ask the system's index instead of walking* and the
+search asks the list of files your system already keeps — `plocate` or `locate` on Linux,
+Spotlight (`mdfind`) on macOS, Everything (`es`) on Windows — instead of reading every
+folder. Every file the index names is still looked at and put through the rest of the
+dialog, so the mask, the size, the text and the metadata mean what they always mean; the
+frame of the results says who answered (`· plocate`). Two things to know. An index is as
+fresh as its last update, so **a file made a minute ago may not be found** — untick the box
+for those. And when there is no index, or it cannot answer (no database yet, a folder on a
+server, *Inside archives* ticked), the search simply walks as usual. `find.index` in the
+configuration names a command of your own to ask instead, or `off` to take the box away;
+the programs are listed, found or not, in `Alt+F1` → *External programs*.
+
 **A search you run every week can be kept.** `F2` in the dialog asks for a name and keeps
 the whole of it — every row, and the folder it was about to look in. `F9` in the dialog
 lists the ones you kept, and `Enter` there fills the dialog in again. Keeping a search

@@ -1724,3 +1724,5 @@ find-saved-gone = 已删除搜索 { $name }
 find-loaded = 已载入搜索 { $name }
 find-fuzzy = 近似名称：上面的字母按顺序出现，最佳匹配在前
 find-meta = 元数据 (artist=bowie; camera=)
+find-index = 询问系统索引而不遍历（可能找不到新文件）
+tools-for-index = Alt+F7 可代替遍历而查询的索引

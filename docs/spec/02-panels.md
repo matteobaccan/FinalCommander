@@ -1064,7 +1064,8 @@ when asked its version, and what it is asked for. The list is not written down t
 archivers are the MultiArc tables the panels already open archives with (an `[[archiver]]`
 block of one's own included), the decompilers are the `[[decompile]]` rules, and the rest are
 the few programs the code runs by name: `git`, the system's log, its services and its opener,
-and `ffmpeg` for the frames of a film (SPEC 05 §1.15). Found means on the `PATH`, by the shell's
+and `ffmpeg` for the frames of a film (SPEC 05 §1.15), and the system's index the find dialog
+may ask (`plocate` or `locate`, `mdfind`, `es` — SPEC 06 §1e). Found means on the `PATH`, by the shell's
 rule (`fcmd_arc::which`), and nothing cleverer: what the panel says is what every other part
 of the program will find. Finding is instant and done when the panel opens; the versions are
 asked off the UI thread, all at once, each given three seconds (`tools::VERSION_WAIT`), and

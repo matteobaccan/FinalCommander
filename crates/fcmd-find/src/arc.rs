@@ -97,6 +97,14 @@ impl<F: FindFs> FindFs for ArcFind<F> {
         self.inner.open_at(path)
     }
 
+    fn stat(&self, path: &VPath) -> Option<Entry> {
+        // No index proposes a path inside a container, so only the disk is ever asked.
+        if path.in_container() {
+            return None;
+        }
+        self.inner.stat(path)
+    }
+
     fn visit_id(&self, dir: &VPath) -> Option<VisitId> {
         if dir.in_container() {
             // Inside a container the path is the identity: there are no links to go round in

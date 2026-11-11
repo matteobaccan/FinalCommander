@@ -1,6 +1,7 @@
 //! The walk: roots in, [`Event`]s out, nothing kept in between.
 
 use std::collections::HashSet;
+use std::ops::ControlFlow;
 use std::time::SystemTime;
 
 use fcmd_core::{CancelToken, Entry, EntryKind, Error, Filter, Fuzzy, VPath};
@@ -158,9 +159,13 @@ pub fn find(
     on: &mut dyn FnMut(Event),
 ) -> Result<Stats, ContentError> {
     let scanner = query.content.as_ref().map(Scanner::compile).transpose()?;
-    // One instant for the whole search, so `mtime > 7d` cannot mean two different things in
-    // two different directories.
-    let now = SystemTime::now();
+    let ctx = Ctx {
+        fs,
+        query,
+        scanner: scanner.as_ref(),
+        now: SystemTime::now(),
+        cancel,
+    };
 
     let mut stats = Stats::default();
     let mut visited: HashSet<VisitId> = HashSet::new();
@@ -245,85 +250,15 @@ pub fn find(
                 children.push(path.enter("/"));
             }
 
-            if !query.filter.matches_at(&entry, now) {
-                continue;
-            }
-            if dirlike && !query.include_dirs {
-                continue;
-            }
-            // The cheap conditions first: the name costs nothing, what the file says about
-            // itself costs a read of its headers, and its text costs the whole of it.
-            let score = match &query.fuzzy {
-                Some(pattern) => match pattern.score(&entry.name_str()) {
-                    Some(score) => Some(score),
-                    None => continue,
-                },
-                None => None,
+            let seen = Seen {
+                path,
+                entry,
+                dirlike,
+                links_to_dir,
             };
-            if let Some(cond) = query.meta.as_ref().filter(|cond| !cond.is_empty()) {
-                // Only what is plainly a file: a directory has nothing to read, and a pipe
-                // or a device would be read for ever.
-                if entry.kind != EntryKind::File {
-                    continue;
-                }
-                match cond.matches_file(fs, &path) {
-                    Ok(true) => {}
-                    Ok(false) => continue,
-                    Err(e) => {
-                        report_problem(&mut stats, on, path, Trouble::File, e.to_string());
-                        continue;
-                    }
-                }
-            }
-
-            match &scanner {
-                // A directory has no bytes, whether we arrived at it by its own name or
-                // through a link: a content condition is a condition on a file.
-                Some(_) if dirlike || links_to_dir => {}
-                Some(scanner) => {
-                    let mut reader = match fs.open(&path) {
-                        Ok(reader) => reader,
-                        Err(e) => {
-                            report_problem(&mut stats, on, path, Trouble::File, e.to_string());
-                            continue;
-                        }
-                    };
-                    match scanner.scan(&mut *reader, cancel, &mut stats.bytes_read) {
-                        Err(e) => {
-                            report_problem(&mut stats, on, path, Trouble::File, e.to_string());
-                        }
-                        Ok(Scanned::Cancelled) => {
-                            stats.cancelled = true;
-                            return Ok(stats);
-                        }
-                        Ok(scanned) => {
-                            if scanner.decides(&scanned) {
-                                let (offset, codepage) = match scanned {
-                                    Scanned::Found { offset, codepage } => (Some(offset), codepage),
-                                    _ => (None, None),
-                                };
-                                stats.hits += 1;
-                                on(Event::Hit(Hit {
-                                    path,
-                                    entry,
-                                    offset,
-                                    codepage,
-                                    score,
-                                }));
-                            }
-                        }
-                    }
-                }
-                None => {
-                    stats.hits += 1;
-                    on(Event::Hit(Hit {
-                        path,
-                        entry,
-                        offset: None,
-                        codepage: None,
-                        score,
-                    }));
-                }
+            if examine(&ctx, seen, &mut stats, on).is_break() {
+                stats.cancelled = true;
+                return Ok(stats);
             }
         }
 
@@ -337,6 +272,212 @@ pub fn find(
     }
 
     Ok(stats)
+}
+
+/// Run a search over paths somebody else proposed, instead of walking for them: the answer
+/// of an index (SPEC 06 §1e).
+///
+/// A candidate is only ever a proposal. It is looked at again on the disk — an index is as
+/// old as its last update, and a file it still lists may be gone, or grown, or renamed back
+/// — and put through the same conditions the walk puts an entry through, by the same
+/// function, so the two sources cannot come to disagree about what matches. What the index
+/// cannot be asked is where to *stop*: so a candidate outside every root is dropped here,
+/// and so is one deeper than the query goes.
+///
+/// A candidate that is no longer there is not a problem to report: it is what "the index is
+/// a little out of date" looks like, and the answer to it is to leave the row out.
+pub fn find_among(
+    fs: &dyn FindFs,
+    query: &Query,
+    candidates: &mut dyn Iterator<Item = VPath>,
+    cancel: &CancelToken,
+    on: &mut dyn FnMut(Event),
+) -> Result<Stats, ContentError> {
+    let scanner = query.content.as_ref().map(Scanner::compile).transpose()?;
+    let ctx = Ctx {
+        fs,
+        query,
+        scanner: scanner.as_ref(),
+        now: SystemTime::now(),
+        cancel,
+    };
+    let mut stats = Stats::default();
+    // An index may name a file twice, and two roots may both hold it.
+    let mut met: HashSet<String> = HashSet::new();
+    for path in candidates {
+        if cancel.is_cancelled() {
+            stats.cancelled = true;
+            return Ok(stats);
+        }
+        if !within(query, &path) || !met.insert(path.to_string()) {
+            continue;
+        }
+        let Some(entry) = fs.stat(&path) else {
+            continue;
+        };
+        let links_to_dir = entry.kind == EntryKind::Symlink
+            && (query.follow_links || scanner.is_some())
+            && fs.is_dir_following(&path);
+        let dirlike = entry.kind == EntryKind::Dir || (links_to_dir && query.follow_links);
+        if dirlike {
+            stats.dirs_seen += 1;
+        } else {
+            stats.files_seen += 1;
+        }
+        let seen = Seen {
+            path,
+            entry,
+            dirlike,
+            links_to_dir,
+        };
+        if examine(&ctx, seen, &mut stats, on).is_break() {
+            stats.cancelled = true;
+            return Ok(stats);
+        }
+    }
+    Ok(stats)
+}
+
+/// Would the walk have reached this path? Under one of the roots, not a root itself, and no
+/// deeper than the query goes.
+fn within(query: &Query, path: &VPath) -> bool {
+    query.roots.iter().any(|root| {
+        if path == root || !path.starts_with(root) {
+            return false;
+        }
+        // How many steps below the root: 1 for something directly in it.
+        let mut steps = 0;
+        let mut at = path.parent();
+        while let Some(dir) = at {
+            steps += 1;
+            if &dir == root {
+                break;
+            }
+            at = dir.parent();
+        }
+        let limit = match (query.subdirectories, query.depth) {
+            (false, _) => Some(1),
+            (true, depth) => depth,
+        };
+        limit.is_none_or(|limit| steps <= limit)
+    })
+}
+
+/// What every candidate is asked, whoever proposed it — the walk, or an index (§1e).
+struct Ctx<'a> {
+    fs: &'a dyn FindFs,
+    query: &'a Query,
+    scanner: Option<&'a Scanner>,
+    /// One instant for the whole search, so `mtime > 7d` cannot mean two different things in
+    /// two different directories.
+    now: SystemTime,
+    cancel: &'a CancelToken,
+}
+
+/// One entry that has been met, and what was learnt about it on the way.
+struct Seen {
+    path: VPath,
+    entry: Entry,
+    /// A directory, or a link to one that the query follows.
+    dirlike: bool,
+    /// A link that points at a directory, followed or not: it has no bytes to read.
+    links_to_dir: bool,
+}
+
+/// Put one entry through every condition of the query and report it if it passes them all.
+/// `Break` means the search was cancelled while this file was being read.
+fn examine(
+    ctx: &Ctx<'_>,
+    seen: Seen,
+    stats: &mut Stats,
+    on: &mut dyn FnMut(Event),
+) -> ControlFlow<()> {
+    let Seen {
+        path,
+        entry,
+        dirlike,
+        links_to_dir,
+    } = seen;
+    if !ctx.query.filter.matches_at(&entry, ctx.now) {
+        return ControlFlow::Continue(());
+    }
+    if dirlike && !ctx.query.include_dirs {
+        return ControlFlow::Continue(());
+    }
+    // The cheap conditions first: the name costs nothing, what the file says about
+    // itself costs a read of its headers, and its text costs the whole of it.
+    let score = match &ctx.query.fuzzy {
+        Some(pattern) => match pattern.score(&entry.name_str()) {
+            Some(score) => Some(score),
+            None => return ControlFlow::Continue(()),
+        },
+        None => None,
+    };
+    if let Some(cond) = ctx.query.meta.as_ref().filter(|cond| !cond.is_empty()) {
+        // Only what is plainly a file: a directory has nothing to read, and a pipe
+        // or a device would be read for ever.
+        if entry.kind != EntryKind::File {
+            return ControlFlow::Continue(());
+        }
+        match cond.matches_file(ctx.fs, &path) {
+            Ok(true) => {}
+            Ok(false) => return ControlFlow::Continue(()),
+            Err(e) => {
+                report_problem(stats, on, path, Trouble::File, e.to_string());
+                return ControlFlow::Continue(());
+            }
+        }
+    }
+
+    match ctx.scanner {
+        // A directory has no bytes, whether we arrived at it by its own name or
+        // through a link: a content condition is a condition on a file.
+        Some(_) if dirlike || links_to_dir => {}
+        Some(scanner) => {
+            let mut reader = match ctx.fs.open(&path) {
+                Ok(reader) => reader,
+                Err(e) => {
+                    report_problem(stats, on, path, Trouble::File, e.to_string());
+                    return ControlFlow::Continue(());
+                }
+            };
+            match scanner.scan(&mut *reader, ctx.cancel, &mut stats.bytes_read) {
+                Err(e) => {
+                    report_problem(stats, on, path, Trouble::File, e.to_string());
+                }
+                Ok(Scanned::Cancelled) => {
+                    return ControlFlow::Break(());
+                }
+                Ok(scanned) => {
+                    if scanner.decides(&scanned) {
+                        let (offset, codepage) = match scanned {
+                            Scanned::Found { offset, codepage } => (Some(offset), codepage),
+                            _ => (None, None),
+                        };
+                        stats.hits += 1;
+                        on(Event::Hit(Hit {
+                            path,
+                            entry,
+                            offset,
+                            codepage,
+                            score,
+                        }));
+                    }
+                }
+            }
+        }
+        None => {
+            stats.hits += 1;
+            on(Event::Hit(Hit {
+                path,
+                entry,
+                offset: None,
+                codepage: None,
+                score,
+            }));
+        }
+    }
+    ControlFlow::Continue(())
 }
 
 fn report_problem(

@@ -1786,3 +1786,5 @@ find-saved-gone = recherche { $name } oubliée
 find-loaded = recherche { $name } chargée
 find-fuzzy = Nom approché : les lettres ci-dessus, dans l’ordre, le meilleur d’abord
 find-meta = Métadonnées (artist=bowie; camera=)
+find-index = Interroger l’index du système au lieu de parcourir (peut manquer les fichiers récents)
+tools-for-index = l’index qu’Alt+F7 peut interroger au lieu de parcourir

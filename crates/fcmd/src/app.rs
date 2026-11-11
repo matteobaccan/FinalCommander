@@ -276,6 +276,9 @@ pub enum Request {
         id: u64,
         spec: Box<FindSpec>,
         cancel: CancelToken,
+        /// `find.index` as it stands: which index the search may ask, for the worker to
+        /// look up — finding a program is a walk of the `PATH`, and not this thread's work.
+        index: String,
     },
     /// A search kept under a name, run for a panel rather than for the results list: what it
     /// finds arrives all at once as that panel's rows (SPEC 06 §1c).
@@ -285,6 +288,8 @@ pub enum Request {
         title: String,
         spec: Box<FindSpec>,
         cancel: CancelToken,
+        /// `find.index`, as for `Find`.
+        index: String,
     },
     /// Re-stat the paths a list panel is made of, and drop what is no longer there.
     TempRefresh {
@@ -1049,6 +1054,8 @@ pub enum Event {
         elapsed: std::time::Duration,
         problems: Vec<String>,
         error: Option<String>,
+        /// The index that answered instead of a walk, by its program's name.
+        via: Option<String>,
     },
     /// A list panel's rows, with the real path of each: find results, `panelize`, a re-read.
     TempListed {
@@ -1946,6 +1953,9 @@ pub struct FindSpec {
     /// Step into the archives met on the way, so what is inside them is searched too — by
     /// name and, where there is a text to find, by what it holds.
     pub in_archives: bool,
+    /// Ask the system's index for candidates rather than walk for them, where there is one
+    /// and it can answer (SPEC 06 §1e). Without one the search walks, as if this were off.
+    pub index: bool,
     /// Where the walk starts. Worked out from the scope when the dialog is accepted, so the
     /// worker never has to know what a panel is.
     pub roots: Vec<VPath>,
@@ -1968,6 +1978,7 @@ impl Default for FindSpec {
             follow_links: false,
             directories: false,
             in_archives: false,
+            index: false,
             roots: Vec::new(),
         }
     }
@@ -1991,6 +2002,7 @@ impl FindSpec {
             follow_links: self.follow_links,
             directories: self.directories,
             in_archives: self.in_archives,
+            index: self.index,
             roots: self.roots.iter().map(|p| p.to_string()).collect(),
         }
     }
@@ -2011,6 +2023,7 @@ impl FindSpec {
             follow_links: saved.follow_links,
             directories: saved.directories,
             in_archives: saved.in_archives,
+            index: saved.index,
             roots: saved.roots.iter().map(|p| VPath::parse(p)).collect(),
         }
     }
@@ -3674,9 +3687,16 @@ impl App {
                 elapsed,
                 problems,
                 error,
+                via,
             } => {
                 let mine = self.find_mut().map(|v| v.id) == Some(id);
                 if let (true, Some(view)) = (mine, self.find_mut()) {
+                    // The frame says who answered, when it was not the walk: a list that
+                    // came from an index is as fresh as the index.
+                    if let Some(program) = via {
+                        view.label.push_str(" · ");
+                        view.label.push_str(&program);
+                    }
                     view.done = true;
                     view.scanning = None;
                     view.files = files;
@@ -17797,7 +17817,13 @@ impl App {
 
     /// `Alt+F7`: the dialog, filled in with the last search.
     fn open_find_form(&mut self) {
-        self.mode = Mode::Form(Box::new(Form::find(&self.last_find, &self.i18n)));
+        self.mode = Mode::Form(Box::new(self.find_form(&self.last_find)));
+    }
+
+    /// The find dialog for one search. The index row is offered unless the configuration
+    /// says there is never to be one (`find.index = "off"`).
+    fn find_form(&self, spec: &FindSpec) -> Form {
+        Form::find(spec, self.cfg.find.index.trim() != "off", &self.i18n)
     }
 
     /// The find dialog, filled in with a kept search. The scope row says what it said when
@@ -17808,7 +17834,7 @@ impl App {
             return;
         };
         let spec = FindSpec::from_saved(saved);
-        self.mode = Mode::Form(Box::new(Form::find(&spec, &self.i18n)));
+        self.mode = Mode::Form(Box::new(self.find_form(&spec)));
         let m = self
             .i18n
             .t_args("find-loaded", &[("name", name.to_string().into())]);
@@ -17978,6 +18004,7 @@ impl App {
             follow_links: form.toggle_value("find.links"),
             directories: form.toggle_value("find.dirs"),
             in_archives: form.toggle_value("find.archives"),
+            index: form.toggle_value("find.index"),
             roots: Vec::new(),
         };
         spec.roots = self.find_roots(scope);
@@ -18104,6 +18131,7 @@ impl App {
             title: saved.name.clone(),
             spec: Box::new(FindSpec::from_saved(saved)),
             cancel,
+            index: self.cfg.find.index.clone(),
         });
     }
 
@@ -18160,6 +18188,7 @@ impl App {
             id,
             spec: Box::new(spec),
             cancel: cancel.clone(),
+            index: self.cfg.find.index.clone(),
         });
         self.mode = Mode::Find(Box::new(FindView {
             id,
@@ -30899,6 +30928,7 @@ mod tests {
             elapsed: std::time::Duration::from_millis(120),
             problems: vec![],
             error: None,
+            via: None,
         });
         press(&mut app, "Esc");
         assert!(matches!(app.mode, Mode::Normal));
@@ -30927,6 +30957,7 @@ mod tests {
             elapsed: std::time::Duration::from_millis(5),
             problems: vec![],
             error: None,
+            via: None,
         });
         press(&mut app, "F5");
         assert!(matches!(app.mode, Mode::Normal));
@@ -31063,6 +31094,7 @@ mod tests {
                 title,
                 spec,
                 cancel,
+                ..
             }) => {
                 assert_eq!(panel, 0);
                 assert_eq!(title, "sources");
@@ -31278,6 +31310,70 @@ mod tests {
         assert!(
             matches!(&app.mode, Mode::Find(v) if v.rows[v.cursor].0.display_name() == "middling too")
         );
+    }
+
+    // ── an index as the source (SPEC 06 §1e) ────────────────────────────────────────────────
+
+    #[test]
+    fn the_index_box_reaches_the_search_with_the_setting_that_says_which_index() {
+        let mut app = app();
+        app.cfg.find.index = "my-index {root} {name}".into();
+        app.run(Command::ToolFind);
+        set_toggle(&mut app, "find.index", true);
+        press(&mut app, "F10");
+        let id = match &app.mode {
+            Mode::Find(view) => view.id,
+            other => panic!("{other:?}"),
+        };
+        match app.take_requests().into_iter().next() {
+            Some(Request::Find { spec, index, .. }) => {
+                assert!(spec.index);
+                assert_eq!(index, "my-index {root} {name}");
+            }
+            other => panic!("{other:?}"),
+        }
+        // A search an index answered says so on its frame; one that walked says nothing.
+        let before = match &app.mode {
+            Mode::Find(view) => view.label.clone(),
+            other => panic!("{other:?}"),
+        };
+        app.handle_event(Event::FindDone {
+            id,
+            files: 3,
+            dirs: 0,
+            elapsed: std::time::Duration::from_millis(4),
+            problems: vec![],
+            error: None,
+            via: Some("my-index".into()),
+        });
+        match &app.mode {
+            Mode::Find(view) => assert_eq!(view.label, format!("{before} · my-index")),
+            other => panic!("{other:?}"),
+        }
+        // And a kept search remembers that it asks the index.
+        assert!(app.last_find.to_saved("x").index);
+        assert!(FindSpec::from_saved(&app.last_find.to_saved("x")).index);
+    }
+
+    #[test]
+    fn with_the_index_turned_off_in_the_configuration_the_dialog_does_not_offer_it() {
+        let mut app = app();
+        app.last_find.index = true;
+        app.cfg.find.index = "off".into();
+        app.run(Command::ToolFind);
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(!form
+            .fields
+            .iter()
+            .any(|f| matches!(f, crate::form::Field::Toggle { key, .. } if *key == "find.index")));
+        // And a dialog without the row asks for a walk, whatever the last search did.
+        press(&mut app, "F10");
+        match app.take_requests().into_iter().next() {
+            Some(Request::Find { spec, .. }) => assert!(!spec.index),
+            other => panic!("{other:?}"),
+        }
     }
 
     #[test]

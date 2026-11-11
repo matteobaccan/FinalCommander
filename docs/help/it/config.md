@@ -166,6 +166,7 @@ Perché ognuno è un programma a parte e non è dentro fcmd:
 | `xdg-open` / `open` | aprire un link nel browser | quale browser è una scelta del desktop, non di fcmd |
 | `journalctl` / `log` / `wevtutil` | *Comandi → Log di sistema* | ogni sistema ha un solo strumento che conosce il suo log |
 | `systemctl` / `launchctl` | il pannello dei servizi | solo il gestore dei servizi può avviare e fermare un servizio |
+| `plocate` o `locate` / `mdfind` / `es` | l'indice che `Alt+F7` può interrogare invece di scorrere il disco (*Trovare le cose*) | l'elenco dei file di un disco è il sistema a tenerlo aggiornato; un secondo elenco nostro sarebbe un secondo servizio da far girare. Mai necessario: senza, la ricerca scorre il disco |
 
 Un programma conta come installato quando è nel `PATH`, con la stessa regola della shell, e da
 nessun'altra parte. L'installatore di 7-Zip per Windows, per esempio, mette `7z.exe` in

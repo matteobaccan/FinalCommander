@@ -96,6 +96,7 @@ fn run_find(
     tx: mpsc::Sender<Event>,
     archives: &std::sync::Arc<fcmd_arc::Cache>,
     groups: &fcmd_core::filter::Groups,
+    index: &str,
 ) {
     let started = std::time::Instant::now();
     let fail = |message: String| {
@@ -106,45 +107,55 @@ fn run_find(
             elapsed: started.elapsed(),
             problems: Vec::new(),
             error: Some(message),
+            via: None,
         });
     };
+    let index = index_for(&spec, index);
 
     let mut problems: Vec<String> = Vec::new();
     let mut last_report = std::time::Instant::now();
-    let result = find_hits(&spec, &cancel, archives, groups, &mut |event| match event {
-        fcmd_find::Event::Hit(hit) => {
-            let _ = tx.send(Event::FindHit {
-                id,
-                path: hit.path,
-                entry: Box::new(hit.entry),
-                offset: hit.offset,
-                score: hit.score,
-            });
-        }
-        fcmd_find::Event::Scanning(dir) => {
-            // Not every directory: a walk over a large tree would spend its time telling
-            // the screen about itself, and ten a second is already more than a reader can
-            // follow.
-            if last_report.elapsed() >= std::time::Duration::from_millis(100) {
-                last_report = std::time::Instant::now();
-                let _ = tx.send(Event::FindProgress {
+    let source = index.as_ref();
+    let result = find_hits(
+        &spec,
+        &cancel,
+        archives,
+        groups,
+        source,
+        &mut |event| match event {
+            fcmd_find::Event::Hit(hit) => {
+                let _ = tx.send(Event::FindHit {
                     id,
-                    scanning: dir.to_string(),
-                    files: 0,
-                    dirs: 0,
+                    path: hit.path,
+                    entry: Box::new(hit.entry),
+                    offset: hit.offset,
+                    score: hit.score,
                 });
             }
-        }
-        fcmd_find::Event::Problem(problem) => {
-            // Capped: a search over a whole drive meets unreadable directories by the
-            // dozen, and ten thousand of them help nobody.
-            if problems.len() < 200 {
-                problems.push(format!("{}: {}", problem.path, problem.message));
+            fcmd_find::Event::Scanning(dir) => {
+                // Not every directory: a walk over a large tree would spend its time telling
+                // the screen about itself, and ten a second is already more than a reader can
+                // follow.
+                if last_report.elapsed() >= std::time::Duration::from_millis(100) {
+                    last_report = std::time::Instant::now();
+                    let _ = tx.send(Event::FindProgress {
+                        id,
+                        scanning: dir.to_string(),
+                        files: 0,
+                        dirs: 0,
+                    });
+                }
             }
-        }
-    });
+            fcmd_find::Event::Problem(problem) => {
+                // Capped: a search over a whole drive meets unreadable directories by the
+                // dozen, and ten thousand of them help nobody.
+                if problems.len() < 200 {
+                    problems.push(format!("{}: {}", problem.path, problem.message));
+                }
+            }
+        },
+    );
     match result {
-        Ok(stats) => {
+        Ok((stats, via)) => {
             let _ = tx.send(Event::FindDone {
                 id,
                 files: stats.files_seen,
@@ -152,9 +163,24 @@ fn run_find(
                 elapsed: started.elapsed(),
                 problems,
                 error: None,
+                via,
             });
         }
         Err(e) => fail(e),
+    }
+}
+
+/// The index a search may ask, if it asked for one and there is one: `find.index` says
+/// which — nothing for the system's own, `off` for none, or a command line. Looked up here,
+/// on the worker's thread, because finding a program is a walk of the `PATH`.
+fn index_for(spec: &app::FindSpec, setting: &str) -> Option<fcmd_find::Index> {
+    if !spec.index {
+        return None;
+    }
+    match setting.trim() {
+        "off" => None,
+        "" => fcmd_find::Index::detect(),
+        line => fcmd_find::Index::custom(line),
     }
 }
 
@@ -166,8 +192,9 @@ fn find_hits(
     cancel: &CancelToken,
     archives: &std::sync::Arc<fcmd_arc::Cache>,
     groups: &fcmd_core::filter::Groups,
+    index: Option<&fcmd_find::Index>,
     on: &mut dyn FnMut(fcmd_find::Event),
-) -> Result<fcmd_find::Stats, String> {
+) -> Result<(fcmd_find::Stats, Option<String>), String> {
     use fcmd_core::filter::{Filter, MaskSet, SizeRange};
     use fcmd_find::{Content, Needle};
 
@@ -218,6 +245,49 @@ fn find_hits(
         meta: Some(fcmd_find::MetaCond::parse(&spec.meta)).filter(|cond| !cond.is_empty()),
     };
 
+    // The index first, where the search asked for one and there is one. What it proposes
+    // goes through the same conditions as a walk's entries; when it cannot be asked at all
+    // — no database, a folder it does not cover, archives to step into — the search walks
+    // instead and the reason is kept with the problems, so a slow answer explains itself.
+    if let Some(index) = index {
+        // Letters in order are not a run of letters: an approximate name gives no hint.
+        let hint = match spec.fuzzy {
+            true => String::new(),
+            false => fcmd_find::index_hint(&spec.mask),
+        };
+        let mut hits = 0u64;
+        let asked = fcmd_find::find_indexed(
+            &fcmd_vfs::local::LocalVfs,
+            &query,
+            index,
+            &hint,
+            cancel,
+            &mut |event| {
+                if matches!(event, fcmd_find::Event::Hit(_)) {
+                    hits += 1;
+                }
+                on(event)
+            },
+        );
+        let why = match asked {
+            Ok(stats) => return Ok((stats, Some(index.name.clone()))),
+            Err(fcmd_find::IndexError::Content(e)) => return Err(e.to_string()),
+            Err(fcmd_find::IndexError::Unavailable(why)) => why,
+        };
+        if let Some(root) = spec.roots.first() {
+            on(fcmd_find::Event::Problem(fcmd_find::Problem {
+                path: root.clone(),
+                what: fcmd_find::Trouble::Directory,
+                message: format!("{}: {why}", index.name),
+            }));
+        }
+        // An index that answered for one folder and not for the next has given what it
+        // has: walking now would find the first folder's files a second time.
+        if hits > 0 {
+            return Ok((fcmd_find::Stats::default(), Some(index.name.clone())));
+        }
+    }
+
     // The archive-aware filesystem only when the box is ticked: without it the walk is the
     // plain local one, and a `.zip` is a file like any other.
     let in_archives = fcmd_find::ArcFind::new(archives.clone(), fcmd_vfs::local::LocalVfs);
@@ -226,7 +296,9 @@ fn find_hits(
     } else {
         &fcmd_vfs::local::LocalVfs
     };
-    fcmd_find::find(fs, &query, cancel, on).map_err(|e| e.to_string())
+    fcmd_find::find(fs, &query, cancel, on)
+        .map(|stats| (stats, None))
+        .map_err(|e| e.to_string())
 }
 
 /// A kept search run for a panel (SPEC 06 §1c): every hit, then the panel's rows in one
@@ -243,13 +315,22 @@ fn run_find_panel(
     tx: mpsc::Sender<Event>,
     archives: &std::sync::Arc<fcmd_arc::Cache>,
     groups: &fcmd_core::filter::Groups,
+    index: &str,
 ) {
     let mut found = Vec::new();
-    let result = find_hits(&spec, &cancel, archives, groups, &mut |event| {
-        if let fcmd_find::Event::Hit(hit) = event {
-            found.push((hit.score, hit.path, hit.entry));
-        }
-    });
+    let index = index_for(&spec, index);
+    let result = find_hits(
+        &spec,
+        &cancel,
+        archives,
+        groups,
+        index.as_ref(),
+        &mut |event| {
+            if let fcmd_find::Event::Hit(hit) = event {
+                found.push((hit.score, hit.path, hit.entry));
+            }
+        },
+    );
     // Best match first, for a panel that is not sorted by anything of its own; the sort is
     // stable, so a search by mask keeps the order of the walk.
     found.sort_by_key(|(score, _, _)| std::cmp::Reverse(*score));
@@ -1444,7 +1525,12 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         let _ = tx.send(Event::Uploaded { id, remote, result });
                     });
                 }
-                Request::Find { id, spec, cancel } => {
+                Request::Find {
+                    id,
+                    spec,
+                    cancel,
+                    index,
+                } => {
                     let tx = tx.clone();
                     let archives = archives.clone();
                     // The named mask lists as they are now: the editor in the Options menu
@@ -1453,7 +1539,7 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                     // A blocking thread: the walk is synchronous, and it must not sit in the
                     // way of the runtime that is also serving the panels.
                     runtime.spawn_blocking(move || {
-                        run_find(id, *spec, cancel, tx, &archives, &groups)
+                        run_find(id, *spec, cancel, tx, &archives, &groups, &index)
                     });
                 }
                 Request::FindPanel {
@@ -1462,13 +1548,14 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                     title,
                     spec,
                     cancel,
+                    index,
                 } => {
                     let tx = tx.clone();
                     let archives = archives.clone();
                     let groups = app.cfg.mask_groups();
                     runtime.spawn_blocking(move || {
                         run_find_panel(
-                            panel, generation, title, *spec, cancel, tx, &archives, &groups,
+                            panel, generation, title, *spec, cancel, tx, &archives, &groups, &index,
                         )
                     });
                 }
@@ -6800,11 +6887,16 @@ dir_attr = "D"
                         app.handle_event(event);
                     }
                 }
-                Request::Find { id, spec, cancel } => {
+                Request::Find {
+                    id,
+                    spec,
+                    cancel,
+                    index,
+                } => {
                     let (tx, rx) = mpsc::channel();
                     let archives = std::sync::Arc::new(fcmd_arc::Cache::new(Default::default()));
                     let groups = app.cfg.mask_groups();
-                    run_find(id, *spec, cancel, tx, &archives, &groups);
+                    run_find(id, *spec, cancel, tx, &archives, &groups, &index);
                     while let Ok(event) = rx.try_recv() {
                         app.handle_event(event);
                     }
@@ -6815,12 +6907,13 @@ dir_attr = "D"
                     title,
                     spec,
                     cancel,
+                    index,
                 } => {
                     let (tx, rx) = mpsc::channel();
                     let archives = std::sync::Arc::new(fcmd_arc::Cache::new(Default::default()));
                     let groups = app.cfg.mask_groups();
                     run_find_panel(
-                        panel, generation, title, *spec, cancel, tx, &archives, &groups,
+                        panel, generation, title, *spec, cancel, tx, &archives, &groups, &index,
                     );
                     while let Ok(event) = rx.try_recv() {
                         app.handle_event(event);
@@ -8017,6 +8110,80 @@ dir_attr = "D"
             _ => panic!("{}", app.status),
         };
         assert_eq!(names, ["main.rs", "domain.rs", "my_admin.rs"]);
+    }
+
+    /// An index as the source, with a stand-in for one: a command that prints a list. What
+    /// the list names is looked at and matched; what it does not name is not found, which is
+    /// how the test knows nobody walked; and an index that cannot be asked is walked for.
+    #[test]
+    fn a_search_asks_the_configured_index_and_walks_when_it_cannot_be_asked() {
+        let root = tempfile::tempdir().unwrap();
+        let src = root.path().join("src");
+        std::fs::create_dir_all(src.join("deep")).unwrap();
+        for name in ["one.rs", "deep/two.rs", "unlisted.rs", "notes.txt"] {
+            std::fs::write(src.join(name), b"x").unwrap();
+        }
+        // The "index": it knows two sources and the notes, one file that is gone, and has
+        // not heard of `unlisted.rs`.
+        let list = root.path().join("index.txt");
+        let lines: Vec<String> = ["one.rs", "deep/two.rs", "notes.txt", "gone.rs"]
+            .iter()
+            .map(|name| src.join(name).display().to_string())
+            .collect();
+        std::fs::write(&list, lines.join("\n")).unwrap();
+        let print = |file: &std::path::Path| {
+            if cfg!(windows) {
+                format!("cmd /c type {}", file.display())
+            } else {
+                format!("cat {}", file.display())
+            }
+        };
+
+        let search = |setting: String| {
+            let mut app = app_on(&src, root.path());
+            serve(&mut app);
+            app.cfg.find.index = setting;
+            app.last_find = app::FindSpec {
+                mask: "*.rs".into(),
+                index: true,
+                ..app::FindSpec::default()
+            };
+            app.run(FcCommand::ToolFind);
+            key(&mut app, "F10");
+            serve(&mut app);
+            match &app.mode {
+                app::Mode::Find(view) => {
+                    assert!(view.done, "the search did not finish");
+                    let mut names: Vec<String> =
+                        view.rows.iter().map(|(p, _)| p.display_name()).collect();
+                    names.sort();
+                    (names, view.label.clone(), view.problems.clone())
+                }
+                _ => panic!("{}", app.status),
+            }
+        };
+
+        // Asked: the two it knows that match, and the frame says who answered.
+        let (names, label, problems) = search(print(&list));
+        assert_eq!(names, ["one.rs", "two.rs"], "{problems:?}");
+        let program = if cfg!(windows) { "cmd" } else { "cat" };
+        assert!(label.ends_with(&format!(" · {program}")), "{label}");
+
+        // A program that is not on this machine: the search walks, and finds all three.
+        let (names, label, _) = search("fcmd-no-such-index-program {root}".into());
+        assert_eq!(names, ["one.rs", "two.rs", "unlisted.rs"]);
+        assert!(!label.contains(" · fcmd-no-such"), "{label}");
+
+        // A program that is there and fails: walked as well, with the reason kept.
+        let (names, _, problems) = search(print(&root.path().join("no-such-list.txt")));
+        assert_eq!(names, ["one.rs", "two.rs", "unlisted.rs"]);
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(problems[0].contains(program), "{problems:?}");
+
+        // And `off` is never asked, whatever the search wanted.
+        let (names, label, problems) = search("off".into());
+        assert_eq!(names, ["one.rs", "two.rs", "unlisted.rs"]);
+        assert!(problems.is_empty() && label.ends_with("src"), "{label}");
     }
 
     /// A condition on what a file says about itself, through the real engine and the

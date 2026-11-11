@@ -387,6 +387,19 @@ file ha una riga così (`gps=`), e metti `;` fra più condizioni che devono vale
 (`artist=bowie; year=1977`). `format=` chiede che tipo di file è: `format=jpeg`. Si combina
 con la maschera, la dimensione e il testo come tutto il resto del dialogo.
 
+**Un disco intero in un attimo.** Spunta *Chiedi all'indice del sistema invece di scorrere* e
+la ricerca interroga l'elenco dei file che il tuo sistema tiene già — `plocate` o `locate` su
+Linux, Spotlight (`mdfind`) su macOS, Everything (`es`) su Windows — invece di leggere ogni
+cartella. Ogni file che l'indice nomina viene comunque guardato e passato per il resto del
+dialogo, quindi la maschera, la dimensione, il testo e i metadati significano quello che
+significano sempre; la cornice dei risultati dice chi ha risposto (`· plocate`). Due cose da
+sapere. Un indice è aggiornato quanto il suo ultimo aggiornamento, quindi **un file creato un
+minuto fa può non essere trovato** — togli la spunta per quelli. E quando un indice non c'è, o
+non può rispondere (nessun database ancora, una cartella su un server, *Dentro gli archivi*
+spuntato), la ricerca scorre il disco come sempre. `find.index` nella configurazione indica un
+tuo comando da interrogare al suo posto, oppure `off` per togliere la casella; i programmi
+sono elencati, trovati o no, in `Alt+F1` → *Programmi esterni*.
+
 **Una ricerca che fai ogni settimana si può salvare.** `F2` nel dialogo chiede un nome e
 salva tutta la ricerca — ogni riga, e la cartella in cui stava per guardare. `F9` nel dialogo
 elenca quelle salvate, e lì `Invio` riempie di nuovo il dialogo. Salvare una ricerca con un

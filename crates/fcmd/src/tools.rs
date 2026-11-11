@@ -32,6 +32,8 @@ pub enum Use {
     SysLog,
     /// The services panel.
     Services,
+    /// The index `Alt+F7` may ask instead of walking (SPEC 06 §1e).
+    Index,
 }
 
 impl Use {
@@ -45,6 +47,7 @@ impl Use {
             Use::Open => "tools-for-open",
             Use::SysLog => "tools-for-syslog",
             Use::Services => "tools-for-services",
+            Use::Index => "tools-for-index",
         }
     }
 }
@@ -86,7 +89,7 @@ fn version_args_for(program: &str) -> &'static [&'static str] {
     match base {
         "7z" | "7za" | "7zz" => &[],
         "javap" | "java" => &["-version"],
-        "ffmpeg" | "ffprobe" => &["-version"],
+        "ffmpeg" | "ffprobe" | "es" => &["-version"],
         _ => &["--version"],
     }
 }
@@ -138,6 +141,12 @@ pub fn catalogue(decompile: &[fcmd_config::DecompileRule]) -> Vec<Tool> {
         ));
     }
     out.push(tool("ffmpeg", Use::Video, Vec::new(), Some(&["-version"])));
+    // The system's own index, by the names the search itself looks for: asked from the
+    // find dialog, never needed. Spotlight's program has no version to say.
+    for program in fcmd_find::Index::program_names() {
+        let version = (program != "mdfind").then(|| version_args_for(program));
+        out.push(tool(program, Use::Index, Vec::new(), version));
+    }
     if cfg!(windows) {
         out.push(tool("wevtutil", Use::SysLog, Vec::new(), None));
     } else if cfg!(target_os = "macos") {
@@ -277,7 +286,7 @@ pub fn install_command(program: &str, manager: Option<Manager>) -> Option<String
     // Part of the system: nothing to install.
     if matches!(
         program,
-        "journalctl" | "systemctl" | "open" | "log" | "launchctl" | "wevtutil"
+        "journalctl" | "systemctl" | "open" | "log" | "launchctl" | "wevtutil" | "mdfind"
     ) {
         return None;
     }
@@ -293,6 +302,7 @@ pub fn install_command(program: &str, manager: Option<Manager>) -> Option<String
             "wasm2wat" => "wabt",
             "objdump" => "binutils",
             "xdg-open" => "xdg-utils",
+            "plocate" => "plocate",
             _ => return None,
         },
         Manager::Pacman => match program {
@@ -303,6 +313,7 @@ pub fn install_command(program: &str, manager: Option<Manager>) -> Option<String
             "wasm2wat" => "wabt",
             "objdump" => "binutils",
             "xdg-open" => "xdg-utils",
+            "plocate" => "plocate",
             _ => return None,
         },
         Manager::Apk => match program {
@@ -326,6 +337,7 @@ pub fn install_command(program: &str, manager: Option<Manager>) -> Option<String
             "ffmpeg" => "Gyan.FFmpeg",
             "javap" => "Microsoft.OpenJDK.21",
             "python3" => "Python.Python.3.12",
+            "es" => "voidtools.Everything.Cli",
             _ => return None,
         },
     };
@@ -353,6 +365,8 @@ pub fn homepage(program: &str) -> Option<&'static str> {
         "objdump" => "https://www.gnu.org/software/binutils/",
         "retdec-decompiler" => "https://github.com/avast/retdec/releases",
         "xdg-open" => "https://www.freedesktop.org/wiki/Software/xdg-utils/",
+        "plocate" | "locate" => "https://plocate.sesse.net/",
+        "es" => "https://www.voidtools.com/downloads/",
         _ => return None,
     })
 }
@@ -370,6 +384,15 @@ mod tests {
         assert!(has("git", Use::Git));
         assert!(has("ffmpeg", Use::Video));
         assert!(has("javap", Use::Decompile));
+        // The index the find dialog may ask: whichever this system calls its own.
+        let index = if cfg!(windows) {
+            "es"
+        } else if cfg!(target_os = "macos") {
+            "mdfind"
+        } else {
+            "plocate"
+        };
+        assert!(has(index, Use::Index));
         // One row per program: objdump answers three masks.
         let objdump: Vec<_> = list.iter().filter(|t| t.program == "objdump").collect();
         assert_eq!(objdump.len(), 1);
