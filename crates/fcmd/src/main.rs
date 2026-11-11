@@ -2341,6 +2341,18 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         }
                     });
                 }
+                Request::BinCompare {
+                    id,
+                    left,
+                    right,
+                    cancel,
+                } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let result = bin_compare(&left, &right, &cancel);
+                        let _ = tx.send(Event::BinCompared { id, result });
+                    });
+                }
                 Request::UsageTree { id, root, cancel } => {
                     let tx = tx.clone();
                     let fs = ArcFs::new(
@@ -3292,6 +3304,21 @@ fn run_decompiler(rule: &fcmd_config::DecompileRule, path: &VPath) -> Result<Str
 }
 
 /// Recursive size of a directory. Depth-limited, cancellable, and it never follows symlinks.
+/// Two files on this disk compared byte against byte (SPEC 05 §3a). The error names the file
+/// that could not be opened; one that fails halfway is named by the pair.
+fn bin_compare(
+    left: &std::path::Path,
+    right: &std::path::Path,
+    cancel: &CancelToken,
+) -> Result<Option<fcmd_view::bindiff::Scan>, String> {
+    let open = |path: &std::path::Path| {
+        std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))
+    };
+    let (mut a, mut b) = (open(left)?, open(right)?);
+    fcmd_view::bindiff::scan(&mut a, &mut b, cancel)
+        .map_err(|e| format!("{} ↔ {}: {e}", left.display(), right.display()))
+}
+
 fn dir_size(
     fs: &dyn fcmd_jobs::JobFs,
     path: &VPath,
@@ -7365,6 +7392,15 @@ dir_attr = "D"
                 Request::VideoFrame { .. } | Request::VideoPlay { .. } => {}
                 // The whole tree is walked where it is asked, as the branch view is: what a
                 // test then sees is the map, as the screen does a moment later.
+                Request::BinCompare {
+                    id,
+                    left,
+                    right,
+                    cancel,
+                } => {
+                    let result = bin_compare(&left, &right, &cancel);
+                    app.handle_event(Event::BinCompared { id, result });
+                }
                 Request::UsageTree { id, root, cancel } => {
                     let tree =
                         fcmd_jobs::usage::walk(&fcmd_jobs::LocalFs, &root, &cancel, &mut |_, _| {});

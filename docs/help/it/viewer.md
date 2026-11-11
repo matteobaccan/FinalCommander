@@ -381,6 +381,23 @@ I due file devono essere su questo disco e sotto i 16 MiB: di ognuno si legge tu
 per allinearli, quindi un file su un server o dentro un archivio lo dice col suo nome invece di
 scaricarne una copia che non hai chiesto.
 
+**Due file che non sono testo** — due build di un programma, due immagini di firmware, due
+fotografie — vengono invece confrontati byte per byte: il byte 0 con il byte 0, fino alla fine
+del più lungo. Il tasto è lo stesso; quale schermata si apre lo decide ciò che i file sono. Il
+confronto gira in background, per quanto grande sia la coppia, ed `Esc` lo ferma. Quando è
+finito la schermata è sulla prima differenza: una colonna di offset, poi i byte di ciascun
+file in esadecimale e come caratteri, quelli del file di sinistra a sinistra. Un byte su cui
+i due non concordano è rosso a sinistra e verde a destra, e dove il file più corto è finito
+il suo lato resta vuoto. La riga con i nomi dice quanto è lungo ciascun file, al byte; il
+piede dice quale differenza di quante è sullo schermo, l'offset della prima e quanti byte
+sono diversi in tutto.
+
+`Alt+↓` e `Alt+↑` vanno da una differenza alla successiva — una differenza è una sequenza di
+byte diversi — e le frecce, `PgUp`, `PgDn`, `Home` e `End` si muovono per righe. Due file con
+gli stessi byte lo dicono, con la loro lunghezza. Qui non si unisce e non si scrive nulla: per
+cambiare un byte, `F4` sul file è l'editor esadecimale. Il confronto è per posizione, come fa
+`cmp`, quindi un byte inserito all'inizio rende diverso tutto ciò che segue.
+
 # Delphi
 
 I file propri di Delphi si leggono come li mostra Delphi.

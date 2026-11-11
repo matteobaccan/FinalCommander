@@ -86,7 +86,7 @@ says what the decision stands on.
 | Synchronise folders | `Ctrl+Shift+Y` | Saving a pair under a name (`[[sync]]`, `Ctrl+Alt+Y`) and the written report came in 0.41 (SPEC 03 §10a). Left: running a saved pair unattended — from the command line or on a schedule, without the review table — a report that is appended to rather than rewritten, and a side that is not on this machine. |
 | User menu | `F2` | A dialog to edit the entries. From FAR's `FarMenu.ini` (SPEC 06 §4a): the symbols with no counterpart — the drive, the other panel's selection, a file name of the left or right panel — the list-file modifiers, and a function key as a hot key. |
 | File associations | Commands menu | Defaults read off the OS (xdg-mime, `LSCopyDefaultRoleHandler`, the registry), a dialog to edit the blocks, and `execute`/`extract`/`preview` entries. |
-| Two files side by side | `Ctrl+Shift+D` | A unified view, a file against the copy on disk, and the first differing offset of two binaries. |
+| Two files side by side | `Ctrl+Shift+D` | Two binaries byte against byte came in 0.45 (SPEC 05 §3a). Left: a unified view; for binaries, a comparison that lines the two up around an inserted byte, and one of files that are not on this machine. |
 
 ## Interface and configuration
 

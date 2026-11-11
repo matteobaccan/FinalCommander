@@ -628,6 +628,16 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         draw_diff(app, view, buf, screen);
         return None;
     }
+    // The byte comparison is told its room first too: how many bytes fit on a row decides
+    // which bytes it has to have read.
+    if let Mode::BinDiff(view) = &mut app.mode {
+        let inner = screen.inner();
+        view.fit(inner.w, inner.h.saturating_sub(3));
+    }
+    if let Mode::BinDiff(view) = &app.mode {
+        draw_bindiff(app, view, buf, screen);
+        return None;
+    }
     // The disk usage map is told its room before it is drawn: the rectangles are laid out
     // for that room once and kept, and the keys walk the same ones the frame shows.
     if let Mode::Usage(view) = &mut app.mode {
@@ -704,11 +714,12 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             );
             None
         }
-        Mode::Job(_) => None,    // handled above, through `Mode::job()`
-        Mode::Diff(_) => None,   // handled above, through `Mode::diff()`
-        Mode::Usage(_) => None,  // handled above, once it has been told its room
-        Mode::Grab(_) => None,   // handled above, on the frame it was opened with
-        Mode::Viewer(_) => None, // handled above, before the panels are drawn
+        Mode::Job(_) => None,     // handled above, through `Mode::job()`
+        Mode::Diff(_) => None,    // handled above, through `Mode::diff()`
+        Mode::Usage(_) => None,   // handled above, once it has been told its room
+        Mode::BinDiff(_) => None, // and so is the byte comparison
+        Mode::Grab(_) => None,    // handled above, on the frame it was opened with
+        Mode::Viewer(_) => None,  // handled above, before the panels are drawn
         Mode::Editor(_) | Mode::Hex(_) => None, // handled above, before the panels are drawn
         Mode::Message { title, lines } => {
             widgets::draw_dialog(buf, &app.theme, screen, title, lines, None);
@@ -3158,6 +3169,149 @@ fn draw_diff(app: &App, view: &fcmd_view::Diff, buf: &mut Buffer, screen: Rect) 
     }
 }
 
+/// Two files that are not text, byte against byte (SPEC 05 §3a).
+///
+/// One offset column, then each file's bytes in hex and as characters with a rule between
+/// the two, so the same offset is on the same row of both. A byte that differs wears the
+/// diff's own two colours — what the left file has in red, what the right has in green —
+/// and where one file has ended its side is simply empty.
+fn draw_bindiff(app: &App, view: &fcmd_view::BinDiff, buf: &mut Buffer, screen: Rect) {
+    let base = app.theme.panel();
+    let frame = app.theme.fg_on("panel.frame", "panel.bg");
+    let dim = app.theme.fg_on("panel.footer.fg", "panel.bg");
+    let painted = |bg: &str| app.theme.color(bg) != app.theme.color("panel.bg");
+    let removed = if painted("diff.removed.bg") {
+        app.theme.fg_on("diff.line.fg", "diff.removed.bg")
+    } else {
+        app.theme.fg_on("syntax.removed", "panel.bg")
+    };
+    let added = if painted("diff.added.bg") {
+        app.theme.fg_on("diff.line.fg", "diff.added.bg")
+    } else {
+        app.theme.fg_on("syntax.added", "panel.bg")
+    };
+
+    buf.fill(screen, ' ', base);
+    let title = app.i18n.t("diff-title");
+    buf.draw_frame(screen, frame, Some(&title));
+    let inner = screen.inner();
+    if inner.h < 4 || inner.w < 30 {
+        return;
+    }
+    let foot_y = inner.y + inner.h - 1;
+    let Some(scan) = &view.scan else {
+        let names = format!("- {}  ↔  + {}", view.left_name, view.right_name);
+        buf.put_str(
+            inner.x,
+            inner.y,
+            &fcmd_ui::elide_middle(&names, inner.w as usize),
+            dim,
+            inner.w,
+        );
+        let text = app.i18n.t("bin-comparing");
+        buf.put_str(inner.x, inner.y + inner.h / 2, &text, base, inner.w);
+        return;
+    };
+    // The two names, each with how long the file is to the byte: two lengths that differ
+    // are the first thing one wants to know about two binaries.
+    let half = (inner.w as usize).saturating_sub(7) / 2;
+    let name = |text: &str, bytes: u64| {
+        let size = app
+            .i18n
+            .t_args("bin-bytes", &[("count", (bytes as i64).into())]);
+        let room = half.saturating_sub(fcmd_ui::buffer::str_cells(&size) + 3);
+        format!("{} · {size}", fcmd_ui::elide_middle(text, room))
+    };
+    let names = format!(
+        "- {}  ↔  + {}",
+        name(&view.left_name, scan.left_len),
+        name(&view.right_name, scan.right_len)
+    );
+    buf.put_str(inner.x, inner.y, &names, dim, inner.w);
+
+    let digits = view.offset_digits();
+    let n = view.per_row;
+    // Where each part of a row starts: the offset, the left file's hex and its characters,
+    // the rule, and the same for the right file.
+    let left_x = inner.x + digits as u16 + 1;
+    let side_w = (4 * n) as u16;
+    let rule_x = left_x + side_w + 1;
+    let right_x = rule_x + 2;
+    let printable = |b: u8| {
+        if (0x20..0x7f).contains(&b) {
+            b as char
+        } else {
+            '·'
+        }
+    };
+    for row in 0..view.rows() {
+        let y = inner.y + 1 + row as u16;
+        let offset = view.top + (row * n) as u64;
+        let (left, right) = view.row(row);
+        buf.put_str(rule_x, y, "│", frame, 1);
+        if left.is_empty() && right.is_empty() {
+            continue;
+        }
+        buf.put_str(
+            inner.x,
+            y,
+            &format!("{offset:0digits$X}"),
+            dim,
+            digits as u16,
+        );
+        let mut side = |x: u16, mine: &[u8], theirs: &[u8], differs: Style| {
+            for (i, byte) in mine.iter().enumerate() {
+                let style = if theirs.get(i) == Some(byte) {
+                    base
+                } else {
+                    differs
+                };
+                buf.put_str(x + (3 * i) as u16, y, &format!("{byte:02X}"), style, 2);
+                buf.set(x + (3 * n + i) as u16, y, printable(*byte), style);
+            }
+        };
+        side(left_x, left, right, removed);
+        side(right_x, right, left, added);
+    }
+
+    let foot = if scan.identical() {
+        app.i18n
+            .t_args("bin-same", &[("bytes", (scan.left_len as i64).into())])
+    } else {
+        // The list of differences is cut at a number nobody walks to; the count says so
+        // with a `+`, and the bytes that differ are counted to the end all the same.
+        let count = if scan.capped {
+            format!("{}+", scan.runs.len())
+        } else {
+            scan.runs.len().to_string()
+        };
+        app.i18n.t_args(
+            "bin-where",
+            &[
+                ("at", (view.difference_at() as i64).into()),
+                ("count", count.into()),
+                ("offset", format!("{:#X}", scan.first().unwrap_or(0)).into()),
+                ("differing", (scan.differing as i64).into()),
+            ],
+        )
+    };
+    buf.put_str(
+        inner.x,
+        foot_y - 1,
+        &fcmd_ui::truncate_cols(&foot, inner.w as usize),
+        base,
+        inner.w,
+    );
+    let keys = app.i18n.t("bin-hint");
+    buf.put_str(
+        inner.x,
+        foot_y,
+        &fcmd_ui::truncate_cols(&keys, inner.w as usize),
+        dim,
+        inner.w,
+    );
+}
+
 /// The colour a row of the disk usage tree has in the panel: the highlight groups asked first,
 /// then the built-in kinds, exactly as a listing of the same folder would paint the name.
 fn usage_ink(
@@ -4760,6 +4914,22 @@ mod tests {
         write("diff", &shot(&mut git_app, 100, 30));
         git_app.mode = Mode::Normal;
 
+        // ---- two binaries, byte against byte, at the first difference ----------------------
+        let old: Vec<u8> = (0..2048u32)
+            .map(|i| (i.wrapping_mul(37) >> 3) as u8)
+            .collect();
+        let mut new = old.clone();
+        new[0x318..0x31C].copy_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF]);
+        new[0x345] ^= 0x20;
+        new[0x380..0x388].copy_from_slice(b"fcmd0.45");
+        new.extend_from_slice(&[0x90; 24]);
+        let mut compare = bindiff_view(&work, &old, &new);
+        compare.left_name = "/home/mb/build/firmware-1.4.bin".into();
+        compare.right_name = "/home/mb/build/firmware-1.5.bin".into();
+        git_app.mode = Mode::BinDiff(Box::new(compare));
+        write("compare", &shot(&mut git_app, 100, 30));
+        git_app.mode = Mode::Normal;
+
         // ---- where the space of a whole tree goes, as a map --------------------------------
         // The sizes are lengths and nothing else: a file made as long as a film without a
         // byte of it written, which is what lets the picture be of gigabytes.
@@ -6330,6 +6500,94 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
             "a line in both is plain"
         );
         assert_ne!(buf.get(x, y).unwrap().style.bg, added);
+    }
+
+    /// Two binaries on the screen byte against byte, at the first difference.
+    fn bindiff_view(dir: &std::path::Path, left: &[u8], right: &[u8]) -> fcmd_view::BinDiff {
+        let (a, b) = (dir.join("old.bin"), dir.join("new.bin"));
+        std::fs::write(&a, left).unwrap();
+        std::fs::write(&b, right).unwrap();
+        let cancel = fcmd_core::CancelToken::new();
+        let scan = fcmd_view::bindiff::scan(
+            &mut std::io::Cursor::new(left),
+            &mut std::io::Cursor::new(right),
+            &cancel,
+        )
+        .unwrap()
+        .expect("nobody cancelled");
+        let mut view = fcmd_view::BinDiff::new(
+            1,
+            "old.bin".into(),
+            std::fs::File::open(&a).unwrap(),
+            "new.bin".into(),
+            std::fs::File::open(&b).unwrap(),
+            cancel,
+        );
+        view.arrived(scan);
+        view
+    }
+
+    /// A byte that differs is red in the left file and green in the right, in hex and as a
+    /// character; the bytes around it are plain, and where the shorter file has ended its
+    /// side is empty.
+    #[test]
+    fn the_byte_comparison_paints_the_bytes_that_differ() {
+        let dir = tempfile::tempdir().unwrap();
+        let left = b"\x00\x01\x02\x03ABCDEFGHIJKL".to_vec();
+        let mut right = left.clone();
+        right[5] = b'x';
+        right.extend_from_slice(b"tail");
+        let mut app = app("far", "en");
+        app.mode = Mode::BinDiff(Box::new(bindiff_view(dir.path(), &left, &right)));
+        let buf = frame_buf(&mut app, 80, 20);
+        let text = buf.to_text();
+        assert!(text.contains("old.bin · 16 bytes"), "{text}");
+        assert!(text.contains("new.bin · 20 bytes"), "{text}");
+        assert!(
+            text.contains(
+                "00000000 00 01 02 03 41 42 43 44 ····ABCD │ 00 01 02 03 41 78 43 44 ····AxCD"
+            ),
+            "{text}"
+        );
+        assert!(text.contains("difference 1 of 2"), "{text}");
+        assert!(text.contains("Alt+↑↓ differences"), "{text}");
+        let at = |word: &str, skip: usize| {
+            (0..20u16)
+                .find_map(|y| {
+                    let line: String = (0..80)
+                        .filter_map(|x| buf.get(x, y))
+                        .map(|c| c.ch)
+                        .collect();
+                    line.match_indices(word)
+                        .nth(skip)
+                        .map(|(x, _)| (line[..x].chars().count() as u16, y))
+                })
+                .unwrap_or_else(|| panic!("{word} is not on screen"))
+        };
+        let removed = app.theme.color("diff.removed.bg");
+        let added = app.theme.color("diff.added.bg");
+        let (x, y) = at("42", 0);
+        assert_eq!(
+            buf.get(x, y).unwrap().style.bg,
+            removed,
+            "what the left has"
+        );
+        let (x, y) = at("78", 0);
+        assert_eq!(buf.get(x, y).unwrap().style.bg, added, "what the right has");
+        let (x, y) = at("AxCD", 0);
+        assert_eq!(
+            buf.get(x + 1, y).unwrap().style.bg,
+            added,
+            "as a character too"
+        );
+        assert_ne!(
+            buf.get(x, y).unwrap().style.bg,
+            added,
+            "its neighbour is plain"
+        );
+        // The right file's last four bytes have nothing opposite them: all of it differs.
+        let (x, y) = at("74 61 69 6C", 0);
+        assert_eq!(buf.get(x, y).unwrap().style.bg, added);
     }
 
     /// A tree walked off a real folder, on the screen as the map: the largest rectangle is

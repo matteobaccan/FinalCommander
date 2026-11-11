@@ -324,6 +324,7 @@ fn landing(lang: &Text) -> String {
         ("git.svg", "Alt+F1 · Git"),
         ("ai.svg", "Alt+F1 · AI"),
         ("diff.svg", "Ctrl+Shift+D"),
+        ("compare.svg", "Ctrl+Shift+D · hex"),
         ("usage.svg", "Alt+Shift+F3 · Tab"),
         ("help.svg", "F1"),
     ] {
@@ -415,6 +416,7 @@ const HELP_SHOTS: &[(&str, usize, &str, &str)] = &[
     ("viewer.md", 6, "hex.svg", "F4"),
     ("viewer.md", 6, "disasm.svg", "F5"),
     ("viewer.md", 7, "diff.svg", "Ctrl+Shift+D"),
+    ("viewer.md", 7, "compare.svg", "Ctrl+Shift+D · hex"),
     ("config.md", 1, "ai.svg", "Alt+F1 · AI"),
     ("editor.md", 0, "editor.svg", "F4"),
     ("editor.md", 2, "hexedit.svg", "F4 · hex"),

@@ -148,6 +148,8 @@ They cannot show a version of the program that no longer exists.
 | **Git in a panel** (`Alt+F1` → *Git*): what changed, staged apart from not staged, in words; `F5` stages, `F6` unstages, `F7` commits, `F8` discards, `F3` is the side-by-side diff. | **The AI panel** (`Alt+F1` → *AI*): the conversation itself, in Markdown, questions on the right and answers as they are written; the frame names the model and how full its context window is. |
 | <img src="docs/shots/diff.svg" alt="The side-by-side diff with the removed line painted red and the added lines painted green" width="420"> | <img src="docs/shots/usage.svg" alt="The disk usage map: a folder's rows as rectangles sized by what they hold, each folder showing what it is made of" width="420"> |
 | **The side-by-side diff** (`Ctrl+Shift+D`, or `F3` in the git panel): a line that went is painted red, a line that came green, and the part of a changed line that differs is marked. | **Where the space went** (`Alt+Shift+F3`, then `Tab`): the whole tree measured once and drawn as a map, each rectangle in the colour its name has in the panel; `Enter` goes into a folder, `Backspace` comes back. |
+| <img src="docs/shots/compare.svg" alt="Two firmware images compared byte against byte: offsets, both files in hex and as characters, the differing bytes painted red and green" width="420"> | |
+| **Two binaries, byte against byte** (`Ctrl+Shift+D` on two files that are not text): the first differing offset, both lengths, how many bytes differ, and the hex of both at that place; `Alt+↓` is the next difference. | |
 
 ## Git and AI, each in a panel
 

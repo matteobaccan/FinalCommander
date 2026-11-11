@@ -1283,6 +1283,43 @@ one has to answer twice an hour.
 and back.
 
 Still to come, and deliberately not in the first cut: a unified view, which is a second layout
-of the same rows; a diff of a file against the copy on disk, which is the editor's question;
-and a byte comparison of two binaries with the first differing offset and hex context, for
-which the pair is simply too large to line up as lines.
+of the same rows.
+
+### 3a. Two files that are not text (0.45)
+
+Lines are what §3 lines up, and a binary has none. When either of the two files looks binary
+(`decode::looks_binary` on its first 4 KiB — the test `F3` uses to choose the dump mode, so a
+UTF-16 text with a byte order mark is still text), `Ctrl+Shift+D` and `--diff` open a different
+screen on the same pair: `fcmd_view::BinDiff`, byte against byte.
+
+**By position.** Byte *n* of one against byte *n* of the other, from the first to the end of
+the longer file, which is what `cmp` does. A byte inserted near the start makes everything
+after it differ, and that is the truth about two files compared this way; lining two binaries
+up around an insertion is a different tool, and a quadratic one.
+
+**Off the UI thread, with no limit on size.** The key opens the screen at once and queues
+`Request::BinCompare`; a worker reads both files in 64 KiB blocks (`bindiff::scan`), skips a
+block that is the same on both sides with one comparison, and answers once with the two
+lengths, the count of byte positions that differ, and the runs of consecutive differing bytes
+as (offset, length). What one file has past the end of the other is one run, the last. The
+runs are kept up to 65 536 (`MOST_RUNS`); past that the list is cut, the screen says so with a
+`+` after the count, and the count of bytes that differ stays exact. `Esc` cancels the worker.
+The 16 MiB limit of §3 does not apply: nothing is held in memory but the runs and the bytes on
+the screen, which are read from the two open files when the place or the room changes.
+
+**The screen.** The line under the frame names both files with their lengths in bytes — two
+lengths that differ are the first thing one wants to know. Then one row per 4, 8, 16 or 32
+bytes, as many as fit: the offset in hex, the left file's bytes in hex and as characters, a
+rule, the right file's. A byte the two disagree about is drawn in the diff's own colours, red
+on the left and green on the right; where a file has ended its side is empty. The foot says
+which difference of how many the top row is at, the offset of the first one, and how many
+bytes differ; under it are the keys. The screen opens with the first difference on its top
+row.
+
+**Keys.** `Alt+↓` and `Alt+↑` put the next and the previous run on the top row and say when
+there is none, as the hunks of §3 do; `↑ ↓ PgUp PgDn Home End` move by rows; `Esc`, `F3` and
+`F10` close. Two files with the same bytes open all the same and say so, on the status line
+and on the foot, with their length. Nothing is merged and nothing is written: changing a byte
+is the hex editor's work (§2.5).
+
+A file on a server or inside an archive is refused by name, as in §3.

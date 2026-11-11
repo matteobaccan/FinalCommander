@@ -362,6 +362,22 @@ Both files have to be on this disk and under 16 MiB: the whole of each is read i
 line them up, so a file on a server or inside an archive says so by name rather than fetching
 a copy you did not ask for.
 
+**Two files that are not text** — two builds of a program, two firmware images, two pictures —
+are compared byte against byte instead: byte 0 with byte 0, to the end of the longer one. The
+same key opens it; which screen you get is decided by what the files are. The comparison runs
+in the background, however large the pair, and `Esc` stops it. When it is back the screen is
+at the first difference: one column of offsets, then each file's bytes in hex and as
+characters, the left file's on the left. A byte the two disagree about is red on the left and
+green on the right, and where the shorter file has ended its side is empty. The line with the
+names says how long each file is, to the byte; the foot says which difference of how many is
+on screen, the offset of the first one, and how many bytes differ in all.
+
+`Alt+↓` and `Alt+↑` go from one difference to the next — a difference being a run of bytes
+that differ — and the arrows, `PgUp`, `PgDn`, `Home` and `End` move by rows. Two files with
+the same bytes say so, with their length. Nothing can be merged or written here: to change a
+byte, `F4` on the file is the hex editor. The comparison is by position, as `cmp` does it, so
+a byte inserted near the start makes everything after it differ.
+
 # Delphi
 
 Delphi's own files are read the way Delphi shows them.

@@ -7,6 +7,7 @@
 mod aigen;
 pub mod asm;
 pub mod base64;
+pub mod bindiff;
 pub mod decode;
 pub mod dfm;
 pub mod diff;
@@ -31,6 +32,7 @@ mod tags;
 pub mod view;
 
 pub use asm::{assemble, AsmError, Assembled};
+pub use bindiff::BinDiff;
 pub use decode::{detect, looks_binary, sniff_bom, Codepage};
 pub use diff::{Diff, Side};
 pub use disasm::{

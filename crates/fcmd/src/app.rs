@@ -42,6 +42,14 @@ pub enum Request {
         root: VPath,
         cancel: CancelToken,
     },
+    /// Compare two files byte against byte, from the first to the end of the longer one
+    /// (SPEC 05 §3a).
+    BinCompare {
+        id: u64,
+        left: PathBuf,
+        right: PathBuf,
+        cancel: CancelToken,
+    },
     /// Look for files with the same content under `roots` (SPEC 06 §13).
     Dupes {
         panel: usize,
@@ -1320,6 +1328,12 @@ pub enum Event {
         panel: usize,
         root: VPath,
         branch: fcmd_jobs::branch::Branch,
+    },
+    /// Two files compared byte against byte: what was found, `None` when it was stopped, or
+    /// why one of them could not be read.
+    BinCompared {
+        id: u64,
+        result: Result<Option<fcmd_view::bindiff::Scan>, String>,
     },
     /// How far the walk for the disk usage map has got.
     UsageProgress {
@@ -2663,6 +2677,8 @@ pub enum Mode {
     Diff(Box<fcmd_view::Diff>),
     /// Where the space of a whole tree goes, as a map and as a list (SPEC 06 §12).
     Usage(Box<crate::treemap::UsageView>),
+    /// Two files that are not text, byte against byte (SPEC 05 §3a).
+    BinDiff(Box<fcmd_view::BinDiff>),
     /// `Alt+Ins`: the screen as it was, with a rectangle of it to copy (SPEC 06 §11b).
     Grab(Box<crate::grab::Grab>),
     /// `Ctrl+Alt+E`: a real terminal with a shell in it (SPEC 06 §4).
@@ -3048,6 +3064,7 @@ pub struct App {
     branch_cancel: CancelToken,
     /// Which walk for the disk usage map is the one on screen: an abandoned one may still
     /// answer, and its answer is for a screen that has gone.
+    /// The same counter numbers the byte comparisons: one screen at a time has either.
     usage_seq: u64,
     /// The file the split dialog is about, and the piece size it was last answered with.
     split_source: Option<VPath>,
@@ -4906,6 +4923,7 @@ impl App {
                 root,
                 branch,
             } => self.branch_arrived(panel, root, branch),
+            Event::BinCompared { id, result } => self.bin_compared(id, result),
             Event::UsageProgress { id, files, bytes } => {
                 if let Mode::Usage(view) = &mut self.mode {
                     if view.id == id && view.tree.is_none() {
@@ -5679,6 +5697,10 @@ impl App {
             Mode::Usage(view) => {
                 self.mode = Mode::Usage(view);
                 self.usage_key(key);
+            }
+            Mode::BinDiff(view) => {
+                self.mode = Mode::BinDiff(view);
+                self.bindiff_key(key);
             }
             Mode::Grab(grab) => {
                 self.mode = Mode::Grab(grab);
@@ -6655,6 +6677,13 @@ impl App {
                 return;
             }
         }
+        // Two files of which either is not text are not lined up as lines: they are compared
+        // byte against byte, on a screen of their own and by a worker, because a pair of
+        // disk images is not something to read whole on the way to a key's answer.
+        if looks_binary_file(left.as_path()) || looks_binary_file(right.as_path()) {
+            self.open_bindiff(left, right);
+            return;
+        }
         let read = |path: &VPath| -> Result<Vec<u8>, String> {
             let meta = std::fs::metadata(path.as_path()).map_err(|e| format!("{path}: {e}"))?;
             if meta.len() > fcmd_view::diff::MOST {
@@ -6698,6 +6727,111 @@ impl App {
         if same {
             let m = self.i18n.t("diff-same");
             self.set_status(m);
+        }
+    }
+
+    /// The byte comparison of two files that are not text (SPEC 05 §3a).
+    ///
+    /// The screen opens at once, saying it is comparing; the comparison itself is a worker's,
+    /// from the first byte to the end of the longer file, and `Esc` stops it.
+    fn open_bindiff(&mut self, left: VPath, right: VPath) {
+        let open =
+            |path: &VPath| std::fs::File::open(path.as_path()).map_err(|e| format!("{path}: {e}"));
+        let (left_file, right_file) = match (open(&left), open(&right)) {
+            (Ok(a), Ok(b)) => (a, b),
+            (Err(e), _) | (_, Err(e)) => {
+                self.set_error(e);
+                return;
+            }
+        };
+        self.usage_seq += 1;
+        let cancel = CancelToken::new();
+        self.requests.push(Request::BinCompare {
+            id: self.usage_seq,
+            left: left.as_path().to_path_buf(),
+            right: right.as_path().to_path_buf(),
+            cancel: cancel.clone(),
+        });
+        self.diff_paths = None;
+        self.diff_git = None;
+        self.mode = Mode::BinDiff(Box::new(fcmd_view::BinDiff::new(
+            self.usage_seq,
+            left.to_string(),
+            left_file,
+            right.to_string(),
+            right_file,
+            cancel,
+        )));
+    }
+
+    /// The comparison a worker made of the two files is back.
+    fn bin_compared(&mut self, id: u64, result: Result<Option<fcmd_view::bindiff::Scan>, String>) {
+        let Mode::BinDiff(view) = &mut self.mode else {
+            return;
+        };
+        if view.id != id {
+            return;
+        }
+        match result {
+            Ok(Some(scan)) => {
+                let same = scan.identical().then_some(scan.left_len);
+                view.arrived(scan);
+                // Two files that are the same say so, as two texts do: one wants to be told
+                // rather than scroll for a difference that is not there.
+                if let Some(bytes) = same {
+                    let m = self
+                        .i18n
+                        .t_args("bin-same", &[("bytes", (bytes as i64).into())]);
+                    self.set_status(m);
+                }
+            }
+            Ok(None) => {}
+            // A file that could not be read to its end has no comparison to show: the
+            // screen closes and the reason is on the status line.
+            Err(e) => {
+                self.leave_screen();
+                self.set_error(e);
+            }
+        }
+    }
+
+    /// The keys of the byte comparison (SPEC 05 §3a): the rows, and `Alt+↑`/`Alt+↓` from one
+    /// difference to the next, as in the comparison of two texts.
+    fn bindiff_key(&mut self, key: Key) {
+        let Mode::BinDiff(view) = &mut self.mode else {
+            return;
+        };
+        let page = view.rows().max(1) as i64;
+        let mut error: Option<&'static str> = None;
+        match key.code {
+            KeyCode::Esc | KeyCode::F(10) | KeyCode::F(3) => {
+                // A comparison still running is told to stop: nobody is waiting for it.
+                view.cancel.cancel();
+                self.leave_screen();
+                return;
+            }
+            _ if view.scan.is_none() => {}
+            KeyCode::Down if key.mods.contains(Mods::ALT) => {
+                if !view.next_difference() {
+                    error = Some("diff-no-next");
+                }
+            }
+            KeyCode::Up if key.mods.contains(Mods::ALT) => {
+                if !view.previous_difference() {
+                    error = Some("diff-no-previous");
+                }
+            }
+            KeyCode::Up => view.scroll(-1),
+            KeyCode::Down => view.scroll(1),
+            KeyCode::PageUp => view.scroll(-page),
+            KeyCode::PageDown => view.scroll(page),
+            KeyCode::Home => view.to_start(),
+            KeyCode::End => view.to_end(),
+            _ => {}
+        }
+        if let Some(id) = error {
+            let m = self.i18n.t(id);
+            self.set_error(m);
         }
     }
 
@@ -23101,7 +23235,7 @@ impl App {
         let left = VPath::local(left).normalised();
         let right = VPath::local(right).normalised();
         self.open_diff_on(left, right);
-        self.started(matches!(self.mode, Mode::Diff(_)))
+        self.started(matches!(self.mode, Mode::Diff(_) | Mode::BinDiff(_)))
     }
 
     /// Did the screen open? If it did, the run is tied to it and [`App::leave_screen`] ends
@@ -42046,6 +42180,157 @@ five
         assert!(view.identical());
         assert_eq!(view.hunks(), 0);
         assert_eq!(app.status, app.i18n.t("diff-same"));
+    }
+
+    /// Two files that are not text are compared byte against byte: the key opens the screen
+    /// and asks a worker, the answer puts the first difference on the top row, `Alt+↓` and
+    /// `Alt+↑` walk the differences, and the frame shows both files' bytes at that offset.
+    #[test]
+    fn two_binaries_are_compared_by_a_worker_and_open_on_the_first_difference() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut left = vec![0u8; 4096];
+        left[..4].copy_from_slice(&[0x7f, b'E', b'L', b'F']);
+        let mut right = left.clone();
+        right[0x200] = 0xAA;
+        right[0x900] = 0xBB;
+        right.extend_from_slice(&[1, 2, 3]);
+        std::fs::write(dir.path().join("a.bin"), &left).unwrap();
+        std::fs::write(dir.path().join("b.bin"), &right).unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "Tab");
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        app.requests.clear();
+        press(&mut app, "Ctrl+Shift+D");
+        let Mode::BinDiff(view) = &app.mode else {
+            panic!("no byte comparison: {:?}", app.mode)
+        };
+        assert!(view.scan.is_none(), "nothing is compared by the key itself");
+        let Some(Request::BinCompare {
+            id,
+            left: a,
+            right: b,
+            cancel,
+        }) = app.take_requests().pop()
+        else {
+            panic!("no comparison was asked for")
+        };
+        let scan = {
+            let (mut a, mut b) = (
+                std::fs::File::open(a).unwrap(),
+                std::fs::File::open(b).unwrap(),
+            );
+            fcmd_view::bindiff::scan(&mut a, &mut b, &cancel).unwrap()
+        };
+        // Another comparison's answer is not this screen's.
+        app.handle_event(Event::BinCompared {
+            id: id + 1,
+            result: Ok(scan.clone()),
+        });
+        assert!(matches!(&app.mode, Mode::BinDiff(v) if v.scan.is_none()));
+        app.handle_event(Event::BinCompared {
+            id,
+            result: Ok(scan),
+        });
+        let mut buf = fcmd_ui::Buffer::new(80, 24);
+        crate::render::draw(&mut app, &mut buf);
+        let text = buf.to_text();
+        let Mode::BinDiff(view) = &app.mode else {
+            panic!("the comparison closed: {:?}", app.mode)
+        };
+        let scan = view.scan.as_ref().expect("the answer is in");
+        assert_eq!(scan.first(), Some(0x200));
+        assert_eq!((scan.left_len, scan.right_len), (4096, 4099));
+        assert_eq!(scan.differing, 5);
+        assert_eq!(view.top, 0x200, "the first difference is on the top row");
+        assert!(text.contains("00000200 00 00"), "{text}");
+        assert!(text.contains("│ AA 00"), "the right file's byte: {text}");
+        assert!(
+            text.contains("4096 bytes") && text.contains("4099 bytes"),
+            "{text}"
+        );
+        assert!(text.contains("difference 1 of 3"), "{text}");
+        assert!(text.contains("first at offset 0x200"), "{text}");
+        assert!(text.contains("bytes that differ: 5"), "{text}");
+
+        press(&mut app, "Alt+Down");
+        assert!(matches!(&app.mode, Mode::BinDiff(v) if v.top == 0x900));
+        press(&mut app, "Alt+Down");
+        assert!(
+            matches!(&app.mode, Mode::BinDiff(v) if v.top == 0x1000),
+            "the tail"
+        );
+        press(&mut app, "Alt+Down");
+        assert!(app.status_error, "there is no fourth");
+        assert_eq!(app.status, app.i18n.t("diff-no-next"));
+        press(&mut app, "Alt+Up");
+        assert!(matches!(&app.mode, Mode::BinDiff(v) if v.top == 0x900));
+        press(&mut app, "Esc");
+        assert!(matches!(app.mode, Mode::Normal));
+    }
+
+    /// Two binaries with the same bytes say so; a comparison still running is stopped by
+    /// `Esc`; and one whose file could not be read closes with the reason.
+    #[test]
+    fn two_equal_binaries_say_so_and_a_comparison_can_be_stopped() {
+        let dir = tempfile::tempdir().unwrap();
+        let bytes = vec![0u8; 512];
+        let (a, b) = (dir.path().join("a.bin"), dir.path().join("b.bin"));
+        std::fs::write(&a, &bytes).unwrap();
+        std::fs::write(&b, &bytes).unwrap();
+        let mut app = app();
+        app.requests.clear();
+        app.open_diff_on(VPath::local(&a), VPath::local(&b));
+        let Some(Request::BinCompare { id, cancel, .. }) = app.take_requests().pop() else {
+            panic!("no comparison was asked for: {:?}", app.mode)
+        };
+        let scan = fcmd_view::bindiff::scan(
+            &mut std::io::Cursor::new(&bytes),
+            &mut std::io::Cursor::new(&bytes),
+            &cancel,
+        )
+        .unwrap();
+        app.handle_event(Event::BinCompared {
+            id,
+            result: Ok(scan),
+        });
+        assert!(matches!(&app.mode, Mode::BinDiff(_)), "{:?}", app.mode);
+        assert!(app.status.contains("512 bytes each"), "{}", app.status);
+        assert!(!app.status_error);
+        let mut buf = fcmd_ui::Buffer::new(80, 24);
+        crate::render::draw(&mut app, &mut buf);
+        assert!(buf.to_text().contains("byte for byte"), "{}", buf.to_text());
+        press(&mut app, "Esc");
+
+        app.open_diff_on(VPath::local(&a), VPath::local(&b));
+        let Some(Request::BinCompare { id, cancel, .. }) = app.take_requests().pop() else {
+            panic!("no comparison was asked for")
+        };
+        // Still running: the arrows wait, and `Esc` tells the worker to stop.
+        press(&mut app, "Down");
+        assert!(matches!(&app.mode, Mode::BinDiff(_)));
+        assert!(!cancel.is_cancelled());
+        press(&mut app, "Esc");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert!(cancel.is_cancelled());
+        // Its answer arrives for a screen that has gone, and nothing happens.
+        app.handle_event(Event::BinCompared {
+            id,
+            result: Err("too late".into()),
+        });
+        assert!(!app.status_error);
+
+        app.open_diff_on(VPath::local(&a), VPath::local(&b));
+        let Some(Request::BinCompare { id, .. }) = app.take_requests().pop() else {
+            panic!("no comparison was asked for")
+        };
+        app.handle_event(Event::BinCompared {
+            id,
+            result: Err("a.bin: the disk went away".into()),
+        });
+        assert!(matches!(app.mode, Mode::Normal));
+        assert!(app.status_error && app.status.contains("the disk went away"));
     }
 
     /// A cursor on `..`, on a directory, or on a file this program cannot read as bytes on
