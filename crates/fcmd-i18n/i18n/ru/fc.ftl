@@ -1900,3 +1900,9 @@ opt-editor-external = Внешний редактор
 opt-editor-use-external = Использовать внешний редактор по F4 (Alt+F4 тогда — этот)
 opt-viewer-external = Внешняя программа просмотра
 opt-viewer-use-external = Использовать внешнюю программу просмотра по F3 (Alt+F3 тогда — эта)
+
+
+# editor features
+opt-editor-line-numbers = Нумеровать строки
+editor-line-numbers-on = Номера строк включены
+editor-line-numbers-off = Номера строк выключены

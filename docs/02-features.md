@@ -231,6 +231,7 @@ something readable rather than only into instructions.
 | 6.15 | `.editorconfig`: indentation, width and trailing-blank trimming per project, line ending and final newline for new files | NEW (every modern editor) | ✓ (SPEC 05 §2.2c) |
 | 6.16 | Word completion from the words of the file, nearest first, cycling (`Alt+/`) | FAR (EditorCompletion)/emacs | ✓ |
 | 6.17 | A marked block rewritten by a language model from an instruction in words: the model's version shown as a diff against the block, applied on `Enter` as one undo step | NEW | ✓ `Ctrl+Alt+W` (SPEC 05 §2.10) |
+| 6.18 | Line numbers in a margin, per file (`Alt+N`) and as a setting (`editor.line_numbers`) | MC | ✓ (SPEC 05 §2.2k) |
 
 ## 7. Tools & dialogs
 

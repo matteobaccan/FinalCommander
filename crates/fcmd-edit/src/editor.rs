@@ -101,6 +101,10 @@ pub struct Editor {
     /// Draw a space as `·` and a tab as `→`. The editor does not draw itself, so this is only
     /// kept here: it belongs to the file being edited, not to the window it is in.
     pub show_whitespace: bool,
+    /// Number the lines in a gutter left of the text (mcedit's `Alt+N`). Kept here for the
+    /// same reason: the editor does not draw itself, but the gutter takes columns the text
+    /// would have had, and the scrolling has to know how many.
+    pub line_numbers: bool,
     /// Where the cursor lands on a match: at its start, or just past its end.
     pub cursor_after_match: bool,
     /// May the cursor stand past the end of a line? Off, it is clamped to the last character,
@@ -182,6 +186,7 @@ impl Editor {
             expand_tabs: true,
             auto_indent: true,
             show_whitespace: false,
+            line_numbers: false,
             cursor_after_match: false,
             beyond_eol: false,
             trim_on_save: None,
@@ -275,6 +280,17 @@ impl Editor {
             });
         }
         self.guides.as_ref().map(|memo| memo.guides.as_slice())
+    }
+
+    /// How many columns the line numbers take, the blank that parts them from the text
+    /// included; nothing when they are off. As wide as the last line's number and never
+    /// narrower than three digits, so the text does not step sideways when a short file
+    /// grows past its ninth or ninety-ninth line.
+    pub fn gutter_width(&self) -> usize {
+        if !self.line_numbers {
+            return 0;
+        }
+        self.buffer.len().max(1).to_string().len().max(3) + 1
     }
 
     pub fn open(path: &Path) -> Result<Editor, EditorError> {

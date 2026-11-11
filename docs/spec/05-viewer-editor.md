@@ -969,6 +969,24 @@ the first lit. `←`/`→`/`Tab`/`Shift+Tab` go round them, `Enter` takes the li
 A fetched copy of a remote file (SPEC 04) asks its own question when the server's
 copy changed; that one still has two buttons.
 
+### 2.2k Line numbers (`Alt+N`)
+
+`editor.line.numbers` numbers the lines in a gutter on the left of the text and takes the
+numbers away again; the key is mcedit's, FAR's editor having no such thing. It belongs to the
+editor in front (`Editor::line_numbers`), and `editor.line_numbers` in the settings — a row of
+the editor settings dialog, SPEC 10 §3.6 — is what every file opens with.
+
+The gutter is as wide as the number of the buffer's last line and never narrower than three
+digits, plus one blank cell (`Editor::gutter_width`), so the text does not step sideways when
+a file grows past its ninth line. The numbers are right-aligned and drawn in `syntax.guide`
+on `editor.bg` — the margin's colour, the one the block guides are drawn in. Everything else
+the editor draws is moved right by the gutter's width and given what is left of the window:
+the text, the syntax colours, the block guides, the marked block and the cursor. The
+horizontal scroll moves the text and leaves the numbers; the mouse's text area begins after
+the gutter, so a click on a number does nothing. A window with fewer than eight columns left
+for the text shows the text and no numbers. The editor does not wrap lines, so a row is
+always a line and every row has its number.
+
 ### 2.2b Syntax highlighting
 
 `fcmd-syntax` is a scanner, not a parser, and deliberately: it knows how a language writes a

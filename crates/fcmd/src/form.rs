@@ -321,6 +321,11 @@ impl Form {
                     cfg.editor.show_whitespace,
                 ),
                 Field::toggle(
+                    "editor.line_numbers",
+                    t("opt-editor-line-numbers"),
+                    cfg.editor.line_numbers,
+                ),
+                Field::toggle(
                     "editor.cursor_after_match",
                     t("opt-editor-cursor-after"),
                     cfg.editor.cursor_after_match,

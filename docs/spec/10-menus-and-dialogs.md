@@ -320,6 +320,7 @@ The `[editor]` section, which this dialog is the front of:
 | Tab width | `editor.tab_width` | How wide a tab is drawn, and how far one indent moves a line |
 | Keep the indent of the line above | `editor.auto_indent` | |
 | Show spaces and tabs | `editor.show_whitespace` | A space is `·` and a tab is `→` followed by its padding, so trailing space and a mixed indent show |
+| Number the lines | `editor.line_numbers` | Off by default. A gutter of line numbers left of the text, for every file opened afterwards; `Alt+N` in the editor turns it on and off for the file in front (SPEC 05 §2.2k) |
 | The cursor lands after the text a search found | `editor.cursor_after_match` | The match is selected either way; this is where the cursor goes — the start is for reading, the end for typing over it |
 | The cursor may go past the end of a line | `editor.beyond_eol` | Off, the arrows stop at the last character and `Right` there goes to the next line. On, the columns past the text are somewhere to be, and real spaces appear only when something is typed there. FAR has the same setting, off by default |
 | Take trailing blanks off when saving | `editor.trim_trailing` | Off by default. On, every `F2` takes the spaces and tabs off the end of each line first, the same as `Alt+Shift+T` (SPEC 05 §2), as one undoable change |

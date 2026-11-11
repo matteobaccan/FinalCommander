@@ -1848,3 +1848,9 @@ opt-editor-external = 外部编辑器
 opt-editor-use-external = F4 使用外部编辑器（Alt+F4 则是本编辑器）
 opt-viewer-external = 外部查看器
 opt-viewer-use-external = F3 使用外部查看器（Alt+F3 则是本查看器）
+
+
+# editor features
+opt-editor-line-numbers = 显示行号
+editor-line-numbers-on = 已显示行号
+editor-line-numbers-off = 已隐藏行号

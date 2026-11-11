@@ -84,6 +84,7 @@ max_open_size = "256MiB"
 undo_depth = 1000                 # steps Ctrl+Z can take back per file (SPEC 05 §2.2g)
 external = ""                     # the other editor, for Alt+F4: "vim +{line} {file}" (SPEC 06 §5a)
 use_external = false              # F4 runs it, and Alt+F4 is ours
+line_numbers = false              # number the lines in a margin; Alt+N per file (SPEC 05 §2.2k)
 # [[editor.replace]]              # a replacement kept by name, for Alt+Shift+F7
 # name = "trailing commas"
 # find = ",\\s*$"

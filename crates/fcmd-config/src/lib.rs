@@ -964,6 +964,9 @@ pub struct EditCfg {
     pub auto_indent: bool,
     /// Draw a space as `·` and a tab as `→`, so trailing space and a mixed indent show.
     pub show_whitespace: bool,
+    /// Number the lines in a gutter left of the text. `Alt+N` in the editor turns it on and
+    /// off for the file in front; this is what every file opens with.
+    pub line_numbers: bool,
     /// Where the cursor lands on a match: at its start, or just after it. FAR offers both,
     /// because the first is for reading and the second for typing over what was found.
     pub cursor_after_match: bool,
@@ -1012,6 +1015,7 @@ impl Default for EditCfg {
             tabs: "typed".into(),
             auto_indent: true,
             show_whitespace: false,
+            line_numbers: false,
             cursor_after_match: false,
             beyond_eol: false,
             trim_trailing: false,
@@ -2227,6 +2231,7 @@ impl Config {
             }
             "editor.auto_indent" => self.editor.auto_indent = parse_bool(value)?,
             "editor.show_whitespace" => self.editor.show_whitespace = parse_bool(value)?,
+            "editor.line_numbers" => self.editor.line_numbers = parse_bool(value)?,
             "editor.cursor_after_match" => self.editor.cursor_after_match = parse_bool(value)?,
             "editor.beyond_eol" => self.editor.beyond_eol = parse_bool(value)?,
             "editor.trim_trailing" => self.editor.trim_trailing = parse_bool(value)?,

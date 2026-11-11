@@ -112,6 +112,18 @@ blank cells, so it never hides a character, and it is not part of the file — n
 copied or saved. Its colour is the theme's `syntax.guide`, and the switch that turns the
 colours off turns the lines off with them.
 
+# Line numbers
+
+`Alt+N` numbers the lines in a margin on the left, and `Alt+N` again takes the numbers away —
+mcedit's key. The margin is as wide as the number of the last line, and never narrower than
+three digits; the text, the block guides and a marked block all sit to its right, and when a
+long line scrolls sideways the numbers stay where they are. They are drawn in the theme's
+`syntax.guide`, the colour of the block guides, and like those they are not part of the file:
+nothing of them is copied or saved, and a click on a number moves nothing.
+
+The key is for the file in front of you. **Number the lines**, in the editor settings
+(`editor.line_numbers` in `fcmd.toml`), is what every file opens with.
+
 # Bytes instead of lines
 
 `F4` on a binary opens the same editor on its bytes, and `Alt+H` switches either way. Two

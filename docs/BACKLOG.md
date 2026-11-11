@@ -115,7 +115,7 @@ Three findings that are not gaps against anybody:
 | Previews from rules: a program per mask, with a timeout | yazi, ranger, lf, nnn, vifm, broot; Total Commander and Double Commander as lister plugins | M | yes — it is SPEC 05 §1.7, written and not built | Feature 5.8. `[[decompile]]` is the same shape; this is the quick view asking it |
 | Fonts and SVG drawn; HTML and RTF laid out | yazi, Total Commander, Double Commander | S as programs (`rsvg-convert`, `magick`); M in process | as programs | Would fall out of the row above |
 | Sound | Total Commander, Double Commander, nnn | S | **no** — decided with the video | |
-| Line numbers in the editor; a right margin; a ruler in the viewer | Midnight Commander | S | yes | |
+| A right margin in the editor; a ruler in the viewer | Midnight Commander | S | yes | The editor's line numbers are in (`Alt+N`) |
 | A block through a command; a file or a command's output inserted; a block written out | Midnight Commander, far2l | S | yes | The hex editor's blocks already do the file half |
 | A paragraph reflowed, wrap while typing, a block aligned; the case of a block; boxes drawn | Midnight Commander, FAR, far2l | S each | yes | FAR ships them as plugins (`align`, `autowrap`, `editcase`, `drawline`) |
 | The syntax chosen by hand | Midnight Commander, far2l | S | yes | For the file whose name says nothing |

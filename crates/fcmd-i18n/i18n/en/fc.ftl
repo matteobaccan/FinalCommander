@@ -1936,3 +1936,9 @@ opt-editor-external = External editor
 opt-editor-use-external = Use the external editor for F4 (Alt+F4 is then this one)
 opt-viewer-external = External viewer
 opt-viewer-use-external = Use the external viewer for F3 (Alt+F3 is then this one)
+
+
+# editor features
+opt-editor-line-numbers = Number the lines
+editor-line-numbers-on = Line numbers on
+editor-line-numbers-off = Line numbers off

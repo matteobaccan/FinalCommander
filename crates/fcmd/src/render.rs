@@ -1816,6 +1816,15 @@ fn draw_editor(
     let (w, h) = (buf.width(), buf.height());
     let keybar_h = u16::from(app.cfg.ui.key_bar);
     let body = Rect::new(0, 1, w, h.saturating_sub(1 + keybar_h));
+    // The line numbers take their columns off the left of the body, and everything that
+    // counts columns — the scrolling, the mouse, the cursor — is told about what is left.
+    // A window too narrow to show both shows the text.
+    let gutter = match editor.gutter_width() as u16 {
+        g if g + 8 <= body.w => g,
+        _ => 0,
+    };
+    let body_all = body;
+    let body = Rect::new(body.x + gutter, body.y, body.w - gutter, body.h);
     app.editor_size = (body.w, body.h);
 
     let base = app.theme.editor();
@@ -1856,7 +1865,7 @@ fn draw_editor(
     let selected = app.theme.fg_on("editor.selected.fg", "editor.selected.bg");
 
     // Where the text ended up, for the mouse: a click puts the caret there and the wheel
-    // scrolls. The editor draws its lines from column zero, so this is the body as it is.
+    // scrolls. The gutter is not part of it, so a click on a line's number moves nothing.
     app.layout.text = Some(body);
 
     let colouring = app.cfg.ui.syntax;
@@ -1869,13 +1878,20 @@ fn draw_editor(
     let guide = app.theme.fg_on("syntax.guide", "editor.bg");
     for (row, line_index) in visible.clone().enumerate() {
         let y = body.y + row as u16;
+        // The number of the line, right-aligned against the blank that parts it from the
+        // text, in the colour the block guides are drawn in: both are the margin's, there
+        // to be read past, and a theme that sets one has set the other.
+        if gutter > 0 {
+            let number = format!("{:>width$}", line_index + 1, width = gutter as usize - 1);
+            buf.put_str(body_all.x, y, &number, guide, gutter - 1);
+        }
         let (text, columns) = expand_with_map(editor, line_index);
         let shown: String = text
             .chars()
             .skip(editor.left)
             .take(body.w as usize)
             .collect();
-        buf.put_str(0, y, &shown, base, body.w);
+        buf.put_str(body.x, y, &shown, base, body.w);
 
         // The syntax, painted over the line in the foreground colour its class asks for.
         // The background stays the editor's, so a coloured run is a colour and not a block.
@@ -1896,7 +1912,7 @@ fn draw_editor(
                 }
                 let style = app.theme.styled(span.class.theme_key(), base);
                 let room = body.w - from as u16;
-                buf.put_str(from as u16, y, &slice, style, room);
+                buf.put_str(body.x + from as u16, y, &slice, style, room);
             }
         }
 
@@ -1910,7 +1926,7 @@ fn draw_editor(
                 for &c in cols {
                     let blank = line.chars().nth(c).is_none_or(char::is_whitespace);
                     if blank && c >= editor.left && c - editor.left < body.w as usize {
-                        buf.put_str((c - editor.left) as u16, y, glyph, guide, 1);
+                        buf.put_str(body.x + (c - editor.left) as u16, y, glyph, guide, 1);
                     }
                 }
             }
@@ -1926,7 +1942,13 @@ fn draw_editor(
                 .take(to.saturating_sub(from))
                 .collect();
             if !slice.is_empty() && (from as u16) < body.w {
-                buf.put_str(from as u16, y, &slice, selected, body.w - from as u16);
+                buf.put_str(
+                    body.x + from as u16,
+                    y,
+                    &slice,
+                    selected,
+                    body.w - from as u16,
+                );
             }
         }
     }
@@ -1947,7 +1969,7 @@ fn draw_editor(
         let x = cursor_col.saturating_sub(editor.left) as u16;
         let y = body.y + (editor.cursor.line - visible.start) as u16;
         if x < body.w {
-            return Some((x, y));
+            return Some((body.x + x, y));
         }
     }
     None
@@ -7726,6 +7748,101 @@ See the [docs](https://example.com/docs) for more.
         let buf = frame_buf(&mut app, 60, 14);
         assert_eq!(at(&buf, 0, 2).0, ' ');
         assert_eq!(at(&buf, 2, 3).0, ' ');
+    }
+
+    /// The line numbers are a margin of their own: right-aligned, in the guides' colour, with
+    /// the text, the block guides, the marked block and the cursor all moved right by its
+    /// width — and scrolled sideways the numbers stay where they are while the text moves.
+    #[test]
+    fn the_editor_numbers_its_lines_in_a_gutter_and_everything_moves_over() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("Unit1.pas");
+        std::fs::write(&file, "begin\n  x := 1;\n\n  y;\nend;\n").unwrap();
+        let mut app = super::tests::app("far", "en");
+        let mut editor = fcmd_edit::Editor::open(&file).expect("it opens");
+        editor.line_numbers = true;
+        assert_eq!(editor.gutter_width(), 4, "three digits and a blank");
+        app.mode = crate::app::Mode::Editor(Box::new(editor));
+        let mut buf = Buffer::new(60, 12);
+        let cursor = draw(&mut app, &mut buf);
+        let text = buf.to_text();
+        let rows: Vec<&str> = text.lines().collect();
+        // Row 0 is the status line, so line n of the file is row n.
+        assert!(rows[1].starts_with("  1 begin"), "{text}");
+        assert!(rows[2].starts_with("  2 "), "{text}");
+        assert!(rows[5].starts_with("  5 end;"), "{text}");
+        assert!(
+            rows[7].trim().is_empty(),
+            "no number past the last line: {text}"
+        );
+        let guide = app.theme.color("syntax.guide");
+        let cell = |buf: &Buffer, x: u16, y: u16| {
+            let cell = buf.get(x, y).unwrap();
+            (cell.ch, cell.style.fg)
+        };
+        assert_eq!(
+            cell(&buf, 2, 1),
+            ('1', guide),
+            "the number, in the margin's colour"
+        );
+        assert_eq!(cell(&buf, 4, 2), ('│', guide), "begin's guide, moved over");
+        assert_eq!(cell(&buf, 4, 3), ('│', guide), "and through the empty line");
+        assert_eq!(
+            cursor,
+            Some((4, 1)),
+            "the cursor is on the text, not the number"
+        );
+        assert_eq!(app.editor_size.0, 56, "the text has what the margin left");
+
+        // A marked block is painted on the text and never on the numbers.
+        {
+            let editor = app.mode.editor_mut().expect("the editor");
+            editor.select_all();
+        }
+        let buf = frame_buf(&mut app, 60, 12);
+        let selected = app.theme.color("editor.selected.bg");
+        assert_ne!(
+            buf.get(2, 1).unwrap().style.bg,
+            selected,
+            "the number is not marked"
+        );
+        assert_eq!(buf.get(4, 1).unwrap().style.bg, selected, "the text is");
+
+        // Scrolled sideways, the text moves under a margin that stays.
+        {
+            let editor = app.mode.editor_mut().expect("the editor");
+            editor.clear_block();
+            editor.cursor = fcmd_edit::Position::new(1, 3);
+            editor.left = 2;
+        }
+        let text = frame(&mut app, 60, 12);
+        let rows: Vec<&str> = text.lines().collect();
+        assert!(rows[1].starts_with("  1 gin"), "{text}");
+        assert!(rows[2].starts_with("  2 x := 1;"), "{text}");
+
+        // A hundred lines more and the margin is still three digits wide; a thousand and
+        // it grows by one. Too narrow a window shows the text and no numbers.
+        {
+            let editor = app.mode.editor_mut().expect("the editor");
+            editor.left = 0;
+            editor.cursor = fcmd_edit::Position::new(0, 0);
+            editor.insert_text(&"\n".repeat(1000)).unwrap();
+            assert_eq!(editor.gutter_width(), 5);
+            editor.move_file_start(false);
+        }
+        let text = frame(&mut app, 60, 12);
+        assert!(text.lines().nth(1).unwrap().starts_with("   1"), "{text}");
+        let text = frame(&mut app, 10, 12);
+        assert!(!text.lines().nth(1).unwrap().contains('1'), "{text}");
+
+        // And off, the text is back in column zero.
+        {
+            let editor = app.mode.editor_mut().expect("the editor");
+            editor.line_numbers = false;
+            assert_eq!(editor.gutter_width(), 0);
+        }
+        let text = frame(&mut app, 60, 12);
+        assert!(!text.lines().nth(1).unwrap().starts_with(' '), "{text}");
     }
 
     /// A file that is not Pascal has blocks of its own and no guides: the editor draws them

@@ -1927,3 +1927,9 @@ opt-editor-external = Editor esterno
 opt-editor-use-external = Usa l'editor esterno per F4 (Alt+F4 diventa questo)
 opt-viewer-external = Visualizzatore esterno
 opt-viewer-use-external = Usa il visualizzatore esterno per F3 (Alt+F3 diventa questo)
+
+
+# editor features
+opt-editor-line-numbers = Numera le righe
+editor-line-numbers-on = Numeri di riga attivi
+editor-line-numbers-off = Numeri di riga spenti

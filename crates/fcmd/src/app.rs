@@ -26078,6 +26078,7 @@ impl App {
         editor.expand_tabs = cfg.expand_typed();
         editor.auto_indent = cfg.auto_indent;
         editor.show_whitespace = cfg.show_whitespace;
+        editor.line_numbers = cfg.line_numbers;
         editor.cursor_after_match = cfg.cursor_after_match;
         editor.beyond_eol = cfg.beyond_eol;
         editor.buffer.set_undo_depth(cfg.undo_depth);
@@ -26913,6 +26914,15 @@ impl App {
                 Command::EditorReload => {
                     editor.reload().map_err(|e| e.to_string())?;
                     return Err("editor-reloaded".into());
+                }
+                // For the file in front only: the setting is what the next one opens with.
+                Command::EditorLineNumbers => {
+                    editor.line_numbers = !editor.line_numbers;
+                    return Err(if editor.line_numbers {
+                        "editor-line-numbers-on".into()
+                    } else {
+                        "editor-line-numbers-off".into()
+                    });
                 }
                 Command::EditorSearchNext | Command::EditorSearchPrev => {
                     let query = editor.last_search.clone().unwrap_or_default();
@@ -49773,9 +49783,11 @@ abcdefghij
         app.cfg.editor.tabs = "keep".into();
         app.cfg.editor.auto_indent = false;
         app.cfg.editor.show_whitespace = true;
+        app.cfg.editor.line_numbers = true;
         app.cfg.editor.cursor_after_match = true;
         press(&mut app, "F4");
         let editor = app.mode.editor().expect("the editor opened");
+        assert!(editor.line_numbers);
         assert_eq!(editor.tab_width, 8);
         assert!(!editor.expand_tabs, "`keep` leaves a typed tab alone");
         assert!(!editor.auto_indent);
@@ -50118,6 +50130,27 @@ abcdefghij
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// `Alt+N` numbers the lines of the file in front and takes the numbers away again; what
+    /// the next file opens with is the setting's business, and the key leaves that alone.
+    #[test]
+    fn alt_n_numbers_the_lines_of_this_file_and_leaves_the_setting_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "one\ntwo\n").unwrap();
+        let mut app = editing(dir.path(), "a.txt");
+        press(&mut app, "F4");
+        assert!(!app.mode.editor().expect("the editor").line_numbers);
+        press(&mut app, "Alt+N");
+        assert!(app.mode.editor().expect("the editor").line_numbers);
+        assert!(!app.status_error, "{}", app.status);
+        assert!(!app.cfg.editor.line_numbers, "the key is not the setting");
+        press(&mut app, "Alt+N");
+        assert!(!app.mode.editor().expect("the editor").line_numbers);
+        // And the setting is one of the rows of the dialog, and a key of the file.
+        app.cfg.set("editor.line_numbers", "true").unwrap();
+        assert!(app.cfg.editor.line_numbers);
+        assert!(app.cfg.set("editor.line_numbers", "perhaps").is_err());
+    }
+
     #[test]
     fn the_editor_settings_dialog_writes_what_it_was_told() {
         let mut app = app();
@@ -50128,6 +50161,7 @@ abcdefghij
         assert_eq!(form.kind, FormKind::EditorSettings);
         assert_eq!(form.text_value("editor.tabs"), "typed");
         assert_eq!(form.text_value("editor.show_whitespace"), "false");
+        assert_eq!(form.text_value("editor.line_numbers"), "false");
 
         // The tab policy is three values, not a box: one step along is `all`.
         press(&mut app, "Right");

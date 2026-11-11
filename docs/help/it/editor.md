@@ -115,6 +115,18 @@ passa soltanto per celle vuote, quindi non copre mai un carattere, e non fa part
 nulla di lei viene copiato o salvato. Il colore è `syntax.guide` del tema, e l'interruttore
 che spegne i colori spegne anche le linee.
 
+# I numeri di riga
+
+`Alt+N` numera le righe in un margine a sinistra, e `Alt+N` di nuovo toglie i numeri: è il
+tasto di mcedit. Il margine è largo quanto il numero dell'ultima riga, e mai meno di tre
+cifre; il testo, le guide dei blocchi e un blocco marcato stanno alla sua destra, e quando una
+riga lunga scorre di lato i numeri restano dove sono. Sono disegnati nel `syntax.guide` del
+tema, il colore delle guide dei blocchi, e come quelle non fanno parte del file: non vengono
+copiati né salvati, e un clic su un numero non sposta nulla.
+
+Il tasto vale per il file che hai davanti. **Numera le righe**, nelle impostazioni dell'editor
+(`editor.line_numbers` in `fcmd.toml`), è ciò con cui si apre ogni file.
+
 # Byte invece di righe
 
 `F4` su un binario apre lo stesso editor sui suoi byte, e `Alt+H` passa da una parte

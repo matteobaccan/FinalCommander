@@ -602,6 +602,9 @@ pub enum Command {
     /// `Shift+F8`: how the file is written — its end of line, its byte order mark, its code
     /// page — to change any of them.
     EditorConvert,
+    /// `Alt+N`: number the lines in a gutter, or stop (mcedit's key).
+    EditorLineNumbers,
+    // (more editor commands go above this line)
 }
 
 impl Command {
@@ -908,6 +911,7 @@ impl Command {
             Command::EditorDeleteWordRight,
             Command::EditorToggleReadOnly,
             Command::EditorConvert,
+            Command::EditorLineNumbers,
         ];
         for v in ViewMode::ALL {
             out.push(Command::PanelViewSet(v));
@@ -1226,6 +1230,7 @@ impl Command {
             Command::EditorDeleteWordRight => "editor.delete.word.right".into(),
             Command::EditorToggleReadOnly => "editor.readonly.toggle".into(),
             Command::EditorConvert => "editor.convert".into(),
+            Command::EditorLineNumbers => "editor.line.numbers".into(),
         }
     }
 
@@ -1521,6 +1526,7 @@ impl Command {
             ("editor.delete.word.right", _) => Command::EditorDeleteWordRight,
             ("editor.readonly.toggle", _) => Command::EditorToggleReadOnly,
             ("editor.convert", _) => Command::EditorConvert,
+            ("editor.line.numbers", _) => Command::EditorLineNumbers,
             _ => return None,
         };
         Some(cmd)
