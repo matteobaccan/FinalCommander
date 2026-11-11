@@ -1123,6 +1123,7 @@ fn draw_pick(
         crate::menu::PickKind::ReplaceTemplates => "replace-tpl-hint",
         crate::menu::PickKind::EditorMatches => "editor-matches-hint",
         crate::menu::PickKind::EditorConvert => "editor-convert-hint",
+        crate::menu::PickKind::EditorChoice => "editor-choice-hint",
         crate::menu::PickKind::Jobs => "jobs-hint",
         crate::menu::PickKind::LeftJobs => "journal-hint",
         crate::menu::PickKind::SavedSyncs => "sync-saved-hint",

@@ -612,6 +612,18 @@ pub enum Command {
     EditorInsertFile,
     /// `Alt+Shift+W`: the marked block written to a file of its own.
     EditorWriteBlock,
+    /// `Alt+Shift+Y`: the language the file is coloured as, chosen from a list.
+    EditorSyntax,
+    /// `Alt+C`: the case of the block, or of the word under the cursor, from a list of four.
+    EditorCase,
+    /// The block, or the word under the cursor, in capitals.
+    EditorCaseUpper,
+    /// The block, or the word under the cursor, in small letters.
+    EditorCaseLower,
+    /// A capital at the start of every word of the block.
+    EditorCaseTitle,
+    /// Capitals made small and small letters capitals, over the block.
+    EditorCaseToggle,
     // (more editor commands go above this line)
 }
 
@@ -919,6 +931,12 @@ impl Command {
             Command::EditorDeleteWordRight,
             Command::EditorToggleReadOnly,
             Command::EditorConvert,
+            Command::EditorCaseToggle,
+            Command::EditorCaseTitle,
+            Command::EditorCaseLower,
+            Command::EditorCaseUpper,
+            Command::EditorCase,
+            Command::EditorSyntax,
             Command::EditorWriteBlock,
             Command::EditorInsertFile,
             Command::EditorInsertOutput,
@@ -1242,6 +1260,12 @@ impl Command {
             Command::EditorDeleteWordRight => "editor.delete.word.right".into(),
             Command::EditorToggleReadOnly => "editor.readonly.toggle".into(),
             Command::EditorConvert => "editor.convert".into(),
+            Command::EditorCaseToggle => "editor.case.toggle".into(),
+            Command::EditorCaseTitle => "editor.case.title".into(),
+            Command::EditorCaseLower => "editor.case.lower".into(),
+            Command::EditorCaseUpper => "editor.case.upper".into(),
+            Command::EditorCase => "editor.case".into(),
+            Command::EditorSyntax => "editor.syntax".into(),
             Command::EditorWriteBlock => "editor.block.write".into(),
             Command::EditorInsertFile => "editor.insert.file".into(),
             Command::EditorInsertOutput => "editor.insert.output".into(),
@@ -1542,6 +1566,12 @@ impl Command {
             ("editor.delete.word.right", _) => Command::EditorDeleteWordRight,
             ("editor.readonly.toggle", _) => Command::EditorToggleReadOnly,
             ("editor.convert", _) => Command::EditorConvert,
+            ("editor.case.toggle", _) => Command::EditorCaseToggle,
+            ("editor.case.title", _) => Command::EditorCaseTitle,
+            ("editor.case.lower", _) => Command::EditorCaseLower,
+            ("editor.case.upper", _) => Command::EditorCaseUpper,
+            ("editor.case", _) => Command::EditorCase,
+            ("editor.syntax", _) => Command::EditorSyntax,
             ("editor.block.write", _) => Command::EditorWriteBlock,
             ("editor.insert.file", _) => Command::EditorInsertFile,
             ("editor.insert.output", _) => Command::EditorInsertOutput,

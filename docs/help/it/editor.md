@@ -105,6 +105,15 @@ Perl, Pascal e Delphi — viene colorato mentre lo leggi, e la riga di stato nom
 subito quando un file viene letto come qualcosa che non intendevi. I colori vengono dal tema,
 quindi lo seguono. `ui.syntax = false` in `fcmd.toml` li spegne.
 
+Quando il nome non dice nulla, o dice la cosa sbagliata — uno script senza estensione, un
+`.txt` che in realtà è una patch, un `.inc` che in un progetto è PHP e nel successivo Pascal —
+`Alt+Shift+Y` elenca i linguaggi tra cui scegliere. Scrivi qualche lettera per restringere
+l'elenco e premi `Invio`. La prima riga torna a ciò che dice il nome, la seconda legge il file
+come testo semplice senza colori, e la riga in vigore è marcata. La scelta viene ricordata per
+quel file, dove il visualizzatore ricorda la tabella codici in cui ha letto un file, così al
+prossimo `F4` non serve ripeterla (`viewer.remember = false` spegne quella memoria, per
+entrambi).
+
 In una unit Pascal o Delphi, e in un form letto come testo, una linea sottile scende lungo
 ogni blocco come la disegna l'IDE di Delphi: dalla riga che lo apre — `begin`, `try`, `case`,
 `repeat`, `asm`, una `class` o un `record` con un corpo, un `object` di un form — al suo `end`
@@ -256,6 +265,27 @@ tornare indietro.
 se c'è, altrimenti in tutto il file. Comincia il pattern con `!` per tenere solo le righe che
 corrispondono e togliere le altre: `!ERROR` lascia gli errori di un log. Un solo `Ctrl+Z` le
 rimette tutte.
+
+# Maiuscole e minuscole di un blocco
+
+`Alt+C` cambia maiuscole e minuscole del blocco marcato, da un elenco di quattro:
+
+| Riga | `Hello wORLD` diventa |
+| --- | --- |
+| TUTTO MAIUSCOLO | `HELLO WORLD` |
+| tutto minuscolo | `hello world` |
+| Iniziali Maiuscole | `Hello World` — una maiuscola all'inizio di ogni parola, minuscole dopo |
+| iNVERTI | `hELLO World` — ogni maiuscola diventa minuscola e ogni minuscola maiuscola |
+
+`Invio` applica la riga sotto il cursore, ed è un solo `Ctrl+Z`. Il blocco resta marcato, così
+una seconda scelta si fa sullo stesso testo. In un blocco a colonne cambiano solo le colonne
+marcate. Senza nulla di marcato cambia la **parola sotto il cursore**, o quella subito prima.
+Le lettere accentate seguono le loro regole — `é` diventa `É`, e la `ß` tedesca diventa `SS`,
+il che allunga il testo di una lettera.
+
+Ognuna delle quattro è anche un comando a sé — `editor.case.upper`, `editor.case.lower`,
+`editor.case.title`, `editor.case.toggle` — senza tasto finché non gliene dai uno nella mappa
+dei tasti.
 
 # Un blocco attraverso un comando, e file dentro e fuori
 

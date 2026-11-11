@@ -24516,6 +24516,8 @@ impl App {
             PickKind::EditorMatches => return,
             // And `open_editor_convert`, which knows how the file is written now.
             PickKind::EditorConvert => return,
+            // And `open_editor_syntax` and its like, which know the file in front.
+            PickKind::EditorChoice => return,
             // And `open_saved_searches`, which knows whether the find dialog is behind it.
             PickKind::SavedSearches => return,
             PickKind::AiServices => return,
@@ -24883,7 +24885,8 @@ impl App {
                 if kind == PickKind::CharMap
                     || kind == PickKind::ReplaceTemplates
                     || kind == PickKind::EditorMatches
-                    || kind == PickKind::EditorConvert =>
+                    || kind == PickKind::EditorConvert
+                    || kind == PickKind::EditorChoice =>
             {
                 self.mode = Mode::Normal;
                 self.restore_editor();
@@ -25829,6 +25832,10 @@ impl App {
                 self.restore_editor();
                 self.editor_convert(&row.value);
             }
+            PickKind::EditorChoice => {
+                self.restore_editor();
+                self.editor_choice(&row.value);
+            }
             PickKind::CharMap => {
                 self.restore_editor();
                 if let Some(editor) = self.mode.editor_mut() {
@@ -26041,6 +26048,8 @@ impl App {
             codepage: viewer.codepage.id().to_string(),
             mode: viewer.mode.letter().to_string(),
             wrap: viewer.wrap.word().to_string(),
+            // The editor's, and kept by `remember_seen` when the viewer writes the row.
+            syntax: String::new(),
             bookmarks: viewer
                 .bookmarks
                 .iter()
@@ -26059,6 +26068,14 @@ impl App {
     pub fn remember_seen(&mut self, row: fcmd_config::SeenCfg) {
         if !self.cfg.viewer.remember || row.path.is_empty() {
             return;
+        }
+        // The language chosen in the editor is on the same row and is not the viewer's to
+        // forget: a file read again after it was edited keeps what it was edited as.
+        let mut row = row;
+        if row.syntax.is_empty() {
+            if let Some(old) = self.seen.iter().find(|s| s.path == row.path) {
+                row.syntax = old.syntax.clone();
+            }
         }
         self.seen.retain(|s| s.path != row.path);
         self.seen.insert(0, row);
@@ -26145,6 +26162,20 @@ impl App {
         editor.cursor_after_match = cfg.cursor_after_match;
         editor.beyond_eol = cfg.beyond_eol;
         editor.buffer.set_undo_depth(cfg.undo_depth);
+        // The language this very file was last edited as, when one was chosen by hand: it
+        // is remembered with where the viewer left the file, and under the same setting.
+        if let Some(path) = editor.path.as_ref().filter(|_| self.cfg.viewer.remember) {
+            let path = path.to_string();
+            match self.seen.iter().find(|s| s.path == path).map(|s| &s.syntax) {
+                Some(name) if name == "-" => editor.set_syntax(None),
+                Some(name) if !name.is_empty() => {
+                    if let Some(syntax) = fcmd_syntax::SYNTAXES.iter().find(|s| s.name == name) {
+                        editor.set_syntax(Some(syntax));
+                    }
+                }
+                _ => {}
+            }
+        }
         // The project's own `.editorconfig` wins over the settings, for this file only
         // (SPEC 05 §2.9). The line ending and the final newline are a new file's: an
         // existing file keeps the ones it has, so opening one never rewrites every line.
@@ -26852,6 +26883,30 @@ impl App {
                 );
                 return;
             }
+            Command::EditorSyntax => {
+                self.open_editor_syntax();
+                return;
+            }
+            Command::EditorCase => {
+                self.open_editor_case();
+                return;
+            }
+            Command::EditorCaseUpper => {
+                self.editor_change_case(fcmd_edit::Case::Upper);
+                return;
+            }
+            Command::EditorCaseLower => {
+                self.editor_change_case(fcmd_edit::Case::Lower);
+                return;
+            }
+            Command::EditorCaseTitle => {
+                self.editor_change_case(fcmd_edit::Case::Title);
+                return;
+            }
+            Command::EditorCaseToggle => {
+                self.editor_change_case(fcmd_edit::Case::Toggle);
+                return;
+            }
             Command::EditorPipe => {
                 // Said before the question rather than after the answer: a command typed
                 // out for a column block would be a command typed for nothing.
@@ -27100,6 +27155,173 @@ impl App {
         }
         if let Some(text) = error {
             self.set_error(text);
+        }
+    }
+
+    /// `Alt+Shift+Y`: the languages the highlighter knows, as a list, for the file whose
+    /// name says nothing or says the wrong thing — a script with no extension, a `.txt`
+    /// that is really a patch, a `.inc` that is PHP here and Pascal there.
+    ///
+    /// The first row goes back to what the name says and the second reads the file as plain
+    /// text; the row in force is marked. The names are sorted, since the table they come
+    /// from is in the order the languages were written.
+    fn open_editor_syntax(&mut self) {
+        let Some(editor) = self.mode.editor() else {
+            return;
+        };
+        let now = editor.highlight.language();
+        let by_name = fcmd_syntax::of_name(&editor.name()).map(|s| s.name);
+        // What the state file holds for this file: only then is a row a choice made by
+        // hand, and the first row the one that is *not* in force.
+        let chosen = editor
+            .path
+            .as_ref()
+            .map(|p| p.to_string())
+            .and_then(|path| self.seen.iter().find(|s| s.path == path))
+            .map(|s| s.syntax.clone())
+            .filter(|s| !s.is_empty());
+        let by_hand = chosen.is_some() || now != by_name;
+        let auto = match by_name {
+            Some(language) => self
+                .i18n
+                .t_args("editor-syntax-auto", &[("language", language.into())]),
+            None => self.i18n.t("editor-syntax-auto-none"),
+        };
+        let mut rows = vec![
+            PickRow::plain(auto, "syntax:", !by_hand),
+            PickRow::plain(
+                self.i18n.t("editor-syntax-none"),
+                "syntax:-",
+                by_hand && now.is_none(),
+            ),
+            PickRow::rule(),
+        ];
+        let mut names: Vec<&str> = fcmd_syntax::SYNTAXES.iter().map(|s| s.name).collect();
+        names.sort_by_key(|n| n.to_lowercase());
+        for name in names {
+            rows.push(PickRow::plain(
+                name,
+                format!("syntax:{name}"),
+                by_hand && now == Some(name),
+            ));
+        }
+        self.park_editor();
+        let title = self.i18n.t("editor-syntax-title");
+        let pick = Pick::new(PickKind::EditorChoice, title, rows, self.active);
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
+    /// `Alt+C`: the four things to do to the case of the block, as a list — a letter each
+    /// would be four more keys to remember for something done twice a week.
+    fn open_editor_case(&mut self) {
+        if self.mode.editor().is_none() {
+            return;
+        }
+        let rows = fcmd_edit::Case::ALL
+            .into_iter()
+            .map(|case| {
+                // Written out, so that the catalogues' own test can see each is used.
+                let label = match case {
+                    fcmd_edit::Case::Upper => "editor-case-upper",
+                    fcmd_edit::Case::Lower => "editor-case-lower",
+                    fcmd_edit::Case::Title => "editor-case-title",
+                    fcmd_edit::Case::Toggle => "editor-case-toggle",
+                };
+                PickRow::plain(self.i18n.t(label), format!("case:{}", case.as_str()), false)
+            })
+            .collect();
+        self.park_editor();
+        let title = self.i18n.t("editor-case-heading");
+        let pick = Pick::new(PickKind::EditorChoice, title, rows, self.active);
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
+    /// A row of one of the editor's short lists was chosen: `syntax:<name>`, `case:<which>`.
+    fn editor_choice(&mut self, what: &str) {
+        let Some((kind, value)) = what.split_once(':') else {
+            return;
+        };
+        match kind {
+            "syntax" => self.editor_set_syntax(value),
+            "case" => {
+                if let Some(case) = fcmd_edit::Case::parse(value) {
+                    self.editor_change_case(case);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Read the file in front as `name` — a syntax's name, `-` for plain text, nothing for
+    /// what the file's own name says — and remember it for this file, where the viewer
+    /// remembers the code page it read a file in, so the next `F4` on it needs no telling.
+    fn editor_set_syntax(&mut self, name: &str) {
+        let Some(editor) = self.mode.editor_mut() else {
+            return;
+        };
+        let syntax = match name {
+            "" => fcmd_syntax::of_name(&editor.name()),
+            "-" => None,
+            name => match fcmd_syntax::SYNTAXES.iter().find(|s| s.name == name) {
+                Some(syntax) => Some(syntax),
+                None => return,
+            },
+        };
+        editor.set_syntax(syntax);
+        let file = editor.name();
+        let path = editor.path.as_ref().map(|p| p.to_string());
+        if let Some(path) = path.filter(|_| self.cfg.viewer.remember) {
+            match self.seen.iter_mut().find(|s| s.path == path) {
+                Some(row) => row.syntax = name.to_string(),
+                // Nothing to forget about a file nobody remembers anything of.
+                None if name.is_empty() => {}
+                None => {
+                    self.seen.insert(
+                        0,
+                        fcmd_config::SeenCfg {
+                            path,
+                            syntax: name.to_string(),
+                            ..Default::default()
+                        },
+                    );
+                    self.seen.truncate(Self::SEEN_KEPT);
+                }
+            }
+        }
+        let m = match syntax {
+            Some(syntax) => self.i18n.t_args(
+                "editor-syntax-set",
+                &[("name", file.into()), ("language", syntax.name.into())],
+            ),
+            None => self
+                .i18n
+                .t_args("editor-syntax-off", &[("name", file.into())]),
+        };
+        self.set_status(m);
+    }
+
+    /// Change the case of the block, or of the word under the cursor with nothing marked.
+    fn editor_change_case(&mut self, case: fcmd_edit::Case) {
+        let (width, height) = self.editor_size;
+        let Some(editor) = self.mode.editor_mut() else {
+            return;
+        };
+        let name = editor.name();
+        let outcome = editor.change_case(case);
+        editor.scroll_into_view(height as usize, width as usize);
+        match outcome {
+            Ok(true) => {}
+            Ok(false) => {
+                let m = self.i18n.t("editor-no-word");
+                self.set_error(m);
+            }
+            Err(e) => {
+                let m = self.i18n.t_args(
+                    "editor-failed",
+                    &[("name", name.into()), ("error", e.to_string().into())],
+                );
+                self.set_error(m);
+            }
         }
     }
 
@@ -44796,6 +45018,173 @@ abcdefghij
         press(&mut app, "Alt+Shift+W");
         answer_prompt(&mut app, "no-such-folder/out.txt");
         assert!(app.status_error && matches!(app.mode, Mode::Editor(_)));
+    }
+
+    /// `Alt+C` lists the four cases over the editor and `Enter` applies the one under the
+    /// cursor to the block, as one undo step; `Esc` gives the editor back untouched. With
+    /// nothing marked and no word under the cursor it says so. The four are commands too.
+    #[test]
+    fn alt_c_changes_the_case_of_the_block_from_a_list() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = editor_with_block(dir.path(), "one two\nthree\n", 0, 1);
+        press(&mut app, "Alt+C");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list: {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::EditorChoice);
+        let values: Vec<&str> = pick.rows.iter().map(|r| r.value.as_str()).collect();
+        assert_eq!(
+            values,
+            ["case:upper", "case:lower", "case:title", "case:toggle"]
+        );
+        press(&mut app, "Enter");
+        assert_eq!(editor_text(&app), "ONE TWO\nthree\n", "{}", app.status);
+        press(&mut app, "Alt+C");
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "Enter");
+        assert_eq!(editor_text(&app), "One Two\nthree\n");
+        press(&mut app, "Ctrl+Z");
+        assert_eq!(editor_text(&app), "ONE TWO\nthree\n", "one step");
+        press(&mut app, "Alt+C");
+        press(&mut app, "Esc");
+        assert_eq!(editor_text(&app), "ONE TWO\nthree\n");
+
+        // The commands themselves, for a key of one's own or a macro. The undo unmarked
+        // the block, so everything is marked again first.
+        press(&mut app, "Ctrl+A");
+        app.run(Command::EditorCaseLower);
+        assert_eq!(editor_text(&app), "one two\nthree\n");
+        app.run(Command::EditorCaseToggle);
+        assert_eq!(editor_text(&app), "ONE TWO\nTHREE\n");
+        app.run(Command::EditorCaseTitle);
+        assert_eq!(editor_text(&app), "One Two\nThree\n");
+        app.run(Command::EditorCaseUpper);
+        assert_eq!(editor_text(&app), "ONE TWO\nTHREE\n");
+
+        // Nothing marked: the word the cursor stands after, and past two blanks nothing —
+        // which is said rather than passed over in silence.
+        if let Mode::Editor(e) = &mut app.mode {
+            e.clear_block();
+            e.move_file_end(false);
+        }
+        app.run(Command::EditorCaseLower);
+        assert!(!app.status_error, "{}", app.status);
+        assert_eq!(editor_text(&app), "ONE TWO\nthree\n");
+        press(&mut app, "Space");
+        press(&mut app, "Space");
+        app.run(Command::EditorCaseUpper);
+        assert!(app.status_error, "{}", app.status);
+        assert_eq!(editor_text(&app), "ONE TWO\nthree  \n");
+    }
+
+    /// `Alt+Shift+Y` lists the languages; the one chosen colours a file whose name says
+    /// nothing, is marked in the list afterwards, and is what the file opens as next time.
+    /// The first row goes back to what the name says, the second is plain text.
+    #[test]
+    fn alt_shift_y_chooses_the_syntax_and_the_file_remembers_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("build-script");
+        std::fs::write(&file, "fn main() {}\n").unwrap();
+        let mut app = editing_app(dir.path());
+        app.open_editor_on(&VPath::local(&file));
+        assert_eq!(app.mode.editor().unwrap().highlight.language(), None);
+        press(&mut app, "Alt+Shift+Y");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list: {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::EditorChoice);
+        assert_eq!(pick.rows[0].value, "syntax:");
+        assert!(pick.rows[0].current, "by its name, which says nothing");
+        assert_eq!(pick.rows[1].value, "syntax:-");
+        let names: Vec<&str> = pick.rows[3..].iter().map(|r| r.label.as_str()).collect();
+        assert_eq!(names.len(), fcmd_syntax::SYNTAXES.len(), "every language");
+        let mut sorted = names.clone();
+        sorted.sort_by_key(|n| n.to_lowercase());
+        assert_eq!(names, sorted, "in alphabetical order");
+        // Typing narrows the list, as in every list: `rus` leaves Rust.
+        for c in "rus".chars() {
+            press(&mut app, &c.to_string());
+        }
+        press(&mut app, "Enter");
+        assert_eq!(
+            app.mode
+                .editor()
+                .expect("the editor back")
+                .highlight
+                .language(),
+            Some("Rust"),
+            "{}",
+            app.status
+        );
+        press(&mut app, "Alt+Shift+Y");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list: {:?}", app.mode)
+        };
+        let current: Vec<&str> = pick
+            .rows
+            .iter()
+            .filter(|r| r.current)
+            .map(|r| r.value.as_str())
+            .collect();
+        assert_eq!(current, ["syntax:Rust"]);
+        press(&mut app, "Esc");
+
+        // Closed and opened again, it is still Rust; with the memory off it is not.
+        press(&mut app, "Esc");
+        assert!(matches!(app.mode, Mode::Normal), "{:?}", app.mode);
+        app.open_editor_on(&VPath::local(&file));
+        assert_eq!(
+            app.mode.editor().unwrap().highlight.language(),
+            Some("Rust")
+        );
+        press(&mut app, "Esc");
+        app.cfg.viewer.remember = false;
+        app.open_editor_on(&VPath::local(&file));
+        assert_eq!(app.mode.editor().unwrap().highlight.language(), None);
+        press(&mut app, "Esc");
+        app.cfg.viewer.remember = true;
+
+        // The viewer reading the file in between does not forget what the editor was told.
+        let row = fcmd_config::SeenCfg {
+            path: VPath::local(&file).to_string(),
+            top: 3,
+            ..Default::default()
+        };
+        app.remember_seen(row);
+        assert_eq!(app.seen[0].syntax, "Rust");
+        assert_eq!(app.seen[0].top, 3);
+
+        // Plain text, and then back to what the name says — which here is nothing, and on
+        // a file whose name says Rust is Rust.
+        app.open_editor_on(&VPath::local(&file));
+        press(&mut app, "Alt+Shift+Y");
+        press(&mut app, "Home");
+        press(&mut app, "Down");
+        press(&mut app, "Enter");
+        assert_eq!(app.mode.editor().unwrap().highlight.language(), None);
+        assert_eq!(app.seen[0].syntax, "-");
+        press(&mut app, "Esc");
+        let named = dir.path().join("main.rs");
+        std::fs::write(&named, "fn main() {}\n").unwrap();
+        app.open_editor_on(&VPath::local(&named));
+        press(&mut app, "Alt+Shift+Y");
+        for c in "pascal".chars() {
+            press(&mut app, &c.to_string());
+        }
+        press(&mut app, "Enter");
+        assert_eq!(
+            app.mode.editor().unwrap().highlight.language(),
+            Some("Pascal")
+        );
+        press(&mut app, "Alt+Shift+Y");
+        press(&mut app, "Home");
+        press(&mut app, "Enter");
+        assert_eq!(
+            app.mode.editor().unwrap().highlight.language(),
+            Some("Rust"),
+            "back to what `main.rs` says"
+        );
     }
 
     /// `Alt+Shift+C` lists characters over the editor; typing narrows by the code, `Enter`

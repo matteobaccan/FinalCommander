@@ -102,6 +102,14 @@ Dockerfile, Lua, Perl, Pascal and Delphi — is coloured as you read it, and the
 you can see at once when a file is being read as something you did not mean. The colours come
 from the theme, so they follow it. `ui.syntax = false` in `fcmd.toml` turns them off.
 
+When the name says nothing, or says the wrong thing — a script with no extension, a `.txt`
+that is really a patch, an `.inc` that is PHP in one project and Pascal in the next —
+`Alt+Shift+Y` lists the languages for you to choose from. Type a few letters to narrow the
+list and press `Enter`. The first row goes back to what the name says, the second reads the
+file as plain text with no colours, and the row in force is marked. The choice is remembered
+for that file, where the viewer remembers the code page it read a file in, so the next `F4`
+on it needs no telling (`viewer.remember = false` turns that memory off, for both).
+
 In a Pascal or Delphi unit, and in a form read as text, a thin line runs down each block the
 way the Delphi IDE draws it: from the line that opens it — `begin`, `try`, `case`, `repeat`,
 `asm`, a `class` or `record` with a body, an `object` of a form — to its `end` or `until`, in
@@ -245,6 +253,26 @@ type `U+20AC` or part of it to narrow the list, `Enter` to insert, `Esc` to go b
 block if there is one, in the whole file otherwise. Start the pattern with `!` to keep only the
 lines that match and take out the rest: `!ERROR` leaves the errors of a log. One `Ctrl+Z` puts
 them all back.
+
+# The case of a block
+
+`Alt+C` changes the case of the marked block, from a list of four:
+
+| Row | `Hello wORLD` becomes |
+| --- | --- |
+| UPPER CASE | `HELLO WORLD` |
+| lower case | `hello world` |
+| Title Case | `Hello World` — a capital at the start of every word, small letters after it |
+| tOGGLE | `hELLO World` — every capital made small and every small letter a capital |
+
+`Enter` applies the row under the cursor, and it is one `Ctrl+Z`. The block stays marked, so
+a second choice is made on the same text. On a column block only the marked columns change.
+With nothing marked it is the **word under the cursor** that changes, or the one the cursor
+stands right after. Accented letters follow their own rules — `é` becomes `É`, and the German
+`ß` becomes `SS`, which makes the text a letter longer.
+
+Each of the four is also a command of its own — `editor.case.upper`, `editor.case.lower`,
+`editor.case.title`, `editor.case.toggle` — with no key until you give it one in the keymap.
 
 # A block through a command, and files in and out
 

@@ -232,6 +232,8 @@ something readable rather than only into instructions.
 | 6.16 | Word completion from the words of the file, nearest first, cycling (`Alt+/`) | FAR (EditorCompletion)/emacs | ✓ |
 | 6.17 | A marked block rewritten by a language model from an instruction in words: the model's version shown as a diff against the block, applied on `Enter` as one undo step | NEW | ✓ `Ctrl+Alt+W` (SPEC 05 §2.10) |
 | 6.18 | Line numbers in a margin, per file (`Alt+N`) and as a setting (`editor.line_numbers`) | MC | ✓ (SPEC 05 §2.2k) |
+| 6.20 | The case of the block, a column block or the word under the cursor: upper, lower, title, toggle | FAR (`editcase`)/MC | ✓ `Alt+C` (SPEC 05 §2.2m) |
+| 6.21 | The syntax chosen by hand from the highlighter's languages, remembered per file | MC/far2l | ✓ `Alt+Shift+Y` (SPEC 05 §2.2b) |
 | 6.19 | The block — or the whole file — run through a shell command and replaced by its output as one undo step, nothing replaced on failure; a command's output or a file inserted at the cursor; the block written to a file | MC/far2l | ✓ `Alt+Shift+P/O/I/W` (SPEC 05 §2.2l) |
 
 ## 7. Tools & dialogs

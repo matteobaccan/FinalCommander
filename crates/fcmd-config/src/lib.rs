@@ -2863,6 +2863,7 @@ both_ways = true
                 mode: "h".into(),
                 wrap: "word".into(),
                 bookmarks: vec![SeenMark { slot: 3, at: 512 }],
+                syntax: "Rust".into(),
             }],
             // A dialog field's own history, and what the histories say about themselves,
             // travel with their lines.
@@ -3492,6 +3493,10 @@ pub struct SeenCfg {
     /// The numbered bookmarks that were set.
     #[serde(default)]
     pub bookmarks: Vec<SeenMark>,
+    /// The language chosen by hand in the editor (`Alt+Shift+Y`): a syntax's name, `-` for
+    /// plain text, and empty for "whatever the file's name says".
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub syntax: String,
 }
 
 /// One numbered bookmark of a remembered file.

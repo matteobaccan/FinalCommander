@@ -1039,6 +1039,24 @@ file is replaced, as save-as replaces one; the path of the file being edited is 
 Reading a file in and writing a block out are done where the key is handled, as the editor's
 own save is: both are one local file.
 
+### 2.2m The case of a block (`Alt+C`)
+
+`editor.case` opens a list of four — upper, lower, title, toggle — and `Enter` applies the
+row under the cursor; `editor.case.upper`, `.lower`, `.title` and `.toggle` are the same four
+as commands without the list, unbound. FAR ships this as the `editcase` plugin.
+
+What is changed is the marked stream block; every line's piece of a column block; or, with
+nothing marked, the word the cursor is on or stands right after (letters, digits and the
+underscore, as for *whole words*). Neither a block nor a word is said on the status line and
+changes nothing. One undo step in every case, and nothing is recorded when the text comes out
+the same. A stream block stays marked on the new text, and the cursor stays where it was
+when the length has not changed.
+
+The mappings are Unicode's (`Case::apply`): `é` → `É`, `ß` → `SS`, and what has no case is
+left as it is. Title case puts a capital on the first letter or digit after anything that is
+neither, and small letters after it; an apostrophe inside a word does not start another
+(`don't` → `Don't`). Toggle swaps each letter that has a case.
+
 ### 2.2b Syntax highlighting
 
 `fcmd-syntax` is a scanner, not a parser, and deliberately: it knows how a language writes a
@@ -1076,7 +1094,17 @@ unterminated string, a Markdown fence. That is what makes both callers possible:
   block is drawn over the guides, and with *Show spaces and tabs* on a guide takes the place
   of the `·` in its cell.
 
-Recognition is by file name. The classes are `keyword`, `type`, `string`, `number`,
+Recognition is by file name, and in the editor by hand when the name is not enough:
+`editor.syntax` (`Alt+Shift+Y`) lists every syntax of the table by name, in alphabetical
+order, under two rows of its own — *what its name says*, which goes back to recognition by
+name, and *plain text*, which colours nothing. The row in force is marked, and the list
+narrows as one types, like every list. The choice is `Editor::set_syntax`, which throws away
+the scan and the block guides so that both are worked out again from the first line, and it
+is remembered per file in the state file's `[[seen]]` row for that path (`syntax`: a
+syntax's name, `-` for plain text, absent for "by name"), beside the code page and the
+position the viewer keeps there (§1.12) and under the same `viewer.remember` setting. The
+viewer rewriting that row when it closes the file keeps the editor's choice. The viewer
+itself still goes by the name. The classes are `keyword`, `type`, `string`, `number`,
 `comment`, `preproc`, `tag`, `attr`, `entity`, `function`; each is a `syntax.*` theme key, and
 every built-in theme defines all of them in its own palette. Only the foreground is set, so a
 coloured run never changes the colour of the page behind it. `ui.syntax = false` turns the

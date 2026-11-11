@@ -44,6 +44,75 @@ impl Block {
     }
 }
 
+/// The four things `Alt+C` does to the letters of a block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Case {
+    Upper,
+    Lower,
+    /// A capital at the start of every word and small letters after it.
+    Title,
+    /// Every capital made small and every small letter a capital.
+    Toggle,
+}
+
+impl Case {
+    pub const ALL: [Case; 4] = [Case::Upper, Case::Lower, Case::Title, Case::Toggle];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Case::Upper => "upper",
+            Case::Lower => "lower",
+            Case::Title => "title",
+            Case::Toggle => "toggle",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Case> {
+        Case::ALL.into_iter().find(|c| c.as_str() == text)
+    }
+
+    /// `text` in this case. Unicode's own mappings, so `straße` becomes `STRASSE` and the
+    /// text may come out longer than it went in; what has no case comes out as it was.
+    pub fn apply(self, text: &str) -> String {
+        match self {
+            Case::Upper => text.to_uppercase(),
+            Case::Lower => text.to_lowercase(),
+            Case::Toggle => text
+                .chars()
+                .flat_map(|c| -> Vec<char> {
+                    if c.is_uppercase() {
+                        c.to_lowercase().collect()
+                    } else if c.is_lowercase() {
+                        c.to_uppercase().collect()
+                    } else {
+                        vec![c]
+                    }
+                })
+                .collect(),
+            Case::Title => {
+                let mut out = String::with_capacity(text.len());
+                // An apostrophe inside a word does not start another: `don't`, `l'arte`
+                // as one word each is the lesser evil, and `Don'T` would be the greater.
+                let mut inside = false;
+                for c in text.chars() {
+                    if c.is_alphanumeric() {
+                        if inside {
+                            out.extend(c.to_lowercase());
+                        } else {
+                            out.extend(c.to_uppercase());
+                        }
+                        inside = true;
+                    } else {
+                        inside = inside && matches!(c, '\'' | '\u{2019}');
+                        out.push(c);
+                    }
+                }
+                out
+            }
+        }
+    }
+}
+
 /// What a save did, so the UI can say it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SaveOutcome {
@@ -1156,6 +1225,108 @@ impl Editor {
         }
     }
 
+    /// The word the cursor is on, or stands right after, as the columns it runs between on
+    /// the cursor's line. Letters, digits and the underscore make a word, as they do for
+    /// *whole words* in the search.
+    pub fn word_at_cursor(&self) -> Option<(usize, usize)> {
+        let is_word = |c: char| c.is_alphanumeric() || c == '_';
+        let chars: Vec<char> = self.buffer.line(self.cursor.line).chars().collect();
+        let col = self.cursor.col.min(chars.len());
+        let on = chars.get(col).copied().is_some_and(is_word);
+        if !on && !(col > 0 && is_word(chars[col - 1])) {
+            return None;
+        }
+        let mut start = col;
+        while start > 0 && is_word(chars[start - 1]) {
+            start -= 1;
+        }
+        let mut end = col;
+        while end < chars.len() && is_word(chars[end]) {
+            end += 1;
+        }
+        Some((start, end))
+    }
+
+    /// Change the case of the marked block — every line's piece of a column block — or,
+    /// with nothing marked, of the word the cursor is on (FAR's `editcase`). One undo step;
+    /// the block stays marked, so a second choice is made on the same text. `false` when
+    /// there is neither a block nor a word to act on.
+    pub fn change_case(&mut self, case: Case) -> Result<bool, EditorError> {
+        let was = self.cursor;
+        match self.block {
+            Some(block) if block.kind == BlockKind::Stream && !block.range().is_empty() => {
+                let before = self.buffer.text_in(block.range());
+                let after = case.apply(&before);
+                if after != before {
+                    self.replace_block(&after)?;
+                    // Where it was, when the text is still the same length: changing the
+                    // case of a selection is not a reason for the cursor to move.
+                    if after.chars().count() == before.chars().count() {
+                        self.cursor = was;
+                    }
+                }
+                Ok(true)
+            }
+            Some(block) if block.kind == BlockKind::Column => {
+                let (top, bottom, left, right) = block.columns();
+                self.buffer.begin_group(was);
+                let mut done = Ok(());
+                for line in top..=bottom.min(self.buffer.len() - 1) {
+                    let len = self.buffer.line_chars(line);
+                    if left >= len || right <= left {
+                        continue;
+                    }
+                    let range = Range::new(
+                        Position::new(line, left),
+                        Position::new(line, right.min(len)),
+                    );
+                    let before = self.buffer.text_in(range);
+                    let after = case.apply(&before);
+                    if after != before {
+                        done = self
+                            .buffer
+                            .delete(range)
+                            .and_then(|_| self.buffer.insert(range.start, &after))
+                            .map(|_| ());
+                        if done.is_err() {
+                            break;
+                        }
+                    }
+                }
+                self.buffer.end_group(was);
+                done.map(|()| true).map_err(Into::into)
+            }
+            _ => {
+                let Some((start, end)) = self.word_at_cursor() else {
+                    return Ok(false);
+                };
+                let range =
+                    Range::new(Position::new(was.line, start), Position::new(was.line, end));
+                let before = self.buffer.text_in(range);
+                let after = case.apply(&before);
+                if after != before {
+                    self.buffer.begin_group(was);
+                    let done = self
+                        .buffer
+                        .delete(range)
+                        .and_then(|_| self.buffer.insert(range.start, &after));
+                    self.buffer.end_group(was);
+                    done?;
+                    self.cursor = self.clamp(was);
+                }
+                Ok(true)
+            }
+        }
+    }
+
+    /// Read the file as another language, or as none: the choice made by hand in
+    /// `Alt+Shift+Y`, for the file whose name says nothing or says the wrong thing. The
+    /// colours and the block guides are both worked out again from the first line.
+    pub fn set_syntax(&mut self, syntax: Option<&'static fcmd_syntax::Syntax>) {
+        self.highlight.set_syntax(syntax);
+        self.guides = None;
+    }
+
     /// What a command is given to filter (`Alt+Shift+P`): the marked block, or with nothing
     /// marked the whole text, its lines parted by `\n` whatever the file's own ending is.
     /// `None` for a column block, which has no shape a rewritten text could go back into.
@@ -1985,6 +2156,95 @@ mod tests {
 
     fn editor(text: &str) -> Editor {
         Editor::new(Buffer::from_text(text), None)
+    }
+
+    /// The four cases, with what Unicode says about a letter: a sharp s grows, an accent
+    /// keeps its letter, and a digit or a sign is left as it was.
+    #[test]
+    fn the_four_cases_follow_unicode_and_leave_what_has_no_case() {
+        assert_eq!(
+            Case::Upper.apply("stra\u{df}e 1, \u{e9}t\u{e9}"),
+            "STRASSE 1, \u{c9}T\u{c9}"
+        );
+        assert_eq!(
+            Case::Lower.apply("\u{c9}T\u{c9} ABC_9"),
+            "\u{e9}t\u{e9} abc_9"
+        );
+        assert_eq!(
+            Case::Title.apply("the QUICK brown-fox, don't stop_here"),
+            "The Quick Brown-Fox, Don't Stop_Here"
+        );
+        assert_eq!(Case::Toggle.apply("Hello World 42"), "hELLO wORLD 42");
+        for case in Case::ALL {
+            assert_eq!(Case::parse(case.as_str()), Some(case));
+        }
+        assert_eq!(Case::parse("sideways"), None);
+    }
+
+    /// On a stream block the block stays marked and the cursor stays put; on a column block
+    /// only the columns marked change; with nothing marked it is the word under the cursor,
+    /// or the one just before it. Each is one undo step, and nothing to act on says so.
+    #[test]
+    fn the_case_of_a_block_a_column_or_the_word_under_the_cursor_changes() {
+        let mut e = editor("alpha beta\ngamma delta");
+        e.move_to(Position::new(0, 6), false, BlockKind::Stream);
+        e.move_to(Position::new(1, 5), true, BlockKind::Stream);
+        assert!(e.change_case(Case::Upper).unwrap());
+        assert_eq!(e.buffer.to_text(), "alpha BETA\nGAMMA delta");
+        assert_eq!(
+            e.block_text().as_deref(),
+            Some("BETA\nGAMMA"),
+            "still marked"
+        );
+        assert_eq!(e.cursor, Position::new(1, 5));
+        assert!(e.change_case(Case::Toggle).unwrap());
+        assert_eq!(e.buffer.to_text(), "alpha beta\ngamma delta");
+        assert!(e.undo() && e.undo());
+        assert_eq!(e.buffer.to_text(), "alpha beta\ngamma delta", "a step each");
+        assert!(!e.undo(), "and no more than that");
+
+        // A column: the same two columns of every line, and a line too short is left alone.
+        let mut e = editor("abcdef\nab\nabcdef");
+        e.move_to(Position::new(0, 2), false, BlockKind::Column);
+        e.move_to(Position::new(2, 4), true, BlockKind::Column);
+        assert!(e.change_case(Case::Upper).unwrap());
+        assert_eq!(e.buffer.to_text(), "abCDef\nab\nabCDef");
+        assert!(e.undo());
+        assert_eq!(
+            e.buffer.to_text(),
+            "abcdef\nab\nabcdef",
+            "one step for all the lines"
+        );
+
+        // Nothing marked: the word the cursor is in, or stands right after.
+        let mut e = editor("say hello_there now");
+        e.cursor = Position::new(0, 7);
+        assert_eq!(e.word_at_cursor(), Some((4, 15)));
+        assert!(e.change_case(Case::Title).unwrap());
+        assert_eq!(e.buffer.to_text(), "say Hello_There now");
+        assert_eq!(e.cursor, Position::new(0, 7), "the cursor has not moved");
+        e.cursor = Position::new(0, 3);
+        assert!(e.change_case(Case::Upper).unwrap(), "right after `say`");
+        assert_eq!(e.buffer.to_text(), "SAY Hello_There now");
+        let mut e = editor("a  b");
+        e.cursor = Position::new(0, 2);
+        assert_eq!(e.word_at_cursor(), None);
+        assert!(!e.change_case(Case::Upper).unwrap(), "between two blanks");
+        assert_eq!(e.buffer.to_text(), "a  b");
+    }
+
+    /// A syntax chosen by hand colours a file whose name says nothing, and taking it away
+    /// again leaves plain text.
+    #[test]
+    fn a_syntax_chosen_by_hand_colours_a_file_whose_name_says_nothing() {
+        let mut e = editor("fn main() {} // hi");
+        assert!(e.highlight.language().is_none());
+        assert!(e.spans(0).is_empty());
+        e.set_syntax(fcmd_syntax::of_language("Rust"));
+        assert_eq!(e.highlight.language(), Some("Rust"));
+        assert!(!e.spans(0).is_empty(), "now it is read as Rust");
+        e.set_syntax(None);
+        assert!(e.spans(0).is_empty());
     }
 
     /// What a filter is given and where its answer goes: the block when one is marked, and

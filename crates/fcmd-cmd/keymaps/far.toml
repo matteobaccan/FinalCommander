@@ -1277,6 +1277,20 @@ keys = ["Alt+Shift+W"]
 scope = "editor"
 cmd = "editor.block.write"
 
+# The case of the block, or of the word under the cursor: a list of four, which FAR ships as
+# the `editcase` plugin. Emacs' `Alt+C` capitalises, and it is the letter that says "case".
+[[bind]]
+keys = ["Alt+C"]
+scope = "editor"
+cmd = "editor.case"
+
+# The language the file is coloured as, chosen from a list when its name says nothing or the
+# wrong thing. mcedit has it in its menu; `Y` because `S` sorts the block.
+[[bind]]
+keys = ["Alt+Shift+Y"]
+scope = "editor"
+cmd = "editor.syntax"
+
 # ---------------------------------------------------------------- menus and dialogs (SPEC 10)
 [[bind]]
 keys = ["Alt+F1"]

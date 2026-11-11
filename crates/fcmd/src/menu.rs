@@ -142,6 +142,9 @@ pub enum PickKind {
     /// How the edited file is written (`Shift+F8`, SPEC 05 §2.1): the end of line, the byte
     /// order mark and the code page, each row a conversion.
     EditorConvert,
+    /// A short list of things to do to the edited file, each row saying which in its value:
+    /// the language to read it as (`Alt+Shift+Y`), the case of the block (`Alt+C`).
+    EditorChoice,
     /// The searches kept under a name (SPEC 06 §1c): `Enter` opens one as a panel.
     SavedSearches,
     /// The `[[sort_group]]` bands, in the order they cut the listing (SPEC 02 §4).
