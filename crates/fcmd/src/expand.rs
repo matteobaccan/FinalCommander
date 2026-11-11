@@ -2,8 +2,10 @@
 //! `docs/spec/06-tools.md` §5b.
 //!
 //! One table serves all four, in two spellings: ours, which is named (`{file}`, `{other.dir}`),
-//! and FAR's, which is punctuation (`!.!`, `!\`). A migrating user's `FarMenu.ini` is written in
-//! the second, so both are accepted and both mean exactly the same thing.
+//! and FAR's, which is punctuation (`!.!`, `!\`). Both are accepted where a line is typed. A
+//! `FarMenu.ini` is written in the second, and is rewritten into the first when it is read
+//! (`fcmd_config::farmenu`), which is where the symbols this table has no spelling for —
+//! the other panel's prefix, the short names, the drive — are mapped or refused by name.
 //!
 //! Nothing here touches the filesystem or runs anything. Expansion can also *ask* — FAR's
 //! `!?title?init!` prompts before the command runs — so the result says what it still needs

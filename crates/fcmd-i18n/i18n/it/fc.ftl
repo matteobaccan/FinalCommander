@@ -1843,3 +1843,6 @@ arc-test-bad-title = { $name }: { $bad } voci su { $files } non sono uscite inte
 # extending it
 plugin-column-failed = { $column }: { $error } — la colonna resta vuota per i file a cui non ha risposto
 plugins-card-columns = Colonne (come le nomina un [[column_set]]):
+usermenu-far-row = Cosa è stato letto diversamente da FarMenu.ini ({ $count })
+usermenu-far-notes = il menu viene dal FarMenu.ini di FAR: { $count } cose sono state lette diversamente — l'ultima riga le elenca
+usermenu-far-not-run = Non è stato eseguito niente.

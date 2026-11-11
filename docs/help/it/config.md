@@ -704,6 +704,22 @@ se era in uno — così eseguirla di nuovo è `Shift+F10` e `Invio`.
 Una cartella può portarsi il suo `.fcmd-menu.toml`, e le sue righe stanno sopra quelle che
 valgono sempre: il menu del progetto in cui sei è quello che vuoi mentre ci sei dentro.
 
+**Venendo da FAR** non devi scrivere prima niente di tutto questo: un `FarMenu.ini` viene
+letto così com'è — metti quello del tuo profilo di FAR accanto a `fcmd.toml`, e quelli nelle
+cartelle dei tuoi progetti vengono trovati dove già sono. I tasti rapidi, le etichette, i
+sottomenu tra `{` e `}` e i separatori `--` diventano le righe qui sopra, e i simboli di FAR
+nei comandi diventano i nostri: `!.!` il nome, `!` il nome senza estensione, `!\` la
+cartella, `!@!` e `!&` la selezione come file e come nomi, `!#` l'altro pannello,
+`!?titolo?iniziale!` una domanda. Le forme con i nomi corti (`!~`, `!-!`) vengono lette come
+quelle lunghe. Una riga che usa qualcosa che qui non ha un corrispondente — la lettera del
+disco `!:`, la selezione dell'altro pannello — resta nel menu e non esegue niente: `Invio`
+su di essa dice perché. Quando qualcosa è stato letto diversamente da FAR la riga di stato lo
+dice all'apertura del menu, e l'ultima riga del menu elenca ogni osservazione.
+
+Dove ci sono tutti e due i file nello stesso posto, il menu è `fcmd-menu.toml` e
+`FarMenu.ini` non viene letto: non vengono mai mescolati, così convertire un menu a mano non
+mostra ogni riga due volte.
+
 # Plugin
 
 Un plugin è una cartella dentro `fcmd-plugins/`, accanto alle impostazioni (`fcmd --paths` dice

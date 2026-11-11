@@ -1780,3 +1780,6 @@ arc-test-bad-title = { $name }：{ $files } 个条目中有 { $bad } 个已损�
 # extending it
 plugin-column-failed = { $column }：{ $error } — 未得到回答的文件，该列留空
 plugins-card-columns = 列（[[column_set]] 中的写法）：
+usermenu-far-row = 与 FarMenu.ini 读法不同之处（{ $count }）
+usermenu-far-notes = 菜单来自 FAR 的 FarMenu.ini：有 { $count } 处读法不同 — 最后一行列出
+usermenu-far-not-run = 未执行任何命令。

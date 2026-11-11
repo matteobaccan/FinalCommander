@@ -58,12 +58,28 @@ pub struct Entry {
     /// has one, is written into the rule as a heading for the group under it.
     #[serde(default)]
     pub separator: bool,
+    /// A row that runs nothing and says this instead when it is taken. Never read from
+    /// `fcmd-menu.toml`: it is how a row of FAR's `FarMenu.ini` that could not be carried
+    /// over stays on the menu — in its place, on its letter — rather than vanishing or,
+    /// worse, running with a hole in its command line (§4a).
+    #[serde(skip)]
+    pub says: Vec<String>,
 }
 
 impl Entry {
     pub fn is_submenu(&self) -> bool {
         !self.submenu.is_empty()
     }
+}
+
+/// A menu as it was found beside a path: ours, or FAR's when ours is not there.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Found {
+    pub menu: UserMenu,
+    /// The `FarMenu.ini` the rows came from, when that is where they came from.
+    pub far: Option<std::path::PathBuf>,
+    /// What was read differently from FAR on the way (see [`crate::farmenu`]).
+    pub notes: Vec<String>,
 }
 
 /// Every row, in the order the file lists them.
@@ -96,6 +112,38 @@ impl UserMenu {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(UserMenu::default()),
             Err(e) => Err(format!("{}: {e}", path.display())),
         }
+    }
+
+    /// The menu at `path`, or FAR's `FarMenu.ini` in the same directory when there is no
+    /// file at `path`.
+    ///
+    /// **Ours wins, whole.** A `fcmd-menu.toml` that exists is the menu, and a `FarMenu.ini`
+    /// beside it is not read at all — not merged under it. The TOML file is the one written
+    /// for this program; FAR's is read so that nobody has to write it before `F2` does
+    /// anything, and somebody who has since converted theirs would otherwise find every row
+    /// on the menu twice.
+    pub fn find(path: &Path) -> Result<Found, String> {
+        if path.is_file() {
+            return Ok(Found {
+                menu: Self::load(path)?,
+                ..Found::default()
+            });
+        }
+        let Some(dir) = path.parent() else {
+            return Ok(Found::default());
+        };
+        for name in crate::farmenu::FAR_MENU_FILE_NAMES {
+            let far = dir.join(name);
+            if far.is_file() {
+                let read = crate::farmenu::load(&far)?;
+                return Ok(Found {
+                    menu: read.menu,
+                    far: Some(far),
+                    notes: read.notes,
+                });
+            }
+        }
+        Ok(Found::default())
     }
 
     /// Parse a menu, and refuse one that cannot mean anything.

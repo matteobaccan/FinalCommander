@@ -1828,3 +1828,6 @@ arc-test-bad-title = { $name }: повреждено записей: { $bad } и
 # extending it
 plugin-column-failed = { $column }: { $error } — столбец остаётся пустым для файлов, на которые не было ответа
 plugins-card-columns = Столбцы (как их называет [[column_set]]):
+usermenu-far-row = Что прочитано иначе, чем в FarMenu.ini ({ $count })
+usermenu-far-notes = меню взято из FarMenu.ini от FAR: { $count } вещей прочитано иначе — они перечислены в последней строке
+usermenu-far-not-run = Ничего не было запущено.

@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+pub mod farmenu;
 pub mod usermenu;
 
 /// The single configuration file. There is no configuration *directory*: FinalCommander
@@ -153,6 +154,12 @@ impl Paths {
             self.menu_file.display(),
             if self.menu_file.exists() {
                 ""
+            } else if self.menu_file.parent().is_some_and(|dir| {
+                farmenu::FAR_MENU_FILE_NAMES
+                    .iter()
+                    .any(|name| dir.join(name).is_file())
+            }) {
+                "   (not present; FAR's FarMenu.ini beside it is read instead)"
             } else {
                 "   (not present; F2 says so and where to put it)"
             },

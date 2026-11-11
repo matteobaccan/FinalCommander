@@ -13522,10 +13522,12 @@ impl App {
     /// when the panel is a directory on this machine — which is where a `.fcmd-menu.toml`
     /// travelling with a project can be read from at all.
     fn open_user_menu(&mut self) {
-        use fcmd_config::usermenu::{UserMenu, LOCAL_MENU_FILE_NAME};
+        use fcmd_config::usermenu::{Found, UserMenu, LOCAL_MENU_FILE_NAME};
 
-        let global = match UserMenu::load(&self.paths.menu_file) {
-            Ok(menu) => menu,
+        // Each of the two is ours where ours is there, and FAR's `FarMenu.ini` from the
+        // same directory where it is not (SPEC 06 §4a).
+        let global = match UserMenu::find(&self.paths.menu_file) {
+            Ok(found) => found,
             Err(e) => {
                 self.set_error(e);
                 return;
@@ -13533,17 +13535,44 @@ impl App {
         };
         let cwd = self.panel().cwd.clone();
         let local = if cwd.is_local() && !cwd.in_container() {
-            match UserMenu::load(&cwd.as_path().join(LOCAL_MENU_FILE_NAME)) {
-                Ok(menu) => menu,
+            match UserMenu::find(&cwd.as_path().join(LOCAL_MENU_FILE_NAME)) {
+                Ok(found) => found,
                 Err(e) => {
                     self.set_error(e);
                     return;
                 }
             }
         } else {
-            UserMenu::default()
+            Found::default()
         };
-        let menu = UserMenu::merged(&local, &global);
+        let mut menu = UserMenu::merged(&local.menu, &global.menu);
+        // What was read differently from FAR, each remark under the file it is about: a
+        // last row of the menu holds them, so that they can be read when one wants to and
+        // are not a dialog in the way every time `F2` is pressed.
+        let mut remarks: Vec<String> = Vec::new();
+        for found in [&local, &global] {
+            if let (Some(file), false) = (&found.far, found.notes.is_empty()) {
+                if !remarks.is_empty() {
+                    remarks.push(String::new());
+                }
+                remarks.push(file.display().to_string());
+                remarks.extend(found.notes.iter().map(|note| format!("  {note}")));
+            }
+        }
+        let noted = local.notes.len() + global.notes.len();
+        if noted > 0 && !menu.entries.is_empty() {
+            menu.entries.push(fcmd_config::usermenu::Entry {
+                separator: true,
+                ..Default::default()
+            });
+            menu.entries.push(fcmd_config::usermenu::Entry {
+                label: self
+                    .i18n
+                    .t_args("usermenu-far-row", &[("count", (noted as i64).into())]),
+                says: remarks,
+                ..Default::default()
+            });
+        }
         if menu.entries.is_empty() {
             // The feature is invisible until somebody writes the file, so the one thing `F2`
             // can usefully do with no file is say where the file goes.
@@ -13568,6 +13597,12 @@ impl App {
         let title = self.plain("menu-user-menu");
         self.menu_levels = vec![(title, rows)];
         self.show_user_menu_level();
+        if noted > 0 && !self.status_error {
+            let msg = self
+                .i18n
+                .t_args("usermenu-far-notes", &[("count", (noted as i64).into())]);
+            self.set_status(msg);
+        }
     }
 
     /// `Shift+F10`: the menu, walked down to the row taken last, with the cursor on it. It is
@@ -13705,6 +13740,18 @@ impl App {
             return;
         }
         if entry.separator {
+            return;
+        }
+        // A row that says something instead of running: one of FAR's that could not be
+        // carried over, or the list of what was read differently.
+        if !entry.says.is_empty() {
+            self.menu_levels.clear();
+            let mut lines = entry.says.clone();
+            if entry.run.is_empty() && lines.len() == 1 {
+                lines.push(String::new());
+                lines.push(self.i18n.t("usermenu-far-not-run"));
+            }
+            self.show_message(entry.label.clone(), lines);
             return;
         }
         self.menu_last = self
@@ -36140,6 +36187,85 @@ submenu = [
         assert_eq!(pick_labels(&app), ["Other"]);
         assert!(app.status.contains("not in this menu"), "{}", app.status);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// FAR's own menu file is read where ours is not: beside the configuration, and in the
+    /// directory the panel is in, with that one's rows on top — and ours wins, whole, where
+    /// both are there.
+    #[test]
+    fn f2_reads_fars_menu_as_it_stands_and_ours_wins_over_it() {
+        let config = tempfile::tempdir().unwrap();
+        let project = tempfile::tempdir().unwrap();
+        std::fs::write(project.path().join("notes.txt"), "x").unwrap();
+        let mut app = app_on_disk(project.path());
+        app.paths.menu_file = config.path().join(fcmd_config::usermenu::MENU_FILE_NAME);
+        app.panels[0].cursor = app.panels[0].listing.row_of_name("notes.txt").unwrap();
+
+        // FAR 3 writes UTF-16 with a mark; the project's own is far2l's UTF-8.
+        let global = "L:   List it\r\n    ls -l \"!.!\"\r\nD:   Free space\r\n    dir !:\r\n";
+        let mut bytes = vec![0xff, 0xfe];
+        bytes.extend(global.encode_utf16().flat_map(u16::to_le_bytes));
+        std::fs::write(config.path().join("FarMenu.ini"), bytes).unwrap();
+        std::fs::write(
+            project.path().join("FarMenu.ini"),
+            "B:   Build\n{\nR:   release\n    make !~\n}\n",
+        )
+        .unwrap();
+
+        press(&mut app, "F2");
+        let labels = pick_labels(&app);
+        assert_eq!(labels[..3], ["Build  \u{25b8}", "List it", "Free space"]);
+        assert_eq!(labels.len(), 5, "a rule and the remarks: {labels:?}");
+        assert!(labels[4].contains('2'), "two remarks: {labels:?}");
+        assert!(app.status.contains("FarMenu.ini"), "{}", app.status);
+
+        // The remarks, each under the file it is about.
+        press(&mut app, "End");
+        press(&mut app, "Enter");
+        let Mode::Message { lines, .. } = &app.mode else {
+            panic!("the remarks are a message: {:?}", app.status)
+        };
+        let said = lines.join("\n");
+        assert!(said.contains("8.3") && said.contains("drive"), "{said}");
+        assert!(
+            said.contains(&project.path().join("FarMenu.ini").display().to_string()),
+            "{said}"
+        );
+        app.mode = Mode::Normal;
+
+        // A row that was carried over runs as a command line of ours…
+        press(&mut app, "F2");
+        press(&mut app, "L");
+        assert_eq!(shell_line(&mut app).as_deref(), Some("ls -l \"notes.txt\""));
+        // …and the one that could not be says why and runs nothing.
+        app.mode = Mode::Normal;
+        press(&mut app, "F2");
+        press(&mut app, "D");
+        let Mode::Message { title, lines } = &app.mode else {
+            panic!("a refused row says why")
+        };
+        assert_eq!(title, "Free space");
+        assert!(lines[0].contains("drive"), "{lines:?}");
+        assert!(shell_line(&mut app).is_none());
+        app.mode = Mode::Normal;
+
+        // Ours beside FAR's: FAR's is not read, and its rows are not on the menu.
+        std::fs::write(
+            &app.paths.menu_file,
+            "[[menu]]\nkey = \"m\"\nlabel = \"Mine\"\nrun = [\"true\"]\n",
+        )
+        .unwrap();
+        press(&mut app, "F2");
+        let labels = pick_labels(&app);
+        assert_eq!(labels[..2], ["Build  \u{25b8}", "Mine"]);
+        assert!(!labels.iter().any(|l| l == "List it"), "{labels:?}");
+        app.mode = Mode::Normal;
+
+        // And ours broken is an error, not a reason to fall back on the other.
+        std::fs::write(&app.paths.menu_file, "[[menu]]\nlabel = \"Nothing\"\n").unwrap();
+        press(&mut app, "F2");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert!(app.status.contains("Nothing"), "{}", app.status);
     }
 
     #[test]

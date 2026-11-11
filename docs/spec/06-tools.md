@@ -277,8 +277,69 @@ not its position, because the conditions move rows between one opening and the n
 that is gone leaves the cursor on the deepest level still found and says so. It is kept for
 the session, not across restarts.
 
-Still to come: reading FAR's `FarMenu.ini` as it stands, and a dialog to edit the entries
-from inside the program.
+Still to come: a dialog to edit the entries from inside the program.
+
+### 4a. FAR's `FarMenu.ini`, read as it stands (0.46)
+
+Somebody coming from FAR — or from far2l, which kept the format — has years of `F2` in a
+file: one in the profile and one in every project directory with commands of its own. It is
+read where it lies, into the same rows `fcmd-menu.toml` makes.
+
+**Where, and which wins.** Beside the configuration, and in the directory the panel is in:
+the two places ours is looked for. In each of them **ours wins, whole**: where
+`fcmd-menu.toml` (or, in a directory, `.fcmd-menu.toml`) exists, a `FarMenu.ini` beside it
+is not read at all. They are not merged, because the TOML file is the one written for this
+program, and somebody who has since converted their menu would otherwise find every row on
+it twice. The two *places* are still merged as before, so a project's `FarMenu.ini` sits
+above a global `fcmd-menu.toml` and the other way round. The name is looked for as
+`FarMenu.ini` and as `farmenu.ini`. `fcmd --paths` says when the global menu is FAR's.
+
+**The format** is FAR's text one. A line that starts at the margin is a row: the hot key, a
+colon, the label. The lines indented under it are its commands. A `{` on a line of its own
+makes the row above it a submenu, up to the matching `}`; a hot key of `--` is a separator
+with the label as its heading. An `&` in a label, FAR's way of underlining a letter, is
+taken out, and is the hot key where the row has none; `::` is a row whose hot key is the
+colon. FAR 3's UTF-16 (either byte order, by its mark) and UTF-8 with or without a mark are
+read; anything else is read as UTF-8 with the letters that do not decode replaced, and that
+is said.
+
+**The commands are rewritten once, when the file is read**, from FAR's punctuation into the
+named substitutions of §5b, so the menu holds command lines like any other:
+
+| FAR | Becomes |
+| --- | --- |
+| `!.!` · `!` · `` !` `` | `{name}` · `{stem}` · `{ext}` |
+| `!\` · `!\!.!` | `{dir}` and a separator, as FAR's path ends in one · `{file}` |
+| `!@!` · `!&` | `{list}` · `{selection}` |
+| `!#` … `!^` | what follows is about the other panel, up to the next prefix: `{other.name}`, `{other.dir}`, `{other.file}` |
+| `![!\` · `!]!\` | `{left.dir}` · `{right.dir}` |
+| `!?title?init!` | kept as it is: the command line asks it in FAR's own spelling |
+| `!!` | a literal `!` |
+| a leading `@` | dropped: there is no echo for it to switch off |
+
+Inside a pair of double quotes of the command's own, the bare value is asked for
+(`"!.!"` → `"{name.raw}"`): FAR puts a name into the line as it is, so a careful menu
+quotes it, and our substitutions quote themselves — quotes within quotes otherwise. A brace
+of the command's own (`awk '{print $1}'`) is doubled so that it is never taken for a
+substitution.
+
+**Approximated, and said**: the short 8.3 forms (`!~`, `!-!`, `!+!`, `` !`~ ``, `!/`, `!$!`,
+`!&~`) are read as the long ones, which is all there is off Windows; `!=\` is read as `!\`,
+links not resolved; the list-file modifiers (`!@QSF!`) are not applied; a function key as a
+hot key (`F5:`) leaves the row without one.
+
+**No counterpart, and refused**: the drive letter (`!:`); the other panel's name without
+its extension, its extension, its selection and its list file; a file name of the left or
+the right panel; a `!?` question that is never closed. A row that uses one of these **stays
+on the menu, in its place and on its letter, and runs nothing**: taking it shows why. A
+command silently run with a hole where a path should have been is the one thing this must
+not do. A row with no commands at all is kept the same way, as FAR keeps it.
+
+**Reported.** Nothing in the file is an error — FAR skips what it does not understand, and
+so does this: a line with no colon, a command with no row, a `{` or a `}` with nothing to
+open or close are each a remark. When there are remarks the status line says how many as
+the menu opens, and a last row of the menu, under a rule, shows them all, each under the
+file it is about. They are written in English, as the startup warnings are.
 
 ## 5. File associations (`[[assoc]]`)
 
@@ -337,10 +398,10 @@ the mapping (`docs/04-far-inventory.md` §8):
 | `!` `!^` `![` `!]` | switch every following symbol to the passive / active / left / right panel | `{right.file}` … and a `{panel:left}` prefix form |
 | modifiers on `!@!`: `Q` `S` `F` `A` `U` `W` | quote · forward slashes · full paths · ANSI · UTF-8 · UTF-16 | `{list.q}`, `{list.slash}`, `{list.full}`, `{list:enc=utf8}` |
 
-Two things in that table are features, not spellings, and we do not have them: the **interactive
-prompt** (a command that asks for a value before it runs, optionally remembering what was typed
-in a named history) and the **panel prefix** that makes a whole command line refer to the other
-panel. Both are in `docs/BACKLOG.md`.
+The interactive prompt is in, in both spellings. The **panel prefix** exists only where a
+`FarMenu.ini` is read (§4a), which rewrites `!#!.!` as `{other.name}`; on a typed line the
+named forms (`{other.file}`, `{left.dir}`) are the way to say it. What a `FarMenu.ini` may
+hold that this table has no row for — the short names, the drive — is listed there.
 
 ## 6. Histories
 

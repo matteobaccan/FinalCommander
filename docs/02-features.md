@@ -232,7 +232,7 @@ something readable rather than only into instructions.
 | 7.1 | Find files: mask, content (text/regex/hex), size/date/attr filters, archives included, encoding list, results panel, panelize results, "find folder" | FAR/TC | ~ dates and attributes in the dialog, code pages |
 | 7.2 | Grep-like content search with result navigation and jump-to-match in the editor | NEW | ✓ `F3` at the match, `F4` on its line |
 | 7.3 | Disk usage / occupied space view (per-dir sizes, sortable, graphical bars) | KRU/TC | ~ `Alt+Shift+F3`: one folder's entries largest first, with bars and shares, filled in as each folder is measured (SPEC 06 §12); one level at a time — a whole-tree view and a treemap are not there |
-| 7.4 | User menu (`F2`) with user-defined entries, submenus, hotkeys, per-directory menus | FAR/MC | ~ `FarMenu.ini` and an editor for the entries; separators and `Shift+F10` are in |
+| 7.4 | User menu (`F2`) with user-defined entries, submenus, hotkeys, per-directory menus | FAR/MC | ~ an editor for the entries; separators, `Shift+F10` and FAR's `FarMenu.ini` read as it stands are in |
 | 7.5 | File associations by mask: view/edit/execute/alternative commands | FAR/MC | ✓ |
 | 7.6 | Command history, view/edit history, folder history — all searchable and persisted | FAR | ✓ |
 | 7.7 | Macro recorder/player, keyboard macros with conditions, assignable to any key | FAR/far2m | ~ conditions on a macro |

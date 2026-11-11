@@ -1842,3 +1842,6 @@ arc-test-bad-title = { $name }: { $bad } von { $files } Einträgen sind beschäd
 # extending it
 plugin-column-failed = { $column }: { $error } — die Spalte bleibt leer für die Dateien, zu denen keine Antwort kam
 plugins-card-columns = Spalten (wie ein [[column_set]] sie nennt):
+usermenu-far-row = Was anders als in FarMenu.ini gelesen wurde ({ $count })
+usermenu-far-notes = das Menü stammt aus FARs FarMenu.ini: { $count } Dinge wurden anders gelesen — die letzte Zeile nennt sie
+usermenu-far-not-run = Es wurde nichts ausgeführt.

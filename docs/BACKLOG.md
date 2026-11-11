@@ -84,7 +84,7 @@ says what the decision stands on.
 | A queue for jobs | `Alt+Shift+F5` | The queue, the lanes per device, background, pause, reordering and retries are in (0.31.0, SPEC 03 §5). A server's speed limit came in 0.34.0 (`max_kbps`). The journal that lets a copy or a move go on after a crash came in 0.41 (SPEC 03 §5a, `Alt+Shift+F6`). Left: cloning a job; journalling the jobs still waiting in the queue and the chain behind a running one, which a crash loses today; a per-job log kept on disk (feature 3.7). |
 | Disk usage | `Alt+Shift+F3` | A whole tree at once rather than one folder's level, and a treemap (SPEC 06 §12). |
 | Synchronise folders | `Ctrl+Shift+Y` | Saving a pair under a name (`[[sync]]`, `Ctrl+Alt+Y`) and the written report came in 0.41 (SPEC 03 §10a). Left: running a saved pair unattended — from the command line or on a schedule, without the review table — a report that is appended to rather than rewritten, and a side that is not on this machine. |
-| User menu | `F2` | Reading FAR's `FarMenu.ini` as it stands, and a dialog to edit the entries. |
+| User menu | `F2` | A dialog to edit the entries. From FAR's `FarMenu.ini` (SPEC 06 §4a): the symbols with no counterpart — the drive, the other panel's selection, a file name of the left or right panel — the list-file modifiers, and a function key as a hot key. |
 | File associations | Commands menu | Defaults read off the OS (xdg-mime, `LSCopyDefaultRoleHandler`, the registry), a dialog to edit the blocks, and `execute`/`extract`/`preview` entries. |
 | Two files side by side | `Ctrl+Shift+D` | A unified view, a file against the copy on disk, and the first differing offset of two binaries. |
 

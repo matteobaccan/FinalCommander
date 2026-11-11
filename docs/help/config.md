@@ -681,6 +681,20 @@ one — so running it once more is `Shift+F10` and `Enter`.
 A directory can carry its own `.fcmd-menu.toml`, and its rows come above the ones that are
 everywhere: the menu of the project you are in is the one you want while you are in it.
 
+**Coming from FAR**, you do not have to write any of this first: a `FarMenu.ini` is read as
+it stands — put the one from your FAR profile beside `fcmd.toml`, and the ones in your
+project folders are found where they already are. The hot keys, the labels, the `{` `}`
+submenus and the `--` separators become the rows above, and FAR's symbols in the commands
+become ours: `!.!` the name, `!` the name without its extension, `!\` the folder, `!@!` and
+`!&` the selection as a file and as names, `!#` the other panel, `!?title?init!` a question.
+The short-name forms (`!~`, `!-!`) are read as the long ones. A row that uses something
+with no counterpart here — the drive letter `!:`, the other panel's selection — stays on the
+menu and runs nothing: `Enter` on it says why. When anything was read differently from FAR
+the status line says so as the menu opens, and the last row of the menu lists every remark.
+
+Where both files are in one place, `fcmd-menu.toml` is the menu and `FarMenu.ini` is not read:
+they are never mixed, so converting a menu by hand does not show every row twice.
+
 # Plugins
 
 A plugin is a folder in `fcmd-plugins/`, beside the settings (`fcmd --paths` says where), with
