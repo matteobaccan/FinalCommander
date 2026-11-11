@@ -191,13 +191,22 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.40.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.41.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.41.0** — released early on the author's word, the same day as 0.40.0, to gather what the
+  roadmap had spread over 0.41–0.47: the editor's search, replace and undo, its conversions and
+  the diff before overwriting; accented sorting; the `delphi-inspiration` theme; search and
+  replace in the hex editor; pictures in real pixels (kitty, iTerm2, sixel) and video frames
+  through `ffmpeg`; saved searches as panels, approximate names, metadata conditions, the
+  system's index and frequent folders; redaction, local-only, rename and rewrite from words,
+  explain a failed command and words to a search; the job journal and saved syncs; extraction
+  counted right, Test with every bad entry, `.cab` read in process; plugin columns and
+  `FarMenu.ini`; our own tar; xattrs carried on copy (with the macOS null-pointer fix).
 - **0.40.0** — two crates of our own instead of dependencies: the Fluent reader
   (`fcmd-i18n/src/ftl.rs`) and the command-line parser (`fcmd/src/cli.rs`), each checked
   case by case against what it replaced (26 crates out of `Cargo.lock`). The AI panel: `Esc`

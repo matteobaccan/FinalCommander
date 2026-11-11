@@ -6,6 +6,8 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.41.0] — 2026-11-11
+
 ### Added
 
 - **Columns a plugin computes.** A `[[column]]` in a plugin's `plugin.toml` names a program, and
