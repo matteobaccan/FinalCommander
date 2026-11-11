@@ -6,6 +6,8 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.42.0] — 2026-11-11
+
 ### Added
 
 - **Line numbers in the editor**: `Alt+N` numbers the lines of the file in front in a margin,

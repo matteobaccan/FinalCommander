@@ -191,13 +191,20 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.41.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.42.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.42.0** — the same day again, on the author's word: the wastebasket as a panel with
+  restore, an external editor and viewer of one's own with FAR's switch for `F4`/`F3`, the
+  internal editor's line numbers, block through a command, case, syntax by hand, search as you
+  type, reflow and inserts; disk usage as a treemap, binary compare and a unified diff saved as
+  a patch; full-screen programs given the terminal (`[term] interactive`, `tty:`); `F11`
+  unbound for `Shift+F11` and `Ctrl+Shift+F11`; the paste on Windows and the editor's leave
+  question fixed; and the feature table read against eighteen other file managers.
 - **0.41.0** — released early on the author's word, the same day as 0.40.0, to gather what the
   roadmap had spread over 0.41–0.47: the editor's search, replace and undo, its conversions and
   the diff before overwriting; accented sorting; the `delphi-inspiration` theme; search and
