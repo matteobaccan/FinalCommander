@@ -2796,6 +2796,15 @@ both_ways = true
             }),
             update_checked: 20_000,
             update_offered: "v0.32.0".into(),
+            // A search kept under a name, with the folder it was kept for.
+            searches: vec![SavedSearch {
+                name: "big logs".into(),
+                mask: "*.log".into(),
+                size: "100M".into(),
+                scope: "tree".into(),
+                roots: vec!["/var/log".into()],
+                ..SavedSearch::default()
+            }],
         };
         state.save(&paths).unwrap();
         let (back, problem) = State::load(&paths);
@@ -3245,10 +3254,48 @@ pub struct State {
     /// and the next tag is the next offer. *Check for updates* in the menu shows it anyway.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub update_offered: String,
+    /// The searches kept under a name (SPEC 06 §1c). Here beside the folder shortcuts and
+    /// for the same reason: a key in the find dialog keeps one, and what a key keeps must
+    /// not wait for *Save setup* to survive.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub searches: Vec<SavedSearch>,
 }
 
 fn is_zero(n: &u64) -> bool {
     *n == 0
+}
+
+/// One search of the find dialog, kept under a name: every row of the dialog, and the folders
+/// it started from when it was kept — which is what lets it be opened as a panel from
+/// anywhere and still mean the same files.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedSearch {
+    pub name: String,
+    pub mask: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub text: String,
+    #[serde(default)]
+    pub case_sensitive: bool,
+    #[serde(default)]
+    pub whole_words: bool,
+    #[serde(default)]
+    pub hex: bool,
+    #[serde(default)]
+    pub not_containing: bool,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub size: String,
+    /// `tree`, `panel`, `selection`, `root` or `other`, as the dialog's row says it.
+    #[serde(default)]
+    pub scope: String,
+    #[serde(default)]
+    pub follow_links: bool,
+    #[serde(default)]
+    pub directories: bool,
+    #[serde(default)]
+    pub in_archives: bool,
+    /// Where the scope pointed when the search was kept.
+    #[serde(default)]
+    pub roots: Vec<String>,
 }
 
 /// A multi-rename as it was done: the folder, and each file's name before and after.

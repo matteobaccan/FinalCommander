@@ -304,6 +304,8 @@ with `Ctrl+Shift+A` beside it.
 | --- | --- | --- |
 | open the dialog | Alt+F7 | **Alt+F7**, filled in with the last search |
 | inside the dialog | ↑↓ rows, Space toggles, Tab to the buttons, Enter, Esc | the same, plus **F10** for OK |
+| keep the search under a name | — | **F2** in the dialog |
+| the kept searches | — | **F9** in the dialog (`Enter` fills it in); **Alt+Shift+F7** from the panels (`Enter` opens one as a panel, `F4` edits, `Del` forgets) |
 | in the results | ↑↓ PgUp PgDn Home End | the same |
 | go to the file | Enter | **Enter** — the panel changes directory and the cursor lands on it |
 | read it without leaving | F3 | **F3** |
@@ -381,7 +383,7 @@ file.copy  file.move  file.rename.inplace  file.mkdir  file.mkfile
 file.delete(trash|permanent|wipe)  file.link(hard|sym|rel)  file.attrs
 file.multirename  file.checksum.create|verify  file.split  file.combine
 file.pack  file.unpack  file.archive.test  file.archive.commands
-tool.find  tool.grep  tool.diskusage  tool.compare.dirs  tool.compare.files
+tool.find  tool.find.saved  tool.grep  tool.diskusage  tool.compare.dirs  tool.compare.files
 tool.sync.dirs  tool.sync.saved  tool.usermenu  tool.history(cmd|view|folder)  tool.macro.record|play
 job.queue.show  job.journal.show  job.pause  job.resume  job.cancel
 shell.run  shell.output.show  shell.term.toggle  shell.insert(name|path|other)

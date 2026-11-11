@@ -3967,6 +3967,32 @@ mod tests {
         );
     }
 
+    /// The find dialog says which keys keep a search and bring one back, because nothing
+    /// else on it would; and the list of kept searches says what each one looks for.
+    #[test]
+    fn the_find_dialog_names_its_keys_and_the_kept_searches_say_what_they_look_for() {
+        let mut app = app("far", "en");
+        app.run(fcmd_cmd::Command::ToolFind);
+        let text = frame(&mut app, 100, 30);
+        assert!(text.contains("F2 keeps this search under a name"), "{text}");
+
+        app.searches.push(fcmd_config::SavedSearch {
+            name: "big logs".into(),
+            mask: "*.log".into(),
+            size: "100M".into(),
+            roots: vec![app.panels[0].cwd.to_string()],
+            ..Default::default()
+        });
+        press(&mut app, "F9");
+        let text = frame(&mut app, 100, 30);
+        assert!(text.contains("Saved searches"), "{text}");
+        let row = text
+            .lines()
+            .find(|line| line.contains("big logs"))
+            .unwrap_or_else(|| panic!("no row in\n{text}"));
+        assert!(row.contains("*.log") && row.contains("100M"), "{row}");
+    }
+
     /// The drive dialog belongs to its panel. FAR opens it five columns in from that panel's
     /// own frame, and so does this: a list that will send the *right* panel somewhere and
     /// opens in the middle of the screen is a list one has to read the title of.

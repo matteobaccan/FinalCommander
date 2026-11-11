@@ -1757,3 +1757,16 @@ video-no-frame = нет кадра из этого видео: { $why }
 video-playing = воспроизведение, { $fps } кадров в секунду, без звука — Пробел ставит на паузу
 video-paused = пауза на { $at } — Пробел продолжает, PgUp и PgDn шагают на десятую часть
 video-ended = видео закончилось — Пробел запускает его снова
+
+
+# finding things
+menu-saved-searches = Сохранённые поиски
+drive-searches = Сохранённые поиски
+find-keys = F2 сохраняет этот поиск под именем · F9 сохранённые
+find-save-name = Сохранить этот поиск как
+find-saved = поиск сохранён как { $name }
+find-saved-none = сохранённых поисков пока нет: F2 в диалоге поиска сохраняет один
+find-saved-title = Сохранённые поиски — Enter открывает, F4 правит, Del забывает
+find-saved-running = поиск { $name }…
+find-saved-gone = поиск { $name } забыт
+find-loaded = поиск { $name } загружен

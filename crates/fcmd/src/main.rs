@@ -97,9 +97,6 @@ fn run_find(
     archives: &std::sync::Arc<fcmd_arc::Cache>,
     groups: &fcmd_core::filter::Groups,
 ) {
-    use fcmd_core::filter::{Filter, MaskSet, SizeRange};
-    use fcmd_find::{Content, Needle};
-
     let started = std::time::Instant::now();
     let fail = |message: String| {
         let _ = tx.send(Event::FindDone {
@@ -112,63 +109,9 @@ fn run_find(
         });
     };
 
-    let masks = match MaskSet::parse_with(&spec.mask, groups, spec.case_sensitive) {
-        Ok(masks) => masks,
-        Err(e) => return fail(e.to_string()),
-    };
-    let mut filter = Filter::named("find");
-    filter.masks = Some(masks);
-    if !spec.size.trim().is_empty() {
-        match SizeRange::parse(&spec.size) {
-            Ok(range) => filter.size = Some(range),
-            Err(e) => return fail(e.to_string()),
-        }
-    }
-
-    let content = if spec.text.is_empty() {
-        None
-    } else {
-        let needle = if spec.hex {
-            match Needle::hex(&spec.text) {
-                Ok(needle) => needle,
-                Err(e) => return fail(e.to_string()),
-            }
-        } else {
-            Needle::text(spec.text.clone())
-                .case_sensitive(spec.case_sensitive)
-                .whole_words(spec.whole_words)
-        };
-        Some(if spec.not_containing {
-            Content::not_containing(needle)
-        } else {
-            Content::containing(needle)
-        })
-    };
-
-    let query = fcmd_find::Query {
-        roots: spec.roots.clone(),
-        filter,
-        // "This folder" is the only scope that does not go down.
-        subdirectories: spec.scope != app::FindScope::Panel,
-        // The search dialog has no depth of its own yet; the comparison does.
-        depth: None,
-        follow_links: spec.follow_links,
-        include_dirs: spec.directories,
-        content,
-        in_archives: spec.in_archives,
-    };
-
     let mut problems: Vec<String> = Vec::new();
     let mut last_report = std::time::Instant::now();
-    // The archive-aware filesystem only when the box is ticked: without it the walk is the
-    // plain local one, and a `.zip` is a file like any other.
-    let in_archives = fcmd_find::ArcFind::new(archives.clone(), fcmd_vfs::local::LocalVfs);
-    let fs: &dyn fcmd_find::FindFs = if spec.in_archives {
-        &in_archives
-    } else {
-        &fcmd_vfs::local::LocalVfs
-    };
-    let result = fcmd_find::find(fs, &query, &cancel, &mut |event| match event {
+    let result = find_hits(&spec, &cancel, archives, groups, &mut |event| match event {
         fcmd_find::Event::Hit(hit) => {
             let _ = tx.send(Event::FindHit {
                 id,
@@ -210,8 +153,104 @@ fn run_find(
                 error: None,
             });
         }
-        Err(e) => fail(e.to_string()),
+        Err(e) => fail(e),
     }
+}
+
+/// A search as the dialog describes it, run: the one place that turns a `FindSpec` into the
+/// engine's query, so the results list and a kept search opened as a panel cannot come to
+/// mean different things by the same rows.
+fn find_hits(
+    spec: &app::FindSpec,
+    cancel: &CancelToken,
+    archives: &std::sync::Arc<fcmd_arc::Cache>,
+    groups: &fcmd_core::filter::Groups,
+    on: &mut dyn FnMut(fcmd_find::Event),
+) -> Result<fcmd_find::Stats, String> {
+    use fcmd_core::filter::{Filter, MaskSet, SizeRange};
+    use fcmd_find::{Content, Needle};
+
+    let masks =
+        MaskSet::parse_with(&spec.mask, groups, spec.case_sensitive).map_err(|e| e.to_string())?;
+    let mut filter = Filter::named("find");
+    filter.masks = Some(masks);
+    if !spec.size.trim().is_empty() {
+        filter.size = Some(SizeRange::parse(&spec.size).map_err(|e| e.to_string())?);
+    }
+
+    let content = if spec.text.is_empty() {
+        None
+    } else {
+        let needle = if spec.hex {
+            Needle::hex(&spec.text).map_err(|e| e.to_string())?
+        } else {
+            Needle::text(spec.text.clone())
+                .case_sensitive(spec.case_sensitive)
+                .whole_words(spec.whole_words)
+        };
+        Some(if spec.not_containing {
+            Content::not_containing(needle)
+        } else {
+            Content::containing(needle)
+        })
+    };
+
+    let query = fcmd_find::Query {
+        roots: spec.roots.clone(),
+        filter,
+        // "This folder" is the only scope that does not go down.
+        subdirectories: spec.scope != app::FindScope::Panel,
+        // The search dialog has no depth of its own yet; the comparison does.
+        depth: None,
+        follow_links: spec.follow_links,
+        include_dirs: spec.directories,
+        content,
+        in_archives: spec.in_archives,
+    };
+
+    // The archive-aware filesystem only when the box is ticked: without it the walk is the
+    // plain local one, and a `.zip` is a file like any other.
+    let in_archives = fcmd_find::ArcFind::new(archives.clone(), fcmd_vfs::local::LocalVfs);
+    let fs: &dyn fcmd_find::FindFs = if spec.in_archives {
+        &in_archives
+    } else {
+        &fcmd_vfs::local::LocalVfs
+    };
+    fcmd_find::find(fs, &query, cancel, on).map_err(|e| e.to_string())
+}
+
+/// A kept search run for a panel (SPEC 06 §1c): every hit, then the panel's rows in one
+/// answer. A search that cannot start, or one that was stopped because the panel has moved
+/// on, answers with what it has — an empty panel says "nothing matches" and the status line
+/// says why.
+#[allow(clippy::too_many_arguments)]
+fn run_find_panel(
+    panel: usize,
+    generation: u64,
+    title: String,
+    spec: app::FindSpec,
+    cancel: CancelToken,
+    tx: mpsc::Sender<Event>,
+    archives: &std::sync::Arc<fcmd_arc::Cache>,
+    groups: &fcmd_core::filter::Groups,
+) {
+    let mut items = Vec::new();
+    let result = find_hits(&spec, &cancel, archives, groups, &mut |event| {
+        if let fcmd_find::Event::Hit(hit) = event {
+            items.push((hit.path, hit.entry));
+        }
+    });
+    // Stopped because the panel went somewhere else or asked again: nobody is waiting.
+    if cancel.is_cancelled() {
+        return;
+    }
+    let _ = tx.send(Event::SearchListed {
+        panel,
+        generation,
+        title,
+        items,
+        error: result.err(),
+    });
 }
 
 /// The device a local directory is on: free space for the panel frame, and the size and the
@@ -627,6 +666,7 @@ fn run(cli: Cli) -> Result<()> {
         .map(|row| (row.key, row.lines))
         .collect();
     app.bookmarks = state.bookmarks;
+    app.searches = state.searches;
     // The tree comes up with what the last session walked, so `Ctrl+T` and `Alt+F10` are
     // useful before anything has been read again.
     app.tree_cache = crate::tree::Cache::from_state(&state.tree);
@@ -1397,6 +1437,22 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                     // way of the runtime that is also serving the panels.
                     runtime.spawn_blocking(move || {
                         run_find(id, *spec, cancel, tx, &archives, &groups)
+                    });
+                }
+                Request::FindPanel {
+                    panel,
+                    generation,
+                    title,
+                    spec,
+                    cancel,
+                } => {
+                    let tx = tx.clone();
+                    let archives = archives.clone();
+                    let groups = app.cfg.mask_groups();
+                    runtime.spawn_blocking(move || {
+                        run_find_panel(
+                            panel, generation, title, *spec, cancel, tx, &archives, &groups,
+                        )
                     });
                 }
                 Request::CompareContents {
@@ -2199,6 +2255,7 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
         left_tab: app.tabs[0].current(),
         right_tab: app.tabs[1].current(),
         bookmarks: app.bookmarks.clone(),
+        searches: app.searches.clone(),
         // The tree's own cache, capped: a walk of a whole disk is worth keeping some of, and
         // a state file nobody can open is worth keeping none of.
         tree: app.tree_cache.to_state(crate::app::TREE_CACHE_KEPT),
@@ -6735,6 +6792,23 @@ dir_attr = "D"
                         app.handle_event(event);
                     }
                 }
+                Request::FindPanel {
+                    panel,
+                    generation,
+                    title,
+                    spec,
+                    cancel,
+                } => {
+                    let (tx, rx) = mpsc::channel();
+                    let archives = std::sync::Arc::new(fcmd_arc::Cache::new(Default::default()));
+                    let groups = app.cfg.mask_groups();
+                    run_find_panel(
+                        panel, generation, title, *spec, cancel, tx, &archives, &groups,
+                    );
+                    while let Ok(event) = rx.try_recv() {
+                        app.handle_event(event);
+                    }
+                }
                 Request::TempRefresh {
                     panel,
                     generation,
@@ -7837,6 +7911,68 @@ dir_attr = "D"
         assert!(!dir.join("sub").exists(), "the directory survived");
         assert!(!dir.join("two.txt").exists(), "the file survived");
         assert_eq!(app.panel().listing.totals.files, 0);
+    }
+
+    /// A kept search opened as a panel, through the real engine: it holds what matches, and
+    /// a re-read after the tree changed holds what matches then — from the folder the
+    /// search was kept for, wherever the panel was when it was opened.
+    #[test]
+    fn a_kept_search_is_a_folder_that_stays_current() {
+        let root = tempfile::tempdir().unwrap();
+        let src = root.path().join("src");
+        let elsewhere = root.path().join("elsewhere");
+        std::fs::create_dir_all(src.join("deep")).unwrap();
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        std::fs::write(src.join("one.rs"), b"1").unwrap();
+        std::fs::write(src.join("deep/two.rs"), b"2").unwrap();
+        std::fs::write(src.join("notes.txt"), b"3").unwrap();
+
+        let mut app = app_on(&src, &elsewhere);
+        serve(&mut app);
+        app.last_find = app::FindSpec {
+            mask: "*.rs".into(),
+            ..app::FindSpec::default()
+        };
+        app.run(FcCommand::ToolFind);
+        key(&mut app, "F2");
+        match &mut app.mode {
+            app::Mode::Prompt(prompt) => prompt.text = "sources".into(),
+            other => panic!("{other:?}"),
+        }
+        key(&mut app, "Enter");
+        key(&mut app, "Esc");
+        assert_eq!(app.searches.len(), 1);
+
+        // Opened on the other panel, which is somewhere else entirely.
+        key(&mut app, "Tab");
+        key(&mut app, "Alt+Shift+F7");
+        key(&mut app, "Enter");
+        serve(&mut app);
+        let names = |app: &App| {
+            let panel = &app.panels[1];
+            let mut names: Vec<String> = (0..panel.listing.len())
+                .filter_map(|row| panel.listing.row(row))
+                .map(|e| panel.path_of(e).display_name())
+                .collect();
+            names.sort();
+            names
+        };
+        assert_eq!(names(&app), ["one.rs", "two.rs"], "{}", app.status);
+        assert!(!app.panels[1].loading);
+
+        // The tree changes under it, and `Ctrl+R` says what matches now.
+        std::fs::remove_file(src.join("one.rs")).unwrap();
+        std::fs::write(src.join("deep/three.rs"), b"3").unwrap();
+        app.run(FcCommand::PanelReread);
+        serve(&mut app);
+        assert_eq!(names(&app), ["three.rs", "two.rs"], "{}", app.status);
+
+        // A kept search whose mask no longer parses says so on an empty panel.
+        app.searches[0].mask = "/(/".into();
+        app.run(FcCommand::PanelReread);
+        serve(&mut app);
+        assert!(names(&app).is_empty());
+        assert!(app.status_error, "{}", app.status);
     }
 
     /// The whole chain through the real engine: a tree on disk, a search by mask and by text,

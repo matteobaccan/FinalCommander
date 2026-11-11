@@ -356,6 +356,20 @@ hundred megabytes up", `1M-1G` a range, `-4K` everything smaller than four kilob
 empty for any size. `K`, `M`, `G` and `T` are powers of 1024, as everywhere else in the
 program.
 
+**A search you run every week can be kept.** `F2` in the dialog asks for a name and keeps
+the whole of it — every row, and the folder it was about to look in. `F9` in the dialog
+lists the ones you kept, and `Enter` there fills the dialog in again. Keeping a search
+under a name that is taken replaces it, which is how you change one.
+
+**A kept search is also a folder.** `Alt+Shift+F7` — or *Commands → Saved searches*, or
+the *Saved searches* row of `Alt+F1`/`Alt+F2` once you have kept one — opens the same list
+from the panels, and `Enter` there makes the panel the files that search finds: a
+temporary panel like the one `F5` gives you, named after the search. It looks in the folder
+the search was kept for, wherever you open it from, and `Ctrl+R` runs it again — so it is
+a folder that always holds "the logs over a hundred megabytes" or "the sources that still
+say TODO" as of now. In that list `F4` puts the search into the dialog instead, and `Del`
+forgets it.
+
 Replacing across files is the same dialog with a replacement, and it counts the files and the
 matches before it writes anything. The count comes from the same engine that then does the
 work, so the two cannot disagree.

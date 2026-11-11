@@ -1771,3 +1771,16 @@ video-no-frame = ningún fotograma de este vídeo: { $why }
 video-playing = reproduciendo a { $fps } fotogramas por segundo, sin sonido — Espacio pausa
 video-paused = en pausa en { $at } — Espacio continúa, RePág y AvPág saltan una décima
 video-ended = el vídeo ha terminado — Espacio lo reproduce de nuevo
+
+
+# finding things
+menu-saved-searches = Búsquedas guardadas
+drive-searches = Búsquedas guardadas
+find-keys = F2 guarda esta búsqueda con un nombre · F9 las guardadas
+find-save-name = Guardar esta búsqueda como
+find-saved = búsqueda guardada como { $name }
+find-saved-none = aún no hay búsquedas guardadas: F2 en el diálogo de búsqueda guarda una
+find-saved-title = Búsquedas guardadas — Intro abre, F4 edita, Supr olvida
+find-saved-running = buscando { $name }…
+find-saved-gone = búsqueda { $name } olvidada
+find-loaded = búsqueda { $name } cargada

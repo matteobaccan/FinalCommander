@@ -1709,3 +1709,16 @@ video-no-frame = 无法取得此视频的画面：{ $why }
 video-playing = 正在以每秒 { $fps } 帧播放，无声音 — 空格暂停
 video-paused = 已暂停于 { $at } — 空格继续，PgUp 和 PgDn 跳过十分之一
 video-ended = 视频已结束 — 空格重新播放
+
+
+# finding things
+menu-saved-searches = 已保存的搜索
+drive-searches = 已保存的搜索
+find-keys = F2 以名称保存此搜索 · F9 已保存的搜索
+find-save-name = 将此搜索保存为
+find-saved = 搜索已保存为 { $name }
+find-saved-none = 尚未保存任何搜索：在查找对话框中按 F2 保存
+find-saved-title = 已保存的搜索 — Enter 打开，F4 编辑，Del 删除
+find-saved-running = 正在搜索 { $name }…
+find-saved-gone = 已删除搜索 { $name }
+find-loaded = 已载入搜索 { $name }

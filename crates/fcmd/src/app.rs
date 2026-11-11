@@ -277,6 +277,15 @@ pub enum Request {
         spec: Box<FindSpec>,
         cancel: CancelToken,
     },
+    /// A search kept under a name, run for a panel rather than for the results list: what it
+    /// finds arrives all at once as that panel's rows (SPEC 06 §1c).
+    FindPanel {
+        panel: usize,
+        generation: u64,
+        title: String,
+        spec: Box<FindSpec>,
+        cancel: CancelToken,
+    },
     /// Re-stat the paths a list panel is made of, and drop what is no longer there.
     TempRefresh {
         panel: usize,
@@ -1046,6 +1055,15 @@ pub enum Event {
         title: String,
         items: Vec<(VPath, Entry)>,
     },
+    /// What a kept search found, as the rows of the panel that asked (SPEC 06 §1c). The
+    /// same answer as `TempListed`, with the reason beside it when the search could not run.
+    SearchListed {
+        panel: usize,
+        generation: u64,
+        title: String,
+        items: Vec<(VPath, Entry)>,
+        error: Option<String>,
+    },
     /// A multi-rename was done, or was not and the folder is as it was.
     Renamed {
         dir: VPath,
@@ -1312,6 +1330,8 @@ pub enum PromptKind {
     VaultNew,
     /// The name to keep a recent replacement under (`Ins` in `Alt+Shift+F7`).
     ReplaceTemplateName,
+    /// The name to keep the find dialog's search under (`F2` in `Alt+F7`).
+    SearchName,
     EditorSaveAs,
     /// Name for F7.
     Mkdir,
@@ -1942,6 +1962,49 @@ impl Default for FindSpec {
         }
     }
 }
+
+impl FindSpec {
+    /// The search as the state file keeps it under a name.
+    pub fn to_saved(&self, name: &str) -> fcmd_config::SavedSearch {
+        fcmd_config::SavedSearch {
+            name: name.to_string(),
+            mask: self.mask.clone(),
+            text: self.text.clone(),
+            case_sensitive: self.case_sensitive,
+            whole_words: self.whole_words,
+            hex: self.hex,
+            not_containing: self.not_containing,
+            size: self.size.clone(),
+            scope: self.scope.as_str().to_string(),
+            follow_links: self.follow_links,
+            directories: self.directories,
+            in_archives: self.in_archives,
+            roots: self.roots.iter().map(|p| p.to_string()).collect(),
+        }
+    }
+
+    /// And back: the search a kept one stands for, with the folders it was kept with.
+    pub fn from_saved(saved: &fcmd_config::SavedSearch) -> FindSpec {
+        FindSpec {
+            mask: saved.mask.clone(),
+            text: saved.text.clone(),
+            case_sensitive: saved.case_sensitive,
+            whole_words: saved.whole_words,
+            hex: saved.hex,
+            not_containing: saved.not_containing,
+            size: saved.size.clone(),
+            scope: FindScope::parse(&saved.scope),
+            follow_links: saved.follow_links,
+            directories: saved.directories,
+            in_archives: saved.in_archives,
+            roots: saved.roots.iter().map(|p| VPath::parse(p)).collect(),
+        }
+    }
+}
+
+/// The origin of a panel that is a kept search, before the search's name: what the
+/// change-drive dialog and a re-read know such a panel by.
+pub const SEARCH_ORIGIN: &str = ":search:";
 
 /// Where a search starts. FAR has six; these are the five that mean something on every
 /// platform we run on.
@@ -2778,6 +2841,17 @@ pub struct App {
     pub output_hit: Option<(usize, String)>,
     /// What was searched for last, so `Alt+F7` opens on it rather than on an empty dialog.
     pub last_find: FindSpec,
+    /// The searches kept under a name (SPEC 06 §1c), as the state file holds them.
+    pub searches: Vec<fcmd_config::SavedSearch>,
+    /// The find dialog waiting behind the question it asked — the name to keep a search
+    /// under, or the list of the kept ones — so that answering or dismissing either puts the
+    /// dialog back with what was typed into it.
+    search_form: Option<Box<Form>>,
+    /// The search the name is being asked for, as the dialog stood when `F2` was pressed.
+    search_keeping: Option<FindSpec>,
+    /// The search each smart-folder panel is running, so that leaving the panel or asking
+    /// again stops the walk that nobody is waiting for any more.
+    search_cancel: [Option<CancelToken>; 2],
     /// The tree panel's rows, per panel, and the directory cache behind them. The cache
     /// outlives the panel, so leaving the tree and coming back costs no reads.
     pub trees: [Option<Box<crate::tree::Tree>>; 2],
@@ -3129,6 +3203,10 @@ impl App {
             user_scroll: 0,
             output_hit: None,
             last_find: FindSpec::default(),
+            searches: Vec::new(),
+            search_form: None,
+            search_keeping: None,
+            search_cancel: [None, None],
             drag: None,
             hex_parked: None,
             hex_replacing: None,
@@ -3263,6 +3341,12 @@ impl App {
                     what: view,
                 });
             }
+            return;
+        }
+        // A kept search is asked again: what a smart folder holds is whatever matches now.
+        // One whose search has been forgotten since is an ordinary list, and falls through.
+        if let Some(saved) = self.search_of_panel(index) {
+            self.run_search_panel(index, generation, &saved);
             return;
         }
         // A list panel is not a directory: re-reading it means asking again about the files it
@@ -3592,6 +3676,24 @@ impl App {
                             .t_args("panel-list-count", &[("count", (count as i64).into())]);
                         self.set_status(msg);
                     }
+                }
+            }
+            Event::SearchListed {
+                panel,
+                generation,
+                title,
+                items,
+                error,
+            } => {
+                self.search_cancel[panel.min(1)] = None;
+                self.handle_event(Event::TempListed {
+                    panel,
+                    generation,
+                    title,
+                    items,
+                });
+                if let Some(error) = error {
+                    self.set_error(error);
                 }
             }
             Event::Renamed {
@@ -6513,6 +6615,13 @@ impl App {
                     self.help_return();
                     return;
                 }
+                // The find dialog was waiting behind the name it asked for.
+                if matches!(prompt.kind, PromptKind::SearchName) {
+                    if let Some(form) = self.search_form.take() {
+                        self.mode = Mode::Form(form);
+                    }
+                    return;
+                }
                 self.restore_viewer();
                 self.restore_editor();
                 // A question asked over the hex editor goes back to it when it is dismissed:
@@ -7155,6 +7264,15 @@ impl App {
                             .t_args("vault-refused", &[("why", e.to_string().into())]);
                         self.set_error(m);
                     }
+                }
+            }
+            PromptKind::SearchName => {
+                let name = prompt.text.trim().to_string();
+                if let (false, Some(spec)) = (name.is_empty(), self.search_keeping.take()) {
+                    self.keep_search(&name, &spec);
+                }
+                if let Some(form) = self.search_form.take() {
+                    self.mode = Mode::Form(form);
                 }
             }
             PromptKind::ReplaceTemplateName => {
@@ -9808,6 +9926,17 @@ impl App {
                 let on_it = origin.as_deref().is_some_and(|o| o.starts_with(":git"));
                 rows.push(keyed(self.plain("drive-git"), ":gitlog".to_string(), on_it));
             }
+            // The kept searches, where there is one: each opens as a panel of what it finds.
+            if !self.searches.is_empty() {
+                let on_it = origin
+                    .as_deref()
+                    .is_some_and(|o| o.starts_with(SEARCH_ORIGIN));
+                rows.push(keyed(
+                    self.plain("drive-searches"),
+                    ":searches".to_string(),
+                    on_it,
+                ));
+            }
         }
         Pick::new(
             PickKind::Drives,
@@ -10904,6 +11033,7 @@ impl App {
             }
             Command::ToolTerminal => self.toggle_terminal(),
             Command::ToolFind => self.open_find_form(),
+            Command::ToolFindSaved => self.open_saved_searches(None),
             Command::ToolReplace => {
                 let files = self.job_sources().len();
                 if files == 0 {
@@ -17630,6 +17760,21 @@ impl App {
         self.mode = Mode::Form(Box::new(Form::find(&self.last_find, &self.i18n)));
     }
 
+    /// The find dialog, filled in with a kept search. The scope row says what it said when
+    /// the search was kept, and means this panel now: a search loaded into the dialog is a
+    /// search to run here, which is what tells it from the same search opened as a panel.
+    fn load_search(&mut self, name: &str) {
+        let Some(saved) = self.searches.iter().find(|s| s.name == name) else {
+            return;
+        };
+        let spec = FindSpec::from_saved(saved);
+        self.mode = Mode::Form(Box::new(Form::find(&spec, &self.i18n)));
+        let m = self
+            .i18n
+            .t_args("find-loaded", &[("name", name.to_string().into())]);
+        self.set_status(m);
+    }
+
     /// OK in the find dialog: work out where to search, and start.
     /// Take a colour group from its dialog (SPEC 10 §3.11).
     ///
@@ -17738,12 +17883,28 @@ impl App {
     }
 
     fn apply_find_form(&mut self, form: &Form) {
+        let Some(spec) = self.find_spec_of(form) else {
+            return;
+        };
+        if spec.roots.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        self.last_find = spec.clone();
+        self.start_find(spec);
+    }
+
+    /// What the find dialog is asking for, checked. `None` when a row does not hold up: the
+    /// dialog is then back on the screen with the reason on the status line, so `OK` and
+    /// *keep this search* refuse the same things in the same words.
+    fn find_spec_of(&mut self, form: &Form) -> Option<FindSpec> {
         let mask = form.text_value("find.mask");
         if mask.is_empty() {
             let m = self.i18n.t("find-needs-mask");
             self.set_error(m);
             self.mode = Mode::Form(Box::new(form.clone()));
-            return;
+            return None;
         }
         // Checked here rather than in the worker: a mistyped size should come back on the
         // dialog that typed it, with the field still filled in, not as a failed search.
@@ -17759,7 +17920,7 @@ impl App {
                 );
                 self.set_error(msg);
                 self.mode = Mode::Form(Box::new(form.clone()));
-                return;
+                return None;
             }
         }
         let scope = FindScope::parse(&form.choice_value("find.scope"));
@@ -17778,13 +17939,138 @@ impl App {
             roots: Vec::new(),
         };
         spec.roots = self.find_roots(scope);
+        Some(spec)
+    }
+
+    /// `F2` in the find dialog: ask for the name to keep this search under. The dialog waits
+    /// behind the question and comes back whatever the answer.
+    fn ask_search_name(&mut self) {
+        let Mode::Form(form) = std::mem::replace(&mut self.mode, Mode::Normal) else {
+            return;
+        };
+        let Some(spec) = self.find_spec_of(&form) else {
+            return;
+        };
         if spec.roots.is_empty() {
             let m = self.i18n.t("msg-nothing-to-do");
             self.set_error(m);
+            self.mode = Mode::Form(form);
             return;
         }
-        self.last_find = spec.clone();
-        self.start_find(spec);
+        self.search_keeping = Some(spec);
+        self.search_form = Some(form);
+        let title = self.i18n.t("find-save-name");
+        self.mode = Mode::Prompt(Prompt {
+            kind: PromptKind::SearchName,
+            title,
+            text: String::new(),
+            secret: false,
+            sources: Vec::new(),
+        });
+    }
+
+    /// Keep a search under a name. One of the same name is replaced where it stood, so
+    /// keeping a search again after changing a row of it is how one edits it.
+    fn keep_search(&mut self, name: &str, spec: &FindSpec) {
+        let saved = spec.to_saved(name);
+        match self.searches.iter_mut().find(|s| s.name == name) {
+            Some(slot) => *slot = saved,
+            None => self.searches.push(saved),
+        }
+        let m = self
+            .i18n
+            .t_args("find-saved", &[("name", name.to_string().into())]);
+        self.set_status(m);
+    }
+
+    /// The kept searches as a list (`Alt+Shift+F7`, the *Commands* menu, the change-drive
+    /// dialog, and `F9` in the find dialog).
+    ///
+    /// Opened from the find dialog — `form` is that dialog — `Enter` fills the dialog in
+    /// with the search, because that is where one was. Opened from anywhere else, `Enter`
+    /// runs it and makes the panel its results, and `F4` is the way into the dialog.
+    fn open_saved_searches(&mut self, form: Option<Box<Form>>) {
+        self.open_saved_searches_on(form, self.active);
+    }
+
+    fn open_saved_searches_on(&mut self, form: Option<Box<Form>>, side: usize) {
+        if self.searches.is_empty() {
+            let m = self.i18n.t("find-saved-none");
+            self.set_error(m);
+            if let Some(form) = form {
+                self.mode = Mode::Form(form);
+            }
+            return;
+        }
+        let origin = self.panels[side].temp_origin().map(str::to_string);
+        let rows = self
+            .searches
+            .iter()
+            .map(|s| {
+                let spec = FindSpec::from_saved(s);
+                PickRow::plain(
+                    format!("{}   {}", s.name, self.find_label(&spec)),
+                    s.name.clone(),
+                    origin
+                        .as_deref()
+                        .and_then(|o| o.strip_prefix(SEARCH_ORIGIN))
+                        == Some(s.name.as_str()),
+                )
+            })
+            .collect();
+        self.search_form = form;
+        let title = self.i18n.t("find-saved-title");
+        self.mode = Mode::Pick(Box::new(Pick::new(
+            PickKind::SavedSearches,
+            title,
+            rows,
+            side,
+        )));
+    }
+
+    /// Make a panel the results of a kept search: a "smart folder". The search runs now and
+    /// again at every re-read, so the panel says what matches today rather than what
+    /// matched when the search was kept.
+    fn open_search_panel(&mut self, side: usize, name: &str) {
+        let Some(saved) = self.searches.iter().find(|s| s.name == name).cloned() else {
+            return;
+        };
+        let generation = self.panels[side].generation + 1;
+        self.panels[side].generation = generation;
+        self.panels[side].set_temp(saved.name.clone(), Vec::new(), generation);
+        self.panels[side].set_temp_origin(format!("{SEARCH_ORIGIN}{}", saved.name));
+        self.active = side;
+        self.run_search_panel(side, generation, &saved);
+    }
+
+    /// Ask the worker for a kept search's results, as the rows of this panel.
+    fn run_search_panel(&mut self, side: usize, generation: u64, saved: &fcmd_config::SavedSearch) {
+        // The walk this panel asked for before is nobody's any more.
+        if let Some(old) = self.search_cancel[side].take() {
+            old.cancel();
+        }
+        let cancel = CancelToken::new();
+        self.search_cancel[side] = Some(cancel.clone());
+        self.panels[side].loading = true;
+        let m = self
+            .i18n
+            .t_args("find-saved-running", &[("name", saved.name.clone().into())]);
+        self.set_status(m);
+        self.requests.push(Request::FindPanel {
+            panel: side,
+            generation,
+            title: saved.name.clone(),
+            spec: Box::new(FindSpec::from_saved(saved)),
+            cancel,
+        });
+    }
+
+    /// The kept search a panel is showing, if it is showing one that is still kept.
+    fn search_of_panel(&self, side: usize) -> Option<fcmd_config::SavedSearch> {
+        let name = self.panels[side]
+            .temp_origin()?
+            .strip_prefix(SEARCH_ORIGIN)?;
+        self.searches.iter().find(|s| s.name == name).cloned()
     }
 
     /// Where a scope starts. Worked out here, where the panels are, so that neither the
@@ -19363,6 +19649,24 @@ impl App {
                     }
                     let m = self.i18n.t("attr-times-pasted");
                     self.set_status(m);
+                    return;
+                }
+                _ => {}
+            }
+        }
+        // The find dialog's own two keys: `F2` keeps the search under a name, `F9` opens the
+        // kept ones over the dialog (SPEC 06 §1c).
+        if form.kind == FormKind::Find && key.mods == Mods::NONE {
+            match key.code {
+                KeyCode::F(2) => {
+                    self.ask_search_name();
+                    return;
+                }
+                KeyCode::F(9) => {
+                    let Mode::Form(form) = std::mem::replace(&mut self.mode, Mode::Normal) else {
+                        return;
+                    };
+                    self.open_saved_searches(Some(form));
                     return;
                 }
                 _ => {}
@@ -21615,6 +21919,8 @@ impl App {
             PickKind::EditorMatches => return,
             // And `open_editor_convert`, which knows how the file is written now.
             PickKind::EditorConvert => return,
+            // And `open_saved_searches`, which knows whether the find dialog is behind it.
+            PickKind::SavedSearches => return,
             PickKind::AiServices => return,
             PickKind::AiContext | PickKind::AiThreads | PickKind::StripMeta => return,
             PickKind::PluginsConfig => return,
@@ -21986,6 +22292,40 @@ impl App {
                     }
                 }
                 self.open_ai_services();
+            }
+            KeyCode::Esc | KeyCode::F(10) if kind == PickKind::SavedSearches => {
+                self.mode = match self.search_form.take() {
+                    Some(form) => Mode::Form(form),
+                    None => Mode::Normal,
+                };
+            }
+            // `F4`: the search goes into the find dialog, to be changed or run by hand.
+            KeyCode::F(4) if kind == PickKind::SavedSearches => {
+                let chosen = pick.chosen().map(|r| r.value.clone());
+                if let Some(name) = chosen {
+                    self.search_form = None;
+                    self.load_search(&name);
+                }
+            }
+            KeyCode::Delete if kind == PickKind::SavedSearches => {
+                let chosen = pick.chosen().map(|r| r.value.clone());
+                let side = pick.side;
+                if let Some(name) = chosen {
+                    self.searches.retain(|s| s.name != name);
+                    let m = self
+                        .i18n
+                        .t_args("find-saved-gone", &[("name", name.into())]);
+                    let form = self.search_form.take();
+                    self.mode = Mode::Normal;
+                    if self.searches.is_empty() {
+                        if let Some(form) = form {
+                            self.mode = Mode::Form(form);
+                        }
+                    } else {
+                        self.open_saved_searches_on(form, side);
+                    }
+                    self.set_status(m);
+                }
             }
             KeyCode::Insert if kind == PickKind::ReplaceTemplates => {
                 let Some(value) = pick.chosen().map(|r| r.value.clone()) else {
@@ -22729,6 +23069,7 @@ impl App {
                         });
                     }
                     ":temp" => self.open_temp_panel(pick.side),
+                    ":searches" => self.open_saved_searches_on(None, pick.side),
                     // A drive row is where the panel *goes*, and where it goes is not always
                     // the root of it: see `drive_landing`. A bookmark and a line of history
                     // are a directory somebody chose, and are taken as they are.
@@ -22782,6 +23123,15 @@ impl App {
                     self.cfg.ais.insert(0, chosen);
                     self.save_setup();
                     self.set_status(m);
+                }
+            }
+            PickKind::SavedSearches => {
+                // From the find dialog the search fills the dialog in; from anywhere else it
+                // becomes the panel.
+                if self.search_form.take().is_some() {
+                    self.load_search(&row.value);
+                } else {
+                    self.open_search_panel(pick.side, &row.value);
                 }
             }
             PickKind::ReplaceTemplates => {
@@ -30532,6 +30882,251 @@ mod tests {
             app.panel().current_path().unwrap(),
             VPath::local("/home/mb/deep/one.rs")
         );
+    }
+
+    // ── searches kept under a name (SPEC 06 §1c) ────────────────────────────────────────────
+
+    /// `F2` in the find dialog, a name, and the dialog is back as it was.
+    fn keep_a_search(app: &mut App, mask: &str, name: &str) {
+        app.run(Command::ToolFind);
+        set_text(app, "find.mask", mask);
+        press(app, "F2");
+        match &mut app.mode {
+            Mode::Prompt(prompt) => {
+                assert_eq!(prompt.kind, PromptKind::SearchName);
+                prompt.text = name.to_string();
+            }
+            other => panic!("{other:?}"),
+        }
+        press(app, "Enter");
+    }
+
+    #[test]
+    fn f2_in_the_find_dialog_keeps_the_search_under_a_name_and_leaves_the_dialog_open() {
+        let mut app = app();
+        let cwd = app.panel().cwd.clone();
+        keep_a_search(&mut app, "*.rs", "sources");
+        // The dialog is back, with what was typed still in it.
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(form.kind, FormKind::Find);
+        assert_eq!(form.text_value("find.mask"), "*.rs");
+        // And the search is kept, with the folder the scope pointed at.
+        assert_eq!(app.searches.len(), 1);
+        assert_eq!(app.searches[0].name, "sources");
+        assert_eq!(app.searches[0].mask, "*.rs");
+        assert_eq!(app.searches[0].roots, vec![cwd.to_string()]);
+
+        // Kept again under the same name, it replaces the one that was there.
+        press(&mut app, "Esc");
+        keep_a_search(&mut app, "*.toml", "sources");
+        assert_eq!(app.searches.len(), 1);
+        assert_eq!(app.searches[0].mask, "*.toml");
+    }
+
+    #[test]
+    fn a_search_is_not_kept_without_a_name_or_with_a_row_that_does_not_hold_up() {
+        let mut app = app();
+        keep_a_search(&mut app, "*.rs", "   ");
+        assert!(app.searches.is_empty());
+        assert!(matches!(&app.mode, Mode::Form(f) if f.kind == FormKind::Find));
+
+        // `Esc` on the name is a change of mind, and the dialog is still there.
+        press(&mut app, "F2");
+        press(&mut app, "Esc");
+        assert!(app.searches.is_empty());
+        assert!(matches!(&app.mode, Mode::Form(f) if f.kind == FormKind::Find));
+
+        // A size nobody can read is refused before any name is asked for.
+        set_text(&mut app, "find.size", "lots");
+        press(&mut app, "F2");
+        assert!(matches!(&app.mode, Mode::Form(f) if f.kind == FormKind::Find));
+        assert!(app.status_error, "{}", app.status);
+    }
+
+    #[test]
+    fn f9_in_the_find_dialog_fills_it_in_with_a_kept_search() {
+        let mut app = app();
+        // With nothing kept, the key says so and the dialog stays.
+        app.run(Command::ToolFind);
+        press(&mut app, "F9");
+        assert!(matches!(&app.mode, Mode::Form(f) if f.kind == FormKind::Find));
+        assert!(app.status_error, "{}", app.status);
+        press(&mut app, "Esc");
+
+        keep_a_search(&mut app, "*.log", "logs");
+        set_text(&mut app, "find.mask", "*.tmp");
+        press(&mut app, "F9");
+        match &app.mode {
+            Mode::Pick(pick) => {
+                assert_eq!(pick.kind, PickKind::SavedSearches);
+                assert_eq!(pick.rows.len(), 1);
+                assert!(
+                    pick.rows[0].label.starts_with("logs"),
+                    "{}",
+                    pick.rows[0].label
+                );
+            }
+            other => panic!("{other:?}"),
+        }
+        // `Esc` goes back to the dialog as it was typed.
+        press(&mut app, "Esc");
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(form.text_value("find.mask"), "*.tmp");
+        // `Enter` fills it in with the kept one, and starts nothing.
+        press(&mut app, "F9");
+        app.requests.clear();
+        press(&mut app, "Enter");
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(form.kind, FormKind::Find);
+        assert_eq!(form.text_value("find.mask"), "*.log");
+        assert!(app.take_requests().is_empty());
+    }
+
+    #[test]
+    fn a_kept_search_opens_as_a_panel_and_is_asked_again_at_every_re_read() {
+        let mut app = app();
+        let cwd = app.panel().cwd.clone();
+        keep_a_search(&mut app, "*.rs", "sources");
+        press(&mut app, "Esc");
+        app.requests.clear();
+
+        press(&mut app, "Alt+Shift+F7");
+        assert!(matches!(&app.mode, Mode::Pick(p) if p.kind == PickKind::SavedSearches));
+        press(&mut app, "Enter");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert_eq!(app.panel().temp_origin(), Some(":search:sources"));
+        let (generation, cancel) = match app.take_requests().into_iter().next() {
+            Some(Request::FindPanel {
+                panel,
+                generation,
+                title,
+                spec,
+                cancel,
+            }) => {
+                assert_eq!(panel, 0);
+                assert_eq!(title, "sources");
+                assert_eq!(spec.mask, "*.rs");
+                // Where it was kept, not wherever the panel happens to be now.
+                assert_eq!(spec.roots, vec![cwd.clone()]);
+                (generation, cancel)
+            }
+            other => panic!("{other:?}"),
+        };
+        app.handle_event(Event::SearchListed {
+            panel: 0,
+            generation,
+            title: "sources".into(),
+            items: vec![(
+                cwd.join("deep").join("one.rs"),
+                entry("one.rs", fcmd_core::EntryKind::File, 10),
+            )],
+            error: None,
+        });
+        assert_eq!(app.panel().listing.len(), 1);
+        assert_eq!(
+            app.panel().current_path().unwrap(),
+            cwd.join("deep").join("one.rs")
+        );
+        // Still the same smart folder after its rows arrived.
+        assert_eq!(app.panel().temp_origin(), Some(":search:sources"));
+
+        // A re-read runs the search again rather than asking about the rows it has, and the
+        // walk nobody waits for any more is not stopped by an answer that already came.
+        app.run(Command::PanelReread);
+        assert!(!cancel.is_cancelled());
+        let again = match app.take_requests().into_iter().next() {
+            Some(Request::FindPanel { spec, cancel, .. }) => {
+                assert_eq!(spec.mask, "*.rs");
+                cancel
+            }
+            other => panic!("{other:?}"),
+        };
+        // Asked a third time before the second answered: the second is stopped.
+        app.run(Command::PanelReread);
+        assert!(again.is_cancelled());
+
+        // A search that could not run says why, on a panel that is empty.
+        let generation = app.panel().generation;
+        app.handle_event(Event::SearchListed {
+            panel: 0,
+            generation,
+            title: "sources".into(),
+            items: Vec::new(),
+            error: Some("bad mask".into()),
+        });
+        assert_eq!(app.panel().listing.len(), 0);
+        assert!(app.status.contains("bad mask"), "{}", app.status);
+    }
+
+    #[test]
+    fn the_list_of_kept_searches_edits_and_forgets() {
+        let mut app = app();
+        // Nothing kept: the key says so rather than opening an empty list.
+        app.run(Command::ToolFindSaved);
+        assert!(matches!(app.mode, Mode::Normal));
+        assert!(app.status_error, "{}", app.status);
+
+        keep_a_search(&mut app, "*.rs", "sources");
+        press(&mut app, "Esc");
+        keep_a_search(&mut app, "*.log", "logs");
+        press(&mut app, "Esc");
+
+        // `F4` puts the one under the cursor into the dialog.
+        app.run(Command::ToolFindSaved);
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(form.text_value("find.mask"), "*.log");
+        press(&mut app, "Esc");
+
+        // `Del` forgets it, and the list stays open on what is left.
+        app.run(Command::ToolFindSaved);
+        press(&mut app, "Del");
+        assert_eq!(app.searches.len(), 1);
+        assert_eq!(app.searches[0].name, "logs");
+        assert!(matches!(&app.mode, Mode::Pick(p) if p.rows.len() == 1));
+        // The last one gone, there is no list left to show.
+        press(&mut app, "Del");
+        assert!(app.searches.is_empty());
+        assert!(matches!(app.mode, Mode::Normal));
+    }
+
+    #[test]
+    fn the_change_drive_dialog_offers_the_kept_searches_once_there_is_one() {
+        let mut app = app();
+        let has = |app: &mut App| {
+            app.run(Command::PanelDrive(fcmd_cmd::Side::Right));
+            let found = match &app.mode {
+                Mode::Pick(pick) => pick.rows.iter().position(|r| r.value == ":searches"),
+                other => panic!("{other:?}"),
+            };
+            found
+        };
+        assert_eq!(has(&mut app), None);
+        press(&mut app, "Esc");
+
+        keep_a_search(&mut app, "*.rs", "sources");
+        press(&mut app, "Esc");
+        let at = has(&mut app).expect("the row is there");
+        if let Mode::Pick(pick) = &mut app.mode {
+            pick.cursor = at;
+        }
+        press(&mut app, "Enter");
+        // The list, for the side the dialog was about; the one chosen becomes that panel.
+        assert!(
+            matches!(&app.mode, Mode::Pick(p) if p.kind == PickKind::SavedSearches && p.side == 1)
+        );
+        press(&mut app, "Enter");
+        assert_eq!(app.panels[1].temp_origin(), Some(":search:sources"));
+        assert_eq!(app.active, 1);
     }
 
     #[test]

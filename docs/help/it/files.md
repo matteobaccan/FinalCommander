@@ -370,6 +370,20 @@ si riempie: `100M` significa "da cento megabyte in su", `1M-1G` un intervallo, `
 quello che è più piccolo di quattro kilobyte. Lasciala vuota per qualunque dimensione. `K`, `M`,
 `G` e `T` sono potenze di 1024, come in ogni altro punto del programma.
 
+**Una ricerca che fai ogni settimana si può salvare.** `F2` nel dialogo chiede un nome e
+salva tutta la ricerca — ogni riga, e la cartella in cui stava per guardare. `F9` nel dialogo
+elenca quelle salvate, e lì `Invio` riempie di nuovo il dialogo. Salvare una ricerca con un
+nome già usato la sostituisce, ed è così che se ne cambia una.
+
+**Una ricerca salvata è anche una cartella.** `Alt+Shift+F7` — oppure *Comandi → Ricerche
+salvate*, o la riga *Ricerche salvate* di `Alt+F1`/`Alt+F2` appena ne hai salvata una — apre
+lo stesso elenco dai pannelli, e lì `Invio` fa del pannello i file che quella ricerca trova: un
+pannello temporaneo come quello che dà `F5`, con il nome della ricerca. Guarda nella cartella
+per cui la ricerca è stata salvata, da ovunque tu la apra, e `Ctrl+R` la esegue di nuovo —
+quindi è una cartella che contiene sempre "i log oltre i cento megabyte" o "i sorgenti che
+dicono ancora TODO" come sono adesso. In quell'elenco `F4` mette invece la ricerca nel
+dialogo, e `Canc` la elimina.
+
 Sostituire attraverso i file è lo stesso dialogo con una sostituzione, e conta i file e le
 occorrenze prima di scrivere qualunque cosa. Il conteggio viene dallo stesso motore che poi fa
 il lavoro, quindi i due non possono essere in disaccordo.

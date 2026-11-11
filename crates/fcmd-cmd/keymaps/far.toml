@@ -161,6 +161,13 @@ cmd = "tool.find"
 keys = ["Alt+F10"]
 cmd = "tool.find.folder"
 
+# The searches kept under a name, beside the key that searches: `Enter` on one makes the
+# panel its results (SPEC 06 §1c).
+[[bind]]
+keys = ["Alt+Shift+F7"]
+scope = "panel"
+cmd = "tool.find.saved"
+
 # ---------------------------------------------------------------- panel control
 [[bind]]
 keys = ["Tab"]

@@ -260,6 +260,7 @@ impl Command {
             Command::ToolTerminal => "a real terminal, with a shell in it",
             Command::ToolFind => "find files, by name or by what is in them",
             Command::ToolFindFolder => "a folder, by name, out of the tree",
+            Command::ToolFindSaved => "the searches kept under a name, each one a panel",
             Command::ToolReplace => "replace across the selected files",
             Command::ShellOutputShow => "the panels off, and the screen the commands printed on",
             Command::NetSites => "the stored connections",

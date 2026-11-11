@@ -1771,3 +1771,16 @@ video-no-frame = aucune image de cette vidéo : { $why }
 video-playing = lecture à { $fps } images par seconde, sans le son — Espace met en pause
 video-paused = en pause à { $at } — Espace reprend, PgPréc et PgSuiv avancent d'un dixième
 video-ended = la vidéo est terminée — Espace la relance
+
+
+# finding things
+menu-saved-searches = Recherches enregistrées
+drive-searches = Recherches enregistrées
+find-keys = F2 garde cette recherche sous un nom · F9 celles gardées
+find-save-name = Garder cette recherche sous le nom
+find-saved = recherche gardée sous { $name }
+find-saved-none = aucune recherche gardée : F2 dans la fenêtre de recherche en garde une
+find-saved-title = Recherches enregistrées — Entrée ouvre, F4 modifie, Suppr oublie
+find-saved-running = recherche de { $name }…
+find-saved-gone = recherche { $name } oubliée
+find-loaded = recherche { $name } chargée

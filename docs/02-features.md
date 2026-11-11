@@ -228,7 +228,7 @@ something readable rather than only into instructions.
 
 | # | Feature | Origin | State |
 | --- | --- | --- | --- |
-| 7.1 | Find files: mask, content (text/regex/hex), size/date/attr filters, archives included, encoding list, results panel, panelize results, "find folder" | FAR/TC | ~ dates and attributes in the dialog, code pages, saving a search |
+| 7.1 | Find files: mask, content (text/regex/hex), size/date/attr filters, archives included, encoding list, results panel, panelize results, "find folder" | FAR/TC | ~ dates and attributes in the dialog, code pages |
 | 7.2 | Grep-like content search with result navigation and jump-to-match in the editor | NEW | ✓ `F3` at the match, `F4` on its line |
 | 7.3 | Disk usage / occupied space view (per-dir sizes, sortable, graphical bars) | KRU/TC | ~ `Alt+Shift+F3`: one folder's entries largest first, with bars and shares, filled in as each folder is measured (SPEC 06 §12); one level at a time — a whole-tree view and a treemap are not there |
 | 7.4 | User menu (`F2`) with user-defined entries, submenus, hotkeys, per-directory menus | FAR/MC | ~ `FarMenu.ini` and an editor for the entries; separators and `Shift+F10` are in |
@@ -240,7 +240,7 @@ something readable rather than only into instructions.
 | 7.10 | Screen grabber (copy a rectangle of the screen to clipboard) | FAR | ✓ `Alt+Ins` |
 | 7.11 | Learn-keys / terminal key diagnostics | MC | ~ the escape sequence cannot be typed in: it is read by a library with a table for the terminals in use |
 | 7.12 | Help system: context-sensitive `F1`, searchable, localised, offline | FAR/KRU | ✓ `F7` searches every chapter, written and generated |
-| 7.13 | Saved searches: a find-file query kept under a name and run again from a list, mask, text and conditions and all | TC/DC/KRU | M3 — each field of the find dialog has its own history (`Ctrl+↓`), which is not the same as the query as a whole |
+| 7.13 | Saved searches: a find-file query kept under a name and run again from a list, mask, text and conditions and all | TC/DC/KRU | ✓ `F2`/`F9` in the find dialog, and `Alt+Shift+F7` to open one as a panel (SPEC 06 §1c) |
 | 7.14 | Duplicate files: by size, then the first 64 KiB, then SHA-256; the groups as a panel with every copy but the oldest selected | FAR (FindDup)/TC | ✓ *Commands → Find duplicate files* (SPEC 06 §13) |
 | 7.15 | Asking a language model from the command line (`ai:`): OpenAI, Anthropic or Ollama, the token from an environment variable, files only after a dialog that names the host, answers kept as Markdown files | NEW | ✓ (SPEC 06 §14) |
 

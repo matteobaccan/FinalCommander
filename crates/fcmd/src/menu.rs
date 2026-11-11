@@ -140,6 +140,8 @@ pub enum PickKind {
     /// How the edited file is written (`Shift+F8`, SPEC 05 §2.1): the end of line, the byte
     /// order mark and the code page, each row a conversion.
     EditorConvert,
+    /// The searches kept under a name (SPEC 06 §1c): `Enter` opens one as a panel.
+    SavedSearches,
     /// The `[[sort_group]]` bands, in the order they cut the listing (SPEC 02 §4).
     SortGroups,
     /// The named mask lists every mask field can use as `<name>` (SPEC 02 §5b).
@@ -528,6 +530,11 @@ pub fn menus() -> Vec<Menu> {
             side: None,
             items: vec![
                 item("menu-find-file", "Alt+F7", Action::Run(Command::ToolFind)),
+                item(
+                    "menu-saved-searches",
+                    "Alt+Shift+F7",
+                    Action::Run(Command::ToolFindSaved),
+                ),
                 item("menu-dupes", "", Action::Run(Command::FileDupes)),
                 item("menu-history", "Alt+F8", Action::Run(Command::CmdHistory)),
                 item(

@@ -1781,3 +1781,16 @@ video-no-frame = no frame from this video: { $why }
 video-playing = playing at { $fps } frames a second, without sound — Space pauses
 video-paused = paused at { $at } — Space plays on, PgUp and PgDn step by a tenth
 video-ended = the video has ended — Space plays it again
+
+
+# finding things
+menu-saved-searches = Saved searches
+drive-searches = Saved searches
+find-keys = F2 keeps this search under a name · F9 the kept ones
+find-save-name = Keep this search as
+find-saved = search kept as { $name }
+find-saved-none = no search has been kept yet: F2 in the find dialog keeps one
+find-saved-title = Saved searches — Enter opens, F4 edits, Del forgets
+find-saved-running = searching for { $name }…
+find-saved-gone = search { $name } forgotten
+find-loaded = search { $name } loaded

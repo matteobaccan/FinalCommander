@@ -409,6 +409,8 @@ pub enum Command {
     ToolFind,
     /// `Alt+F10`: the folders the tree knows, as a list one types into (SPEC 02 §7).
     ToolFindFolder,
+    /// The searches kept under a name: one of them opens as a panel (SPEC 06 §1c).
+    ToolFindSaved,
     /// Replace across the selected files, with a dry run first.
     ToolReplace,
     ShellOutputShow,
@@ -775,6 +777,7 @@ impl Command {
             Command::ToolTerminal,
             Command::ToolFind,
             Command::ToolFindFolder,
+            Command::ToolFindSaved,
             Command::ToolReplace,
             Command::ShellOutputShow,
             Command::NetSites,
@@ -1084,6 +1087,7 @@ impl Command {
             Command::ToolTerminal => "tool.terminal".into(),
             Command::ToolFind => "tool.find".into(),
             Command::ToolFindFolder => "tool.find.folder".into(),
+            Command::ToolFindSaved => "tool.find.saved".into(),
             Command::ToolReplace => "tool.replace".into(),
             Command::ShellOutputShow => "shell.output.show".into(),
             Command::NetSites => "net.sites".into(),
@@ -1368,6 +1372,7 @@ impl Command {
             ("tool.usermenu.last", _) => Command::ToolUserMenuLast,
             ("tool.find", _) => Command::ToolFind,
             ("tool.find.folder", _) => Command::ToolFindFolder,
+            ("tool.find.saved", _) => Command::ToolFindSaved,
             ("tool.replace", _) => Command::ToolReplace,
             ("shell.output.show", _) => Command::ShellOutputShow,
             ("net.sites", _) => Command::NetSites,

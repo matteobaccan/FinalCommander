@@ -118,7 +118,8 @@ extension, Unselect by this extension, Select all, Restore selection · Folder s
 
 ### 2.3 Commands
 
-Find file, Command history, View and edit history, Folders history (§4.4), Disk usage
+Find file, Saved searches (`Alt+Shift+F7`, SPEC 06 §1c), Command history, View and edit
+history, Folders history (§4.4), Disk usage
 (`Alt+Shift+F3`, SPEC 06 §12), Jobs (`Alt+Shift+F5`, SPEC 03 §5), Branch view (`Ctrl+Alt+B`, SPEC 02 §3d) · Swap panels, Sync other
 panel, Panels on/off, Compare folders, Synchronise folders, Open a tunnel, Tunnels, Compare by
 content, Panelize a command's output, View through a command, Learn keys, View file

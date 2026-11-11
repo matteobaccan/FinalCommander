@@ -1771,3 +1771,16 @@ video-no-frame = kein Bild aus diesem Video: { $why }
 video-playing = Wiedergabe mit { $fps } Bildern pro Sekunde, ohne Ton — Leertaste hält an
 video-paused = angehalten bei { $at } — Leertaste spielt weiter, Bild↑ und Bild↓ springen um ein Zehntel
 video-ended = das Video ist zu Ende — Leertaste spielt es erneut
+
+
+# finding things
+menu-saved-searches = Gespeicherte Suchen
+drive-searches = Gespeicherte Suchen
+find-keys = F2 speichert diese Suche unter einem Namen · F9 die gespeicherten
+find-save-name = Diese Suche speichern als
+find-saved = Suche als { $name } gespeichert
+find-saved-none = noch keine Suche gespeichert: F2 im Suchdialog speichert eine
+find-saved-title = Gespeicherte Suchen — Enter öffnet, F4 bearbeitet, Entf vergisst
+find-saved-running = suche nach { $name }…
+find-saved-gone = Suche { $name } vergessen
+find-loaded = Suche { $name } geladen

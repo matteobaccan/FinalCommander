@@ -61,12 +61,49 @@ is not a file one can seek about in per entry, so a content search reads one ent
 and refuses one over 64 MB with a problem rather than filling the machine.
 
 **What is deliberately not in the first versions**: the date and attribute conditions (the filter object carries them
-already — the dialog does not offer them yet), saving and loading a search, running a job over
-the whole result set, and `tool.find.folder`. Each is a line in the backlog.
+already — the dialog does not offer them yet) and running a job over the whole result set.
+Each is a line in the backlog. Saving and loading a search is §1c.
 
 **Problems are collected, not announced.** A search over a whole drive meets unreadable
 directories by the dozen; saying so one at a time would bury the results. They are counted and
 kept, and the list can show them on request.
+
+### 1c. Searches kept under a name, and opened as panels
+
+A search one runs every week is a search one should not have to type every week, and the
+histories of the dialog's rows (`Ctrl+↓`) remember each row by itself, not the query as a
+whole.
+
+**Keeping one.** `F2` in the find dialog asks for a name and keeps every row of the dialog
+under it, together with the folders the scope row pointed at when the key was pressed. The
+rows are checked first, by the same function `OK` uses, so a search that would be refused is
+refused before any name is asked for; the dialog stays open behind the question and comes
+back whatever the answer. A name that is already taken replaces the search that had it,
+which is how a kept search is changed: load it, change a row, keep it again under the same
+name. The searches live in the state file (`[[searches]]`, beside the folder shortcuts and
+for the same reason — a key keeps them, and what a key keeps must not wait for *Save
+setup*).
+
+**Loading one.** `F9` in the find dialog opens the kept searches over it; `Enter` fills the
+dialog in with the one chosen and `Esc` goes back to the dialog as it was typed. Loaded into
+the dialog, the scope row means *this* panel again: that is a search to run here.
+
+**As a panel.** `tool.find.saved` — `Alt+Shift+F7`, *Commands → Saved searches*, and a row
+of the change-drive dialog once there is a search to show — opens the same list from the
+panels. There `Enter` makes the panel the results of the search: a temporary panel like the
+one `F5` makes out of a results list, named after the search, whose rows are the real files
+wherever they live. The search runs from the folders it was kept with, not from wherever
+the panel happens to be, which is what lets it be opened from anywhere and mean the same
+files; and it runs again at every re-read (`Ctrl+R`, and after a job that changed
+something), so the panel says what matches now and not what matched when the search was
+kept. A re-read asked for while the previous walk is still going stops that walk. A search
+that cannot start — a mask that no longer parses because a `<group>` it named is gone —
+leaves the panel empty and says why on the status line. `F4` in the list puts the search
+into the find dialog instead, and `Del` forgets it; a panel still showing a forgotten
+search becomes an ordinary list of the files it held.
+
+The list is the same one in both places and tells them apart by where it was opened from:
+in the dialog one is filling in a dialog, in the panels one is going somewhere.
 
 ## 2. Grep with jump-to-match
 
