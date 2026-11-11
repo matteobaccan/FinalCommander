@@ -8,6 +8,23 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Saved searches, and a search opened as a panel.** In the `Alt+F7` dialog `F2` keeps the
+  search under a name and `F9` lists the kept ones to fill the dialog in. `Alt+Shift+F7`,
+  *Commands → Saved searches* and a row in `Alt+F1`/`Alt+F2` list them too: `Enter` opens one
+  as a temporary panel that runs again on every re-read (`Ctrl+R`), from the folders it was kept
+  for; `F4` loads it into the dialog, `Del` forgets it. They are kept in the state file.
+- **Find file by half a name, or by its metadata.** A box under the mask matches the letters in
+  order anywhere in the name, several words each on its own, and keeps the results best first.
+  A metadata row (`field=value; …`) asks the rows `F11` shows — EXIF, ID3, document
+  properties, `format=` for the kind of file — through the same readers.
+- **The system's index as a source.** A box in the find dialog asks `plocate`/`locate`,
+  `mdfind` or Everything's `es` instead of walking, where one is installed; every path it names
+  is checked again on disk against the conditions, and the search walks as before when there is
+  no index, the folder is remote or inside an archive. `[find] index` names another program or
+  turns the box off. The external programs panel lists the indexes.
+- **Frequent folders.** `Alt+Shift+F12` (*Commands → Frequent folders*) lists the folders
+  visited most and most lately, typed into to narrow it; `Enter` goes there, `Del` takes a row
+  out. Visits are counted in the state file.
 - **Pictures in real pixels.** `F3` and the quick view draw a picture with the terminal's own
   graphics where it has them: kitty's protocol (kitty, Ghostty), iTerm2's inline images (iTerm2,
   WezTerm) and sixel (foot, mlterm, contour). Half blocks stay for every other terminal, while
