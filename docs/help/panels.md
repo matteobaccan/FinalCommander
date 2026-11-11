@@ -114,6 +114,17 @@ Two files the sort key cannot separate are settled by `panel.sort_chain` in the
 configuration — `["size", "name"]` sorts by size and settles a tie by name — and the name has
 the last word in any case, so the order never depends on the order a directory came back in.
 
+Names are put in order the way a reader looks for them, not by the bytes they are stored in:
+`Éxtra.txt` stands beside `extra.txt` and not after `zorro.txt`, `straße` is read as `strasse`,
+`æ` as `ae`, `ø` as `o`, `ł` as `l`. Of two names that read the same, the plain one comes
+first. Digits count as the number they spell (`img2` before `img10`) unless `Natural number
+order` is turned off in `F9 → Options → System settings`, and the row under it, `Upper and
+lower case in the sort`, says whether `Makefile` and `makefile` are told apart: as this system
+does it (they are on Linux, they are not on Windows and macOS), always, or never. These are
+the Latin accents and not a language's own alphabet — Swedish puts `ö` after `z`, and here it
+is with `o`; Greek, Cyrillic and the rest keep the order Unicode gives them. A name that is
+not valid text keeps every byte it has and sorts after the names that are.
+
 `Shift+F11` — `Group` on the key bar — turns the **sort groups** on and off. They are bands
 written in the configuration as `[[sort_group]]` blocks, each with a mask and a side, and they
 pull some kinds of file in front of the listing and push others behind it whatever the sort

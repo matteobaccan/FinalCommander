@@ -59,7 +59,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.11 | Status line (name, size, date of the current item) and total/selected counters | FAR | ✓ |
 | 1.11b | Column titles row (`Name │ Size │ Date Time`), with the sort-mode letter in the corner — lower case ascending, upper case descending — and a `*` beside it while a filter is on | FAR | ✓ |
 | 1.12 | Function-key bar (`F1..F12`, follows modifiers: Shift/Alt/Ctrl rows) | NC | ✓ |
-| 1.13 | Sort by name/ext/size/mtime/ctime/atime/owner/unsorted, reversible, group dirs first, selected first, natural ("version") sort, locale-aware collation | FAR/TC | ~ locale-aware collation |
+| 1.13 | Sort by name/ext/size/mtime/ctime/atime/owner/unsorted, reversible, group dirs first, selected first, natural ("version") sort, locale-aware collation | FAR/TC | ~ the Latin accents are folded (`é` with `e`, `ß` as `ss`); a locale's own alphabet is decided against (`docs/BACKLOG.md`, Settled) |
 | 1.14 | Secondary sort criteria chain (tie-breakers, configurable): per sort mode an ordered set, with its own editor (add, remove, replace, direction, inherit, reorder, reset) | FAR | ~ `panel.sort_chain`: up to three tie-breakers, the name last, `reverse` over the whole; one chain for every sort mode, and no editor — it is written in the file |
 | 1.14b | Sort groups: named mask groups that sort ahead of or behind everything else, ordered, applied on top of the sort mode | FAR (`Shift+F11`) | ✓ |
 | 1.14c | Sort by creation time, access time, owner and description, besides name/ext/size/write time | FAR (`Ctrl+F8…F11`) | ✓ |
@@ -299,7 +299,7 @@ Found by reading FAR's own help and configuration tables; the detail is in
 | 9b.12 | Screen grabber: select any region of the screen, stream or block, extend, move, append to the clipboard | FAR (`Alt+Ins`) | ~ a rectangle, marked from the cursor, copied whole; no stream mode, no appending to what is on the clipboard |
 | 9b.13 | Viewer ⇄ editor at the same position, jump to the open file in the panel, next/previous file of the panel from inside the viewer | FAR (`F6`, `Ctrl+F10`, `Gray ±`) | ✓ |
 | 9b.14 | Remember per file: position, code page, view mode, wrap mode, bookmarks | FAR | ✓ |
-| 9b.15 | Sorting collation as three settings — collation (ordinal/invariant/linguistic), digits-as-numbers, case sensitivity — rather than one "natural sort" flag | FAR | M3 |
+| 9b.15 | Sorting collation as three settings — collation (ordinal/invariant/linguistic), digits-as-numbers, case sensitivity — rather than one "natural sort" flag | FAR | ~ digits (`panel.natural_sort`) and case (`panel.sort_case`) are a setting each; the collation is one and not a choice: the Latin accents folded |
 | 9b.16 | A searchable settings browser, because the setting count only grows (FAR: 311) | FAR (`far:config`) | ✓ the same feature as 9.8 |
 | 9b.17 | Dialog framework: history in edit fields with lockable items, autocomplete, three-state checkboxes, movable dialogs, click outside to accept or cancel | FAR | ~ moving a dialog with the mouse |
 | 9b.18 | Menus that filter as you type, with a lock and horizontal scrolling | FAR (`RAlt`) | ~ every list filters as you type, `Esc` clears before it closes, `Alt+←/→` slides the rows; FAR's lock on the filter is not there |

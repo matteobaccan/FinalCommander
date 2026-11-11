@@ -123,6 +123,17 @@ Due file che la chiave di ordinamento non riesce a separare vengono risolti da
 parità per nome — e il nome ha comunque l'ultima parola, così l'ordine non dipende mai
 dall'ordine in cui la cartella è tornata dal sistema.
 
+I nomi sono messi in ordine come li cerca chi legge, non secondo i byte in cui sono scritti:
+`Éxtra.txt` sta accanto a `extra.txt` e non dopo `zorro.txt`, `straße` si legge `strasse`, `æ`
+come `ae`, `ø` come `o`, `ł` come `l`. Di due nomi che si leggono uguali viene prima quello
+senza accenti. Le cifre valgono il numero che scrivono (`img2` prima di `img10`) a meno di
+spegnere `Ordine naturale dei numeri` in `F9 → Opzioni → Impostazioni di sistema`, e la riga
+sotto, `Maiuscole e minuscole nell'ordinamento`, dice se `Makefile` e `makefile` vengono
+distinti: come fa questo sistema (su Linux sì, su Windows e macOS no), sempre, oppure mai.
+Sono gli accenti latini e non l'alfabeto di una lingua — lo svedese mette `ö` dopo `z`, qui
+sta con `o`; greco, cirillico e gli altri tengono l'ordine che dà loro Unicode. Un nome che
+non è testo valido conserva ogni suo byte e si ordina dopo quelli che lo sono.
+
 `Shift+F11` — `Gruppi` sulla barra dei tasti — accende e spegne i **gruppi di ordinamento**.
 Sono fasce scritte nella configurazione come blocchi `[[sort_group]]`, ciascuna con una
 maschera e un lato, e tirano certi tipi di file davanti all'elenco e ne spingono altri dietro

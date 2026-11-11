@@ -385,6 +385,22 @@ impl Form {
                     t("opt-natural-sort"),
                     cfg.panel.natural_sort,
                 ),
+                // Three answers, so a row that cycles: `auto` is the platform's own habit, and
+                // a box could only say yes or no.
+                choice(
+                    "panel.sort_case",
+                    t("opt-sort-case"),
+                    &[
+                        ("auto", t("opt-sort-case-auto")),
+                        ("yes", t("opt-sort-case-yes")),
+                        ("no", t("opt-sort-case-no")),
+                    ],
+                    match cfg.panel.sort_case.trim() {
+                        "yes" => "yes",
+                        "no" => "no",
+                        _ => "auto",
+                    },
+                ),
                 Field::toggle(
                     "panel.allow_reverse_sort",
                     t("opt-allow-reverse"),

@@ -2850,11 +2850,11 @@ impl App {
             dirs_first: cfg.panel.dirs_first,
             selected_first: cfg.panel.selected_first,
             natural: cfg.panel.natural_sort,
+            case_sensitive: cfg.panel.sort_case_sensitive(),
             // Writing the blocks is what turns them on: a list of bands nobody asked to see
             // would be a listing that reordered itself for no reason anybody could point at.
             // `Shift+F11` is how they go off again.
             groups: !sort_groups.is_empty(),
-            ..Sort::default()
         };
         let view = ViewMode::parse(&cfg.panel.view).unwrap_or(ViewMode::Full);
         let hidden = cfg.panel.show_hidden;
@@ -18644,6 +18644,9 @@ impl App {
                         panel.sort.selected_first = self.cfg.panel.selected_first
                     }
                     "panel.natural_sort" => panel.sort.natural = self.cfg.panel.natural_sort,
+                    "panel.sort_case" => {
+                        panel.sort.case_sensitive = self.cfg.panel.sort_case_sensitive()
+                    }
                     "panel.show_hidden" => panel.show_hidden = self.cfg.panel.show_hidden,
                     "panel.view" => {
                         panel.view = ViewMode::parse(&self.cfg.panel.view).unwrap_or(panel.view)
@@ -32129,6 +32132,28 @@ mod tests {
         press(&mut app, "Space");
         press(&mut app, "Esc");
         assert!(app.cfg.panel.natural_sort);
+    }
+
+    #[test]
+    fn the_case_of_the_sort_is_a_row_of_the_system_dialog_and_reaches_both_panels() {
+        let mut app = app();
+        assert_eq!(app.cfg.panel.sort_case, "auto");
+        open(&mut app, 3, "menu-system-settings");
+        press(&mut app, "Down"); // the second row, under the natural order
+        press(&mut app, "Space"); // auto → yes
+        press(&mut app, "F10");
+        assert_eq!(app.cfg.panel.sort_case, "yes");
+        assert!(
+            app.panels.iter().all(|p| p.sort.case_sensitive),
+            "the panels did not pick up the new setting"
+        );
+
+        open(&mut app, 3, "menu-system-settings");
+        press(&mut app, "Down");
+        press(&mut app, "Space"); // yes → no
+        press(&mut app, "F10");
+        assert_eq!(app.cfg.panel.sort_case, "no");
+        assert!(app.panels.iter().all(|p| !p.sort.case_sensitive));
     }
 
     #[test]

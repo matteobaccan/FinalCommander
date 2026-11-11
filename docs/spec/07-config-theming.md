@@ -380,7 +380,7 @@ something the file format does not accept:
 
 | Dialog | Keys |
 | --- | --- |
-| System | `panel.natural_sort`, `panel.allow_reverse_sort`, `net.fetch_limit_mb`, `net.keepalive_secs` |
+| System | `panel.natural_sort`, `panel.sort_case`, `panel.allow_reverse_sort`, `net.fetch_limit_mb`, `net.keepalive_secs` |
 | Panel | `panel.show_hidden`, `panel.dirs_first`, `panel.selected_first`, `panel.reverse`, `panel.view`, `panel.sort`, `panel.quick_search` |
 | Interface | `ui.key_bar`, `ui.status_bar`, `ui.syntax`, `ui.keymap` |
 | Confirmations | `general.confirm_delete`, `general.confirm_overwrite`, `general.confirm_exit` |

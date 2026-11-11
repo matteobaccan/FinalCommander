@@ -432,6 +432,29 @@ in cui sono scritte. Il nome ha comunque l'ultima parola dopo di esse, così l'o
 fra due letture della stessa cartella, e invertire l'ordinamento inverte tutto l'insieme invece
 del solo primo passo.
 
+# L'ordine dei nomi
+
+```toml
+[panel]
+natural_sort = true     # img2 prima di img10
+sort_case = "auto"      # auto | yes | no
+```
+
+`sort_case` dice se l'ordinamento distingue le maiuscole dalle minuscole. `auto` fa quello che
+fa il gestore di file del sistema: su Linux contano, perché `Makefile` e `makefile` sono due
+file, su Windows e macOS no, perché sono uno solo. `yes` e `no` lo dicono senza mezzi termini,
+per una configurazione che deve ordinare allo stesso modo su ogni macchina. Quando contano, le
+maiuscole vengono prima, come in `ls`.
+
+Gli accenti latini sono tolti in ogni caso, e non c'è un'impostazione per questo: `é` si
+ordina come `e`, `ß` come `ss`, `æ` come `ae`, `ø` come `o`, `ł` come `l` — ogni lettera di
+Latin-1 e di Latin Extended-A, e anche un accento scritto come carattere a sé dopo la sua
+lettera, che è come li conserva macOS. Due nomi che si leggono uguali sono decisi da come sono
+scritti, prima quello senza accenti. È una tabella di lettere e non una lingua: non si
+consulta l'alfabeto di nessun paese, e niente di ciò che sta fuori dal latino cambia posto.
+Tutte e due le impostazioni sono righe di `F9 → Opzioni → Impostazioni di sistema`, e
+di *Tutti i parametri*.
+
 # Mettere davanti certi tipi di file
 
 Un blocco `[[sort_group]]` in `fcmd.toml` è una fascia dell'elenco: una maschera, e da quale

@@ -1686,3 +1686,10 @@ editor-replace-style = Conserver le style (foo → bar, Foo → Bar, FOO → BAR
 editor-replace-groups = Dans une expression régulière, $1 et { "${name}" } sont ce qu’un groupe a capturé, $$ un dollar
 editor-matches-title = Lignes avec `{ $query }` : { $count }
 editor-matches-hint = Tapez pour filtrer · Entrée : aller à la ligne · Échap : retour
+
+
+# sorting and extended attributes (0.41)
+opt-sort-case = Majuscules et minuscules dans le tri
+opt-sort-case-auto = comme ce système
+opt-sort-case-yes = les distinguer
+opt-sort-case-no = un seul alphabet

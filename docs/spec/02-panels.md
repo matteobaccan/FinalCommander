@@ -300,9 +300,42 @@ the folder.
 
 Keys: name, ext, size, mtime, ctime, atime, btime, attrs, owner, descr, packed, type, none
 (directory order). Modifiers: reverse, directories first (default on), selected first,
-case-insensitive (default on Windows/macOS), **natural/version order** for digits, locale
-collation via ICU-less `unicode-collation`-style folding. A **criteria chain** breaks ties
-(FAR's idea): `panel.sort_chain = ["size", "name"]`.
+case-insensitive (default on Windows/macOS), **natural/version order** for digits, the Latin
+accents folded. A **criteria chain** breaks ties (FAR's idea):
+`panel.sort_chain = ["size", "name"]`.
+
+**How two names are compared** (`fcmd_core::sort::collate_bytes`, the one comparison every
+text key uses — name, extension, description, owner). Three steps, each asked only when the
+one before left the names equal:
+
+1. *The name as it reads.* The Latin accents are folded: every letter of Latin-1 Supplement
+   and Latin Extended-A becomes the letter or the two letters a reader takes it for (`é`→`e`,
+   `ł`→`l`, `ø`→`o`, `ß`→`ss`, `æ`→`ae`, `þ`→`th`), and a combining accent (U+0300–U+036F) is
+   not counted, so the decomposed names macOS hands back sort with the composed ones. The
+   case is folded too unless the sort is case-sensitive; with `panel.natural_sort` a run of
+   digits is the number it spells.
+2. *The padding of the numbers*: `img2` before `img02`.
+3. *The name as it is written*: the bytes when the case counts, the characters without their
+   case when it does not. An accented letter is a larger character than the plain one, so of
+   `extra` and `éxtra` the plain one comes first.
+
+Each step is a key of one name alone, compared lexicographically, so the order is total — no
+`a < b < c < a` for a sort to trip on — and two names are equal only when they are the same
+name, or differ in case alone while the case does not count.
+
+`panel.sort_case = "auto" | "yes" | "no"` says whether the case counts. `auto`, the default,
+is the platform's own habit: it counts on Linux and not on Windows and macOS. It is a row of
+the System settings dialog, beside the natural order.
+
+**Decided: this is the Latin accents, not a locale.** A real collator (`icu_collator` with
+CLDR's tables) was the other road and was not taken: it wants valid text, megabytes in the
+binary and a dependency, to answer a complaint that was one thing — `Éxtra.txt` after
+`zorro.txt`. So no language's own alphabet is consulted (Swedish `ö` sorts with `o`), and
+Greek, Cyrillic and CJK keep code-point order.
+
+**A name that is not UTF-8 is not decoded to be sorted.** Names are compared on their encoded
+bytes; where a byte belongs to no character it is a step of its own, in byte order, after
+every character. It is never turned into U+FFFD, where two different names would become one.
 
 **Shipped in 0.7.2.** The chain is up to three keys, asked in order when the sort key leaves
 two rows equal, and the *name* has the last word after them whatever was asked — so the

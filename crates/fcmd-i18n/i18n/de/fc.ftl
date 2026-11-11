@@ -1686,3 +1686,10 @@ editor-replace-style = Schreibweise beibehalten (foo → bar, Foo → Bar, FOO �
 editor-replace-groups = In einem regulären Ausdruck stehen $1 und { "${name}" } für das, was eine Gruppe gefunden hat, $$ für ein Dollarzeichen
 editor-matches-title = Zeilen mit `{ $query }`: { $count }
 editor-matches-hint = Tippen zum Eingrenzen · Enter: zur Zeile · Esc: zurück
+
+
+# sorting and extended attributes (0.41)
+opt-sort-case = Groß- und Kleinschreibung beim Sortieren
+opt-sort-case-auto = wie dieses System
+opt-sort-case-yes = unterscheiden
+opt-sort-case-no = ein Alphabet

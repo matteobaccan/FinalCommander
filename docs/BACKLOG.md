@@ -96,7 +96,6 @@ says what the decision stands on.
 | --- | --- | --- |
 | A theme editor | `opt.colors` | A grid to pick from instead of typing, and FAR's colour *groups* — one change for every "selected" colour at once. |
 | Lock the filter | `Ctrl+Alt+L` | The one of the three list behaviours that needs something new: the filter would have to outlive the list it belongs to, and no list yet asks for that — every one of them is built where it is opened. |
-| Sorting collation | System settings | **Decided (11 November 2026): yes, accented names sort where a reader expects them.** FAR splits what we fold into one `natural_sort`: collation (ordinal / invariant / linguistic), digits-as-numbers, case sensitivity. The ground it stands on: digits-as-numbers is `panel.natural_sort` and works; case sensitivity *exists in the comparison already* but is not settable — `Sort::case_sensitive` starts from the platform (sensitive on Linux, not on Windows and macOS); collation does not exist at all, because names are compared on their **UTF-8 bytes** on purpose (no name is validated to be sorted, and two names that are not valid UTF-8 do not collapse onto the same replacement character). What that costs, visibly, is one thing: `Éxtra.txt` sorts *after* `zorro.txt`, because `C3 A9` comes after `7A`. Two roads: (a) two settings and no dependency — `panel.sort_case = auto\|yes\|no`, and folding the Latin accents in the one branch that already decodes, documented as "the Latin accents, not a locale"; or (b) a real collator (`icu_collator` with CLDR data), which wants valid text, megabytes in the binary, and an entry in `THIRD-PARTY.md`. |
 | Macro conditions | `Ctrl+.` | SPEC 08 §5. A condition is a named question the application already knows the answer to — is anything selected, is the cursor on a directory, is this panel a real directory or a list, is the command line empty, is this a server — so a `when` field holding a list of those needs no engine, no dependency and no language. What it does need is the *fall-through*, which is half of why FAR has it: a macro on `F5` conditioned on something being selected plays when something is, and when nothing is, `F5` copies as it always did. |
 | The Lua engine | SPEC 08 §2 | **Decided against** (see *Settled* below), and so are the conditions above. far2m's macros are Lua: a dependency to justify, an API surface to draw (what a script may ask and what it may do), and the question of what a script is allowed to do when a recorded macro is already not trusted. FAR's fourteen macro areas are also finer than our five scopes; worth splitting when something needs it. |
 | XLat | — | **Open question** on the key, which nothing has claimed. Transliterate a typed line between keyboard layouts, with tables, rules and flags. Niche outside Cyrillic keyboards, cheap once the tables exist. |
@@ -202,6 +201,11 @@ way", and the reason is here so it does not have to be found again.
   generated, and `logo.svg` is animated and meant to be read as text in a pull request
   (`assets/README.md`, `.imgbotconfig`).
 * **Short (8.3) names, `Ctrl+N`** — no equivalent on Unix, and dying on Windows.
+* **A locale's collation for the sort** — the names are sorted with the Latin accents folded
+  and the case as `panel.sort_case` says (SPEC 02 §4), by a table of our own. A real collator
+  (`icu_collator` with CLDR's data) wants valid text, megabytes in the binary and a
+  dependency, and what it would add is each language's own alphabet — `ö` after `z` in
+  Swedish — which nobody has asked for.
 * **NTFS alternate data streams** — out of the core; a provider may expose them as entries if
   it wants to.
 * **SUBST drives, VHD attach and detach, USB safe removal, CD eject, volume labels** — the

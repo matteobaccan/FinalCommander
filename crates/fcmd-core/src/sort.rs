@@ -330,29 +330,61 @@ impl Sort {
         // thirty-five million times for a panel of 1.7 million rows. The byte path reaches a
         // character only where one of the two names actually holds a byte above ASCII at the
         // point the comparison turns on, which for a tree of file names is almost never.
-        if self.natural {
-            natural_cmp_bytes(
-                a.name.as_encoded_bytes(),
-                b.name.as_encoded_bytes(),
-                self.case_sensitive,
-            )
-        } else {
-            self.cmp_str(&a.name_str(), &b.name_str())
-        }
+        collate_bytes(
+            a.name.as_encoded_bytes(),
+            b.name.as_encoded_bytes(),
+            self.natural,
+            self.case_sensitive,
+        )
     }
 
     fn cmp_str(&self, a: &str, b: &str) -> Ordering {
-        if self.natural {
-            natural_cmp(a, b, self.case_sensitive)
-        } else if self.case_sensitive {
-            a.cmp(b)
-        } else {
-            a.to_lowercase().cmp(&b.to_lowercase())
-        }
+        collate_bytes(
+            a.as_bytes(),
+            b.as_bytes(),
+            self.natural,
+            self.case_sensitive,
+        )
     }
 }
 
 /// Compare treating digit runs as numbers. `img2` < `img10`, `a` == `A` when insensitive.
+///
+/// [`collate_bytes`] with the digits counted, which is what everything outside a panel's own
+/// sort wants of it.
+pub fn natural_cmp(a: &str, b: &str, case_sensitive: bool) -> Ordering {
+    collate_bytes(a.as_bytes(), b.as_bytes(), true, case_sensitive)
+}
+
+/// [`natural_cmp`] on the bytes of a name, which is how a listing holds it.
+pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
+    collate_bytes(a, b, true, case_sensitive)
+}
+
+/// The order of two names, on their encoded bytes: the one comparison every text key uses.
+///
+/// A file name is not always a `str`: on Unix it is any bytes without a slash or a zero, on
+/// Windows it is UTF-16 that need not be well formed. So nothing here validates a name to
+/// sort it, and a byte that is not text is never turned into a replacement character, where
+/// two different names would become the same one: it sorts as the byte it is, after every
+/// character (see [`Units`]).
+///
+/// What is compared, in this order:
+///
+/// 1. the name as a reader takes it in: the Latin accents folded away (`Éxtra` beside
+///    `extra`, `ß` as `ss`, `æ` as `ae` — [`fold_latin`]), the case folded too unless
+///    `case_sensitive`, and with `natural` a run of digits as the number it spells;
+/// 2. the padding of those numbers, so `img2` and `img02` are not the same name;
+/// 3. the names as they are written, which puts the accented one after the plain one — the
+///    bytes when the case counts, the characters without their case when it does not.
+///
+/// Each step is a key of one name alone, compared like a word in a dictionary, which is what
+/// makes the whole an order a sort can trust: never `a < b < c < a`. Two names come out equal
+/// only when they are the same name, or differ in nothing but case with the case not counting.
+///
+/// This is the Latin accents and not a locale: Swedish wants `ö` after `z` and German wants
+/// it with `o`, and only a collator with CLDR's tables behind it can say which. Greek and
+/// Cyrillic keep the order Unicode gives them.
 ///
 /// Two names that begin alike are settled by what comes after, so the shared head is skipped
 /// with a byte comparison the machine does a word at a time instead of walking it character by
@@ -366,44 +398,46 @@ impl Sort {
 /// digits — `a2x` against `a21` diverges at `x` against `1`, and the answer depends on 2
 /// against 21, not on `x` against `1` — so the cursor walks back to the start of that run.
 /// And it may sit inside a multi-byte character, whose leading bytes two different characters
-/// can share, so it walks back to the character boundary. From there the comparison proceeds
-/// exactly as it always did.
-pub fn natural_cmp(a: &str, b: &str, case_sensitive: bool) -> Ordering {
-    natural_cmp_bytes(a.as_bytes(), b.as_bytes(), case_sensitive)
-}
-
-/// The same comparison on the bytes of a name, which is how a listing holds it.
-///
-/// A file name is not always a `str`: on Unix it is any bytes without a slash or a zero, on
-/// Windows it is UTF-16 that need not be well formed. Comparing the encoded bytes is both
-/// faster — no name is validated as UTF-8 to be sorted — and truer to the name, because two
-/// names that are not UTF-8 no longer collapse onto the same replacement character. UTF-8
-/// orders its bytes the way Unicode orders its characters, so for a case-sensitive comparison
-/// the bytes are the answer; only folding case outside ASCII needs the characters themselves,
-/// and that is the one path that decodes.
-pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
+/// can share, so it walks back to the byte that begins it. From there the comparison proceeds
+/// as if it had started at the first byte.
+pub fn collate_bytes(a: &[u8], b: &[u8], natural: bool, case_sensitive: bool) -> Ordering {
     let common = a.len().min(b.len());
     let mut i = 0;
     while i < common && a[i] == b[i] {
         i += 1;
     }
-    if i == common {
-        // One name is the other with more after it, or they are the same name.
-        return a.len().cmp(&b.len());
+    if i == a.len() && i == b.len() {
+        return Ordering::Equal;
     }
-    while i > 0 && a[i - 1].is_ascii_digit() {
-        i -= 1;
+    // One name being the other with more after it is not an answer yet: what is after may be
+    // a combining accent, which the first step does not count.
+    let continues = |i: usize| {
+        a.get(i).is_some_and(|c| c & 0xC0 == 0x80) || b.get(i).is_some_and(|c| c & 0xC0 == 0x80)
+    };
+    loop {
+        let before = i;
+        while i > 0 && a[i - 1].is_ascii_digit() {
+            i -= 1;
+        }
+        // A continuation byte cannot begin a character. Stepping back lands on bytes the two
+        // names share, so the byte that does begin one begins it in both.
+        while i > 0 && continues(i) {
+            i -= 1;
+        }
+        // Once more round only when the character stepped over had digits before it: a
+        // combining accent between two digits does not end the number.
+        if i == before {
+            break;
+        }
     }
-    // A continuation byte cannot begin a character, and both names are inside the same
-    // character here, since every byte before this one was equal.
-    while i > 0 && a[i] & 0xC0 == 0x80 {
-        i -= 1;
-    }
-    natural_cmp_from(&a[i..], &b[i..], case_sensitive)
+    collate_from(&a[i..], &b[i..], natural, case_sensitive)
 }
 
 /// The comparison itself, on the part of the two names that can still decide it.
-fn natural_cmp_from(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
+///
+/// ASCII is settled here a byte at a time, which is nearly every comparison there is. The
+/// first byte above ASCII hands what is left to [`collate_tail`], the only path that decodes.
+fn collate_from(a: &[u8], b: &[u8], natural: bool, case_sensitive: bool) -> Ordering {
     // `img02` and `img2` are two different files and must not compare equal, or the order
     // between them is whatever the sort happened to do. Numerically those runs are the same,
     // so the padding decides — but last, after everything else has had its say, which is what
@@ -411,14 +445,28 @@ fn natural_cmp_from(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
     let mut padding = Ordering::Equal;
     let (mut x, mut y) = (0usize, 0usize);
     loop {
-        match (a.get(x).copied(), b.get(y).copied()) {
+        let (ca, cb) = (a.get(x).copied(), b.get(y).copied());
+        if ca.is_some_and(|c| !c.is_ascii()) || cb.is_some_and(|c| !c.is_ascii()) {
+            return collate_tail(&a[x..], &b[y..], natural, case_sensitive, padding);
+        }
+        match (ca, cb) {
             (None, None) => return padding,
             (None, Some(_)) => return Ordering::Less,
             (Some(_), None) => return Ordering::Greater,
             (Some(ca), Some(cb)) => {
-                if ca.is_ascii_digit() && cb.is_ascii_digit() {
-                    let (na, la) = take_number(a, &mut x);
-                    let (nb, lb) = take_number(b, &mut y);
+                if natural && ca.is_ascii_digit() && cb.is_ascii_digit() {
+                    let (mut ex, mut ey) = (x, y);
+                    let (na, la) = take_number(a, &mut ex);
+                    let (nb, lb) = take_number(b, &mut ey);
+                    // A combining accent right after the digits is not counted, so the run
+                    // may go on beyond it (`1`, an accent, `2` reads as 12): where a run ends
+                    // is then a question about characters, and the other path's to answer.
+                    if a.get(ex).is_some_and(|c| !c.is_ascii())
+                        || b.get(ey).is_some_and(|c| !c.is_ascii())
+                    {
+                        return collate_tail(&a[x..], &b[y..], natural, case_sensitive, padding);
+                    }
+                    (x, y) = (ex, ey);
                     match na.cmp(&nb) {
                         Ordering::Equal => {
                             if padding == Ordering::Equal {
@@ -427,7 +475,7 @@ fn natural_cmp_from(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
                         }
                         other => return other,
                     }
-                } else if case_sensitive || (ca.is_ascii() && cb.is_ascii()) {
+                } else {
                     x += 1;
                     y += 1;
                     let (ka, kb) = if case_sensitive {
@@ -439,41 +487,35 @@ fn natural_cmp_from(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
                         Ordering::Equal => {}
                         other => return other,
                     }
-                } else {
-                    // Folding case outside ASCII is a question about characters, not bytes.
-                    // This is the only path that decodes, and it starts at a character
-                    // boundary: every byte before it was equal or was ASCII.
-                    let rest = natural_cmp_chars(&a[x..], &b[y..]);
-                    return if rest == Ordering::Equal {
-                        padding
-                    } else {
-                        rest
-                    };
                 }
             }
         }
     }
 }
 
-/// The tail of a case-insensitive comparison where one of the two names left ASCII behind.
+/// What is left of a comparison once one of the two names has left ASCII behind.
 ///
-/// Same rules as the byte loop, characters instead of bytes: runs of digits are still numbers,
-/// and padding still decides last. Folding is the only reason to be here, so it is the only
-/// thing done differently.
-fn natural_cmp_chars(a: &[u8], b: &[u8]) -> Ordering {
-    let (a, b) = (String::from_utf8_lossy(a), String::from_utf8_lossy(b));
-    let mut ai = a.chars().peekable();
-    let mut bi = b.chars().peekable();
-    let mut padding = Ordering::Equal;
+/// Same rules as the byte loop, on what [`Units`] makes of the names: runs of digits are
+/// still numbers, and padding still decides before the spelling does. Both slices start
+/// where a character starts: every byte before them was ASCII, or equal in the two names.
+fn collate_tail(
+    a: &[u8],
+    b: &[u8],
+    natural: bool,
+    case_sensitive: bool,
+    mut padding: Ordering,
+) -> Ordering {
+    let mut ai = Units::folded(a, !case_sensitive).peekable();
+    let mut bi = Units::folded(b, !case_sensitive).peekable();
     loop {
         match (ai.peek().copied(), bi.peek().copied()) {
-            (None, None) => return padding,
+            (None, None) => break,
             (None, Some(_)) => return Ordering::Less,
             (Some(_), None) => return Ordering::Greater,
-            (Some(ca), Some(cb)) => {
-                if ca.is_ascii_digit() && cb.is_ascii_digit() {
-                    let (na, la) = take_number_chars(&mut ai);
-                    let (nb, lb) = take_number_chars(&mut bi);
+            (Some(ua), Some(ub)) => {
+                if natural && is_digit(ua) && is_digit(ub) {
+                    let (na, la) = take_number_units(&mut ai);
+                    let (nb, lb) = take_number_units(&mut bi);
                     match na.cmp(&nb) {
                         Ordering::Equal => {
                             if padding == Ordering::Equal {
@@ -485,9 +527,7 @@ fn natural_cmp_chars(a: &[u8], b: &[u8]) -> Ordering {
                 } else {
                     ai.next();
                     bi.next();
-                    let ka = ca.to_lowercase().next().unwrap_or(ca);
-                    let kb = cb.to_lowercase().next().unwrap_or(cb);
-                    match ka.cmp(&kb) {
+                    match ua.cmp(&ub) {
                         Ordering::Equal => {}
                         other => return other,
                     }
@@ -495,21 +535,176 @@ fn natural_cmp_chars(a: &[u8], b: &[u8]) -> Ordering {
             }
         }
     }
+    // The two read the same. What tells them apart now is how they are written, and an
+    // accented letter is a larger character than the plain one, so it comes after it.
+    padding.then_with(|| {
+        if case_sensitive {
+            a.cmp(b)
+        } else {
+            Units::written(a).cmp(Units::written(b))
+        }
+    })
 }
 
-/// [`take_number`] over characters, for the folding path.
-fn take_number_chars(it: &mut std::iter::Peekable<std::str::Chars<'_>>) -> (u128, usize) {
+/// A name, one comparable step at a time: a character's code point, or — for a byte that is
+/// part of no character — a number above every code point, one per byte value.
+///
+/// That second half is what keeps a name that is not UTF-8 itself. Decoding it "lossily"
+/// would turn every stray byte into U+FFFD and sort `a\xFE` and `a\xFF` as one name; here
+/// each is its own step, in byte order, after all text.
+struct Units<'a> {
+    bytes: &'a [u8],
+    at: usize,
+    /// The second letter of a character that folds to two (`ß`, `æ`), not handed out yet.
+    held: Option<u32>,
+    /// Fold the Latin accents and drop the combining ones: how a name reads, as opposed to
+    /// how it is written.
+    fold: bool,
+    lower: bool,
+}
+
+/// Above every `char`: where the bytes that are not text start.
+const NOT_TEXT: u32 = 0x11_0000;
+
+impl<'a> Units<'a> {
+    /// The name as it reads: accents folded, and case too when `lower`.
+    fn folded(bytes: &'a [u8], lower: bool) -> Self {
+        Units {
+            bytes,
+            at: 0,
+            held: None,
+            fold: true,
+            lower,
+        }
+    }
+
+    /// The name as it is written, without its case: what tells `é` from `e` once the two
+    /// names have read the same.
+    fn written(bytes: &'a [u8]) -> Self {
+        Units {
+            bytes,
+            at: 0,
+            held: None,
+            fold: false,
+            lower: true,
+        }
+    }
+
+    /// The character that starts at the cursor, or the one byte there when it starts none.
+    fn decode(&mut self) -> Option<Result<char, u8>> {
+        let first = *self.bytes.get(self.at)?;
+        let len = match first {
+            0x00..=0x7F => 1,
+            0xC2..=0xDF => 2,
+            0xE0..=0xEF => 3,
+            0xF0..=0xF4 => 4,
+            _ => 0,
+        };
+        // `from_utf8` is the judge of what a character is: an overlong form or a surrogate
+        // is bytes to it, as it is to the rest of the program.
+        let decoded = self
+            .bytes
+            .get(self.at..self.at + len)
+            .filter(|_| len > 0)
+            .and_then(|slice| std::str::from_utf8(slice).ok())
+            .and_then(|text| text.chars().next());
+        Some(match decoded {
+            Some(c) => {
+                self.at += len;
+                Ok(c)
+            }
+            None => {
+                self.at += 1;
+                Err(first)
+            }
+        })
+    }
+
+    fn case(&self, c: char) -> u32 {
+        if !self.lower {
+            c as u32
+        } else if c.is_ascii() {
+            c.to_ascii_lowercase() as u32
+        } else {
+            c.to_lowercase().next().unwrap_or(c) as u32
+        }
+    }
+}
+
+impl Iterator for Units<'_> {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<u32> {
+        if let Some(held) = self.held.take() {
+            return Some(held);
+        }
+        loop {
+            let c = match self.decode()? {
+                Ok(c) => c,
+                Err(byte) => return Some(NOT_TEXT + byte as u32),
+            };
+            if !self.fold {
+                return Some(self.case(c));
+            }
+            // A combining accent (U+0300 to U+036F) is the other way of writing `é`: `e` and
+            // then the accent, which is what macOS hands back for a name typed in the
+            // Finder. Read, it is part of the letter before it.
+            if ('\u{300}'..='\u{36F}').contains(&c) {
+                continue;
+            }
+            return Some(match fold_latin(c) {
+                Some((first, second)) => {
+                    self.held = second.map(|s| self.case(s));
+                    self.case(first)
+                }
+                None => self.case(c),
+            });
+        }
+    }
+}
+
+/// The letters a Latin letter with an accent is read as: `é` as `e`, `Ł` as `L`, `ß` as
+/// `ss`, `Æ` as `AE`. `None` for everything this does not know, which is everything outside
+/// Latin-1 Supplement and Latin Extended-A, and `×` and `÷` inside them.
+///
+/// The case is kept, so a case-sensitive sort still puts `Éa` with the capitals.
+pub fn fold_latin(c: char) -> Option<(char, Option<char>)> {
+    // U+00C0 to U+017F, two bytes each: the letter, and a second one or a space. The same
+    // letters as the Unicode decompositions where a letter has one; the ones that have none
+    // (`ø`, `ł`, `đ`, `ß`, `æ`, `þ`…) are what a reader of the language would type instead.
+    const TABLE: &[u8; 384] = b"\
+A A A A A A AEC E E E E I I I I D N O O O O O   O U U U U Y THss\
+a a a a a a aec e e e e i i i i d n o o o o o   o u u u u y thy \
+A a A a A a C c C c C c C c D d D d E e E e E e E e E e G g G g \
+G g G g H h H h I i I i I i I i I i IJijJ j K k k L l L l L l L \
+l L l N n N n N n n N n O o O o O o OEoeR r R r R r S s S s S s \
+S s T t T t T t U u U u U u U u U u U u W w Y y Y Z z Z z Z z s ";
+    let at = (c as u32).checked_sub(0xC0)? as usize * 2;
+    let first = *TABLE.get(at)?;
+    let second = TABLE[at + 1];
+    if first == b' ' {
+        return None;
+    }
+    Some((first as char, (second != b' ').then_some(second as char)))
+}
+
+fn is_digit(unit: u32) -> bool {
+    (b'0' as u32..=b'9' as u32).contains(&unit)
+}
+
+/// [`take_number`] over [`Units`], for the path that decodes.
+fn take_number_units(it: &mut std::iter::Peekable<Units<'_>>) -> (u128, usize) {
     let mut n: u128 = 0;
     let mut digits = 0usize;
-    while let Some(c) = it.peek().copied() {
-        if !c.is_ascii_digit() {
+    while let Some(unit) = it.peek().copied() {
+        if !is_digit(unit) {
             break;
         }
         it.next();
         digits += 1;
         n = n
             .saturating_mul(10)
-            .saturating_add((c as u8 - b'0') as u128);
+            .saturating_add((unit - b'0' as u32) as u128);
     }
     (n, digits)
 }
@@ -579,7 +774,7 @@ mod tests {
             for b in parts {
                 for case_sensitive in [true, false] {
                     let fast = natural_cmp(a, b, case_sensitive);
-                    let slow = natural_cmp_from(a.as_bytes(), b.as_bytes(), case_sensitive);
+                    let slow = collate_from(a.as_bytes(), b.as_bytes(), true, case_sensitive);
                     assert_eq!(
                         fast, slow,
                         "{a:?} vs {b:?} (case_sensitive = {case_sensitive}): \
@@ -800,6 +995,302 @@ mod tests {
     }
 
     /// Two names that differ only in how a number is padded are still two names.
+    fn sorted(names: &[&str], natural: bool, case_sensitive: bool) -> Vec<String> {
+        let mut v: Vec<&str> = names.to_vec();
+        v.sort_by(|a, b| collate_bytes(a.as_bytes(), b.as_bytes(), natural, case_sensitive));
+        v.into_iter().map(str::to_string).collect()
+    }
+
+    #[test]
+    fn an_accented_name_sorts_beside_the_plain_one_and_not_after_z() {
+        // The complaint this answers: on its bytes `Éxtra.txt` came after `zorro.txt`.
+        for case_sensitive in [true, false] {
+            assert_eq!(
+                natural_cmp("Éxtra.txt", "zorro.txt", case_sensitive),
+                Ordering::Less
+            );
+            assert_eq!(
+                natural_cmp("éxtra.txt", "fine.txt", case_sensitive),
+                Ordering::Less
+            );
+        }
+        assert_eq!(
+            sorted(
+                &["zorro", "étude", "eta", "Łódź", "lodz", "mañana", "manzana", "eve"],
+                true,
+                false
+            ),
+            ["eta", "étude", "eve", "lodz", "Łódź", "mañana", "manzana", "zorro"]
+        );
+    }
+
+    #[test]
+    fn two_names_that_read_the_same_put_the_plain_one_first() {
+        for case_sensitive in [true, false] {
+            assert_eq!(
+                natural_cmp("extra", "éxtra", case_sensitive),
+                Ordering::Less
+            );
+            assert_eq!(
+                natural_cmp("éxtra", "extra", case_sensitive),
+                Ordering::Greater
+            );
+            // And the accent decides only after the whole name has been read.
+            assert_eq!(
+                natural_cmp("éxtra1", "extra2", case_sensitive),
+                Ordering::Less
+            );
+        }
+    }
+
+    #[test]
+    fn a_letter_that_is_two_is_read_as_two() {
+        for case_sensitive in [true, false] {
+            // `ß` is `ss`: between `strasbourg` and `strast`, not after `z`.
+            assert_eq!(
+                sorted(
+                    &["straße", "strast", "strasse", "strasbourg", "strasz"],
+                    true,
+                    case_sensitive
+                ),
+                ["strasbourg", "strasse", "straße", "strast", "strasz"]
+            );
+            assert_eq!(natural_cmp("æon", "afar", case_sensitive), Ordering::Less);
+            assert_eq!(
+                natural_cmp("æon", "aeon", case_sensitive),
+                Ordering::Greater
+            );
+            assert_eq!(natural_cmp("æon", "aez", case_sensitive), Ordering::Less);
+            assert_eq!(natural_cmp("œuvre", "of", case_sensitive), Ordering::Less);
+            assert_eq!(
+                natural_cmp("søren", "sorry", case_sensitive),
+                Ordering::Less
+            );
+            assert_eq!(natural_cmp("łuk", "lux", case_sensitive), Ordering::Less);
+        }
+        assert_eq!(fold_latin('ß'), Some(('s', Some('s'))));
+        assert_eq!(fold_latin('Æ'), Some(('A', Some('E'))));
+        assert_eq!(fold_latin('ø'), Some(('o', None)));
+        assert_eq!(fold_latin('Ł'), Some(('L', None)));
+        assert_eq!(fold_latin('ı'), Some(('i', None)));
+        assert_eq!(fold_latin('ž'), Some(('z', None)));
+        assert_eq!(fold_latin('ſ'), Some(('s', None)));
+        // The two signs in the middle of the letters, and everything on either side.
+        assert_eq!(fold_latin('×'), None);
+        assert_eq!(fold_latin('÷'), None);
+        assert_eq!(fold_latin('¿'), None);
+        assert_eq!(fold_latin('ƀ'), None);
+        assert_eq!(fold_latin('e'), None);
+        assert_eq!(fold_latin('я'), None);
+    }
+
+    #[test]
+    fn an_accent_written_after_its_letter_reads_like_the_one_written_in_it() {
+        // macOS hands names back decomposed: `e` and U+0301 where Linux has U+00E9.
+        let decomposed = "cafe\u{301}";
+        for case_sensitive in [true, false] {
+            assert_eq!(
+                natural_cmp(decomposed, "cafz", case_sensitive),
+                Ordering::Less
+            );
+            assert_eq!(
+                natural_cmp(decomposed, "cafe", case_sensitive),
+                Ordering::Greater
+            );
+            assert_eq!(
+                natural_cmp("cafe", decomposed, case_sensitive),
+                Ordering::Less
+            );
+            assert_ne!(
+                natural_cmp(decomposed, "café", case_sensitive),
+                Ordering::Equal
+            );
+        }
+    }
+
+    #[test]
+    fn the_case_counts_only_when_asked_and_the_accents_fold_either_way() {
+        // Sensitive: capitals first, as the bytes always had it, and `É` with the capitals.
+        assert_eq!(
+            sorted(&["extra", "Zeta", "Éxtra", "alpha", "Extra"], true, true),
+            ["Extra", "Éxtra", "Zeta", "alpha", "extra"]
+        );
+        // Insensitive: one alphabet.
+        assert_eq!(
+            sorted(&["zeta", "Éxtra", "alpha", "Beta"], true, false),
+            ["alpha", "Beta", "Éxtra", "zeta"]
+        );
+        assert_eq!(natural_cmp("ÉCOLE", "école", false), Ordering::Equal);
+        assert_ne!(natural_cmp("ÉCOLE", "école", true), Ordering::Equal);
+        assert_eq!(natural_cmp("Ecole", "école", false), Ordering::Less);
+    }
+
+    #[test]
+    fn numbers_are_still_numbers_beside_an_accent() {
+        for case_sensitive in [true, false] {
+            assert_eq!(
+                sorted(
+                    &["été10", "ete2", "été2", "ete10", "été02"],
+                    true,
+                    case_sensitive
+                ),
+                ["ete2", "été2", "été02", "ete10", "été10"]
+            );
+            // And with the natural order off a digit is a character like any other, the
+            // accents folded all the same.
+            assert_eq!(
+                sorted(&["été10", "ete2", "été2", "zz"], false, case_sensitive),
+                ["été10", "ete2", "été2", "zz"]
+            );
+        }
+        assert_eq!(
+            collate_bytes(b"img2", b"img10", false, true),
+            Ordering::Greater
+        );
+    }
+
+    #[test]
+    fn a_name_that_is_not_text_keeps_every_byte_it_has() {
+        for case_sensitive in [true, false] {
+            for natural in [true, false] {
+                let cmp = |a: &[u8], b: &[u8]| collate_bytes(a, b, natural, case_sensitive);
+                // Two different stray bytes are two different names, in byte order: decoded
+                // "lossily" both would be U+FFFD and the two names one.
+                assert_eq!(cmp(b"a\xFE", b"a\xFF"), Ordering::Less);
+                assert_eq!(cmp(b"a\xFF", b"a\xFE"), Ordering::Greater);
+                assert_eq!(cmp(b"a\x80z", b"a\x81a"), Ordering::Less);
+                // A byte that is no character comes after every character, as `\xFF` always
+                // did, and is not folded into anything.
+                assert_eq!(cmp(b"a\xE9", "aé".as_bytes()), Ordering::Greater);
+                assert_eq!(cmp(b"a\xE9", b"az"), Ordering::Greater);
+                assert_eq!(cmp(b"a\xFF", "a日".as_bytes()), Ordering::Greater);
+                // The head of a character with its tail cut off is bytes too.
+                assert_eq!(cmp(b"a\xC3", "aé".as_bytes()), Ordering::Greater);
+                assert_eq!(cmp(b"a\xC3", b"a\xC3"), Ordering::Equal);
+            }
+        }
+    }
+
+    /// The property a sort needs and a comparison assembled from special cases loses first:
+    /// one answer per pair, the opposite answer the other way round, and no cycle.
+    #[test]
+    fn the_order_is_total_on_names_of_every_kind() {
+        let names: Vec<&[u8]> = vec![
+            b"",
+            b"a",
+            b"A",
+            b"e",
+            b"E",
+            "é".as_bytes(),
+            "É".as_bytes(),
+            "e\u{301}".as_bytes(),
+            "ë".as_bytes(),
+            b"ea",
+            "éa".as_bytes(),
+            b"ez",
+            b"f",
+            b"z",
+            b"ss",
+            b"sS",
+            "ß".as_bytes(),
+            b"st",
+            b"sr",
+            b"ae",
+            "æ".as_bytes(),
+            "Æ".as_bytes(),
+            b"af",
+            b"1",
+            b"01",
+            b"2",
+            b"10",
+            "1\u{301}2".as_bytes(),
+            "1\u{300}03".as_bytes(),
+            b"12",
+            b"103",
+            "é2".as_bytes(),
+            "é10".as_bytes(),
+            "é02".as_bytes(),
+            b"e2",
+            b"e10",
+            b"\xC3",
+            b"\xC3\x28",
+            b"\xA9",
+            b"\xFF",
+            b"e\xFF",
+            b"e\xFE",
+            b"z\x80",
+            "日本".as_bytes(),
+            "я".as_bytes(),
+            "Я".as_bytes(),
+            "×".as_bytes(),
+            b"~",
+        ];
+        for natural in [true, false] {
+            for case_sensitive in [true, false] {
+                let cmp = |a: &[u8], b: &[u8]| collate_bytes(a, b, natural, case_sensitive);
+                let what = format!("natural = {natural}, case_sensitive = {case_sensitive}");
+                for a in &names {
+                    assert_eq!(cmp(a, a), Ordering::Equal, "{a:?} with itself ({what})");
+                    for b in &names {
+                        let ab = cmp(a, b);
+                        assert_eq!(ab, cmp(b, a).reverse(), "{a:?} and {b:?} ({what})");
+                        // The skip over the shared head must not change the answer.
+                        assert_eq!(
+                            ab,
+                            collate_from(a, b, natural, case_sensitive),
+                            "{a:?} and {b:?}, the long way ({what})"
+                        );
+                        if case_sensitive && a != b {
+                            assert_ne!(ab, Ordering::Equal, "{a:?} and {b:?} ({what})");
+                        }
+                        for c in &names {
+                            if ab != Ordering::Greater && cmp(b, c) != Ordering::Greater {
+                                assert_ne!(
+                                    cmp(a, c),
+                                    Ordering::Greater,
+                                    "{a:?} <= {b:?} <= {c:?} and yet {a:?} > {c:?} ({what})"
+                                );
+                            }
+                        }
+                    }
+                }
+                // And sorting the same names from two different shuffles ends the same way.
+                let mut one = names.clone();
+                let mut two: Vec<&[u8]> = names.iter().rev().copied().collect();
+                one.sort_by(|a, b| cmp(a, b).then_with(|| a.cmp(b)));
+                two.sort_by(|a, b| cmp(a, b).then_with(|| a.cmp(b)));
+                assert_eq!(one, two, "{what}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_panel_sorted_by_name_puts_the_accented_files_where_they_are_looked_for() {
+        let listing = vec![
+            e("zorro.txt", EntryKind::File, 0),
+            e("Éxtra.txt", EntryKind::File, 0),
+            e("extra.txt", EntryKind::File, 0),
+            e("fine.txt", EntryKind::File, 0),
+        ];
+        let sort = Sort {
+            case_sensitive: false,
+            ..Sort::default()
+        };
+        assert_eq!(
+            names(listing.clone(), sort),
+            ["extra.txt", "Éxtra.txt", "fine.txt", "zorro.txt"]
+        );
+        // The same with the natural order off: the folding is not part of that switch.
+        let plain = Sort {
+            natural: false,
+            ..sort
+        };
+        assert_eq!(
+            names(listing, plain),
+            ["extra.txt", "Éxtra.txt", "fine.txt", "zorro.txt"]
+        );
+    }
+
     #[test]
     fn leading_zeros_decide_last_but_they_do_decide() {
         // Not equal: they are different files, and an order that calls them equal leaves the

@@ -418,6 +418,28 @@ are written. The name has the last word after them in any case, so the order nev
 between two reads of the same directory, and turning the sort round turns the whole thing
 round rather than only its first step.
 
+# The order of names
+
+```toml
+[panel]
+natural_sort = true     # img2 before img10
+sort_case = "auto"      # auto | yes | no
+```
+
+`sort_case` says whether the sort tells upper case from lower. `auto` does what the system's
+own file manager does: the case counts on Linux, where `Makefile` and `makefile` are two
+files, and does not on Windows and macOS, where they are one. `yes` and `no` say it outright,
+for a configuration that should sort the same on every machine. With the case counting the
+capitals come first, as they do in `ls`.
+
+The Latin accents are folded either way, and there is no setting for it: `é` sorts as `e`,
+`ß` as `ss`, `æ` as `ae`, `ø` as `o`, `ł` as `l` — every letter of Latin-1 and Latin
+Extended-A, and an accent written as a separate combining character after its letter, which
+is how macOS stores them. Two names that read the same are settled by how they are written,
+the plain one first. It is a table of letters and not a locale: no language's own alphabet
+is consulted, and nothing outside Latin is reordered. Both settings are rows of
+`F9 → Options → System settings`, and of *All settings*.
+
 # Putting kinds of file first
 
 A `[[sort_group]]` block in `fcmd.toml` is a band of the listing: a mask, and which side of

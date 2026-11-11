@@ -1624,3 +1624,10 @@ editor-replace-style = 保留大小写风格（foo → bar，Foo → Bar，FOO �
 editor-replace-groups = 在正则表达式中，$1 和 { "${name}" } 是分组捕获的内容，$$ 是美元符号
 editor-matches-title = 含 `{ $query }` 的行：{ $count }
 editor-matches-hint = 输入以筛选 · 回车：转到该行 · Esc：返回
+
+
+# sorting and extended attributes (0.41)
+opt-sort-case = 排序时的大小写
+opt-sort-case-auto = 按本系统的习惯
+opt-sort-case-yes = 区分
+opt-sort-case-no = 不区分

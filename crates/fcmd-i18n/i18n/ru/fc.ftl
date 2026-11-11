@@ -1672,3 +1672,10 @@ editor-replace-style = Сохранять стиль (foo → bar, Foo → Bar, 
 editor-replace-groups = В регулярном выражении $1 и { "${name}" } — то, что захватила группа, $$ — знак доллара
 editor-matches-title = Строки с `{ $query }`: { $count }
 editor-matches-hint = Печатайте для отбора · Enter: перейти к строке · Esc: назад
+
+
+# sorting and extended attributes (0.41)
+opt-sort-case = Регистр букв при сортировке
+opt-sort-case-auto = как в этой системе
+opt-sort-case-yes = различать
+opt-sort-case-no = один алфавит

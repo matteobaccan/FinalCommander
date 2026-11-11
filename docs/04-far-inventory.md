@@ -255,7 +255,7 @@ modifiers on !@!   Q quote, S forward slashes, F full paths, A ANSI, U UTF-8, W 
 | Colour **groups** and colour **themes**, with 16-colour, 256-colour and RGB pickers | ◐ 7 themes, and a palette editor over every key (*Options → Colours*, live, `F2` writes it) — no colour *groups* and no grid to pick from |
 | Virtual-terminal rendering (8- and 24-bit colour), fullwidth-aware rendering, ClearType-friendly redraw | ◐ 24-bit with degradation; width handled always |
 | Clock, screen saver with a timeout, mouse, always-show-menu-bar, console icon, window-title variables (`%Ver`, `%Platform`, `%Admin`, `%PID`) | ◐ the clock (`ui.clock`), the always-on menu bar (`ui.menu_bar`) and the mouse, each off by default and each with its reason in the help; ✗ the screen saver, the console icon and the title variables — the screen saver can use the deadline the clock gave the event loop |
-| Sorting collation: ordinal / invariant / linguistic, digits-as-numbers, case sensitivity — as three separate settings | ◐ natural sort only |
+| Sorting collation: ordinal / invariant / linguistic, digits-as-numbers, case sensitivity — as three separate settings | ◐ digits-as-numbers (`panel.natural_sort`) and case (`panel.sort_case`) each a setting; one collation, the Latin accents folded, and no linguistic one |
 | Elevation: ask for administrator rights per operation class (modify / read / extra privileges) | ⊘ |
 | XLat: transliterate a typed line between keyboard layouts, with tables, rules and flags | ✗ |
 | Mouse wheel everywhere, with a configurable line count per area, and horizontal wheel support | ✅ the wheel scrolls whatever is under the pointer without taking the focus — in the panels, the lists, the viewer and the editor — with a line count per area (`ui.wheel_lines`, `ui.wheel_lines_viewer`, `ui.wheel_lines_editor`) and the horizontal wheel. The mouse as a whole is off until asked for (`ui.mouse`), because a terminal that is reporting it stops acting on it, and the text selection and middle-click paste are the terminal's own |
@@ -355,7 +355,8 @@ as it stands now, in rough order of how much each one unlocks.
    in the viewer only), what the size figure counts (`Ctrl+Shift+S`), per-panel height and the
    numpad reset. Each is an afternoon, and each is a key a FAR user presses without thinking.
 5. **Collation as three settings** — ordinal, invariant, linguistic — with digits-as-numbers and
-   case sensitivity separable. We have natural sort and nothing to turn it into.
+   case sensitivity separable. Answered in part: the digits and the case are a setting each,
+   and the collation is one, the Latin accents folded; a linguistic one is decided against.
 6. **The macro areas**: six scopes against FAR's fourteen, and no conditions. The Lua engine is
    a different question and wants the plugin host's own API.
 7. **The editor's remaining three**: the warning on opening a read-only file and the override, a

@@ -252,6 +252,13 @@ pub struct PanelCfg {
     pub dirs_first: bool,
     pub selected_first: bool,
     pub natural_sort: bool,
+    /// Does the case of a name count when names are sorted: `yes`, `no`, or `auto` for what
+    /// the platform's own file manager does — it counts on Linux, where `Makefile` and
+    /// `makefile` are two files, and not on Windows and macOS, where they are one.
+    ///
+    /// A word rather than a switch because the default is neither answer: a configuration
+    /// carried from one machine to another keeps following the machine it is on.
+    pub sort_case: String,
     /// Do the mask keys touch directories? FAR's *Select folders*, and FAR's default of no.
     ///
     /// `+`, `-`, `Ctrl+Gray+` and `Ctrl+Gray-` are about files nine times in ten: one types
@@ -310,6 +317,7 @@ impl Default for PanelCfg {
             dirs_first: true,
             selected_first: false,
             natural_sort: true,
+            sort_case: "auto".into(),
             // FAR's default: a mask is about files.
             select_folders: false,
             show_hidden: true,
@@ -411,6 +419,20 @@ pub struct UiCfg {
     /// ours to rewrite unasked. On, the two panels' directories go with it, so the next start
     /// is where the last one ended.
     pub save_setup_on_exit: bool,
+}
+
+impl PanelCfg {
+    /// Whether the sort tells `a` from `A`, with `auto` answered for this platform.
+    ///
+    /// Anything the setting does not name is `auto`: a file written by hand with `sort_case =
+    /// "maybe"` sorts the way it did before the setting existed rather than some third way.
+    pub fn sort_case_sensitive(&self) -> bool {
+        match self.sort_case.trim() {
+            "yes" | "true" | "on" => true,
+            "no" | "false" | "off" => false,
+            _ => cfg!(not(any(windows, target_os = "macos"))),
+        }
+    }
 }
 
 impl Default for UiCfg {
@@ -2023,6 +2045,13 @@ impl Config {
             "panel.dirs_first" => self.panel.dirs_first = parse_bool(value)?,
             "panel.selected_first" => self.panel.selected_first = parse_bool(value)?,
             "panel.natural_sort" => self.panel.natural_sort = parse_bool(value)?,
+            "panel.sort_case" => {
+                let value = value.trim();
+                if !matches!(value, "auto" | "yes" | "no") {
+                    return Err(format!("`{value}` is not auto, yes or no"));
+                }
+                self.panel.sort_case = value.to_string();
+            }
             "panel.select_folders" => self.panel.select_folders = parse_bool(value)?,
             "panel.split" => {
                 self.panel.split = value
@@ -2294,6 +2323,43 @@ attrs = "-h"
         // And from the file.
         let cfg: Config = toml::from_str("[editor]\nundo_depth = 20\n").unwrap();
         assert_eq!(cfg.editor.undo_depth, 20);
+    }
+
+    #[test]
+    fn the_case_of_a_sort_is_auto_until_somebody_says_otherwise() {
+        let mut cfg = Config::default();
+        assert_eq!(cfg.panel.sort_case, "auto");
+        // `auto` is the platform's own habit, which is what the sort did before the setting.
+        assert_eq!(
+            cfg.panel.sort_case_sensitive(),
+            cfg!(not(any(windows, target_os = "macos")))
+        );
+        cfg.set("panel.sort_case", "yes").expect("yes is a value");
+        assert!(cfg.panel.sort_case_sensitive());
+        cfg.set("panel.sort_case", " no ").expect("no is a value");
+        assert!(!cfg.panel.sort_case_sensitive());
+        assert_eq!(cfg.panel.sort_case, "no", "stored without the spaces");
+        // A word it does not know is refused, and what was there stays.
+        let refused = cfg.set("panel.sort_case", "sometimes");
+        assert!(refused.is_err(), "{refused:?}");
+        assert_eq!(cfg.panel.sort_case, "no");
+        // From the file, and back into it for Save setup.
+        let (read, warnings) =
+            Config::parse("fcmd.toml", "[panel]\nsort_case = \"yes\"\n").expect("it reads");
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert!(read.panel.sort_case_sensitive());
+        assert!(
+            read.dump().contains("sort_case = \"yes\""),
+            "{}",
+            read.dump()
+        );
+        // And a file written by hand with something else sorts as it always did.
+        let (odd, _) =
+            Config::parse("fcmd.toml", "[panel]\nsort_case = \"maybe\"\n").expect("it reads");
+        assert_eq!(
+            odd.panel.sort_case_sensitive(),
+            Config::default().panel.sort_case_sensitive()
+        );
     }
 
     #[test]

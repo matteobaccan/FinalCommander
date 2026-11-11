@@ -1696,3 +1696,10 @@ editor-replace-style = Preserve style (foo → bar, Foo → Bar, FOO → BAR)
 editor-replace-groups = In a regular expression $1 and { "${name}" } are what a group caught, $$ a dollar
 editor-matches-title = Lines with `{ $query }`: { $count }
 editor-matches-hint = Type to narrow · Enter: go to the line · Esc: back
+
+
+# sorting and extended attributes (0.41)
+opt-sort-case = Upper and lower case in the sort
+opt-sort-case-auto = as this system does
+opt-sort-case-yes = tell them apart
+opt-sort-case-no = one alphabet
