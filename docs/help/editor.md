@@ -233,3 +233,34 @@ type `U+20AC` or part of it to narrow the list, `Enter` to insert, `Esc` to go b
 block if there is one, in the whole file otherwise. Start the pattern with `!` to keep only the
 lines that match and take out the rest: `!ERROR` leaves the errors of a log. One `Ctrl+Z` puts
 them all back.
+
+# Having a block rewritten
+
+Mark a block and press `Ctrl+Alt+W`: fcmd asks **what should become of it**, in words — `fix
+the typos`, `translate to English`, `make this a table`, `rename x to count` — and sends the
+block, with the file's name and your words, to an AI service (see *Asking an AI* in
+*Configuration*). Before anything goes, a dialog says how much and to which host, with
+*Cancel* lit and `F3` to see exactly what is sent; secrets in the block are masked like
+anywhere else.
+
+The answer does not go into the file. It opens as a **comparison**: the block as it is on the
+left, the model's version on the right, what differs painted, `Alt+↓` and `Alt+↑` from one
+change to the next. There:
+
+| Key | What it does |
+| --- | --- |
+| `Enter` | puts the model's version in the block's place — in the buffer, not on the disk; saving is still `F2` |
+| `Esc` | leaves the block exactly as it is |
+
+Put in, the rewrite is **one step**: a single `Ctrl+Z` takes all of it out again, and the new
+text stays marked, so you can ask again or undo and see the difference.
+
+Only the marked text is sent, never the rest of the file, and it has to be an ordinary block
+(not a column). You can go on working while the model writes: if by the time it answers the
+block is no longer the text that was sent — you typed in it, unmarked it, closed the file —
+nothing is offered and nothing is replaced; the model's version is kept in the answers' folder
+(`ai:`), like every answer.
+
+`Ctrl+Alt+X` (*what is this?*) from the editor works the same way round: the dialog comes up
+over the editor, and the answer does not take the editor's place — the status line names the
+file it was written to.

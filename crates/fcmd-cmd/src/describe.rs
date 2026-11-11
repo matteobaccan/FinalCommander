@@ -250,6 +250,7 @@ impl Command {
             Command::ToolGit => "the repository: what changed, the log, blame, branches",
             Command::GitCommitDraft => "commit what is staged, with a message the model drafted",
             Command::AiExplain => "ask the model what the marked block, or the screen, is",
+            Command::AiRewrite => "rewrite the marked block as told in words: the model's version as a diff, applied on Enter",
             Command::AiRename => "rename what is selected from words: the model's pattern, previewed in the multi-rename dialog",
             Command::AiLocalOnly => "ask only the AI services on this machine: on or off",
             Command::AiRedact => {

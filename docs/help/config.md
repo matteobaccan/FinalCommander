@@ -112,13 +112,15 @@ and to which host, and they go only if you press *Send*. Each answer is a Markdo
 panel, so what you asked is there to read again. The status line says what the answer cost, in
 the tokens the service counted, and the answer file says it too.
 
-Three more ways to ask:
+More ways to ask:
 
 | What you type or press | What it does |
 | --- | --- |
 | `ai+ question` | asks a **follow-up** in the same thread: the earlier questions and answers go again (no service keeps a conversation), and the new answer is added to the same file. The thread is the last answer of this session, or the one under the cursor in the `fcmd-ai` folder |
 | `ai! what to do` | asks for **one command** for your shell and system, and puts it on the command line — **not run**: read it, change it, and press `Enter` yourself |
 | `Ctrl+Alt+X` in the viewer or the editor | asks **what this is**: the marked block in the editor, or what is on the screen, goes with the file's name — after a dialog that says how much and to which host |
+| `Ctrl+Alt+U` on selected files | asks for a **rename pattern** from words, and opens the multi-rename dialog with it — see *Renaming many files at once* |
+| `Ctrl+Alt+W` in the editor | has the marked block **rewritten**, shows the result as a comparison and puts it in only on `Enter` — see *Having a block rewritten* |
 | `Shift+F7` in a repository | drafts a **commit message** from the staged diff — after the same dialog — and opens the commit prompt with it, to read and change before anything is committed |
 
 A question to the model is not a command: `!` and the other metasymbols are not expanded in it.

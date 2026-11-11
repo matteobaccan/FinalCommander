@@ -1527,6 +1527,13 @@ keys = ["Ctrl+Alt+U"]
 scope = "panel"
 cmd = "ai.rename"
 
+# Rewrite the marked block (SPEC 05 §2.10): an instruction in words, the model's version shown
+# as a diff against the block, and `Enter` there putting it in — one `Ctrl+Z` takes it out.
+[[bind]]
+keys = ["Ctrl+Alt+W"]
+scope = "editor"
+cmd = "ai.rewrite"
+
 # Undo the last file operation (SPEC 03 §14). FAR has none; `Ctrl+Z` in a panel is the
 # description, as it is there, so the undo takes `Alt` with it as well.
 [[bind]]

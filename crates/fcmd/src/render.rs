@@ -51,7 +51,11 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     }
 
     // The editor takes the whole screen; its prompts and confirmations draw on top of it.
-    if app.mode.editor().is_some() || app.editor_parked_for_render() {
+    // Not when a whole screen has been opened over a parked editor — the comparison with the
+    // disk, a proposed rewrite of its block, the preview of what a question sends: those
+    // are drawn below as what they are, and the editor comes back when they close.
+    let screen_over_editor = app.mode.diff().is_some() || app.mode.viewer().is_some();
+    if (app.mode.editor().is_some() || app.editor_parked_for_render()) && !screen_over_editor {
         if let Some((mut editor, parked)) = app.editor_for_render() {
             let cursor = draw_editor(app, &mut editor, buf);
             app.return_editor(editor, parked);
@@ -3126,6 +3130,8 @@ fn draw_diff(app: &App, view: &fcmd_view::Diff, buf: &mut Buffer, screen: Rect) 
     let keys = app.i18n.t(match app.diff_git {
         Some((_, false)) => "diff-hint-git",
         Some((_, true)) => "diff-hint-git-staged",
+        // A rewrite proposed for the editor's block is answered, not merged.
+        None if app.ai_rewrite_shown() => "diff-hint-rewrite",
         None => "diff-hint",
     });
     let y = inner.y + inner.h - 1;

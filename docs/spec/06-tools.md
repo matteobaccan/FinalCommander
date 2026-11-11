@@ -754,6 +754,9 @@ completions (and every server that speaks it), Anthropic's messages, Ollama's ch
   the host, for a one-line commit message from `git diff --cached --stat --patch` (run on the
   worker, capped like a file); the answer opens the commit prompt, which commits only on
   `Enter`.
+* **`Ctrl+Alt+U`** (`ai.rename`, panels and the multi-rename dialog) asks for a rename pattern
+  from words: SPEC 03 §8a. **`Ctrl+Alt+W`** (`ai.rewrite`, editor) has the marked block
+  rewritten and shows it as a diff: SPEC 05 §2.10.
 * A line that starts with `ai:`, `ai+` or `ai!` is not expanded: FAR's metasymbols would turn
   the `!` of `ai!` into a file name.
 

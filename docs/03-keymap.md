@@ -221,6 +221,7 @@ indistinguishable in a TTY — see §9.
 | bookmarks set / go | Ctrl+Shift+0..9 / LeftCtrl+0..9 | — | Ctrl+Shift+0..9 / Alt+0..9 |
 | codepage toggle / menu | F8 / Shift+F8 | — | **Shift+F8**, a list that converts: the end of line, the byte order mark and the code page the file is saved in |
 | read-only lock | Ctrl+L | — | Ctrl+Alt+L |
+| rewrite the marked block (an AI's version, as a diff, applied on `Enter`) | — | — | **Ctrl+Alt+W** |
 | literal next key (char code) | Ctrl+Q | — | **Ctrl+Q** — a control character, or a tab where tabs are expanded |
 | insert name of current file | Shift+Enter / Ctrl+Shift+Enter (other panel) | — | same |
 | duplicate line | Ctrl+Shift+D (via block) | — | Ctrl+Shift+D |

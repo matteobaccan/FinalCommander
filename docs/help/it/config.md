@@ -116,13 +116,15 @@ quella cartella nel pannello, così quello che hai chiesto resta lì da rilegger
 stato dice quanto è costata la risposta, nei token contati dal servizio, e lo dice anche il file
 della risposta.
 
-Altri tre modi di chiedere:
+Altri modi di chiedere:
 
 | Cosa scrivi o premi | Cosa fa |
 | --- | --- |
 | `ai+ domanda` | fa una **domanda di seguito** nella stessa conversazione: domande e risposte precedenti vengono rimandate (nessun servizio tiene la conversazione), e la nuova risposta si aggiunge allo stesso file. La conversazione è l'ultima risposta di questa sessione, o quella sotto il cursore nella cartella `fcmd-ai` |
 | `ai! cosa fare` | chiede **un comando** per la tua shell e il tuo sistema, e lo mette sulla riga di comando — **senza eseguirlo**: leggilo, cambialo, e premi `Invio` tu |
 | `Ctrl+Alt+X` nel visualizzatore o nell'editor | chiede **che cos'è questo**: il blocco marcato nell'editor, o quello che c'è sullo schermo, parte con il nome del file — dopo un dialogo che dice quanto e a quale host |
+| `Ctrl+Alt+U` sui file selezionati | chiede un **modello di rinomina** a parole, e apre con quello il dialogo di rinomina multipla — vedi *Rinominare molti file in una volta* |
+| `Ctrl+Alt+W` nell'editor | fa **riscrivere** il blocco marcato, mostra il risultato come confronto e lo inserisce solo con `Enter` — vedi *Far riscrivere un blocco* |
 | `Shift+F7` in un repository | scrive una **bozza del messaggio di commit** dal diff in staging — dopo lo stesso dialogo — e apre il prompt del commit con quella, da leggere e cambiare prima che si committi qualcosa |
 
 Una domanda al modello non è un comando: `!` e gli altri metasimboli non vengono espansi.

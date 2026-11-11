@@ -1103,6 +1103,43 @@ impl Editor {
         }
     }
 
+    /// Put `text` where the marked block is, as **one** undo step, and leave what was put
+    /// there marked — so the next thing done to "the block" is done to the new text, and a
+    /// single undo brings the old one back. Only a stream block: a column of a rewritten
+    /// text has no shape to go back into. False when there is no such block.
+    pub fn replace_block(&mut self, text: &str) -> Result<bool, EditorError> {
+        let Some(block) = self.block else {
+            return Ok(false);
+        };
+        if block.kind != BlockKind::Stream {
+            return Ok(false);
+        }
+        let range = block.range();
+        self.buffer.begin_group(self.cursor);
+        let done = self
+            .buffer
+            .delete(range)
+            .and_then(|_| self.buffer.insert(range.start, text));
+        // The group is closed whichever way it went: a refusal must not leave a step open
+        // for the next key to fall into.
+        match done {
+            Ok(end) => {
+                self.cursor = end;
+                self.buffer.end_group(self.cursor);
+                self.block = Some(Block {
+                    anchor: range.start,
+                    head: end,
+                    kind: BlockKind::Stream,
+                });
+                Ok(true)
+            }
+            Err(e) => {
+                self.buffer.end_group(self.cursor);
+                Err(e.into())
+            }
+        }
+    }
+
     pub fn copy_block(&mut self) -> bool {
         match (self.block_text(), self.block) {
             (Some(text), Some(block)) => {
@@ -2866,5 +2903,64 @@ mod tests {
         let block = e.block.expect("the match is selected");
         assert_eq!(block.anchor, Position::new(0, 4));
         assert_eq!(block.head, Position::new(0, 10));
+    }
+
+    /// A block replaced by a text of another length: the new text stands where the old one
+    /// was, is the block now, and one undo — not one for the taking out and one for the
+    /// putting in — brings the old text back.
+    #[test]
+    fn a_block_is_replaced_as_one_step_that_one_undo_takes_back() {
+        let before = "alpha\nbeta\ngamma\ndelta\n";
+        let mut e = editor(before);
+        // A change of its own first, so the undo has something behind it to stop at.
+        e.cursor = Position::new(0, 5);
+        e.insert_text("!").unwrap();
+        let with_mark = "alpha!\nbeta\ngamma\ndelta\n";
+        // Lines 2 and 3, whole.
+        e.move_to(Position::new(1, 0), false, BlockKind::Stream);
+        e.move_to(Position::new(3, 0), true, BlockKind::Stream);
+        assert_eq!(e.block_text().as_deref(), Some("beta\ngamma\n"));
+
+        assert!(e.replace_block("one\ntwo\nthree\n").unwrap());
+        assert_eq!(e.buffer.to_text(), "alpha!\none\ntwo\nthree\ndelta\n");
+        assert_eq!(e.block_text().as_deref(), Some("one\ntwo\nthree\n"));
+        assert_eq!(e.cursor, Position::new(4, 0), "after what was put in");
+
+        assert!(e.undo());
+        assert_eq!(
+            e.buffer.to_text(),
+            with_mark,
+            "one step back is the block back"
+        );
+        assert!(e.redo());
+        assert_eq!(e.buffer.to_text(), "alpha!\none\ntwo\nthree\ndelta\n");
+        assert!(e.undo());
+        assert!(e.undo());
+        assert_eq!(e.buffer.to_text(), before);
+
+        // A piece of a line, replaced by nothing at all.
+        let mut e = editor("let x = old_name;\n");
+        e.move_to(Position::new(0, 8), false, BlockKind::Stream);
+        e.move_to(Position::new(0, 16), true, BlockKind::Stream);
+        assert!(e.replace_block("new").unwrap());
+        assert_eq!(e.buffer.to_text(), "let x = new;\n");
+
+        // No block, or a column block: nothing is touched and it says so.
+        let mut e = editor("ab\ncd\n");
+        assert!(!e.replace_block("x").unwrap());
+        e.move_to(Position::new(0, 0), false, BlockKind::Column);
+        e.move_to(Position::new(1, 1), true, BlockKind::Column);
+        assert!(!e.replace_block("x").unwrap());
+        assert_eq!(e.buffer.to_text(), "ab\ncd\n");
+
+        // A buffer that takes no edits refuses, and leaves no step half open.
+        let mut e = editor("ab\ncd\n");
+        e.move_to(Position::new(0, 0), false, BlockKind::Stream);
+        e.move_to(Position::new(1, 0), true, BlockKind::Stream);
+        e.buffer.read_only = true;
+        assert!(e.replace_block("x\n").is_err());
+        e.buffer.read_only = false;
+        assert_eq!(e.buffer.to_text(), "ab\ncd\n");
+        assert!(!e.undo(), "nothing was done, so nothing is undone");
     }
 }

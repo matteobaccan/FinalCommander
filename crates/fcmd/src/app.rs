@@ -648,6 +648,51 @@ pub enum AiUse {
     /// Words to a rename: a pattern for the multi-rename dialog, which previews it and
     /// renames nothing until its own OK (SPEC 03 §8a).
     Rename,
+    /// A marked block of the editor rewritten as asked: shown as a diff against the block,
+    /// and put in its place only on a yes (SPEC 05 §2.10).
+    Rewrite,
+}
+
+/// A rewrite of the editor's block that is on its way or waiting for its yes: which file,
+/// the block as it was when the question was asked — the answer is for that text and no
+/// other — and the model's version once it is back.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AiRewrite {
+    pub name: String,
+    pub original: String,
+    pub proposal: Option<String>,
+}
+
+/// What the model is told for [`AiUse::Rewrite`].
+const AI_REWRITE_INSTRUCTION: &str = "\
+You rewrite a piece of a file as the user asks. The piece comes after the request, fenced, \
+under the file's name. Reply with the rewritten piece only, whole: no explanation, no code \
+fence, nothing before or after it. Keep its indentation, and everything the request does \
+not ask to change.";
+
+/// The text to put in the block's place, out of what the model answered: a code fence around
+/// the whole answer is the model's and comes off, and the end of the text is made to match
+/// the block's — a block that ended its line still ends it, one that stopped mid-line does
+/// not gain a line.
+pub(crate) fn ai_rewrite_text(answer: &str, original: &str) -> String {
+    let mut text = answer.replace("\r\n", "\n");
+    let trimmed = text.trim();
+    if trimmed.starts_with("```") && trimmed.ends_with("```") && trimmed.len() >= 6 {
+        // The opening fence's line, with whatever language it names, and the closing one.
+        if let Some((_, rest)) = trimmed.split_once('\n') {
+            let rest = rest.trim_end();
+            let body = rest.strip_suffix("```").unwrap_or(rest);
+            text = body.to_string();
+        }
+    }
+    let body = text.trim_end_matches('\n');
+    // A blank line the model put in front is not part of the piece; its indentation is.
+    let body = body.trim_start_matches('\n');
+    if original.ends_with('\n') {
+        format!("{body}\n")
+    } else {
+        body.to_string()
+    }
 }
 
 /// What the model is told for [`AiUse::Rename`]: the dialog's own language, and the six
@@ -1442,6 +1487,8 @@ pub enum PromptKind {
     AiKey,
     /// Words for how the selected files should be renamed (`ai.rename`).
     AiRename,
+    /// What should become of the editor's marked block (`ai.rewrite`).
+    AiRewrite,
     /// The password of the secrets file, to open it.
     VaultPassword,
     /// A password for a new secrets file, to keep a key in; empty keeps it for this session.
@@ -2897,6 +2944,8 @@ pub struct App {
     ai_preview_show: bool,
     /// The send dialog, waiting under the preview: closing the preview asks again.
     ai_preview_back: Option<Box<Confirm>>,
+    /// The rewrite of the editor's block that was asked for, until it is applied or left.
+    pub ai_rewrite: Option<AiRewrite>,
     /// What stops the question that is out, and whether one was stopped and its answer, if
     /// it still arrives, is to be dropped.
     pub ai_cancel: Option<CancelToken>,
@@ -3330,6 +3379,7 @@ impl App {
             ai_preview: None,
             ai_preview_show: false,
             ai_preview_back: None,
+            ai_rewrite: None,
             ai_cancel: None,
             ai_stopped: false,
             editor_size: (80, 20),
@@ -6381,6 +6431,23 @@ impl App {
         // The comparison a save opened, between the disk and the editor waiting underneath:
         // leaving it goes back to the question it was opened from, and the keys that would
         // change a side or walk off to another screen say that this one only shows.
+        // A rewrite a model proposed for the editor's block: `Enter` puts it in the block's
+        // place, `Esc` leaves the block as it was, and either way the editor is back. The
+        // keys that merge, write or walk off say that this comparison is only to be answered.
+        if self.ai_rewrite_shown() {
+            match key.code {
+                KeyCode::Enter => return self.ai_rewrite_answer(true),
+                KeyCode::Esc | KeyCode::F(10) | KeyCode::F(3) => {
+                    return self.ai_rewrite_answer(false)
+                }
+                KeyCode::F(2) | KeyCode::F(5) | KeyCode::F(12) => {
+                    let m = self.i18n.t("ai-rewrite-hint");
+                    self.set_error(m);
+                    return;
+                }
+                _ => {}
+            }
+        }
         if self.editor_diff && self.editor_parked.is_some() {
             match key.code {
                 KeyCode::Esc | KeyCode::F(10) | KeyCode::F(3) => {
@@ -7380,6 +7447,7 @@ impl App {
                 }
             }
             PromptKind::AiRename => self.ai_rename_ask(&prompt.text),
+            PromptKind::AiRewrite => self.ai_rewrite_ask(&prompt.text),
             PromptKind::AiKey => {
                 let key = prompt.text.trim().to_string();
                 let Some(query) = self.ai_pending.take() else {
@@ -10649,6 +10717,10 @@ impl App {
         }
         if cmd == Command::AiRename {
             self.ai_rename_prompt();
+            return;
+        }
+        if cmd == Command::AiRewrite {
+            self.ai_rewrite_prompt();
             return;
         }
         if cmd == Command::AiExplain {
@@ -14829,6 +14901,9 @@ impl App {
         if names.len() > 5 {
             lines.push("  …".into());
         }
+        // Asked from the editor, the dialog is drawn over it and the editor waits
+        // underneath: putting the dialog in its place would drop it, unsaved changes and all.
+        self.park_editor();
         // Read on the worker while the dialog is already up: how many secrets will be
         // masked is a line that arrives a moment later, and the preview with it.
         self.ai_preview = None;
@@ -15023,6 +15098,15 @@ impl App {
     }
 
     fn ask_ai(&mut self, query: AiQuery) {
+        self.ask_ai_now(query);
+        // A question asked from the editor leaves the editor in front again once it is on
+        // its way — or refused — unless a key or a password is being asked for over it.
+        if matches!(self.mode, Mode::Normal) {
+            self.restore_editor();
+        }
+    }
+
+    fn ask_ai_now(&mut self, query: AiQuery) {
         if self.ai_refused(&query.service) {
             return;
         }
@@ -15128,6 +15212,7 @@ impl App {
         match answer.purpose {
             AiUse::Probe => self.ai_logged_in(&answer.text),
             AiUse::Rename => self.ai_rename_ready(&answer.text, cost),
+            AiUse::Rewrite => self.ai_rewrite_ready(&answer.text, cost),
             AiUse::Answer => {
                 self.ai_last = Some(answer.file.clone());
                 // The answer of a conversation in a panel: the conversation is that file now,
@@ -15151,6 +15236,18 @@ impl App {
                             self.quick_of = None;
                         }
                     }
+                }
+                // An editor in front is not replaced by the answer: what is in it may not
+                // be saved. The answer is a file, and the status line says which.
+                if !in_panel && (self.mode.editor().is_some() || self.editor_parked.is_some()) {
+                    let name = answer
+                        .file
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    let m = self.i18n.t_args("ai-answer-kept", &[("name", name.into())]);
+                    self.set_status(m);
+                    return;
                 }
                 if !in_panel {
                     let vpath = VPath::local(&answer.file);
@@ -17081,6 +17178,160 @@ impl App {
         // Names, not files: nothing of what is in them goes.
         if let Mode::Confirm(c) = &mut self.mode {
             c.lines[0] = head;
+        }
+    }
+
+    /// `ai.rewrite` (`Ctrl+Alt+W` in the editor): what should become of the marked block,
+    /// in words (SPEC 05 §2.10). A block has to be marked — the rewrite replaces exactly
+    /// that — and it has to be a stream block.
+    fn ai_rewrite_prompt(&mut self) {
+        if self.cfg.ais.is_empty() {
+            let m = self.i18n.t("ai-none");
+            self.set_error(m);
+            return;
+        }
+        let marked = self.mode.editor().and_then(|e| {
+            let stream = e
+                .block
+                .is_some_and(|b| b.kind == fcmd_edit::BlockKind::Stream);
+            let text = e.block_text().filter(|t| stream && !t.trim().is_empty())?;
+            Some((e.name(), text, e.buffer.read_only))
+        });
+        let Some((name, original, read_only)) = marked else {
+            let m = self.i18n.t("ai-rewrite-no-block");
+            self.set_error(m);
+            return;
+        };
+        if read_only {
+            let m = self.i18n.t("ai-rewrite-read-only");
+            self.set_error(m);
+            return;
+        }
+        self.ai_rewrite = Some(AiRewrite {
+            name,
+            original,
+            proposal: None,
+        });
+        self.editor_prompt(PromptKind::AiRewrite, "ai-rewrite-prompt", String::new());
+    }
+
+    /// The words are typed, over the editor: say that the block goes, how much of it and
+    /// where, and ask on a yes.
+    fn ai_rewrite_ask(&mut self, words: &str) {
+        let words = words.trim();
+        let Some(pending) = self.ai_rewrite.clone().filter(|_| !words.is_empty()) else {
+            self.ai_rewrite = None;
+            self.restore_editor();
+            return;
+        };
+        if self.cfg.ais.is_empty() {
+            self.restore_editor();
+            return;
+        }
+        let mut query = AiQuery::new(self.cfg.ais[0].clone(), words.to_string());
+        query.purpose = AiUse::Rewrite;
+        query.instruction = AI_REWRITE_INSTRUCTION.into();
+        let bytes = pending.original.len() as u64;
+        query.inline = vec![(pending.name.clone(), pending.original)];
+        self.confirm_ai_send(query, vec![pending.name], Some(bytes));
+        // Refused before any dialog (local only): back to the editor, nothing pending.
+        if !matches!(self.mode, Mode::Confirm(_)) {
+            self.ai_rewrite = None;
+            self.restore_editor();
+        }
+    }
+
+    /// The model's version of the block is back: shown against the block in the diff, with
+    /// the editor waiting underneath, and nothing changed until the diff's `Enter`. The
+    /// answer is for the block as it was when it was asked: if the editor is not in front
+    /// any more, or the block is not that text now, nothing is offered.
+    fn ai_rewrite_ready(&mut self, answer: &str, cost: String) {
+        let Some(pending) = self.ai_rewrite.clone() else {
+            return;
+        };
+        let unchanged = self.mode.editor().is_some_and(|e| {
+            e.name() == pending.name && e.block_text().as_deref() == Some(&pending.original)
+        });
+        if !unchanged {
+            self.ai_rewrite = None;
+            let m = self.i18n.t("ai-rewrite-stale");
+            self.set_error(m);
+            return;
+        }
+        let proposal = ai_rewrite_text(answer, &pending.original);
+        if proposal == pending.original || proposal.trim().is_empty() {
+            self.ai_rewrite = None;
+            let m = self.i18n.t("ai-rewrite-same");
+            self.set_status(m);
+            return;
+        }
+        let view = fcmd_view::Diff::new(
+            format!("{} · {}", pending.name, self.i18n.t("ai-rewrite-before")),
+            pending.original.as_bytes(),
+            format!("{} · {}", pending.name, self.i18n.t("ai-rewrite-after")),
+            proposal.as_bytes(),
+            fcmd_core::diff::Ignore::default(),
+        );
+        if let Some(p) = self.ai_rewrite.as_mut() {
+            p.proposal = Some(proposal);
+        }
+        self.park_editor();
+        // No paths and no git: this comparison writes nothing and stages nothing.
+        self.diff_paths = None;
+        self.diff_git = None;
+        self.diff_warned = false;
+        self.mode = Mode::Diff(Box::new(view));
+        let m = self.i18n.t("ai-rewrite-hint");
+        self.set_status(if cost.is_empty() {
+            m
+        } else {
+            format!("{m}  {cost}")
+        });
+    }
+
+    /// Is the diff on the screen a proposed rewrite of the editor's block, waiting for its
+    /// answer? The renderer says its keys then.
+    pub fn ai_rewrite_shown(&self) -> bool {
+        self.editor_parked.is_some()
+            && matches!(self.mode, Mode::Diff(_))
+            && self
+                .ai_rewrite
+                .as_ref()
+                .is_some_and(|p| p.proposal.is_some())
+    }
+
+    /// The answer to a proposed rewrite: `apply` puts it in the block's place as one undo
+    /// step; otherwise the editor comes back as it was.
+    fn ai_rewrite_answer(&mut self, apply: bool) {
+        let proposal = self.ai_rewrite.take().and_then(|p| p.proposal);
+        self.restore_editor();
+        let (width, height) = self.editor_size;
+        let Some(proposal) = proposal.filter(|_| apply) else {
+            let m = self.i18n.t("ai-rewrite-left");
+            self.set_status(m);
+            return;
+        };
+        let Some(editor) = self.mode.editor_mut() else {
+            return;
+        };
+        let name = editor.name();
+        match editor.replace_block(&proposal) {
+            Ok(true) => {
+                editor.scroll_into_view(height as usize, width as usize);
+                let m = self.i18n.t("ai-rewrite-applied");
+                self.set_status(m);
+            }
+            Ok(false) => {
+                let m = self.i18n.t("ai-rewrite-stale");
+                self.set_error(m);
+            }
+            Err(e) => {
+                let m = self.i18n.t_args(
+                    "editor-failed",
+                    &[("name", name.into()), ("error", e.to_string().into())],
+                );
+                self.set_error(m);
+            }
         }
     }
 
@@ -48049,5 +48300,311 @@ abcdefghij
         assert!(ai_rename_options("I cannot do that.").is_none());
         assert!(ai_rename_options("").is_none());
         assert!(ai_rename_options("note: this is not one of the six").is_none());
+    }
+
+    /// An editor on `text` in `dir`, with lines `from..to` marked as a stream block.
+    fn editor_with_block(dir: &std::path::Path, text: &str, from: usize, to: usize) -> App {
+        let file = dir.join("notes.txt");
+        std::fs::write(&file, text).unwrap();
+        let mut app = editing_app(dir);
+        app.cfg.ais = vec![ai_service_cfg("local", "http://127.0.0.1:11434/api/chat")];
+        app.open_editor_on(&VPath::local(&file));
+        let Mode::Editor(e) = &mut app.mode else {
+            panic!("the editor: {:?}", app.mode)
+        };
+        use fcmd_edit::{BlockKind, Position};
+        e.move_to(Position::new(from, 0), false, BlockKind::Stream);
+        e.move_to(Position::new(to, 0), true, BlockKind::Stream);
+        app.take_requests();
+        app
+    }
+
+    fn editor_text(app: &App) -> String {
+        match &app.mode {
+            Mode::Editor(e) => e.buffer.to_text(),
+            other => panic!("the editor is not in front: {other:?}"),
+        }
+    }
+
+    /// Ask for a rewrite of the marked block with `words`, through the prompt and the
+    /// dialog, and give back the question that went.
+    fn ask_rewrite(app: &mut App, words: &str) -> AiQuery {
+        press(app, "Ctrl+Alt+W");
+        assert!(
+            matches!(&app.mode, Mode::Prompt(p) if p.kind == PromptKind::AiRewrite),
+            "{:?}",
+            app.mode
+        );
+        type_text(app, words);
+        press(app, "Enter");
+        let Mode::Confirm(c) = &mut app.mode else {
+            panic!("said before it goes: {:?}", app.mode)
+        };
+        assert_eq!(c.button, 1, "Cancel is the one lit");
+        c.button = 0;
+        press(app, "Enter");
+        let query = ai_asked(app).expect("asked on yes");
+        app.ai_busy = None;
+        query
+    }
+
+    /// SPEC 05 §2.10, the whole road: a block marked, an instruction typed, a dialog that
+    /// says the block goes and where, the model's version shown as a diff against the block
+    /// with the buffer untouched, `Enter` putting it in, and one `Ctrl+Z` taking it out.
+    #[test]
+    fn a_marked_block_is_rewritten_through_a_diff_and_undone_in_one_step() {
+        let dir = tempfile::tempdir().unwrap();
+        let before = "intro\nteh quick fox\njumsp over\noutro\n";
+        let mut app = editor_with_block(dir.path(), before, 1, 3);
+        if let Mode::Editor(e) = &mut app.mode {
+            assert_eq!(
+                e.block_text().as_deref(),
+                Some("teh quick fox\njumsp over\n")
+            );
+        }
+
+        let query = ask_rewrite(&mut app, "fix the typos");
+        assert_eq!(query.purpose, AiUse::Rewrite);
+        assert_eq!(query.question, "fix the typos");
+        assert!(query.files.is_empty(), "the block, not the file");
+        assert_eq!(query.inline.len(), 1);
+        assert_eq!(query.inline[0].0, "notes.txt");
+        assert_eq!(query.inline[0].1, "teh quick fox\njumsp over\n");
+        assert!(query.instruction.contains("rewritten piece only"));
+        // The editor is in front again while the model writes, as it was.
+        assert_eq!(editor_text(&app), before);
+
+        // The answer, fenced as models fence things: a diff, and still nothing changed.
+        ai_answers(
+            &mut app,
+            dir.path(),
+            AiUse::Rewrite,
+            "```text\nthe quick fox\njumps over\n```",
+        );
+        let Mode::Diff(view) = &app.mode else {
+            panic!("the diff: {:?}", app.mode)
+        };
+        assert!(!view.identical());
+        assert!(app.ai_rewrite_shown());
+        let proposal = app.ai_rewrite.as_ref().unwrap().proposal.clone();
+        assert_eq!(proposal.as_deref(), Some("the quick fox\njumps over\n"));
+        // And it is the diff that is on the screen, both sides named, not the editor.
+        let mut buf = fcmd_ui::Buffer::new(100, 24);
+        crate::render::draw(&mut app, &mut buf);
+        let screen = buf.to_text();
+        assert!(screen.contains("as the model rewrote it"), "{screen}");
+        assert!(
+            screen.contains("jumps over") && screen.contains("jumsp over"),
+            "{screen}"
+        );
+        assert!(screen.contains("Enter replace the block"), "{screen}");
+        // The keys that merge or write mean nothing here, and say so.
+        press(&mut app, "F5");
+        assert!(app.status_error && matches!(&app.mode, Mode::Diff(_)));
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("notes.txt")).unwrap(),
+            before,
+            "nothing is written"
+        );
+
+        // `Enter` is the yes.
+        press(&mut app, "Enter");
+        let after = "intro\nthe quick fox\njumps over\noutro\n";
+        assert_eq!(editor_text(&app), after);
+        assert!(app.ai_rewrite.is_none());
+        assert!(app.status.contains("Ctrl+Z"), "{}", app.status);
+        if let Mode::Editor(e) = &app.mode {
+            assert!(
+                e.buffer.modified(),
+                "changed in the buffer, not on the disk"
+            );
+            assert_eq!(
+                e.block_text().as_deref(),
+                Some("the quick fox\njumps over\n")
+            );
+        }
+        // One step back is the whole of it.
+        press(&mut app, "Ctrl+Z");
+        assert_eq!(editor_text(&app), before);
+    }
+
+    /// `Esc` at the words, at the dialog and at the diff each leave the buffer as it was,
+    /// with the editor in front and its unsaved changes kept.
+    #[test]
+    fn a_rewrite_left_at_any_step_changes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = editor_with_block(dir.path(), "one\ntwo\nthree\n", 1, 2);
+        // Something not saved, so that losing the editor would be losing work.
+        let mine = "one\ntwo\nthree\n";
+        press(&mut app, "Ctrl+Alt+W");
+        type_text(&mut app, "upper");
+        press(&mut app, "Esc");
+        assert_eq!(editor_text(&app), mine);
+
+        press(&mut app, "Ctrl+Alt+W");
+        press(&mut app, "Enter");
+        assert_eq!(editor_text(&app), mine, "no words, no question");
+        assert!(ai_asked(&mut app).is_none());
+
+        press(&mut app, "Ctrl+Alt+W");
+        type_text(&mut app, "upper");
+        press(&mut app, "Enter");
+        assert!(matches!(&app.mode, Mode::Confirm(_)));
+        press(&mut app, "Esc");
+        assert_eq!(editor_text(&app), mine);
+        assert!(ai_asked(&mut app).is_none());
+
+        ask_rewrite(&mut app, "upper");
+        ai_answers(&mut app, dir.path(), AiUse::Rewrite, "TWO");
+        assert!(matches!(&app.mode, Mode::Diff(_)), "{:?}", app.mode);
+        press(&mut app, "Esc");
+        assert_eq!(editor_text(&app), mine);
+        assert!(app.ai_rewrite.is_none());
+        if let Mode::Editor(e) = &app.mode {
+            assert_eq!(e.block_text().as_deref(), Some("two\n"), "still marked");
+            assert!(!e.buffer.modified());
+        }
+    }
+
+    /// The answer is for the block as it was asked: a block edited, unmarked or left behind
+    /// while the model wrote gets nothing put into it; an answer that changes nothing opens
+    /// no diff; and without a block, or with a column one, the key says what it needs.
+    #[test]
+    fn a_rewrite_for_a_block_that_changed_is_not_offered() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = editor_with_block(dir.path(), "one\ntwo\nthree\n", 1, 2);
+        ask_rewrite(&mut app, "upper");
+        // The user typed over the block meanwhile.
+        if let Mode::Editor(e) = &mut app.mode {
+            e.insert_text("2\n").unwrap();
+        }
+        ai_answers(&mut app, dir.path(), AiUse::Rewrite, "TWO");
+        assert!(app.status_error, "{}", app.status);
+        assert_eq!(editor_text(&app), "one\n2\nthree\n");
+        assert!(app.ai_rewrite.is_none());
+
+        // The same text back: said, and no diff of nothing.
+        let mut app = editor_with_block(dir.path(), "one\ntwo\nthree\n", 1, 2);
+        ask_rewrite(&mut app, "upper");
+        ai_answers(&mut app, dir.path(), AiUse::Rewrite, "two\n");
+        assert!(matches!(&app.mode, Mode::Editor(_)), "{:?}", app.mode);
+        assert!(app.ai_rewrite.is_none());
+
+        // The editor closed before the answer came.
+        let mut app = editor_with_block(dir.path(), "one\ntwo\nthree\n", 1, 2);
+        ask_rewrite(&mut app, "upper");
+        press(&mut app, "Esc");
+        assert!(matches!(&app.mode, Mode::Normal), "{:?}", app.mode);
+        ai_answers(&mut app, dir.path(), AiUse::Rewrite, "TWO");
+        assert!(matches!(&app.mode, Mode::Normal), "{:?}", app.mode);
+        assert!(app.status_error);
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("notes.txt")).unwrap(),
+            "one\ntwo\nthree\n"
+        );
+
+        // No block, and a column block.
+        let mut app = editor_with_block(dir.path(), "one\ntwo\nthree\n", 1, 2);
+        if let Mode::Editor(e) = &mut app.mode {
+            e.clear_block();
+        }
+        press(&mut app, "Ctrl+Alt+W");
+        assert!(app.status_error && matches!(&app.mode, Mode::Editor(_)));
+        if let Mode::Editor(e) = &mut app.mode {
+            use fcmd_edit::{BlockKind, Position};
+            e.move_to(Position::new(0, 0), false, BlockKind::Column);
+            e.move_to(Position::new(1, 2), true, BlockKind::Column);
+        }
+        press(&mut app, "Ctrl+Alt+W");
+        assert!(app.status_error && matches!(&app.mode, Mode::Editor(_)));
+        // And with no service at all.
+        let mut app = editor_with_block(dir.path(), "one\ntwo\nthree\n", 1, 2);
+        app.cfg.ais.clear();
+        press(&mut app, "Ctrl+Alt+W");
+        assert!(app.status_error && matches!(&app.mode, Mode::Editor(_)));
+    }
+
+    /// Asking the model anything from the editor keeps the editor: the dialog is drawn over
+    /// it, *Cancel* and *Send* both come back to it, and an answer to read does not take its
+    /// place — the buffer may hold what was never saved.
+    #[test]
+    fn asking_from_the_editor_never_loses_the_editor() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = editor_with_block(dir.path(), "one\ntwo\nthree\n", 1, 2);
+        if let Mode::Editor(e) = &mut app.mode {
+            e.clear_block();
+            e.insert_text("unsaved ").unwrap();
+        }
+        let mine = editor_text(&app);
+        press(&mut app, "Ctrl+Alt+X");
+        assert!(matches!(&app.mode, Mode::Confirm(_)), "{:?}", app.mode);
+        press(&mut app, "Esc");
+        assert_eq!(editor_text(&app), mine, "Cancel gives the editor back");
+
+        press(&mut app, "Ctrl+Alt+X");
+        // The preview, opened over the dialog over the editor, closes back onto the dialog.
+        let preview = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::AiPreview { query, .. } => Some(query),
+                _ => None,
+            })
+            .expect("what would go is read");
+        app.handle_event(Event::AiPreview {
+            query: preview,
+            result: Ok(AiPreview {
+                user: "what is this?".into(),
+                ..Default::default()
+            }),
+        });
+        press(&mut app, "F3");
+        assert!(matches!(&app.mode, Mode::Viewer(_)), "{:?}", app.mode);
+        let mut buf = fcmd_ui::Buffer::new(100, 24);
+        crate::render::draw(&mut app, &mut buf);
+        assert!(
+            buf.to_text().contains("127.0.0.1"),
+            "the preview is what is drawn"
+        );
+        press(&mut app, "Esc");
+        if let Mode::Confirm(c) = &mut app.mode {
+            c.button = 0;
+        } else {
+            panic!("the dialog again: {:?}", app.mode)
+        }
+        press(&mut app, "Enter");
+        assert!(ai_asked(&mut app).is_some());
+        assert_eq!(editor_text(&app), mine, "Send gives the editor back too");
+
+        app.ai_busy = None;
+        ai_answers(&mut app, dir.path(), AiUse::Answer, "three words in a file");
+        assert_eq!(
+            editor_text(&app),
+            mine,
+            "the answer does not take its place"
+        );
+        assert!(app.status.contains("answer.md"), "{}", app.status);
+    }
+
+    /// What a model writes around a rewrite comes off, and the end of the text is the
+    /// block's own: a block that ended its line still does, one that did not gains none.
+    #[test]
+    fn a_rewrite_is_read_out_of_its_fence_and_ends_as_the_block_ended() {
+        assert_eq!(
+            ai_rewrite_text("```rust\nlet a = 1;\n```", "let a=1;\n"),
+            "let a = 1;\n"
+        );
+        assert_eq!(ai_rewrite_text("```\nx\n```\n", "y"), "x");
+        assert_eq!(ai_rewrite_text("new_name", "old_name"), "new_name");
+        assert_eq!(ai_rewrite_text("new_name\n\n", "old_name"), "new_name");
+        assert_eq!(ai_rewrite_text("a\nb", "c\nd\n"), "a\nb\n");
+        assert_eq!(ai_rewrite_text("a\r\nb\r\n", "c\nd\n"), "a\nb\n");
+        // The indentation of the first line is the text's, not padding to take off.
+        assert_eq!(ai_rewrite_text("\n    x = 1\n", "    x=1\n"), "    x = 1\n");
+        // A fence inside the text is the text's.
+        assert_eq!(
+            ai_rewrite_text("see:\n```\ncode\n```\nend", "old\n"),
+            "see:\n```\ncode\n```\nend\n"
+        );
     }
 }

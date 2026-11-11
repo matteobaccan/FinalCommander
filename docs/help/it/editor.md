@@ -244,3 +244,34 @@ tornare indietro.
 se c'è, altrimenti in tutto il file. Comincia il pattern con `!` per tenere solo le righe che
 corrispondono e togliere le altre: `!ERROR` lascia gli errori di un log. Un solo `Ctrl+Z` le
 rimette tutte.
+
+# Far riscrivere un blocco
+
+Marca un blocco e premi `Ctrl+Alt+W`: fcmd chiede **che cosa deve diventare**, a parole —
+`correggi i refusi`, `traduci in inglese`, `fanne una tabella`, `rinomina x in count` — e manda
+il blocco, con il nome del file e le tue parole, a un servizio AI (vedi *Chiedere a un'AI* in
+*Configurazione*). Prima che parta qualcosa, un dialogo dice quanto e a quale host, con
+*Annulla* acceso e `F3` per vedere esattamente che cosa parte; i segreti nel blocco vengono
+mascherati come ovunque.
+
+La risposta non finisce nel file. Si apre come **confronto**: a sinistra il blocco com'è, a
+destra la versione del modello, le differenze colorate, `Alt+↓` e `Alt+↑` da un cambiamento al
+successivo. Lì:
+
+| Tasto | Cosa fa |
+| --- | --- |
+| `Enter` | mette la versione del modello al posto del blocco — nel buffer, non sul disco; per salvare serve ancora `F2` |
+| `Esc` | lascia il blocco esattamente com'è |
+
+Una volta inserita, la riscrittura è **un solo passo**: un unico `Ctrl+Z` la toglie tutta, e il
+testo nuovo resta marcato, così puoi chiedere di nuovo o annullare e vedere la differenza.
+
+Parte solo il testo marcato, mai il resto del file, e deve essere un blocco normale (non a
+colonna). Mentre il modello scrive puoi continuare a lavorare: se quando risponde il blocco non
+è più il testo che era partito — ci hai scritto dentro, l'hai smarcato, hai chiuso il file —
+non viene proposto niente e niente viene sostituito; la versione del modello resta nella
+cartella delle risposte (`ai:`), come ogni risposta.
+
+`Ctrl+Alt+X` (*che cos'è questo?*) dall'editor funziona allo stesso modo: il dialogo compare
+sopra l'editor, e la risposta non prende il posto dell'editor — la riga di stato dice in quale
+file è stata scritta.

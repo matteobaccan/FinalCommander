@@ -1171,6 +1171,44 @@ far is this offset from that one, what is this field with the top bit set — an
 reads the numbers typed into the assembler and the block operations, so a number means the same
 thing everywhere in the program.
 
+### 2.10 A block rewritten by a language model (0.44, `docs/06-ai-study.md` C5)
+
+`ai.rewrite` — `Ctrl+Alt+W` in the editor. The model proposes; the diff shows; the user's
+`Enter` applies, as one undo step (`Editor::replace_block`).
+
+* **Asking.** A **stream** block with something in it must be marked, the buffer must take
+  edits, and an `[[ai]]` service must exist; otherwise the status line says which is missing
+  and nothing else happens. A prompt over the editor takes the words; empty words ask
+  nothing. The request (SPEC 06 §14) carries the words as the question, an instruction to
+  answer with the rewritten piece only, and the block as one inline text named after the
+  file. Nothing else of the file goes. The send dialog of §14 is shown first, over the
+  editor, *Cancel* lit, `F3` previewing; redaction and the local-only switch apply (§14.2).
+* **The editor is never lost.** The dialog is drawn over the parked editor; *Cancel*, `Esc`
+  and *Send* all bring it back, and the question goes out with the editor in front and
+  usable. This holds for every question asked from the editor, `ai.explain` included; an
+  answer *to read* that comes back while an editor is in front is not opened over it — the
+  status line names its file in `fcmd-ai/`.
+* **The answer is for the text that was sent.** When it arrives, the editor must be in front
+  on the same file with a block whose text is byte for byte what was sent. If not — typed
+  in, unmarked, another file, the editor closed, a prompt open over it — nothing is offered
+  and the status line says so. An answer equal to the block, or empty, says so and opens
+  nothing.
+* **What is put in.** `ai_rewrite_text`: one code fence around the *whole* answer is taken
+  off (with its language word), CRLF becomes LF, blank lines before and after are dropped
+  but the first line's indentation is kept, and the text ends as the block ended — with a
+  newline if the block had one, without if it had not.
+* **The diff.** The editor is parked and §3's view opens on two texts — `name · the block`
+  and `name · as the model rewrote it` — with no paths and no git behind it, so nothing can
+  be written or staged. `Enter` restores the editor and replaces the block; `Esc`, `F10` or
+  `F3` restores it untouched; `F2`, `F5` and `F12` say what the keys are instead of acting.
+  Everything else (movement, `Alt+↑`/`Alt+↓`, the ignore switches) is the diff's own.
+* **One step.** The delete and the insert are one undo group; the new text becomes the
+  block; the buffer is modified and the file on disk is not touched until `F2`.
+
+Also fixed here: a screen opened over a parked editor — this diff, the comparison with the
+disk of §2.2j, the preview of §14.2 — is now what is drawn; before, the editor was painted
+and the screen over it answered keys unseen.
+
 ## 3. Diff: two files side by side (`Ctrl+Shift+D`)
 
 Two files, two columns, and what differs marked — the screen a reader of two versions of the

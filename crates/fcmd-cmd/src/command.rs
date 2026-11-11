@@ -388,7 +388,11 @@ pub enum Command {
     GitCommitDraft,
     /// Ask the language model what the marked block, or the screen, is.
     AiExplain,
-    /// Say in words what the selected names should become; the model's pattern goes into the multi-rename dialog (SPEC 03 §8a).
+    /// Have the language model rewrite the editor's marked block; its version is shown as a
+    /// diff and applied on a yes (SPEC 05 §2.10).
+    AiRewrite,
+    /// Say in words what the selected names should become; the model's pattern goes into
+    /// the multi-rename dialog (SPEC 03 §8a).
     AiRename,
     /// Ask only language models on this machine, or any of them (SPEC 06 §14.2).
     AiLocalOnly,
@@ -775,6 +779,7 @@ impl Command {
             Command::ToolGit,
             Command::GitCommitDraft,
             Command::AiExplain,
+            Command::AiRewrite,
             Command::AiRename,
             Command::AiLocalOnly,
             Command::AiRedact,
@@ -1089,6 +1094,7 @@ impl Command {
             Command::ToolGit => "tool.git".into(),
             Command::GitCommitDraft => "git.commit.draft".into(),
             Command::AiExplain => "ai.explain".into(),
+            Command::AiRewrite => "ai.rewrite".into(),
             Command::AiRename => "ai.rename".into(),
             Command::AiLocalOnly => "ai.local".into(),
             Command::AiRedact => "ai.redact".into(),
@@ -1367,6 +1373,7 @@ impl Command {
             ("tool.git", _) => Command::ToolGit,
             ("git.commit.draft", _) => Command::GitCommitDraft,
             ("ai.explain", _) => Command::AiExplain,
+            ("ai.rewrite", _) => Command::AiRewrite,
             ("ai.rename", _) => Command::AiRename,
             ("ai.local", _) => Command::AiLocalOnly,
             ("ai.redact", _) => Command::AiRedact,
