@@ -619,23 +619,18 @@ impl Archive {
         }
         if self.format.is_some_and(|f| f.is_tar() && !f.seekable()) {
             let format = self.format.expect("just asked");
-            let mut stream = tar::Archive::new(decoder(&self.source, format)?);
-            let items = stream.entries().map_err(|e| self.broken(e))?;
-            for item in items {
+            let mut stream = crate::tar::Reader::new(decoder(&self.source, format)?);
+            while let Some(item) = stream.next().map_err(|e| self.broken(e))? {
                 if cancel.is_cancelled() {
                     return Err(ArcError::Cancelled);
                 }
-                let mut item = item.map_err(|e| self.broken(e))?;
-                let path = item
-                    .path()
-                    .map(|p| tar_path(&p))
-                    .unwrap_or_else(|_| String::new());
-                if path.ends_with('/') {
+                if item.kind() == crate::tar::Kind::Dir {
                     continue;
                 }
+                let path = tar_name(&item.name);
                 report.members += 1;
                 progress(&path, report.bytes);
-                match copy(&mut item, &mut io::sink(), cancel, &mut |_| {}) {
+                match copy(&mut stream, &mut io::sink(), cancel, &mut |_| {}) {
                     Ok(bytes) => report.bytes += bytes,
                     Err(ArcError::Cancelled) => return Err(ArcError::Cancelled),
                     Err(e) => report.bad.push((path, e.to_string())),
@@ -786,16 +781,10 @@ impl Archive {
             // A compressed tar is one stream: the only way to the last entry is through all
             // of it. That is the format's doing, not ours, and it is why `seekable` says no.
             _ => {
-                let mut stream = tar::Archive::new(decoder(&self.source, format)?);
-                let items = stream.entries().map_err(|e| self.broken(e))?;
-                for item in items {
-                    let mut item = item.map_err(|e| self.broken(e))?;
-                    let path = item
-                        .path()
-                        .map(|p| tar_path(&p))
-                        .unwrap_or_else(|_| String::new());
-                    if path == inner {
-                        return copy(&mut item, out, cancel, progress);
+                let mut stream = crate::tar::Reader::new(decoder(&self.source, format)?);
+                while let Some(item) = stream.next().map_err(|e| self.broken(e))? {
+                    if tar_name(&item.name) == inner {
+                        return copy(&mut stream, out, cancel, progress);
                     }
                     if cancel.is_cancelled() {
                         return Err(ArcError::Cancelled);
@@ -1011,8 +1000,8 @@ pub(crate) fn normalise(path: &str) -> String {
     format!("/{}", out.join("/"))
 }
 
-pub(crate) fn tar_path(path: &Path) -> String {
-    normalise(&path.to_string_lossy())
+pub(crate) fn tar_name(name: &str) -> String {
+    normalise(name)
 }
 
 /// Does a tar come out of this single compressed stream?
@@ -1514,13 +1503,12 @@ fn index_tar(
     limits: &Limits,
     cancel: &CancelToken,
 ) -> Result<Vec<ArcEntry>> {
-    let mut archive = tar::Archive::new(decoder(path, format)?);
-    let items = archive.entries().map_err(|e| ArcError::Broken {
+    let mut archive = crate::tar::Reader::new(decoder(path, format)?);
+    let mut out = Vec::new();
+    while let Some(item) = archive.next().map_err(|e| ArcError::Broken {
         path: name.to_string(),
         reason: e.to_string(),
-    })?;
-    let mut out = Vec::new();
-    for item in items {
+    })? {
         if cancel.is_cancelled() {
             return Err(ArcError::Cancelled);
         }
@@ -1530,41 +1518,27 @@ fn index_tar(
                 reason: format!("more than {} entries", limits.entries),
             });
         }
-        let item = item.map_err(|e| ArcError::Broken {
-            path: name.to_string(),
-            reason: e.to_string(),
-        })?;
-        let header = item.header();
-        let Ok(inner) = item.path().map(|p| tar_path(&p)) else {
-            continue;
-        };
+        let inner = tar_name(&item.name);
         if inner == "/" {
             continue;
         }
-        let kind = match header.entry_type() {
-            tar::EntryType::Directory => EntryKind::Dir,
-            tar::EntryType::Regular | tar::EntryType::Continuous => EntryKind::File,
-            tar::EntryType::Symlink | tar::EntryType::Link => EntryKind::Symlink,
+        let kind = match item.kind() {
+            crate::tar::Kind::Dir => EntryKind::Dir,
+            crate::tar::Kind::File => EntryKind::File,
+            crate::tar::Kind::Symlink | crate::tar::Kind::HardLink => EntryKind::Symlink,
             // Devices, fifos and the GNU bookkeeping entries: shown, never read.
-            _ => EntryKind::Other,
+            crate::tar::Kind::Other => EntryKind::Other,
         };
         out.push(ArcEntry {
             path: inner,
-            size: header.size().unwrap_or(0),
+            size: item.size,
             packed: None,
-            mtime: header
-                .mtime()
-                .ok()
-                .map(|secs| SystemTime::UNIX_EPOCH + Duration::from_secs(secs)),
-            mode: header.mode().ok(),
+            mtime: Some(SystemTime::UNIX_EPOCH + Duration::from_secs(item.mtime)),
+            mode: Some(item.mode),
             kind,
-            link_target: header
-                .link_name()
-                .ok()
-                .flatten()
-                .map(|p| p.to_string_lossy().into_owned()),
+            link_target: (!item.link.is_empty()).then(|| item.link.clone()),
             // Only a plain tar can be seeked back to; the compressed ones re-read the stream.
-            at: format.seekable().then(|| item.raw_file_position()),
+            at: format.seekable().then_some(item.data_at),
         });
     }
     Ok(out)
@@ -1873,16 +1847,15 @@ mod tests {
     }
 
     fn tar_bytes(names: &[(&str, &[u8])]) -> Vec<u8> {
-        let mut builder = tar::Builder::new(Vec::new());
+        let mut builder = crate::tar::Builder::new(Vec::new());
         for (name, body) in names {
-            let mut header = tar::Header::new_gnu();
-            header.set_size(body.len() as u64);
-            header.set_mode(0o644);
-            header.set_mtime(1_700_000_000);
-            header.set_cksum();
-            builder.append_data(&mut header, name, &body[..]).unwrap();
+            let mut header = crate::tar::Header::new(name, crate::tar::Kind::File);
+            header.size = body.len() as u64;
+            header.mode = 0o644;
+            header.mtime = 1_700_000_000;
+            builder.append(&header, &mut &body[..]).unwrap();
         }
-        builder.into_inner().unwrap()
+        builder.finish().unwrap()
     }
 
     /// An `ar` built by hand, so the test needs no `ar` on the machine running it.

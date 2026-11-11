@@ -37,7 +37,6 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `ssh-key`, `ssh-encoding`, `ssh-cipher` | Apache-2.0 OR MIT | OpenSSH key and `known_hosts` formats |
 | `zip` | MIT | reading and writing zip archives |
 | `rusqlite`, `libsqlite3-sys` | MIT | SQLite databases as a container and the `sql:` queries; `bundled` compiles SQLite (public domain) into the binary, so nothing is installed |
-| `tar` | MIT OR Apache-2.0 | reading and writing the tar family |
 | `flate2` (with `miniz_oxide`) | MIT OR Apache-2.0 | gzip, in pure Rust — and inflate for a PDF's own tables in the structure pane |
 | `bzip2` (with `libbz2-rs-sys`) | MIT OR Apache-2.0 / **bzip2-1.0.6** | bzip2, in pure Rust |
 | `lzma-rust2` | Apache-2.0 | xz, in pure Rust |
@@ -51,7 +50,7 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `vte` | Apache-2.0 OR MIT | recognising the escape sequences a program writes to a terminal |
 | `trash` (with `urlencoding`, `scopeguard`, `once_cell`, `chrono`; `objc2-foundation` on macOS) | MIT | handing a file to the system's own wastebasket — the XDG trash spec, `NSFileManager`, `IFileOperation` — and, for the undo, listing it and restoring from it on Linux and Windows |
 | `md5`, `sha1`, `sha2` | MIT OR Apache-2.0 | three of the four hashes the checksum dialog offers (all three were already in the tree under the SSH client) |
-| `crc32fast` | MIT OR Apache-2.0 | the fourth: CRC32, which is what a `.sfv` list holds (already in the tree under `zip` and `tar`) |
+| `crc32fast` | MIT OR Apache-2.0 | the fourth: CRC32, which is what a `.sfv` list holds (already in the tree under `zip` and `flate2`) |
 | `image` | MIT OR Apache-2.0 | decoding PNG, JPEG, GIF and BMP for the viewer's picture mode; built with `default-features = false`, so it is those four formats and nothing else |
 | `nix` | MIT | the Unix calls the terminal and `fcmd-platform` need that `std` does not expose, `copy_file_range` among them |
 | `windows-sys` (Windows only) | MIT OR Apache-2.0 | Microsoft's own bindings, for the calls `fcmd-platform` makes on Windows: free space, cluster size, memory, `CopyFileExW`, and the two `DeviceIoControl` codes a raw device answers with its length and its sector size. Already in the tree under `rustix` and `mio` |

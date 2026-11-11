@@ -23,7 +23,7 @@ use std::time::SystemTime;
 
 use fcmd_core::{CancelToken, VPath};
 
-use crate::archive::{decoder, normalise, tar_path, Archive, Cache};
+use crate::archive::{decoder, normalise, tar_name, Archive, Cache};
 use crate::write::{Level, Written};
 use crate::{ArcError, Format, Limits, Result};
 
@@ -524,19 +524,17 @@ fn rebuild_tar(
     let mut written = Written::default();
     {
         let sink = crate::write::Sink::new(&plain, format, level)?;
-        let mut new = tar::Builder::new(sink);
-        let mut old = tar::Archive::new(decoder(path, format)?);
-        let entries = old.entries().map_err(|e| broken(path, e))?;
-        for entry in entries {
+        let mut new = crate::tar::Builder::new(sink);
+        let mut old = crate::tar::Reader::new(decoder(path, format)?);
+        while let Some(entry) = old.next().map_err(|e| broken(path, e))? {
             if cancel.is_cancelled() {
                 let _ = std::fs::remove_file(&plain);
                 return Err(ArcError::Cancelled);
             }
-            let mut entry = entry.map_err(|e| broken(path, e))?;
             // Two forms of the same name: the one the tar stores, which is relative and may
             // end in a slash, and the normalised one the changes are written against.
-            let stored = entry.path().map(|p| p.into_owned()).unwrap_or_default();
-            let inner = normalise(&tar_path(&stored));
+            let stored = entry.name.clone();
+            let inner = normalise(&tar_name(&stored));
             if plan.is_removed(&inner) {
                 continue;
             }
@@ -545,42 +543,39 @@ fn rebuild_tar(
             }
             // As in the zip: the stored name is kept unless something renamed it, so a
             // trailing slash or a `./` prefix survives the rebuild untouched.
-            let name = match plan.renamed.get(&inner) {
-                None => stored.clone(),
-                Some(to) => PathBuf::from(to.trim_start_matches('/')),
-            };
-            let mut header = entry.header().clone();
-            let is_dir = header.entry_type().is_dir();
-            let size = header.size().unwrap_or(0);
+            let mut header = entry.clone();
+            if let Some(to) = plan.renamed.get(&inner) {
+                let to = to.trim_start_matches('/');
+                header.name = if stored.ends_with('/') {
+                    format!("{to}/")
+                } else {
+                    to.to_string()
+                };
+            }
+            let is_dir = header.kind() == crate::tar::Kind::Dir;
+            let size = header.size;
             // A tar's header is written afresh for every entry anyway, so what was asked for
             // simply goes in it.
             if let Some((mode, mtime)) = plan.touched.get(&inner) {
                 if let Some(mode) = mode {
-                    header.set_mode(*mode);
+                    header.mode = *mode;
                 }
                 if let Some(when) = mtime {
                     if let Ok(since) = when.duration_since(std::time::UNIX_EPOCH) {
-                        header.set_mtime(since.as_secs());
+                        header.mtime = since.as_secs();
                     }
                 }
             }
-            // The data has to be read out of the stream whatever happens to it, because a tar
-            // is read in order; holding it is bounded by the entry's own size.
-            let mut data = Vec::with_capacity(size.min(8 * 1024 * 1024) as usize);
-            entry
-                .read_to_end(&mut data)
-                .map_err(|e| io_error(path, e))?;
-            header.set_size(data.len() as u64);
-            header.set_cksum();
-            new.append_data(&mut header, &name, data.as_slice())
-                .map_err(|e| broken(part, e))?;
+            // The member's bytes go straight from the old stream to the new one: a tar is
+            // read in order and written in order, so nothing needs to be held.
+            new.append(&header, &mut old).map_err(|e| broken(part, e))?;
             if is_dir {
                 written.dirs += 1;
             } else {
                 written.files += 1;
                 written.bytes += size;
             }
-            progress(&name.to_string_lossy(), written.bytes);
+            progress(&header.name, written.bytes);
         }
         for (inner, source) in &plan.put {
             if cancel.is_cancelled() {
@@ -588,15 +583,14 @@ fn rebuild_tar(
                 return Err(ArcError::Cancelled);
             }
             let name = inner.trim_start_matches('/');
-            let mut file = File::open(source).map_err(|e| io_error(source, e))?;
-            let size = file.metadata().map(|m| m.len()).unwrap_or(0);
-            new.append_file(name, &mut file)
-                .map_err(|e| broken(part, e))?;
+            let size = new
+                .append_file(name, source)
+                .map_err(|e| io_error(source, e))?;
             written.files += 1;
             written.bytes += size;
             progress(name, written.bytes);
         }
-        let sink = new.into_inner().map_err(|e| broken(part, e))?;
+        let sink = new.finish().map_err(|e| broken(part, e))?;
         sink.finish(part)?;
     }
     if format == Format::TarZst {

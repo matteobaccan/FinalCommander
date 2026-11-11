@@ -402,8 +402,9 @@ fn write_tar(
         part.to_path_buf()
     };
     let sink = Sink::new(&plain, format, level)?;
-    let mut tar = tar::Builder::new(sink);
-    tar.follow_symlinks(true);
+    // Links are followed, as they always were here: what goes in is the file a link points
+    // to, which is what the person packing a folder of links almost always means.
+    let mut tar = crate::tar::Builder::new(sink);
     let mut written = Written::default();
     for item in items {
         if cancel.is_cancelled() {
@@ -412,18 +413,18 @@ fn write_tar(
         }
         if item.is_dir {
             tar.append_dir(&item.inner, &item.source)
-                .map_err(|e| broken(part, e))?;
+                .map_err(|e| io_error(&item.source, e))?;
             written.dirs += 1;
             continue;
         }
-        let mut file = File::open(&item.source).map_err(|e| io_error(&item.source, e))?;
-        tar.append_file(&item.inner, &mut file)
-            .map_err(|e| broken(part, e))?;
-        written.bytes += item.size;
+        let size = tar
+            .append_file(&item.inner, &item.source)
+            .map_err(|e| io_error(&item.source, e))?;
+        written.bytes += size;
         written.files += 1;
         progress(&item.source, written.bytes);
     }
-    let sink = tar.into_inner().map_err(|e| broken(part, e))?;
+    let sink = tar.finish().map_err(|e| broken(part, e))?;
     sink.finish(part)?;
     if format == Format::TarZst {
         let source = File::open(&plain).map_err(|e| io_error(&plain, e))?;

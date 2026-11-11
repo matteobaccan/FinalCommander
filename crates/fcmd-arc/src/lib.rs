@@ -29,6 +29,7 @@ pub mod mail;
 mod nest;
 mod rebuild;
 pub mod sqlite;
+mod tar;
 mod write;
 
 pub use archive::{ArcEntry, Archive, Cache, Report};

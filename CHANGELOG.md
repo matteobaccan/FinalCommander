@@ -6,6 +6,16 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Tar is read and written by our own code.** The `tar` crate is gone: `fcmd-arc` reads v7,
+  ustar, GNU (long names and links, base-256 sizes) and PAX archives itself, and writes ustar
+  with a PAX record in front of a member only where a name, a link, a size, a time or an owner
+  does not fit its field — the form every tar since 2001 reads. A rebuilt tar now streams each
+  member from the old archive to the new one instead of holding it in memory, and a damaged
+  header or an archive cut in the middle of a member is said to be one. Checked against GNU tar
+  in both directions.
+
 ## [0.40.0] — 2026-11-11
 
 ### Added
