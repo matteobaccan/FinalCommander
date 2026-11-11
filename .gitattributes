@@ -9,3 +9,6 @@ docs/fcmd.1 text eol=lf
 *.ftl text eol=lf
 *.toml text eol=lf
 *.md text eol=lf
+
+# `fcmd -h` and `--help` as they were when clap was replaced, compared byte for byte.
+crates/fcmd/tests/*.txt text eol=lf

@@ -4303,6 +4303,20 @@ fn read_syslog() -> Result<std::path::PathBuf, String> {
     Ok(path)
 }
 
+/// A folder of its own for each answer git gives as a file, inside this session's temporary
+/// folder so it goes with it on the way out.
+///
+/// The files are named after what they show — the file's own name for the two sides of a
+/// diff — and a view still open on one `a.txt` must not find it rewritten by the next
+/// question about another `a.txt`, in another repository or in the same one a moment later.
+fn git_answer_dir() -> std::path::PathBuf {
+    static ASKED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = ASKED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    std::env::temp_dir()
+        .join(format!("fcmd-sql-{}", std::process::id()))
+        .join(format!("git-{n}"))
+}
+
 /// Run git in `cwd` and say what it said, its own error included when it failed.
 fn git(cwd: &std::path::Path, args: &[&str]) -> Result<String, String> {
     let mut command = std::process::Command::new("git");
@@ -4487,7 +4501,7 @@ fn run_git(cwd: &std::path::Path, what: &app::GitAsk) -> Result<app::GitOut, Str
     let top = git(cwd, &["rev-parse", "--show-toplevel"])?;
     let root = std::path::PathBuf::from(top.trim().replace('/', std::path::MAIN_SEPARATOR_STR));
     let text = |name: &str, body: String| -> Result<GitOut, String> {
-        let dir = std::env::temp_dir().join(format!("fcmd-sql-{}", std::process::id()));
+        let dir = git_answer_dir();
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let path = dir.join(name);
         std::fs::write(&path, body).map_err(|e| e.to_string())?;
@@ -4582,7 +4596,7 @@ fn run_git(cwd: &std::path::Path, what: &app::GitAsk) -> Result<app::GitOut, Str
             // A version git does not have — a file new in this commit, or one taken away — is
             // an empty side: the diff then shows all of it added, or all of it gone.
             let version = |spec: String| git(&root, &["show", &spec]).unwrap_or_default();
-            let dir = std::env::temp_dir().join(format!("fcmd-sql-{}", std::process::id()));
+            let dir = git_answer_dir();
             let write = |label: &str, body: String| -> Result<std::path::PathBuf, String> {
                 let sub = dir.join(label);
                 std::fs::create_dir_all(&sub).map_err(|e| e.to_string())?;
@@ -6941,10 +6955,14 @@ dir_attr = "D"
         };
         assert_eq!(std::fs::read_to_string(&before).unwrap(), "one\n");
         assert_eq!(std::fs::read_to_string(&after).unwrap(), "two\n");
+        let first_before = before;
         let Ok(app::GitOut::Sides { before, after, .. }) = run_git(root, &sides(false)) else {
             panic!("the unstaged sides")
         };
         assert_eq!(std::fs::read_to_string(&before).unwrap(), "two\n");
+        // Each question writes its own copies: the first view's side is still what it was.
+        assert_ne!(first_before, before);
+        assert_eq!(std::fs::read_to_string(&first_before).unwrap(), "one\n");
         assert_eq!(after, a, "the work tree is the file itself");
         // Discarding what is not staged puts the file back as the index has it.
         let discard = app::GitAsk::Discard {
