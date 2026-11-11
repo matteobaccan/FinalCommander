@@ -197,9 +197,9 @@ else. `fcmd --shell-init bash|zsh|fish|powershell` prints the function instead a
 adds one line to their own startup file — which also means the function can never be out of step
 with the binary that printed it.
 
-**Shell completions are missing and belong here.** There are none today. `clap` generates them
-for bash, zsh, fish, PowerShell and Elvish from the parser that already exists, which is a
-hidden `--completions <shell>` flag and a few lines; a package is the natural place to install
+**Shell completions are missing and belong here.** There are none today. They would be written
+from the option table in `crates/fcmd/src/cli.rs`, the one the help and the manual page come
+from — for bash, zsh, fish and PowerShell, a hidden `--completions <shell>` flag; a package is the natural place to install
 them, and it is the one thing in this list the program cannot currently produce. Deciding
 against completions is fine; shipping packages that are expected to carry them and do not is
 the thing to avoid.

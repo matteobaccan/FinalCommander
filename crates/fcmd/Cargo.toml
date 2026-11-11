@@ -12,7 +12,6 @@ authors.workspace = true
 thiserror = "2"
 toml = "1.0.7"
 anyhow = "1.0.104"
-clap = { version = "4.5.61", features = ["derive"] }
 fcmd-arc = { workspace = true }
 fcmd-cmd = { workspace = true }
 fcmd-config = { workspace = true }
@@ -37,7 +36,6 @@ unicode-width = "0.2.2"
 # fcmd-s3, so this is no new code to trust, only a direct use of it.
 ring = "0.17"
 serde_json = "1.0.154"
-clap_mangen = "0.3"
 # The filesystem watch behind `panel.auto_refresh` (feature 1.25): inotify on Linux,
 # FSEvents on macOS, `ReadDirectoryChangesW` on Windows, which is three platform APIs we
 # are not going to write three times. CC0-1.0, no runtime of its own.

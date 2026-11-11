@@ -1,0 +1,30 @@
+FinalCommander — orthodox file manager for the terminal
+
+Usage: fcmd [OPTIONS] [PATH]...
+
+Arguments:
+  [PATH]...  Directory for the left panel, and optionally for the right one
+
+Options:
+      --config <FILE>       Use this configuration file instead of the default one
+      --plugins <DIR>       Use this plugins directory (the only directory fcmd ever reads besides the config file)
+      --theme <ID>          Theme id (commander, far, black, white, matrix, tron, blade, github-dark, delphi-dark-2027, or an external one)
+      --keymap <NAME>       Keymap profile: a built-in one (far, mc) or a [[keymap]] block from the config file
+      --lang <TAG>          Interface language: en, it, de, fr, es, ru, zh, or auto
+      --set <KEY=VALUE>     Override a setting, e.g. --set panel.show_hidden=true
+      --view <FILE>         Open this file in the viewer; leaving the viewer ends the run
+      --edit <FILE>         Open this file in the editor; a name that is not there starts an empty file
+      --diff <A> <B>        Compare these two files side by side
+  -P, --printwd <FILE>      Write the directory the panel ended in to this file, for a shell wrapper to read
+      --no-save             Read the histories and the panels' places, but write nothing back on the way out
+      --shell-init <SHELL>  Print the shell function that makes the shell follow the panel, for this shell [possible values: bash, zsh, fish, powershell]
+      --list-themes         List the themes found in this run and where each came from
+      --list-commands       List every command id (the vocabulary keys, menus and plugins bind to)
+      --list-languages      List the interface languages compiled in
+      --check-keymap        Validate the keymap and print the resolved bindings
+      --export-theme <ID>   Print a theme as TOML, to start an external theme from
+      --dump-config         Print the effective configuration
+      --paths               Print where the config file, the state file and the plugins directory are
+      --list-plugins        List the plugins found in the plugins directory
+  -h, --help                Print help (see more with '--help')
+  -V, --version             Print version

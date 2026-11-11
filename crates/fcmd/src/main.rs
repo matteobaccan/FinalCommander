@@ -3,6 +3,7 @@
 //! The interface is strictly TUI; see `docs/spec/00-overview.md`.
 
 mod app;
+mod cli;
 mod cmdline;
 mod colset;
 mod complete;
@@ -32,7 +33,6 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
 use anyhow::{Context, Result};
-use clap::Parser;
 use fcmd_cmd::{Command as FcCommand, Keymap, Scope as FcmdScope};
 use fcmd_config::{Config, Paths};
 use fcmd_core::{CancelToken, VPath};
@@ -49,127 +49,7 @@ use crate::app::{
     UploadError,
 };
 
-#[derive(Debug, Parser)]
-#[command(
-    name = "fcmd",
-    version,
-    about = "FinalCommander — orthodox file manager for the terminal",
-    long_about = "FinalCommander is a two-panel file manager for the terminal that \
-works the same way on Linux, macOS and Windows: one program, one set of keys, one \
-configuration file.\n\n\
-Two panels side by side, the function keys along the bottom saying what they do right now, \
-and a command line underneath. Copying, moving and deleting run as jobs with progress and a \
-way to stop them. Archives open as directories. The viewer streams a file of any size and \
-disassembles a binary; the editor edits lines or bytes. SFTP panels are panels like any \
-other.\n\n\
-The keys are FAR's by default, with a Midnight Commander profile; every action is a named \
-command and every command can be bound to a key. Press F1 inside the program for the manual, \
-whose key and command chapters are generated from the keymap in force."
-)]
-struct Cli {
-    /// Directory for the left panel, and optionally for the right one.
-    #[arg(value_name = "PATH", num_args = 0..=2)]
-    paths: Vec<PathBuf>,
-
-    /// Use this configuration file instead of the default one.
-    #[arg(long, value_name = "FILE")]
-    config: Option<PathBuf>,
-
-    /// Use this plugins directory (the only directory fcmd ever reads besides the config file).
-    #[arg(long, value_name = "DIR")]
-    plugins: Option<PathBuf>,
-
-    /// Theme id (commander, far, black, white, matrix, tron, blade, github-dark, delphi-dark-2027, or an external one).
-    #[arg(long, value_name = "ID")]
-    theme: Option<String>,
-
-    /// Keymap profile: a built-in one (far, mc) or a [[keymap]] block from the config file.
-    #[arg(long, value_name = "NAME")]
-    keymap: Option<String>,
-
-    /// Interface language: en, it, de, fr, es, ru, zh, or auto.
-    #[arg(long, value_name = "TAG")]
-    lang: Option<String>,
-
-    /// Override a setting, e.g. --set panel.show_hidden=true
-    #[arg(long = "set", value_name = "KEY=VALUE")]
-    set: Vec<String>,
-
-    /// Open this file in the viewer; leaving the viewer ends the run.
-    #[arg(long, value_name = "FILE", conflicts_with_all = ["edit", "diff"])]
-    view: Option<PathBuf>,
-
-    /// Open this file in the editor; a name that is not there starts an empty file.
-    #[arg(long, value_name = "FILE", conflicts_with_all = ["view", "diff"])]
-    edit: Option<PathBuf>,
-
-    /// Compare these two files side by side.
-    #[arg(long, num_args = 2, value_names = ["A", "B"], conflicts_with_all = ["view", "edit"])]
-    diff: Vec<PathBuf>,
-
-    /// Write the directory the panel ended in to this file, for a shell wrapper to read.
-    ///
-    /// A process cannot change its parent's working directory, so leaving the shell where the
-    /// panel was takes two halves: this, and a function in the shell. `--shell-init` prints
-    /// the function. Midnight Commander spells this `-P`, and so does this.
-    #[arg(short = 'P', long, value_name = "FILE")]
-    printwd: Option<PathBuf>,
-
-    /// Read the histories and the panels' places, but write nothing back on the way out.
-    ///
-    /// For a second copy opened for a quick job beside the main one: without it, whichever
-    /// quits last writes the state file, and the main one's histories lose to the side job's.
-    /// FAR's issue #1046.
-    #[arg(long)]
-    no_save: bool,
-
-    /// Print the shell function that makes the shell follow the panel, for this shell.
-    ///
-    /// Add `eval "$(fcmd --shell-init bash)"` to the shell's startup file — one line, and no
-    /// file installed anywhere, which is the rule in SPEC 11 §1.
-    #[arg(long, value_name = "SHELL", value_parser = ["bash", "zsh", "fish", "powershell"])]
-    shell_init: Option<String>,
-
-    /// List the themes found in this run and where each came from.
-    #[arg(long)]
-    list_themes: bool,
-
-    /// List every command id (the vocabulary keys, menus and plugins bind to).
-    #[arg(long)]
-    list_commands: bool,
-
-    /// List the interface languages compiled in.
-    #[arg(long)]
-    list_languages: bool,
-
-    /// Validate the keymap and print the resolved bindings.
-    #[arg(long)]
-    check_keymap: bool,
-
-    /// Print a theme as TOML, to start an external theme from.
-    #[arg(long, value_name = "ID")]
-    export_theme: Option<String>,
-
-    /// Print the effective configuration.
-    #[arg(long)]
-    dump_config: bool,
-
-    /// Print where the config file, the state file and the plugins directory are.
-    #[arg(long = "paths")]
-    show_paths: bool,
-
-    /// List the plugins found in the plugins directory.
-    #[arg(long)]
-    list_plugins: bool,
-
-    /// Print the manual page, in roff, for a packager to install as fcmd.1.
-    ///
-    /// It is generated from these very options, so it cannot describe a flag that does not
-    /// exist or miss one that does. `docs/fcmd.1` in the repository is this output, and a
-    /// test fails if the two ever differ.
-    #[arg(long, hide = true)]
-    man: bool,
-}
+use crate::cli::Cli;
 
 /// A search on a worker thread. The engine streams events; each one becomes an event the app
 /// already knows how to draw, so the list fills while the walk is still going.
@@ -358,8 +238,8 @@ fn print_banner() {
 }
 
 fn main() -> Result<()> {
-    // `--help` and `--version` never reach `run`: clap answers them itself and exits while
-    // parsing, so the banner above them goes here.
+    // `--help` and `--version` never reach `run`: the parser answers them itself and exits,
+    // so the banner above them goes here.
     let asked =
         std::env::args().any(|a| matches!(a.as_str(), "-h" | "--help" | "-V" | "--version"));
     if asked {
@@ -375,18 +255,10 @@ fn main() -> Result<()> {
     }
 }
 
-/// The manual page, in roff, from the options above plus the sections clap cannot know about.
+/// The manual page, in roff: the part [`cli`] writes from the options, and the sections it
+/// cannot know about.
 fn man_page() -> String {
-    use clap::CommandFactory;
-    let command = Cli::command();
-    let mut page = Vec::new();
-    clap_mangen::Man::new(command)
-        .title("FCMD")
-        .section("1")
-        .manual("FinalCommander")
-        .render(&mut page)
-        .expect("writing to a vector cannot fail");
-    let mut text = String::from_utf8(page).expect("roff is text");
+    let mut text = cli::man_page();
     // What a man page has and a `--help` does not: where the files are, what the keys are, and
     // where to look next. Written here rather than in the roff by hand, so the generated part
     // stays generated.
@@ -833,7 +705,7 @@ end
 }
 "#
         .to_string(),
-        // `clap` checks the name against its own list, so this is unreachable from the
+        // The parser checks the name against its own list, so this is unreachable from the
         // command line and is still worth answering rather than panicking.
         other => format!("# no shell function for `{other}`\n"),
     }
@@ -4969,7 +4841,6 @@ fn open_url(url: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::CommandFactory;
 
     /// A real command, run the way the application runs one: what it prints has to arrive
     /// while it runs, and what comes back at the end has to be the note and not the output
@@ -6928,11 +6799,6 @@ dir_attr = "D"
         assert!(BANNER.lines().all(|l| l.len() <= 40), "{BANNER}");
     }
 
-    #[test]
-    fn cli_definition_is_valid() {
-        Cli::command().debug_assert();
-    }
-
     /// The manual page in the repository is `--man`'s own output. A packager installs that
     /// file, so it has to be the page this binary describes — including its version, which
     /// is why a release that forgets to regenerate it fails here rather than shipping a page
@@ -6955,7 +6821,7 @@ dir_attr = "D"
              \n    cargo run -p fcmd -- --man > docs/fcmd.1\n"
         );
         // And it is a manual page rather than a dump of `--help`: the sections a reader
-        // expects are there, and the ones clap cannot know about are the point of writing it.
+        // expects are there, and the ones the options cannot tell are the point of writing it.
         for section in [
             ".SH NAME",
             ".SH SYNOPSIS",

@@ -135,8 +135,11 @@ same thing with the same files: a help index per language, and the note on the c
 are still English.
 
 The manual page, `docs/fcmd.1`, is generated from the command line's own options by
-`fcmd --man`, with the sections `clap` cannot know about — files, keys, exit status — written
-once underneath. The file in the repository is that output and a test fails when the two
+`fcmd --man`, with the sections the options cannot tell — files, keys, exit status — written
+once underneath. The options are one table in `crates/fcmd/src/cli.rs`, and the parser, `-h`,
+`--help`, the error messages and the page are all written from it; since 0.40 there is no
+argument-parsing library, and the words and layout are the ones `clap` printed before,
+checked against it on some 40,000 command lines when it was replaced. The file in the repository is that output and a test fails when the two
 differ, so a flag cannot exist without a line in the page, and a release that forgets to
 regenerate it does not build.
 
