@@ -29,6 +29,16 @@ Notable changes, newest first. The format follows
 - The feature table was read against the sources of eighteen other file managers; its states
   are corrected both ways, and BACKLOG opens with what they have and this does not.
 
+### Fixed
+
+- **The question over the editor had no buttons.** Leaving a changed file with `Esc` asked
+  "Leave and lose them?" with no answers drawn under it; it now shows them, as every other
+  question does.
+- **A paste into the editor on Windows indented every line again.** The Windows console hands
+  a paste over as keys, so each line break was an `Enter` and took the indentation of the line
+  before it, on top of the pasted line's own. A burst of typed lines already waiting is now
+  taken as the paste it is and goes in as it was copied.
+
 ## [0.41.0] — 2026-11-11
 
 ### Added

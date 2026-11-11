@@ -731,38 +731,104 @@ pub fn install_panic_hook() {
 /// `crossterm::event::read` blocks.
 pub fn read_input_loop(tx: Sender<Input>) {
     loop {
-        match event::read() {
-            Ok(Event::Key(k)) => {
-                if let Some(input) = map_key_event(k) {
-                    if tx.send(input).is_err() {
-                        return;
-                    }
-                }
-            }
-            Ok(Event::Resize(w, h)) => {
-                if tx.send(Input::Resize(w, h)).is_err() {
-                    return;
-                }
-            }
-            Ok(Event::Paste(s)) => {
-                if tx.send(Input::Paste(s)).is_err() {
-                    return;
-                }
-            }
-            Ok(Event::Mouse(m)) => {
-                if let Some(input) = map_mouse_event(m) {
-                    if tx.send(input).is_err() {
-                        return;
-                    }
-                }
-            }
-            Ok(_) => {}
+        let event = match event::read() {
+            Ok(event) => event,
             Err(_) => {
                 let _ = tx.send(Input::Eof);
                 return;
             }
+        };
+        // A key that types something, with more already waiting behind it, may be the first
+        // of a paste the terminal delivered as keys (the Windows console does, whatever the
+        // terminal on top of it supports). The burst is read whole and, if it is one, sent as
+        // the paste it was — so the editor does not indent every pasted line again.
+        let event = match event {
+            Event::Key(k) if typed(&k).is_some() && pending() => {
+                let mut burst = vec![k];
+                let mut after = None;
+                while pending() {
+                    match event::read() {
+                        Ok(Event::Key(k)) if matches!(k.kind, KeyEventKind::Release) => {}
+                        Ok(Event::Key(k)) if typed(&k).is_some() => burst.push(k),
+                        Ok(other) => {
+                            after = Some(other);
+                            break;
+                        }
+                        Err(_) => break,
+                    }
+                }
+                match pasted(&burst) {
+                    Some(text) => {
+                        if tx.send(Input::Paste(text)).is_err() {
+                            return;
+                        }
+                    }
+                    None => {
+                        for k in burst {
+                            if !forward(&tx, Event::Key(k)) {
+                                return;
+                            }
+                        }
+                    }
+                }
+                match after {
+                    Some(event) => event,
+                    None => continue,
+                }
+            }
+            other => other,
+        };
+        if !forward(&tx, event) {
+            return;
         }
     }
+}
+
+/// Is another event already waiting? Asked with no timeout: a person typing never has one.
+fn pending() -> bool {
+    event::poll(Duration::ZERO).unwrap_or(false)
+}
+
+/// Send one event on as input; false once nobody is listening.
+fn forward(tx: &Sender<Input>, event: Event) -> bool {
+    let input = match event {
+        Event::Key(k) => map_key_event(k),
+        Event::Resize(w, h) => Some(Input::Resize(w, h)),
+        Event::Paste(s) => Some(Input::Paste(s)),
+        Event::Mouse(m) => map_mouse_event(m),
+        _ => None,
+    };
+    match input {
+        Some(input) => tx.send(input).is_ok(),
+        None => true,
+    }
+}
+
+/// The character a key press types into text, if it types one: a character with no Ctrl or
+/// Alt, Enter as a line break, Tab as a tab.
+fn typed(k: &KeyEvent) -> Option<char> {
+    if !matches!(k.kind, KeyEventKind::Press | KeyEventKind::Repeat)
+        || k.modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+    {
+        return None;
+    }
+    match k.code {
+        CKey::Char(c) => Some(c),
+        CKey::Enter => Some('\n'),
+        CKey::Tab => Some('\t'),
+        _ => None,
+    }
+}
+
+/// The text of a burst of typed keys, when the burst is a paste: more than one line, with
+/// something on them. A key held down repeats one character, and Enter held down repeats
+/// line breaks alone; neither is a paste, and both stay keys.
+fn pasted(burst: &[KeyEvent]) -> Option<String> {
+    let text: String = burst.iter().filter_map(typed).collect();
+    let lines = text.contains('\n');
+    let words = text.chars().any(|c| !c.is_whitespace());
+    (lines && words && burst.len() > 2).then_some(text)
 }
 
 /// Poll once, for tests and for the non-threaded path.
@@ -914,6 +980,42 @@ mod tests {
 
     fn key(code: CKey, mods: KeyModifiers) -> Option<Input> {
         map_key_event(KeyEvent::new(code, mods))
+    }
+
+    /// A paste the console delivered as keys is known by its shape: several lines with text
+    /// on them. What a hand does — a key held down, Enter held down, a shortcut — is not.
+    #[test]
+    fn a_burst_of_typed_lines_is_a_paste_and_a_held_key_is_not() {
+        let keys = |text: &str| -> Vec<KeyEvent> {
+            text.chars()
+                .map(|c| match c {
+                    '\n' => KeyEvent::new(CKey::Enter, KeyModifiers::NONE),
+                    '\t' => KeyEvent::new(CKey::Tab, KeyModifiers::NONE),
+                    c => KeyEvent::new(CKey::Char(c), KeyModifiers::NONE),
+                })
+                .collect()
+        };
+        assert_eq!(
+            pasted(&keys("- one\n  two\n")).as_deref(),
+            Some("- one\n  two\n"),
+            "the lines come as they are, indentation and all"
+        );
+        assert_eq!(pasted(&keys("\tx\ny")).as_deref(), Some("\tx\ny"));
+        assert_eq!(pasted(&keys("aaaaaaa")), None, "a letter held down");
+        assert_eq!(pasted(&keys("\n\n\n\n")), None, "Enter held down");
+        assert_eq!(
+            pasted(&keys("a\n")),
+            None,
+            "too short to be anything but typing"
+        );
+        // A shortcut is not text, and a released key types nothing.
+        let ctrl = KeyEvent::new(CKey::Char('v'), KeyModifiers::CONTROL);
+        assert_eq!(typed(&ctrl), None);
+        let mut up = KeyEvent::new(CKey::Char('a'), KeyModifiers::NONE);
+        up.kind = KeyEventKind::Release;
+        assert_eq!(typed(&up), None);
+        let shifted = KeyEvent::new(CKey::Char('A'), KeyModifiers::SHIFT);
+        assert_eq!(typed(&shifted), Some('A'));
     }
 
     #[test]

@@ -1633,8 +1633,10 @@ fn draw_dialog_over_screen(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)
                 screen,
                 &confirm.title,
                 &confirm.lines,
-                &[],
-                0,
+                // Its own answers, as anywhere else: drawn without them, the question over
+                // the editor ("Leave and lose them?") had no buttons to read or to pick.
+                &confirm.buttons(&app.i18n),
+                confirm.button,
             );
             None
         }
@@ -8599,6 +8601,25 @@ third line
 
     /// A question the hex editor asks is drawn over the bytes it is about: the match a
     /// replacement stops at has to be on the screen while one decides about it.
+    /// Leaving a changed file asks over the editor, and the question has its answers on
+    /// screen: drawn without them it was a question nobody could see how to answer.
+    #[test]
+    fn leaving_a_changed_file_asks_with_its_buttons_over_the_editor() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes.txt");
+        std::fs::write(&path, "one\n").unwrap();
+        let mut app = app("commander", "en");
+        app.mode =
+            crate::app::Mode::Editor(Box::new(fcmd_edit::Editor::open(&path).expect("it opens")));
+        let key = |app: &mut App, k: &str| app.handle_input(Input::Key(k.parse().unwrap()));
+        key(&mut app, "x");
+        key(&mut app, "Esc");
+        let out = frame(&mut app, 100, 24);
+        assert!(out.contains("unsaved changes"), "{out}");
+        assert!(out.contains("Discard"), "the answers are drawn: {out}");
+        assert!(out.contains("Cancel"), "{out}");
+    }
+
     #[test]
     fn a_replacement_asks_about_each_match_over_the_bytes() {
         let dir = tempfile::tempdir().unwrap();
