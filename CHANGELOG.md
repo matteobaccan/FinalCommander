@@ -8,6 +8,18 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A selection out of a `.rar`, `.iso`, `.wim`… is one run of the program**, not one per file:
+  it writes beside the destination, each file moves into place as it is finished, the bar
+  counts bytes as they land, and `Esc` stops the program and cleans up. `Shift+F2` and the
+  archive menu now take these archives too.
+- **Test archive reports everything.** A list of every damaged entry with its reason, `Enter`
+  to go to it; a whole archive says so in one line; bytes counted inside an entry. An archive
+  read through a program is tested by that program's own test, in one run.
+- **`.cab` opens without `7z`**: stored and MSZIP cabinets are read in process, with their
+  block checksums. LZX and Quantum cabinets still go to `7z`, and without it are listed and say
+  what they need.
+- `file.archive.test` and `file.archive.commands` are accepted as command names beside
+  `arc.test` and `arc.commands`.
 - **Secrets are masked before a question goes to an AI.** Keys, tokens, private key blocks,
   passwords in addresses and `.env`-style secrets become `[REDACTED:kind]` in everything sent —
   the question, the files, the earlier turns. The send dialog says how many, `F3` there shows
@@ -156,6 +168,13 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **Unpacking ran its bar past the end and could leave half a file.** The archive layer
+  reported a running total where the engine counts steps, so a large entry was counted many
+  times over; each entry is now written as `.fcmd-part` and renamed when whole, so a cancel or
+  a damaged entry leaves nothing behind.
+- **A damaged `.zst` tested whole**: its checksum was computed and never compared. It is now,
+  for `.zst` and `.tar.zst`, and a bad tar header inside a compressed tar is a line of the
+  report rather than a test that stops with no report.
 - **Asking the AI from the editor lost the editor.** `Ctrl+Alt+X` there replaced it, unsaved
   changes included; the question is now asked over the parked editor. A full screen opened over
   a parked editor — the "What changed" comparison before overwriting — is drawn instead of the
