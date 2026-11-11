@@ -2557,6 +2557,9 @@ pub struct App {
     viewer_under_prompt: Option<Box<Viewer>>,
     /// The editor, parked while one of its prompts or confirmations is open.
     editor_parked: Option<Box<Editor>>,
+    /// The menu bar was opened over a screen — `F9` in the editor — which is parked until the
+    /// panels are back in front, and then comes back itself.
+    screen_under_menu: bool,
     /// The pair `Ins` in the replacements list is naming.
     replace_naming: Option<(String, String)>,
     /// AI keys typed in this session and not kept in the secrets file, by service name.
@@ -2965,6 +2968,7 @@ impl App {
             last_search: None,
             viewer_under_prompt: None,
             editor_parked: None,
+            screen_under_menu: false,
             replace_naming: None,
             ai_tokens: std::collections::HashMap::new(),
             vault: None,
@@ -4449,6 +4453,12 @@ impl App {
                 self.term_resized(w, h.saturating_sub(chrome.max(1)));
             }
             Input::Eof => self.quit = true,
+        }
+        // The screen the menu bar was opened over comes back as soon as nothing else is in
+        // front: the menu closed, or what it opened has been answered.
+        if self.screen_under_menu && self.mode.is_normal() {
+            self.screen_under_menu = false;
+            self.restore_front_screen();
         }
         // A key may have moved the panel, and the shell goes where the panel goes.
         self.sync_subshell();
@@ -22754,7 +22764,13 @@ impl App {
         }
         // `F9` is the assembler in bytes and the menu bar in lines: there is nothing to
         // assemble over a line of text, so the key keeps the meaning it has everywhere else.
+        //
+        // The editor is parked first and comes back when the menu is gone: the menu bar
+        // replaces whatever is in front, and putting it over an editor used to drop the
+        // editor and every unsaved change in it.
         if cmd == Command::EditorAssemble {
+            self.park_front_screen();
+            self.screen_under_menu = true;
             self.run(Command::AppMenu);
             return;
         }
@@ -38751,6 +38767,34 @@ abcdefghij
         assert_eq!(
             app.keymap.resolve(&[Scope::Viewer, Scope::Global], key),
             Some(Command::ViewerStructure)
+        );
+    }
+
+    /// `F9` in the editor never takes the screen from under a file with unsaved changes:
+    /// whatever it opens, `Esc` comes back to the same editor with the same text in it.
+    #[test]
+    fn f9_in_the_editor_keeps_what_was_typed() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "one\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.panels[0].cursor = app.panels[0].listing.row_of_name("a.txt").unwrap();
+        press(&mut app, "F4");
+        press(&mut app, "x");
+        assert!(matches!(app.mode, Mode::Editor(_)), "{:?}", app.mode);
+        press(&mut app, "F9");
+        for _ in 0..3 {
+            if matches!(app.mode, Mode::Editor(_)) {
+                break;
+            }
+            press(&mut app, "Esc");
+        }
+        let Mode::Editor(ed) = &app.mode else {
+            panic!("the editor was lost: {:?}", app.mode)
+        };
+        assert!(
+            ed.buffer.to_text().starts_with("xone"),
+            "{:?}",
+            ed.buffer.to_text()
         );
     }
 

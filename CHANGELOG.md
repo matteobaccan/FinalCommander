@@ -86,6 +86,11 @@ Notable changes, newest first. The format follows
 - `Alt+F7` with `editor.cursor_after_match` on found the same hit again instead of the one
   before it.
 - The editor's help said `Ctrl+Y` redoes; it deletes the line, and redo is `Ctrl+Shift+Z`.
+- **`F9` in the editor threw the editor away**, unsaved changes and all: the menu bar took the
+  screen's place instead of opening over it. The editor now waits under the menu and comes
+  back when it closes, or when what was chosen from it has been answered.
+- A hex search in the editor (`F7`, *Hex*) looked for the text `4D 5A` itself. It now looks for
+  the characters those bytes are in the file's code page, `??` standing for any one.
 - Two names that are not valid UTF-8 and differ only in their invalid bytes no longer sort as
   the same name when the case does not count.
 

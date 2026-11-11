@@ -1243,7 +1243,8 @@ impl Editor {
     fn compile(&self, query: &str) -> Result<Regex, EditorError> {
         let pattern = match self.search_mode {
             SearchMode::Regex => query.to_string(),
-            _ => regex::escape(query),
+            SearchMode::Hex => hex_pattern(query, self.buffer.codepage)?,
+            SearchMode::Plain => regex::escape(query),
         };
         regex::RegexBuilder::new(&pattern)
             .case_insensitive(self.search_case_insensitive)
@@ -1730,6 +1731,40 @@ struct Completion {
     next: usize,
 }
 
+/// A hex search in the editor: the bytes as the file's own code page reads them.
+///
+/// The editor holds text, not bytes, so `4D 5A` is looked for as the characters those bytes
+/// are in the file's code page — `C3 A9` is `é` in a UTF-8 file and `Ã©` in a CP1252 one,
+/// which is what a hex search of that file on disk would find. `??` stands for any one
+/// character: in a code page of one byte per character that is exactly the viewer's rule, in
+/// UTF-8 it is a character rather than a byte, which is as near as text can come.
+fn hex_pattern(query: &str, codepage: fcmd_view::Codepage) -> Result<String, EditorError> {
+    let mut pattern = String::new();
+    let mut run: Vec<u8> = Vec::new();
+    let mut any = false;
+    for token in query.split_whitespace() {
+        for pair in token.as_bytes().chunks(2) {
+            let text = std::str::from_utf8(pair).unwrap_or("");
+            if text == "??" {
+                pattern.push_str(&regex::escape(&codepage.decode(&run)));
+                run.clear();
+                pattern.push('.');
+                any = true;
+                continue;
+            }
+            let byte = u8::from_str_radix(text, 16)
+                .map_err(|_| EditorError::Search(format!("`{text}` is not a hex byte")))?;
+            run.push(byte);
+            any = true;
+        }
+    }
+    if !any {
+        return Err(EditorError::Search("empty search".to_string()));
+    }
+    pattern.push_str(&regex::escape(&codepage.decode(&run)));
+    Ok(pattern)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2185,6 +2220,26 @@ mod tests {
         assert!(e.find(r"W\w+d", false).unwrap());
         assert_eq!(e.cursor, Position::new(0, 6));
         assert!(e.find("(unclosed", false).is_err());
+    }
+
+    /// The search dialog offers hex in the editor too, and it used to look for the text
+    /// `4D 5A` itself. The bytes are the characters they are in the file's code page.
+    #[test]
+    fn a_hex_search_finds_the_bytes_as_the_file_reads_them() {
+        let mut e = editor("MZ header\ncaf\u{e9} au lait\n");
+        e.search_mode = SearchMode::Hex;
+        assert!(e.find("4D 5A", false).unwrap());
+        assert_eq!(e.cursor, Position::new(0, 0));
+        // `é` is two bytes in UTF-8, the editor's page here.
+        e.move_file_start(false);
+        assert!(e.find("66 C3A9", false).unwrap());
+        assert_eq!(e.cursor.line, 1);
+        // `??` is any one character.
+        e.move_file_start(false);
+        assert!(e.find("68 ?? 61", false).unwrap(), "h?a in `header`");
+        // Not hex at all is said, not searched for.
+        assert!(e.find("4G", false).is_err());
+        assert!(e.find("   ", false).is_err());
     }
 
     #[test]
