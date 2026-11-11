@@ -329,47 +329,53 @@ files rather than guessing what its dialog says.
   only, directories only) to say it with, which the selection keys have not. SPEC 02 §4b has
   the whole of it.
 
-## What is worth doing next, in rough order
+## What is worth doing next: the roadmap after 0.40
 
-**Agreed on 6 November 2026, after the survey of the others** (Directory Opus, TheFile.Ninja,
-superfile, Wikipedia's comparison; the gaps are a section of `docs/BACKLOG.md`):
+Set out on 11 November 2026, after 0.40.0, from `docs/BACKLOG.md`, `docs/06-ai-study.md` and
+what the users have asked for. One theme per release, each about a session of work and cut
+when it is finished; what is half done when the time is up is closed or moved to the next one,
+never shipped half. Issues come first whenever one is open, and a red CI before anything.
 
-- **0.37.0** — a review of all the documentation: README, the help in both languages, the
-  site, the manual page, the specs, `docs/00`–`05`, BACKLOG, CONTRIBUTING, THIRD-PARTY, this
-  file; every key and setting named checked against the keymaps and `fcmd-config`; a key table
-  for people coming from FAR, Total Commander and mc in the README.
-- **0.38.0** — table mode improved (a header row detected rather than assumed, `^` as a
-  delimiter, `Ctrl+C` on the selected rows); **git taken much further**: the branches and
-  switching between them, what is to commit and what is staged, staging and unstaging, commit,
-  push, pull, a diff, a file's own log — **all of it in a panel**, the author was explicit
-  about that, not on the command line; **metadata as far as it goes**, executables included
-  (PE version resources and signatures, Mach-O and ELF notes, and the media and document
-  readers); and **a study, not code, of what the AI could do next**, for the author to choose
-  from.
-- Everything else from the survey stays in the backlog for later.
+- **0.41 — the editor, properly.** Search and replace with whole words, capture references in
+  the replacement and a list of every match (6.4); a burst of typing undone as one step, with
+  a depth that can be set (6.3); explicit commands to convert the end of line, the BOM and the
+  code page (6.6); a diff of what changed on disk before choosing to overwrite or reload
+  (6.12). The editor is where the Delphi users spend their day, and these are the four things
+  FAR's has and ours has not.
+- **0.42 — real pixels.** The kitty, iTerm2 and sixel protocols for pictures where the
+  terminal has them, half blocks kept as the fallback (5.22); then what waits on it: a
+  thumbnail view, and stepping through pictures full screen marking the keepers. HEIC's EXIF
+  beside it. Video stays the open question it is in the backlog until this is in.
+- **0.43 — finding things.** A search saved under a name and opened as a panel; search on
+  metadata (EXIF, ID3, document properties — the readers `F11` already has); an index as a
+  source for `Alt+F7` when the machine has one (Everything, `mdfind`, `plocate`), run as a
+  program; fuzzy names; and a folder list ordered by use (frecency, 2.3).
+- **0.44 — AI, third round**, in the order the study set: redaction before sending (A4) and a
+  local-only switch (A5) first, because what comes after sends more; then words to a rename
+  (C3) and a rewrite of a marked block shown as a diff (C5); explain what failed on the
+  command line (B2); words to a search (C2). `D` stays out.
+- **0.45 — jobs that survive.** The on-disk journal that lets a copy resume after a crash
+  (3.7, 11.6); a synchronisation saved as a named job, with a written report; disk usage of a
+  whole tree with a treemap (SPEC 06 §12); the unified diff and the first differing offset of
+  two binaries.
+- **0.46 — extending it.** `when` conditions on macros with FAR's fall-through (SPEC 08 §5),
+  the same vocabulary `[command.when]` started; columns a plugin computes (content plugins);
+  `FarMenu.ini` read as it stands for the user menu.
+- **0.47 — archives, the rest.** `cab` read in process; a selection extracted from a format
+  read through a program, with the job engine's progress; `Test` on `Alt+F6`; a table for
+  RARLAB's `rar`, verified on a machine that has it.
+- **Then 1.0**, when the above is in and a month of releases has passed with no fix for
+  something that worked before: a 1.0 is a promise that keys, settings and the plugin format
+  stop moving without notice. Before it, a release that does nothing but read the program
+  against its specs once more, the way 0.37.0 did.
 
+Open questions that block nothing above and are the author's to settle, each when its release
+comes near: video through `ffmpeg` (before 0.42 is over), a real collator for sorting, the Lua
+engine, a named cipher for the hex editor's blocks, and where tags and ratings would live.
 
-After 0.32.0 the author agreed to **all** of the following, to be shipped in several
-releases, each cut after about four hours of work (what is half done at that point is closed
-or left out, and the next release picks it up): finding duplicate files; an SQLite panel
-(tables as folders, a table in table mode, `sql:` queries, export to CSV); an AI panel
-(`[[ai]]` blocks with URL, model, API style and a token read from an environment variable;
-`ai:` on the command line; the answer as a Markdown file in a panel; files attached only
-after a dialog says what is sent); a git panel (branches, log, status, blame); JSON as a
-panel; a disk-usage chart; reading mail (`.eml`/`mbox` in the viewer, then IMAP read-only as
-a panel, FarMail's idea — its code is GPL and is not used); SCP beside SFTP, a bandwidth cap
-per server, *Generate URL* for a session; `.editorconfig`, word completion and a character
-map in the editor; the Windows registry and the system log as panels. An issue a release
-closes is answered once the release is out.
-
-The candidates the author was shown next, none of them started: search and replace with whole
-words and capture references (6.4), grouped undo (6.3), a unified diff and the first differing
-offset of two binaries, `when` conditions on macros (SPEC 08 §5), explicit end-of-line / BOM /
-code page conversion (6.6), a named synchronisation job; and larger, real pixels for pictures
-(kitty, iTerm2, sixel), a diff before overwriting a file changed on disk (6.12), a whole-tree
-disk usage with a treemap. Also still open from before: a table for RARLAB's `rar`, `cab` read
-in process, and the job journal that lets a copy be resumed after a crash (3.7, 11.6). Ask
-the author which, and in what order, before starting.
+Dependencies keep their rule: Renovate's pull requests are merged when green and the gate
+passes on top, and never cut a release alone. `object` 0.41 and `reqwest` 0.13 are ports, not
+bumps, and go in the release that has room for them.
 
 One rule that came out of that review and holds everywhere: **`Alt+<letter>` belongs to the
 quick search**, so nothing else may take it (`Ctrl+Shift+N/I/T` moved for this reason), and
