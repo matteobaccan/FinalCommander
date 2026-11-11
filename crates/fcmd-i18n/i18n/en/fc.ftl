@@ -1794,3 +1794,5 @@ find-saved-title = Saved searches — Enter opens, F4 edits, Del forgets
 find-saved-running = searching for { $name }…
 find-saved-gone = search { $name } forgotten
 find-loaded = search { $name } loaded
+find-fuzzy = Approximate name: the letters above, in order, best match first
+find-meta = Metadata (artist=bowie; camera=)

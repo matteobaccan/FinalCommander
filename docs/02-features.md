@@ -243,6 +243,8 @@ something readable rather than only into instructions.
 | 7.13 | Saved searches: a find-file query kept under a name and run again from a list, mask, text and conditions and all | TC/DC/KRU | ✓ `F2`/`F9` in the find dialog, and `Alt+Shift+F7` to open one as a panel (SPEC 06 §1c) |
 | 7.14 | Duplicate files: by size, then the first 64 KiB, then SHA-256; the groups as a panel with every copy but the oldest selected | FAR (FindDup)/TC | ✓ *Commands → Find duplicate files* (SPEC 06 §13) |
 | 7.15 | Asking a language model from the command line (`ai:`): OpenAI, Anthropic or Ollama, the token from an environment variable, files only after a dialog that names the host, answers kept as Markdown files | NEW | ✓ (SPEC 06 §14) |
+| 7.16 | Find files by approximate name: the letters in order anywhere in the name, results ranked best first | broot/NEW | ✓ a box in `Alt+F7` (SPEC 06 §1d) |
+| 7.17 | Find files by metadata: EXIF, ID3, document properties and the rest of what `F11` reads, as `field=value` conditions | TC/Wikipedia | ✓ a row in `Alt+F7` (SPEC 06 §1d) |
 
 ## 8. Shell & terminal integration
 

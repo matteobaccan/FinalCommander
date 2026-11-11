@@ -2,7 +2,8 @@
 
 ## 1. Find files (`Alt+F7`)
 
-Dialog fields: name masks (include/exclude, comma-separated, `*`/`?`/`**`), content (plain /
+Dialog fields: name masks (include/exclude, comma-separated, `*`/`?`/`**`) or an approximate
+name (§1d), a condition on the file's metadata (§1d), content (plain /
 regex / hex, case, whole word, encodings to try), size range, date range (absolute or relative
 `<7d`), attributes/permissions predicate, depth limit, follow symlinks, search in archives,
 search in the selected items only, use the predicate language (SPEC 02 §5) for anything else.
@@ -104,6 +105,51 @@ search becomes an ordinary list of the files it held.
 
 The list is the same one in both places and tells them apart by where it was opened from:
 in the dialog one is filling in a dialog, in the panels one is going somewhere.
+
+### 1d. Approximate names, and what a file says about itself
+
+Two more conditions, each a row of the dialog, each *and*-ed with the rest like the size and
+the text.
+
+**Approximate name.** A box under the mask row changes what that row means: letters to
+find in order anywhere in a name, rather than a mask. `mnrs` finds `main.rs`; several words
+must each match, in any order (`test app` finds `app_tests.rs`); case follows the dialog's
+own box; `*` and `?` left over from a search by mask are ignored, so the default `*` still
+means every name. It is a subsequence and nothing cleverer — a match can always be
+explained by pointing at the letters — and what makes it useful is the order of the
+results: letters next to each other beat letters apart, a letter that starts a word (the
+start of the name, after `_ - . space`, a capital after a small letter) beats one in the
+middle, and of two equal matches the shorter name wins. The matcher is
+`fcmd_core::fuzzy`, written here: forty lines of a two-row table did not justify a
+dependency. The engine reports each hit with its score (`Hit::score`), and the results
+list keeps itself best first as the hits arrive — a hit is inserted after the rows that
+match as well or better, so equal matches stay in the order they were found. A cursor
+nobody has moved stays on the first row, which is the best match so far; a cursor somebody
+moved stays on its row. A kept search opened as a panel hands its rows over best first
+too, though the panel's own sort then decides. The frame writes the pattern as `~mnrs`.
+
+**Metadata.** A row that asks about what the file says of itself — the camera of a
+photograph, the artist of a song, the author of a document. No parser was written for it:
+the viewer's `F11` already reads EXIF and PNG text, ID3, FLAC and Ogg comments, the
+properties of PDFs and office documents, the version resource of a program and the rest
+into rows of a label and a value (SPEC 05 §1.8), and the condition is a question asked of
+those same rows (`fcmd_find::MetaCond`). So what `F11` shows about a file is exactly what
+it can be found by, and a format the pane learns is a format the search knows.
+
+The grammar is `field=value`, both matched as substrings without regard to case, against
+a row's label and its value: `artist=bowie`. Either side may be left out — `=canon` (or
+just `canon`) is "canon" in any row, `gps=` is a file that has a GPS row at all — and
+several separated by `;` must all hold. `format` is a row every file the readers know has:
+what it is, with its one-line summary (`format=jpeg`, `format=pdf`). A heading of the pane
+is not a row, a directory says nothing about itself, and a file the readers do not know
+simply does not match — that is most files and not a problem to report; a file that cannot
+be opened is one, like any other.
+
+The cost is the reading: the name conditions are checked first, then this, then the text.
+A file on the disk is read at the offsets the readers go to (a few kilobytes of a
+photograph, the directory at the end of a `.docx`), never whole. An entry of an archive
+has no offsets to go to and is read whole, up to the same 64 MB a text search allows.
+Only plain files are opened: a pipe or a device would be read for ever.
 
 ## 2. Grep with jump-to-match
 

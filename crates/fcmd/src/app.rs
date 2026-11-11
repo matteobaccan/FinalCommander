@@ -1031,6 +1031,8 @@ pub enum Event {
         entry: Box<Entry>,
         /// Where the text was found, for `F3` and `F4` to open the file there.
         offset: Option<u64>,
+        /// How well the name matched, for a search by approximate name.
+        score: Option<i32>,
     },
     /// Where a search has got to, so the list can say it is still working.
     FindProgress {
@@ -1931,6 +1933,12 @@ pub struct FindSpec {
     /// megabytes up", `1M-1G` a range, `-4K` an upper bound. Empty means any size. This is
     /// what finds the files worth deleting when a disk fills up.
     pub size: String,
+    /// The mask row is letters to find in order anywhere in a name, and the results come
+    /// best match first (SPEC 06 §1d).
+    pub fuzzy: bool,
+    /// What the file has to say about itself, in the grammar of `fcmd_find::MetaCond`:
+    /// `artist=bowie; year=1977`. Empty means no such condition.
+    pub meta: String,
     pub scope: FindScope,
     pub follow_links: bool,
     /// Directories in the results, not only files.
@@ -1954,6 +1962,8 @@ impl Default for FindSpec {
             hex: false,
             not_containing: false,
             size: String::new(),
+            fuzzy: false,
+            meta: String::new(),
             scope: FindScope::Tree,
             follow_links: false,
             directories: false,
@@ -1975,6 +1985,8 @@ impl FindSpec {
             hex: self.hex,
             not_containing: self.not_containing,
             size: self.size.clone(),
+            fuzzy: self.fuzzy,
+            meta: self.meta.clone(),
             scope: self.scope.as_str().to_string(),
             follow_links: self.follow_links,
             directories: self.directories,
@@ -1993,6 +2005,8 @@ impl FindSpec {
             hex: saved.hex,
             not_containing: saved.not_containing,
             size: saved.size.clone(),
+            fuzzy: saved.fuzzy,
+            meta: saved.meta.clone(),
             scope: FindScope::parse(&saved.scope),
             follow_links: saved.follow_links,
             directories: saved.directories,
@@ -2182,6 +2196,9 @@ pub struct FindView {
     /// Where in each row's file the text was found, beside `rows` and as long: `None` for a
     /// search with no text in it, or one for text that is *not* there.
     pub found_at: Vec<Option<u64>>,
+    /// How well each row's name matched, beside `rows` and as long, for a search by
+    /// approximate name: the rows are kept best first. `None` for a search by mask.
+    pub scores: Vec<Option<i32>>,
     pub cursor: usize,
     pub top: usize,
     /// The directory being scanned right now, while it is running.
@@ -2198,6 +2215,29 @@ pub struct FindView {
 }
 
 impl FindView {
+    /// A hit arrives. One of a search by mask goes at the end, as it was found; one with a
+    /// score goes where its score puts it — after the rows that matched as well or better,
+    /// so that of two equal matches the one found first stays first.
+    ///
+    /// A cursor that has been moved stays on its row when a better match lands above it. A
+    /// cursor still on the first row stays on the first row, which is then the best match so
+    /// far: that is where somebody who has not touched the list is looking.
+    pub fn push(&mut self, path: VPath, entry: Entry, offset: Option<u64>, score: Option<i32>) {
+        let at = match score {
+            Some(score) => self
+                .scores
+                .partition_point(|other| other.is_some_and(|other| other >= score)),
+            None => self.rows.len(),
+        };
+        self.rows.insert(at, (path, entry));
+        self.found_at.insert(at, offset);
+        self.scores.insert(at, score);
+        if self.cursor > 0 && at <= self.cursor {
+            self.cursor += 1;
+            self.top += 1;
+        }
+    }
+
     pub fn move_cursor(&mut self, delta: isize, page: usize) {
         if self.rows.is_empty() {
             self.cursor = 0;
@@ -3605,11 +3645,11 @@ impl App {
                 path,
                 entry,
                 offset,
+                score,
             } => {
                 if let Some(view) = self.find_mut() {
                     if view.id == id {
-                        view.rows.push((path, *entry));
-                        view.found_at.push(offset);
+                        view.push(path, *entry, offset, score);
                     }
                 }
             }
@@ -17932,6 +17972,8 @@ impl App {
             hex: form.toggle_value("find.hex"),
             not_containing: form.toggle_value("find.not"),
             size,
+            fuzzy: form.toggle_value("find.fuzzy"),
+            meta: form.text_value("find.meta").trim().to_string(),
             scope,
             follow_links: form.toggle_value("find.links"),
             directories: form.toggle_value("find.dirs"),
@@ -18124,6 +18166,7 @@ impl App {
             label,
             rows: Vec::new(),
             found_at: Vec::new(),
+            scores: Vec::new(),
             cursor: 0,
             top: 0,
             scanning: None,
@@ -18139,10 +18182,18 @@ impl App {
 
     /// What the results frame says: the mask, the text, and where it looked.
     fn find_label(&self, spec: &FindSpec) -> String {
-        let mut label = spec.mask.clone();
+        // `~` in front of letters that are looked for approximately, as a shell writes "about".
+        let mut label = match spec.fuzzy {
+            true => format!("~{}", spec.mask),
+            false => spec.mask.clone(),
+        };
         if !spec.size.trim().is_empty() {
             label.push_str(" · ");
             label.push_str(spec.size.trim());
+        }
+        if !spec.meta.trim().is_empty() {
+            label.push_str(" · ");
+            label.push_str(spec.meta.trim());
         }
         if !spec.text.is_empty() {
             label.push_str(" · ");
@@ -28649,6 +28700,7 @@ fn field_keeps_history(key: &str) -> bool {
         "find.mask"
             | "find.text"
             | "find.size"
+            | "find.meta"
             | "replace.needle"
             | "replace.with"
             | "search.what"
@@ -30390,6 +30442,7 @@ mod tests {
                 label: "line 30".into(),
                 rows: vec![(VPath::local(&file), entry.clone())],
                 found_at: vec![Some(at)],
+                scores: vec![None],
                 cursor: 0,
                 top: 0,
                 scanning: None,
@@ -30830,6 +30883,7 @@ mod tests {
                 path: VPath::local(format!("/home/mb/{name}")),
                 entry: Box::new(entry(name, fcmd_core::EntryKind::File, 10)),
                 offset: None,
+                score: None,
             });
         }
         assert!(matches!(&app.mode, Mode::Find(v) if v.rows.len() == 2));
@@ -30864,6 +30918,7 @@ mod tests {
             path: VPath::local("/home/mb/deep/one.rs"),
             entry: Box::new(entry("one.rs", fcmd_core::EntryKind::File, 10)),
             offset: None,
+            score: None,
         });
         app.handle_event(Event::FindDone {
             id,
@@ -31129,6 +31184,102 @@ mod tests {
         assert_eq!(app.active, 1);
     }
 
+    // ── approximate names and metadata (SPEC 06 §1d) ────────────────────────────────────────
+
+    #[test]
+    fn the_approximate_box_and_the_metadata_row_reach_the_search_and_are_kept_with_it() {
+        let mut app = app();
+        app.run(Command::ToolFind);
+        set_text(&mut app, "find.mask", "mnrs");
+        set_toggle(&mut app, "find.fuzzy", true);
+        set_text(&mut app, "find.meta", " artist=bowie ");
+        press(&mut app, "F10");
+        match &app.mode {
+            // The frame says the letters are looked for approximately, and what else is asked.
+            Mode::Find(view) => {
+                assert!(view.label.starts_with("~mnrs"), "{}", view.label);
+                assert!(view.label.contains("artist=bowie"), "{}", view.label);
+            }
+            other => panic!("{other:?}"),
+        }
+        match app.take_requests().into_iter().next() {
+            Some(Request::Find { spec, .. }) => {
+                assert!(spec.fuzzy);
+                assert_eq!(spec.meta, "artist=bowie");
+            }
+            other => panic!("{other:?}"),
+        }
+        // The dialog opens on them again, and a kept search carries them.
+        press(&mut app, "Esc");
+        press(&mut app, "Esc");
+        app.run(Command::ToolFind);
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(form.toggle_value("find.fuzzy"));
+        assert_eq!(form.text_value("find.meta"), "artist=bowie");
+        let kept = app.last_find.to_saved("songs");
+        assert!(kept.fuzzy);
+        assert_eq!(kept.meta, "artist=bowie");
+        assert_eq!(FindSpec::from_saved(&kept), app.last_find);
+    }
+
+    #[test]
+    fn approximate_results_are_kept_best_first_as_they_arrive() {
+        let mut app = app();
+        let cwd = app.panel().cwd.clone();
+        app.run(Command::ToolFind);
+        set_toggle(&mut app, "find.fuzzy", true);
+        press(&mut app, "F10");
+        let id = match &app.mode {
+            Mode::Find(view) => view.id,
+            other => panic!("{other:?}"),
+        };
+        let hit = |app: &mut App, name: &str, score: i32| {
+            app.handle_event(Event::FindHit {
+                id,
+                path: cwd.join(name),
+                entry: Box::new(entry(name, fcmd_core::EntryKind::File, 1)),
+                offset: None,
+                score: Some(score),
+            });
+        };
+        let order = |app: &App| -> Vec<String> {
+            match &app.mode {
+                Mode::Find(view) => view.rows.iter().map(|(p, _)| p.display_name()).collect(),
+                other => panic!("{other:?}"),
+            }
+        };
+        hit(&mut app, "middling", 50);
+        hit(&mut app, "worst", 10);
+        hit(&mut app, "best", 90);
+        assert_eq!(order(&app), ["best", "middling", "worst"]);
+        // Nobody has touched the list: the cursor is on the best match so far.
+        assert!(matches!(&app.mode, Mode::Find(v) if v.cursor == 0));
+
+        // Of two that match equally well, the one found first stays first.
+        hit(&mut app, "middling too", 50);
+        assert_eq!(order(&app), ["best", "middling", "middling too", "worst"]);
+
+        // A cursor somebody moved stays on its row when a better match lands above it.
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        hit(&mut app, "better still", 95);
+        match &app.mode {
+            Mode::Find(view) => {
+                assert_eq!(view.rows[view.cursor].0.display_name(), "middling too");
+                assert_eq!(view.rows.len(), view.scores.len());
+                assert_eq!(view.rows.len(), view.found_at.len());
+            }
+            other => panic!("{other:?}"),
+        }
+        // And one that lands below it leaves it where it is.
+        hit(&mut app, "last", 1);
+        assert!(
+            matches!(&app.mode, Mode::Find(v) if v.rows[v.cursor].0.display_name() == "middling too")
+        );
+    }
+
     #[test]
     fn enter_on_a_result_goes_to_the_file() {
         let mut app = app();
@@ -31143,6 +31294,7 @@ mod tests {
             path: VPath::local("/home/mb/deep/one.rs"),
             entry: Box::new(entry("one.rs", fcmd_core::EntryKind::File, 10)),
             offset: None,
+            score: None,
         });
         press(&mut app, "Enter");
         assert!(matches!(app.mode, Mode::Normal));

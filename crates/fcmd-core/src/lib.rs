@@ -13,6 +13,7 @@ pub mod diff;
 pub mod entry;
 pub mod error;
 pub mod filter;
+pub mod fuzzy;
 pub mod git;
 pub mod listing;
 pub mod longpath;
@@ -32,6 +33,7 @@ pub use filter::{
     default_groups, parse_size, AttrConditions, AttrState, DateCondition, DateRange, Filter,
     FilterError, Groups, HardLinks, KindFilter, MaskSet, SizeRange, TimeField,
 };
+pub use fuzzy::Fuzzy;
 pub use listing::{Listing, Totals};
 pub use longpath::{is_long, os_path};
 pub use selection::{MaskScope, Selection};

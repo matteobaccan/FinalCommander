@@ -1784,3 +1784,5 @@ find-saved-title = Gespeicherte Suchen — Enter öffnet, F4 bearbeitet, Entf ve
 find-saved-running = suche nach { $name }…
 find-saved-gone = Suche { $name } vergessen
 find-loaded = Suche { $name } geladen
+find-fuzzy = Ungefährer Name: die Buchstaben oben, in dieser Reihenfolge, bester Treffer zuerst
+find-meta = Metadaten (artist=bowie; camera=)

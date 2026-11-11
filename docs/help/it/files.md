@@ -370,6 +370,23 @@ si riempie: `100M` significa "da cento megabyte in su", `1M-1G` un intervallo, `
 quello che è più piccolo di quattro kilobyte. Lasciala vuota per qualunque dimensione. `K`, `M`,
 `G` e `T` sono potenze di 1024, come in ogni altro punto del programma.
 
+**Quando il nome lo ricordi solo a metà**, spunta *Nome approssimato*: la riga della maschera
+prende allora delle lettere invece di una maschera e trova ogni nome che le contiene in
+quell'ordine — `mnrs` trova `main.rs`, e `test app` trova `app_tests.rs`, perché ogni parola
+deve solo esserci da qualche parte. L'elenco arriva con il risultato migliore per primo: le
+lettere vicine prima di quelle sparse, l'inizio di una parola prima del mezzo, un nome corto
+prima di uno lungo.
+
+**La riga dei metadati** trova un file da quello che dice di sé — esattamente quello che `F11`
+mostra nel visualizzatore: la fotocamera e la data di una fotografia, l'artista e l'album di
+una canzone, l'autore e il titolo di un PDF o di un documento d'ufficio, la versione di un
+programma. Scrivi `campo=valore`: `artist=bowie`, `model=canon`, `author=rossi`. Entrambi i
+lati sono cercati ovunque e senza distinguere maiuscole e minuscole. Ometti il campo per
+guardare in ogni riga (`=bowie`, o solo `bowie`), ometti il valore per chiedere soltanto se il
+file ha una riga così (`gps=`), e metti `;` fra più condizioni che devono valere tutte
+(`artist=bowie; year=1977`). `format=` chiede che tipo di file è: `format=jpeg`. Si combina
+con la maschera, la dimensione e il testo come tutto il resto del dialogo.
+
 **Una ricerca che fai ogni settimana si può salvare.** `F2` nel dialogo chiede un nome e
 salva tutta la ricerca — ogni riga, e la cartella in cui stava per guardare. `F9` nel dialogo
 elenca quelle salvate, e lì `Invio` riempie di nuovo il dialogo. Salvare una ricerca con un

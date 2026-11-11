@@ -79,7 +79,7 @@ says what the decision stands on.
 
 | Item | Where | What is left |
 | --- | --- | --- |
-| Find file | `Alt+F7` | From FAR's dialog: a sixth scope, one code page or a chosen set, fuzzy matching, alternate streams, the advanced page (a first-N-bytes limit, result columns in the column grammar), and a new search from the results. |
+| Find file | `Alt+F7` | From FAR's dialog: a sixth scope, one code page or a chosen set, alternate streams, the advanced page (a first-N-bytes limit, result columns in the column grammar), and a new search from the results. |
 | Checksums, split and combine | Files menu | Checksums, splits and joins of something that is not on this machine, which wait on `JobFs::read_chunks` beyond the local filesystem, and the self-joining script. |
 | A queue for jobs | `Alt+Shift+F5` | The queue, the lanes per device, background, pause, reordering and retries are in (0.31.0, SPEC 03 §5). A server's speed limit came in 0.34.0 (`max_kbps`). The journal that lets a copy or a move go on after a crash came in 0.41 (SPEC 03 §5a, `Alt+Shift+F6`). Left: cloning a job; journalling the jobs still waiting in the queue and the chain behind a running one, which a crash loses today; a per-job log kept on disk (feature 3.7). |
 | Disk usage | `Alt+Shift+F3` | A whole tree at once rather than one folder's level, and a treemap (SPEC 06 §12). |
@@ -139,8 +139,7 @@ cannot be, kept so the question is not asked again.
 | --- | --- | --- | --- |
 | Tags, labels, ratings | Opus, File Ninja, Tabbles | Free tags, coloured labels, star ratings and status icons on files, as columns, filters and sort keys | **Parked by the author (11 November 2026): not now.** The study, for when it comes back: extended attributes in Dolphin's (`user.xdg.tags`, `user.baloo.rating`) and the Finder's formats on Linux and macOS, a `descript.ion`-like sidecar on Windows and wherever xattrs are missing, optionally XMP `Rating` inside pictures; no database of our own, which breaks the moment a file moves outside the program. About a release of work. |
 | Indexed search | Opus, File Ninja | Asking an index — Everything and Windows Search, Spotlight (`mdfind`), `plocate` — instead of walking | A source for `Alt+F7`, run as a program |
-| Search on metadata | Wikipedia | EXIF, ID3, document properties as search conditions | Needs the readers the viewer's `F11` already has |
-| Boolean and fuzzy search | Wikipedia | Nested and/or/not over conditions; approximate name matching | The fuzzy half is under *Find file* above |
+| Boolean search | Wikipedia | Nested and/or/not over conditions | The conditions of `Alt+F7` are all *and*-ed today |
 | Metadata panel | superfile, Opus | A side panel showing a file's metadata (EXIF and the like, `exiftool` where present) as the cursor moves | `F11` shows it in the viewer today |
 | Editing metadata | Opus | Writing EXIF/ID3/document fields | Read-only today |
 | What the AI could do next | — | Follow-ups, streaming, cost, words to a command, a commit message, explain this, rename and rewrite proposals, and the larger ideas | The study is `docs/06-ai-study.md`; the author chooses from it |

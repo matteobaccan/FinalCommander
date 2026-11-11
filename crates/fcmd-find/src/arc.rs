@@ -89,6 +89,14 @@ impl<F: FindFs> FindFs for ArcFind<F> {
         Ok(Box::new(Cursor::new(bytes)))
     }
 
+    fn open_at(&self, path: &VPath) -> Option<io::Result<Box<dyn fcmd_view::Source>>> {
+        // An entry of a container has no offsets to go to: it is read whole, by `open`.
+        if path.in_container() {
+            return None;
+        }
+        self.inner.open_at(path)
+    }
+
     fn visit_id(&self, dir: &VPath) -> Option<VisitId> {
         if dir.in_container() {
             // Inside a container the path is the identity: there are no links to go round in

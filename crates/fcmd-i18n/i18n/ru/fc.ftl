@@ -1770,3 +1770,5 @@ find-saved-title = Сохранённые поиски — Enter открыва�
 find-saved-running = поиск { $name }…
 find-saved-gone = поиск { $name } забыт
 find-loaded = поиск { $name } загружен
+find-fuzzy = Приблизительное имя: буквы выше по порядку, лучшее совпадение первым
+find-meta = Метаданные (artist=bowie; camera=)

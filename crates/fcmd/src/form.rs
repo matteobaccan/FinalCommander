@@ -1001,7 +1001,10 @@ impl Form {
         let t = |id: &str| i18n.t(id);
         let fields = vec![
             Field::text("find.mask", t("find-mask"), last.mask.clone()),
+            // Right under the row it changes the meaning of.
+            Field::toggle("find.fuzzy", t("find-fuzzy"), last.fuzzy),
             Field::text("find.size", t("find-size"), last.size.clone()),
+            Field::text("find.meta", t("find-meta"), last.meta.clone()),
             Field::text("find.text", t("find-text"), last.text.clone()),
             Field::toggle("find.case", t("find-case"), last.case_sensitive),
             Field::toggle("find.words", t("find-words"), last.whole_words),

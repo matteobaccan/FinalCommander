@@ -118,6 +118,7 @@ fn run_find(
                 path: hit.path,
                 entry: Box::new(hit.entry),
                 offset: hit.offset,
+                score: hit.score,
             });
         }
         fcmd_find::Event::Scanning(dir) => {
@@ -170,10 +171,17 @@ fn find_hits(
     use fcmd_core::filter::{Filter, MaskSet, SizeRange};
     use fcmd_find::{Content, Needle};
 
-    let masks =
-        MaskSet::parse_with(&spec.mask, groups, spec.case_sensitive).map_err(|e| e.to_string())?;
     let mut filter = Filter::named("find");
-    filter.masks = Some(masks);
+    // Approximately, the row is letters and not a mask: nothing of the mask grammar is read
+    // out of it, and the engine matches the name itself.
+    let fuzzy = spec
+        .fuzzy
+        .then(|| fcmd_core::Fuzzy::new(&spec.mask, spec.case_sensitive));
+    if fuzzy.is_none() {
+        let masks = MaskSet::parse_with(&spec.mask, groups, spec.case_sensitive)
+            .map_err(|e| e.to_string())?;
+        filter.masks = Some(masks);
+    }
     if !spec.size.trim().is_empty() {
         filter.size = Some(SizeRange::parse(&spec.size).map_err(|e| e.to_string())?);
     }
@@ -206,6 +214,8 @@ fn find_hits(
         include_dirs: spec.directories,
         content,
         in_archives: spec.in_archives,
+        fuzzy,
+        meta: Some(fcmd_find::MetaCond::parse(&spec.meta)).filter(|cond| !cond.is_empty()),
     };
 
     // The archive-aware filesystem only when the box is ticked: without it the walk is the
@@ -234,12 +244,19 @@ fn run_find_panel(
     archives: &std::sync::Arc<fcmd_arc::Cache>,
     groups: &fcmd_core::filter::Groups,
 ) {
-    let mut items = Vec::new();
+    let mut found = Vec::new();
     let result = find_hits(&spec, &cancel, archives, groups, &mut |event| {
         if let fcmd_find::Event::Hit(hit) = event {
-            items.push((hit.path, hit.entry));
+            found.push((hit.score, hit.path, hit.entry));
         }
     });
+    // Best match first, for a panel that is not sorted by anything of its own; the sort is
+    // stable, so a search by mask keeps the order of the walk.
+    found.sort_by_key(|(score, _, _)| std::cmp::Reverse(*score));
+    let items = found
+        .into_iter()
+        .map(|(_, path, entry)| (path, entry))
+        .collect();
     // Stopped because the panel went somewhere else or asked again: nobody is waiting.
     if cancel.is_cancelled() {
         return;
@@ -7973,6 +7990,76 @@ dir_attr = "D"
         serve(&mut app);
         assert!(names(&app).is_empty());
         assert!(app.status_error, "{}", app.status);
+    }
+
+    /// A search by approximate name through the real engine: the letters in order, and the
+    /// list best match first whatever order the walk met the files in.
+    #[test]
+    fn an_approximate_search_finds_by_letters_and_ranks_what_it_finds() {
+        let root = tempfile::tempdir().unwrap();
+        let src = root.path().join("src");
+        std::fs::create_dir_all(src.join("deep")).unwrap();
+        for name in ["my_admin.rs", "domain.rs", "deep/main.rs", "other.txt"] {
+            std::fs::write(src.join(name), b"x").unwrap();
+        }
+        let mut app = app_on(&src, root.path());
+        serve(&mut app);
+        app.last_find = app::FindSpec {
+            mask: "main".into(),
+            fuzzy: true,
+            ..app::FindSpec::default()
+        };
+        app.run(FcCommand::ToolFind);
+        key(&mut app, "F10");
+        serve(&mut app);
+        let names: Vec<String> = match &app.mode {
+            app::Mode::Find(view) => view.rows.iter().map(|(p, _)| p.display_name()).collect(),
+            _ => panic!("{}", app.status),
+        };
+        assert_eq!(names, ["main.rs", "domain.rs", "my_admin.rs"]);
+    }
+
+    /// A condition on what a file says about itself, through the real engine and the
+    /// viewer's own readers: the picture whose text chunk says so, and nothing else.
+    #[test]
+    fn a_metadata_condition_finds_the_file_that_says_so_about_itself() {
+        fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], body: &[u8]) {
+            out.extend_from_slice(&(body.len() as u32).to_be_bytes());
+            out.extend_from_slice(kind);
+            out.extend_from_slice(body);
+            out.extend_from_slice(&[0; 4]);
+        }
+        let png = |author: &str| {
+            let mut out = b"\x89PNG\r\n\x1a\n".to_vec();
+            let mut header = 4u32.to_be_bytes().to_vec();
+            header.extend_from_slice(&3u32.to_be_bytes());
+            header.extend_from_slice(&[8, 2, 0, 0, 0]);
+            chunk(&mut out, b"IHDR", &header);
+            chunk(&mut out, b"tEXt", format!("Author\0{author}").as_bytes());
+            chunk(&mut out, b"IEND", &[]);
+            out
+        };
+        let root = tempfile::tempdir().unwrap();
+        let pics = root.path().join("pics");
+        std::fs::create_dir_all(&pics).unwrap();
+        std::fs::write(pics.join("ada.png"), png("Ada Lovelace")).unwrap();
+        std::fs::write(pics.join("charles.png"), png("Charles Babbage")).unwrap();
+        std::fs::write(pics.join("notes.txt"), b"Author: Ada Lovelace").unwrap();
+
+        let mut app = app_on(&pics, root.path());
+        serve(&mut app);
+        app.run(FcCommand::ToolFind);
+        match &mut app.mode {
+            app::Mode::Form(form) => form.set_text("find.meta", "author=ada".to_string()),
+            other => panic!("{other:?}"),
+        }
+        key(&mut app, "F10");
+        serve(&mut app);
+        let names: Vec<String> = match &app.mode {
+            app::Mode::Find(view) => view.rows.iter().map(|(p, _)| p.display_name()).collect(),
+            _ => panic!("{}", app.status),
+        };
+        assert_eq!(names, ["ada.png"]);
     }
 
     /// The whole chain through the real engine: a tree on disk, a search by mask and by text,

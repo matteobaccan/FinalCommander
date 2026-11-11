@@ -3284,6 +3284,12 @@ pub struct SavedSearch {
     pub not_containing: bool,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub size: String,
+    /// The mask is letters to find in order, not a mask (SPEC 06 §1d).
+    #[serde(default)]
+    pub fuzzy: bool,
+    /// The condition on what a file says about itself: `artist=bowie; year=1977`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub meta: String,
     /// `tree`, `panel`, `selection`, `root` or `other`, as the dialog's row says it.
     #[serde(default)]
     pub scope: String,

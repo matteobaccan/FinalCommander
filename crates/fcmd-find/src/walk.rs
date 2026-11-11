@@ -3,11 +3,12 @@
 use std::collections::HashSet;
 use std::time::SystemTime;
 
-use fcmd_core::{CancelToken, Entry, EntryKind, Error, Filter, VPath};
+use fcmd_core::{CancelToken, Entry, EntryKind, Error, Filter, Fuzzy, VPath};
 use fcmd_view::Codepage;
 
 use crate::content::{Content, ContentError, Scanned, Scanner};
 use crate::fs::{FindFs, VisitId};
+use crate::meta::MetaCond;
 
 /// What to look for.
 ///
@@ -39,6 +40,13 @@ pub struct Query {
     /// in it is matched and read like anything else. Off by default — opening every container
     /// of a whole drive is a search of a different size, and the user asks for it.
     pub in_archives: bool,
+    /// Match the name approximately — the letters of this pattern in order, anywhere in the
+    /// name — instead of by the filter's masks, which the caller then leaves empty. Every
+    /// hit carries how well it matched, for the caller to rank by (SPEC 06 §1d).
+    pub fuzzy: Option<Fuzzy>,
+    /// What the file has to say about itself: a condition on the rows the viewer's `F11`
+    /// reads out of it. A directory says nothing, so this excludes every directory.
+    pub meta: Option<MetaCond>,
 }
 
 impl Query {
@@ -85,6 +93,9 @@ pub struct Hit {
     pub offset: Option<u64>,
     /// Which code page the needle was found in, for a search over several of them.
     pub codepage: Option<Codepage>,
+    /// How well the name matched an approximate pattern, higher being better. `None` for a
+    /// search by mask, where a name matches or does not.
+    pub score: Option<i32>,
 }
 
 /// Why a path is not in the results although it might have belonged there. Reported rather
@@ -240,6 +251,30 @@ pub fn find(
             if dirlike && !query.include_dirs {
                 continue;
             }
+            // The cheap conditions first: the name costs nothing, what the file says about
+            // itself costs a read of its headers, and its text costs the whole of it.
+            let score = match &query.fuzzy {
+                Some(pattern) => match pattern.score(&entry.name_str()) {
+                    Some(score) => Some(score),
+                    None => continue,
+                },
+                None => None,
+            };
+            if let Some(cond) = query.meta.as_ref().filter(|cond| !cond.is_empty()) {
+                // Only what is plainly a file: a directory has nothing to read, and a pipe
+                // or a device would be read for ever.
+                if entry.kind != EntryKind::File {
+                    continue;
+                }
+                match cond.matches_file(fs, &path) {
+                    Ok(true) => {}
+                    Ok(false) => continue,
+                    Err(e) => {
+                        report_problem(&mut stats, on, path, Trouble::File, e.to_string());
+                        continue;
+                    }
+                }
+            }
 
             match &scanner {
                 // A directory has no bytes, whether we arrived at it by its own name or
@@ -273,6 +308,7 @@ pub fn find(
                                     entry,
                                     offset,
                                     codepage,
+                                    score,
                                 }));
                             }
                         }
@@ -285,6 +321,7 @@ pub fn find(
                         entry,
                         offset: None,
                         codepage: None,
+                        score,
                     }));
                 }
             }
@@ -769,6 +806,87 @@ mod tests {
         query.follow_links = true;
         let (events, _) = run(&query);
         assert_eq!(names(&events), ["inside.txt"]);
+    }
+
+    #[test]
+    fn an_approximate_pattern_finds_names_by_their_letters_and_says_how_well() {
+        let dir = tree();
+        let mut query = Query::under(VPath::local(dir.path()));
+        query.fuzzy = Some(Fuzzy::new("trs", false));
+        let (events, _) = run(&query);
+        // `three.rs` has the letters in order; `two.txt` has no `r` after its `t`… and
+        // `one.rs` no `t` at all.
+        assert_eq!(names(&events), ["three.rs"]);
+        let scored = events.iter().all(|e| match e {
+            Event::Hit(hit) => hit.score.is_some(),
+            _ => true,
+        });
+        assert!(scored, "a hit of an approximate search carries its score");
+
+        // And the better match scores higher, which is what the caller ranks by.
+        query.fuzzy = Some(Fuzzy::new("o", false));
+        let (events, _) = run(&query);
+        let score_of = |name: &str| {
+            events
+                .iter()
+                .find_map(|e| match e {
+                    Event::Hit(hit) if hit.path.display_name() == name => hit.score,
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("{name} was not found"))
+        };
+        assert!(score_of("one.rs") > score_of("two.txt"));
+
+        // A search by mask has nothing to rank by.
+        let (events, _) = run(&masked(dir.path(), "*.rs"));
+        assert!(events.iter().all(|e| match e {
+            Event::Hit(hit) => hit.score.is_none(),
+            _ => true,
+        }));
+    }
+
+    #[test]
+    fn a_condition_on_what_a_file_says_about_itself_reads_only_files_and_keeps_the_rest_out() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        fs::create_dir(root.join("author")).unwrap();
+        fs::write(
+            root.join("ada.png"),
+            crate::meta::tests::png_with_text("Author", "Ada Lovelace"),
+        )
+        .unwrap();
+        fs::write(
+            root.join("author").join("charles.png"),
+            crate::meta::tests::png_with_text("Author", "Charles Babbage"),
+        )
+        .unwrap();
+        fs::write(root.join("notes.txt"), b"Author: Ada Lovelace").unwrap();
+
+        let mut query = Query::under(VPath::local(root));
+        // Directories are asked for too, and one of them is even called `author`: it still
+        // says nothing about itself.
+        query.include_dirs = true;
+        query.meta = Some(MetaCond::parse("author=ada"));
+        let (events, stats) = run(&query);
+        assert_eq!(names(&events), ["ada.png"]);
+        assert_eq!(stats.problems, 0);
+
+        query.meta = Some(MetaCond::parse("author="));
+        let (events, _) = run(&query);
+        assert_eq!(names(&events), ["ada.png", "charles.png"]);
+
+        // With the mask and the text conditions, all of them have to hold.
+        query.meta = Some(MetaCond::parse("format=png"));
+        query.filter = Filter::from_masks(MaskSet::parse("c*").unwrap());
+        let (events, _) = run(&query);
+        assert_eq!(names(&events), ["charles.png"]);
+
+        // A condition that asks for nothing is no condition.
+        query.filter = Filter::default();
+        query.include_dirs = false;
+        query.meta = Some(MetaCond::parse(" ; "));
+        let (events, _) = run(&query);
+        assert_eq!(names(&events), ["ada.png", "charles.png", "notes.txt"]);
     }
 
     #[test]

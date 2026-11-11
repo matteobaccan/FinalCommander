@@ -1722,3 +1722,5 @@ find-saved-title = 已保存的搜索 — Enter 打开，F4 编辑，Del 删除
 find-saved-running = 正在搜索 { $name }…
 find-saved-gone = 已删除搜索 { $name }
 find-loaded = 已载入搜索 { $name }
+find-fuzzy = 近似名称：上面的字母按顺序出现，最佳匹配在前
+find-meta = 元数据 (artist=bowie; camera=)

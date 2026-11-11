@@ -1784,3 +1784,5 @@ find-saved-title = Búsquedas guardadas — Intro abre, F4 edita, Supr olvida
 find-saved-running = buscando { $name }…
 find-saved-gone = búsqueda { $name } olvidada
 find-loaded = búsqueda { $name } cargada
+find-fuzzy = Nombre aproximado: las letras de arriba, en orden, el mejor primero
+find-meta = Metadatos (artist=bowie; camera=)

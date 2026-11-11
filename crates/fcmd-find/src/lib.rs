@@ -46,9 +46,11 @@
 mod arc;
 mod content;
 mod fs;
+mod meta;
 mod walk;
 
 pub use arc::{ArcFind, BIGGEST};
 pub use content::{Content, ContentError, Needle};
 pub use fs::{FindFs, VisitId};
+pub use meta::MetaCond;
 pub use walk::{find, Event, Hit, Problem, Query, Stats, Trouble};

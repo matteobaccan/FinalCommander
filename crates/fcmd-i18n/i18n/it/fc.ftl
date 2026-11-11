@@ -1785,3 +1785,5 @@ find-saved-title = Ricerche salvate — Invio apre, F4 modifica, Canc elimina
 find-saved-running = ricerca di { $name }…
 find-saved-gone = ricerca { $name } eliminata
 find-loaded = ricerca { $name } caricata
+find-fuzzy = Nome approssimato: le lettere qui sopra, in ordine, il migliore per primo
+find-meta = Metadati (artist=bowie; camera=)

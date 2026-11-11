@@ -3975,6 +3975,18 @@ mod tests {
         app.run(fcmd_cmd::Command::ToolFind);
         let text = frame(&mut app, 100, 30);
         assert!(text.contains("F2 keeps this search under a name"), "{text}");
+        // The whole dialog still fits the smallest screen anybody runs: its first row, the
+        // rows this dialog grew by, and its buttons.
+        let small = frame(&mut app, 80, 24);
+        for part in [
+            "File mask",
+            "Approximate name",
+            "Metadata",
+            "Inside archives",
+            "Cancel",
+        ] {
+            assert!(small.contains(part), "no {part:?} in\n{small}");
+        }
 
         app.searches.push(fcmd_config::SavedSearch {
             name: "big logs".into(),

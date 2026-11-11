@@ -356,6 +356,22 @@ hundred megabytes up", `1M-1G` a range, `-4K` everything smaller than four kilob
 empty for any size. `K`, `M`, `G` and `T` are powers of 1024, as everywhere else in the
 program.
 
+**When you only half remember the name**, tick *Approximate name*: the mask row then takes
+letters instead of a mask and finds every name that has them in that order — `mnrs` finds
+`main.rs`, and `test app` finds `app_tests.rs`, because each word only has to be in there
+somewhere. The list comes best match first: letters side by side before letters scattered,
+the start of a word before the middle of one, a short name before a long one.
+
+**The metadata row** finds a file by what it says about itself — exactly what `F11` shows
+you in the viewer: the camera and the date of a photograph, the artist and the album of a
+song, the author and the title of a PDF or an office document, the version of a program.
+Write `field=value`: `artist=bowie`, `model=canon`, `author=rossi`. Both sides are matched
+anywhere and in any case. Leave the field out to look in every row (`=bowie`, or just
+`bowie`), leave the value out to ask only whether the file has such a row (`gps=`), and put
+`;` between several that must all hold (`artist=bowie; year=1977`). `format=` asks what
+kind of file it is: `format=jpeg`. It combines with the mask, the size and the text like
+everything else in the dialog.
+
 **A search you run every week can be kept.** `F2` in the dialog asks for a name and keeps
 the whole of it — every row, and the folder it was about to look in. `F9` in the dialog
 lists the ones you kept, and `Enter` there fills the dialog in again. Keeping a search

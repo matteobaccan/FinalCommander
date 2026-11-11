@@ -30,6 +30,15 @@ pub trait FindFs: Send + Sync {
     /// how long the file claims to be, so a stream with no length at all is enough.
     fn open(&self, path: &VPath) -> io::Result<Box<dyn Read + Send>>;
 
+    /// Open a file for reading at any offset, for the readers that go straight to the few
+    /// places they need — the metadata condition (SPEC 06 §1d). `None`, which is the
+    /// default, means this provider cannot, and the engine reads the stream from
+    /// [`open`](FindFs::open) instead, up to a limit.
+    fn open_at(&self, path: &VPath) -> Option<io::Result<Box<dyn fcmd_view::Source>>> {
+        let _ = path;
+        None
+    }
+
     /// Identity of a directory, with links followed. `None` means "this provider has no
     /// answer", and the walk falls back to the path it arrived by.
     fn visit_id(&self, dir: &VPath) -> Option<VisitId> {
@@ -69,6 +78,16 @@ impl FindFs for LocalVfs {
             ));
         }
         Ok(Box::new(std::fs::File::open(path.as_path())?))
+    }
+
+    fn open_at(&self, path: &VPath) -> Option<io::Result<Box<dyn fcmd_view::Source>>> {
+        if !path.is_local() {
+            return None;
+        }
+        Some(
+            fcmd_view::FileSource::open(path.as_path())
+                .map(|source| Box::new(source) as Box<dyn fcmd_view::Source>),
+        )
     }
 
     fn visit_id(&self, dir: &VPath) -> Option<VisitId> {
