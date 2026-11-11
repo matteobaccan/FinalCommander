@@ -8,6 +8,24 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Secrets are masked before a question goes to an AI.** Keys, tokens, private key blocks,
+  passwords in addresses and `.env`-style secrets become `[REDACTED:kind]` in everything sent —
+  the question, the files, the earlier turns. The send dialog says how many, `F3` there shows
+  exactly what goes, and the status line and the answer file say it afterwards. On by default;
+  `F5` in the AI panel switches it; `[ai_guard] redact`, and `patterns` for your own regular
+  expressions.
+- **Local only.** `F6` in the AI panel (`[ai_guard] local_only`, with `local_hosts` for your
+  own machines) refuses every service that is not on this machine — a question, its files and
+  the login alike — before anything is sent.
+- **Rename from words.** `Ctrl+Alt+U` on selected files, or inside the multi-rename dialog,
+  takes an instruction ("dates to ISO, lowercase"); the model's pattern fills the dialog, the
+  preview shows every name, and only `OK` renames. Only the instruction and up to twenty names
+  are sent.
+- **Rewrite a block.** `Ctrl+Alt+W` in the editor has the marked block rewritten as told; the
+  result opens as a diff against the block, `Enter` puts it in as one undo step, `Esc` leaves
+  it.
+- **Why did that fail?** `Ctrl+Alt+X` in the panels after a command that exited non-zero asks
+  an AI, sending the command, its exit code and the last 200 lines it printed.
 - **Saved searches, and a search opened as a panel.** In the `Alt+F7` dialog `F2` keeps the
   search under a name and `F9` lists the kept ones to fill the dialog in. `Alt+Shift+F7`,
   *Commands → Saved searches* and a row in `Alt+F1`/`Alt+F2` list them too: `Enter` opens one
@@ -138,6 +156,10 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **Asking the AI from the editor lost the editor.** `Ctrl+Alt+X` there replaced it, unsaved
+  changes included; the question is now asked over the parked editor. A full screen opened over
+  a parked editor — the "What changed" comparison before overwriting — is drawn instead of the
+  editor behind it.
 - **Answering "no" to discarding changes in the hex editor lost them.** The question replaced the
   editor instead of parking it, so the bytes went with it whatever the answer. It is parked now,
   and "no" (or `Esc`) brings it back as it was.
