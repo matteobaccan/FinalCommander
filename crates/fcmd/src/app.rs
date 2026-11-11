@@ -5151,6 +5151,7 @@ impl App {
             KeyCode::Enter if confirm.button != 0 => {
                 self.mode = Mode::Normal;
                 self.restore_editor();
+                self.restore_hex();
                 return;
             }
             _ => {}
@@ -5181,7 +5182,7 @@ impl App {
                     ConfirmAction::RunPlugin(which) => self.start_plugin_command(which),
                     ConfirmAction::Service { id, action } => self.start_service_action(id, action),
                     ConfirmAction::DiscardHex => {
-                        // The mode is already Normal: the bytes go with it.
+                        self.hex_parked = None;
                         self.leave_screen();
                         self.read_panel(0);
                         self.read_panel(1);
@@ -5259,6 +5260,7 @@ impl App {
                 self.mode = Mode::Normal;
                 // A refused confirmation gives the editor back, not a lost buffer.
                 self.restore_editor();
+                self.restore_hex();
             }
             _ => {}
         }
@@ -5650,6 +5652,8 @@ impl App {
         let body = self
             .i18n
             .t_args("editor-discard-body", &[("name", name.into())]);
+        // Parked, so that "no" gives the bytes back rather than dropping them with the mode.
+        self.park_hex();
         self.mode = Mode::Confirm(Confirm {
             title,
             lines: vec![body],
@@ -35662,6 +35666,28 @@ run = ["echo one", "echo two", "echo three"]
         let editor = app.mode.hex_mut().unwrap();
         assert_eq!(editor.cursor, 3);
         assert_eq!(editor.read(0, 8), b"ABCDEFGH");
+    }
+
+    /// Closing a changed hex buffer asks first, and "no" gives the bytes back.
+    #[test]
+    fn saying_no_to_discarding_the_hex_edits_keeps_them() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bytes.bin");
+        std::fs::write(&path, b"abcd").unwrap();
+        let mut app = app();
+        app.open_hex(&path);
+        app.mode.hex_mut().unwrap().set_byte(0, b'z');
+        app.close_hex();
+        assert!(matches!(&app.mode, Mode::Confirm(c) if c.action == ConfirmAction::DiscardHex));
+        press(&mut app, "Esc");
+        let editor = app.mode.hex_mut().expect("the hex editor is back");
+        assert!(editor.modified());
+        assert_eq!(editor.byte(0), Some(b'z'));
+        // And yes does drop them.
+        app.close_hex();
+        press(&mut app, "Enter");
+        assert!(app.mode.is_normal(), "{:?}", app.mode);
+        assert!(app.hex_parked.is_none());
     }
 
     /// Search and replace in the hex editor, through the keys and the dialogs a user walks:

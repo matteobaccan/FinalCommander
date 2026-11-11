@@ -106,6 +106,9 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **Answering "no" to discarding changes in the hex editor lost them.** The question replaced the
+  editor instead of parking it, so the bytes went with it whatever the answer. It is parked now,
+  and "no" (or `Esc`) brings it back as it was.
 - A list opened from the editor — the characters (`Alt+Shift+C`), the kept replacements
   (`Alt+Shift+F7`) — was not drawn over it: it answered keys nobody could see.
 - A command given right after typing was undone together with the typing, and `Backspace`
