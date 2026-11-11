@@ -29125,7 +29125,10 @@ impl App {
                 // The same moment counts for the frequent folders: going somewhere is what
                 // makes it a folder one goes to. Walking back and forth through the history
                 // is not going anywhere new, and is not counted, as it is not recorded.
-                self.visits.visit(&text, now);
+                // One folder is one row whatever way it was spelled: a path joined with `/`
+                // on Windows and the same path read back from the list are one place.
+                self.visits
+                    .visit(&self.panels[index].cwd.normalised().to_string(), now);
             }
             return true;
         }
@@ -32885,7 +32888,11 @@ mod tests {
         // Three visits, two, one — and not the folder the panel is in already.
         assert_eq!(
             rows,
-            [work.to_string(), docs.to_string(), once.to_string()],
+            [
+                work.normalised().to_string(),
+                docs.normalised().to_string(),
+                once.normalised().to_string()
+            ],
             "{rows:?}"
         );
         assert_eq!(pick.cursor, 0, "the cursor starts on the best");
@@ -32897,11 +32904,11 @@ mod tests {
         };
         let narrowed: Vec<&str> = pick.rows.iter().map(|r| r.value.as_str()).collect();
         assert!(
-            narrowed.contains(&docs.to_string().as_str()),
+            narrowed.contains(&docs.normalised().to_string().as_str()),
             "{narrowed:?}"
         );
         assert!(
-            narrowed.contains(&once.to_string().as_str()),
+            narrowed.contains(&once.normalised().to_string().as_str()),
             "{narrowed:?}"
         );
         press(&mut app, "n");
@@ -32910,7 +32917,7 @@ mod tests {
             panic!("{:?}", app.mode)
         };
         assert_eq!(pick.rows.len(), 1);
-        assert_eq!(pick.rows[0].value, once.to_string());
+        assert_eq!(pick.rows[0].value, once.normalised().to_string());
 
         // `Enter` goes there, and going there counts.
         press(&mut app, "Enter");
@@ -32920,7 +32927,7 @@ mod tests {
         assert_eq!(
             ranked
                 .iter()
-                .find(|v| v.path == once.to_string())
+                .find(|v| v.path == once.normalised().to_string())
                 .unwrap()
                 .count,
             2
@@ -32943,7 +32950,10 @@ mod tests {
             panic!("{:?}", app.mode)
         };
         assert_eq!(pick.rows.len(), 1);
-        assert_eq!(pick.rows[0].value, home.join("beta").to_string());
+        assert_eq!(
+            pick.rows[0].value,
+            home.join("beta").normalised().to_string()
+        );
         assert!(!app
             .visits
             .ranked(0)
