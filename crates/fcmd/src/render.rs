@@ -4282,8 +4282,144 @@ mod tests {
         press(&mut app, "F1");
         write("help", &shot(&mut app, 100, 30));
 
+        // ---- every theme on the same scene: the panels under a pulled-down menu, and a
+        //      Pascal unit in the viewer with the lines down its blocks ----------------------
+        let delphi = work.parent().expect("a parent").join("delphi");
+        std::fs::create_dir_all(delphi.join("__history")).expect("the project");
+        for (name, text) in [
+            ("Unit1.pas", SAMPLE_PASCAL),
+            (
+                "Unit1.dfm",
+                "object Form1: TForm1\n  Caption = 'Orders'\nend\n",
+            ),
+            ("Project1.dpr", "program Project1;\nbegin\nend.\n"),
+            ("Project1.dproj", "<Project/>\n"),
+            ("Orders.inc", "{$DEFINE TRACE}\n"),
+            ("Project1.res", "res"),
+            ("Unit1.dcu", "dcu"),
+        ] {
+            let at = delphi.join(name);
+            std::fs::write(&at, text).expect("a project file");
+            std::fs::File::options()
+                .write(true)
+                .open(&at)
+                .and_then(|f| f.set_modified(when((name.len() % 5) as u64).expect("a time")))
+                .expect("the date is set");
+        }
+        for dir in ["__history", ""] {
+            if let Ok(f) = std::fs::File::open(delphi.join(dir)) {
+                let _ = f.set_modified(when(4).expect("a time"));
+            }
+        }
+        for (id, _) in fcmd_ui::BUILTIN_THEMES {
+            let mut scene = app_on_disk(&delphi);
+            scene.theme = Theme::builtin(id).expect("a built-in theme");
+            scene.cfg.panel.status_line = true;
+            scene.cfg.ui.menu_bar = true;
+            for name in ["Unit1.dfm", "Orders.inc"] {
+                let row = scene.panels[0].listing.row_of_name(name).expect("the file");
+                let id = scene.panels[0].listing.row(row).expect("a row").id;
+                scene.panels[0].selection.set(id, true);
+            }
+            scene.panels[0].cursor = scene.panels[0]
+                .listing
+                .row_of_name("Unit1.pas")
+                .expect("the unit");
+            // The last menu, the right panel's, so the left one shows its marked files.
+            press(&mut scene, "F9");
+            press(&mut scene, "Left");
+            press(&mut scene, "Down");
+            let top = shot(&mut scene, 100, 22);
+            press(&mut scene, "Esc");
+            press(&mut scene, "Esc");
+            press(&mut scene, "F3");
+            // Down to the nested blocks, where the lines are worth seeing.
+            for _ in 0..30 {
+                press(&mut scene, "Down");
+            }
+            let bottom = shot(&mut scene, 100, 24);
+            press(&mut scene, "Esc");
+            // One picture of the two, the one above the other.
+            let mut both = Buffer::new(100, 46);
+            for (from, y0) in [(&top, 0u16), (&bottom, 22)] {
+                for y in 0..from.height() {
+                    for x in 0..from.width() {
+                        if let (Some(c), Some(to)) = (from.get(x, y), both.cell_mut(x, y + y0)) {
+                            *to = *c;
+                        }
+                    }
+                }
+            }
+            write(&format!("theme-{id}"), &both);
+        }
+
         let _ = std::fs::remove_dir_all(work.parent().expect("a parent"));
     }
+
+    /// A Delphi unit for the theme pictures: a class, a nested `try`, a `case`, a `repeat`,
+    /// strings, numbers, a directive and comments of both kinds.
+    const SAMPLE_PASCAL: &str = r#"unit Unit1;
+
+{$MODE DELPHI}
+
+interface
+
+uses
+  System.SysUtils, System.Classes;
+
+type
+  TOrder = class(TObject)
+  private
+    FTotal: Currency;
+    FLines: TStringList;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function Total: Currency;
+  end;
+
+implementation
+
+{ TOrder }
+
+constructor TOrder.Create;
+begin
+  inherited Create;
+  FLines := TStringList.Create;
+  FTotal := 0;
+end;
+
+function TOrder.Total: Currency;
+var
+  I: Integer;
+begin
+  Result := 0;
+  try
+    for I := 0 to FLines.Count - 1 do
+    begin
+      case FLines[I][1] of
+        '+': Result := Result + StrToCurr(Copy(FLines[I], 2, MaxInt));
+        '-': Result := Result - StrToCurr(Copy(FLines[I], 2, MaxInt));
+      end;
+    end;
+  except
+    // A line that is not a number is left out.
+    on E: EConvertError do
+      Result := FTotal;
+  end;
+  repeat
+    Dec(I);
+  until I < $10;
+end;
+
+destructor TOrder.Destroy;
+begin
+  FLines.Free;
+  inherited;
+end;
+
+end.
+"#;
 
     /// A small x86-64 ELF with two functions and their symbols, for the hex view and the
     /// disassembler: `square` squares its argument and adds what `helper` returns.

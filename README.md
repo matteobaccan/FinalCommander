@@ -362,17 +362,45 @@ commander that promises the same keys on three platforms cannot fight a system c
 own name. `fcmd` is free everywhere, it is what the archives, the configuration file and the
 crates are all called, and it is four letters. Please do not "fix" it to something shorter.
 
-## Themes and languages
+## Themes
 
-Nine themes are compiled in — `commander` (the classic blue, default), `far` (FAR's own
-colours), `black` (black only, light text), `white`, `matrix`, `tron`, `blade`, `github-dark`
-(GitHub's dark terminal colours) and `delphi-dark-2027` (the Delphi IDE's dark theme) — and `[[theme]]` blocks in `fcmd.toml` are read at startup,
-hot-reloaded, may `inherit` a built-in one, and replace a built-in with the same id.
+Nine themes are compiled in, every one of them on the same scene below: the panels under a
+pulled-down menu, and a Delphi unit in the viewer with the lines the IDE draws down its blocks.
+
+- `commander` — **Commander**: the classic blue of the orthodox commanders, the default.
+- `far` — **FAR**: FAR Manager's own palette, from its source.
+- `black` — **Black**: black behind everything, light text, the cursor bold and underlined.
+- `white` — **White**: a light page for a light room.
+- `matrix` — **Matrix**: green on black.
+- `tron` — **Tron**: cyan lines on a dark blue night.
+- `blade` — **Blade**: amber and teal in the rain.
+- `github-dark` — **GitHub Dark**: GitHub's dark terminal colours.
+- `delphi-dark-2027` — **Delphi Dark 2027**: the Delphi IDE's dark editor, for the whole program, block lines included.
+
+<table>
+<tr><td align="center"><img src="docs/shots/theme-commander.svg" alt="Commander" width="280"><br><code>commander</code></td><td align="center"><img src="docs/shots/theme-far.svg" alt="FAR" width="280"><br><code>far</code></td><td align="center"><img src="docs/shots/theme-black.svg" alt="Black" width="280"><br><code>black</code></td></tr>
+<tr><td align="center"><img src="docs/shots/theme-white.svg" alt="White" width="280"><br><code>white</code></td><td align="center"><img src="docs/shots/theme-matrix.svg" alt="Matrix" width="280"><br><code>matrix</code></td><td align="center"><img src="docs/shots/theme-tron.svg" alt="Tron" width="280"><br><code>tron</code></td></tr>
+<tr><td align="center"><img src="docs/shots/theme-blade.svg" alt="Blade" width="280"><br><code>blade</code></td><td align="center"><img src="docs/shots/theme-github-dark.svg" alt="GitHub Dark" width="280"><br><code>github-dark</code></td><td align="center"><img src="docs/shots/theme-delphi-dark-2027.svg" alt="Delphi Dark 2027" width="280"><br><code>delphi-dark-2027</code></td></tr>
+</table>
+
+**Choosing one**: `Ctrl+Shift+T` steps through them while the program runs, `F9` → Options →
+Themes is the same list, and `Shift+F9` keeps the choice; or `theme = "far"` under `[ui]` in
+`fcmd.toml`, or `fcmd --theme far` for one run. `fcmd --list-themes` says which there are and
+where each came from.
+
+**Making your own**: `fcmd --export-theme tron >> ~/.config/fcmd.toml` gives a `[[theme]]`
+block to start from — a palette of named colours, every key of the interface given one of
+them, and an optional `[theme.styles]` table for bold, italic and underlined text. A block may
+`inherit` a built-in theme and change only what it names, replaces a built-in with the same id,
+and is read again when the file changes. `F9` → Options → Colours lists every key with its
+colour and writes your changes back as such a block.
+
+## Languages
 
 The interface ships in English, Italian, German, French, Spanish, Russian and Simplified
 Chinese (`ui.language = "auto"` follows the OS locale); CJK double-width layout is tested.
-`F9` → Options → Languages switches language while the program runs, and Options → Themes is
-the same list for the themes; `Shift+F9` makes either choice permanent.
+`F9` → Options → Languages switches language while the program runs, and `Shift+F9` makes the
+choice permanent.
 
 ## How it is built
 

@@ -33,6 +33,9 @@ Notable changes, newest first. The format follows
 
 ### Changed
 
+- **The themes, shown.** The README, the help and the web site have a section on the nine
+  themes: a picture of each on the same scene — the panels under a menu and a Delphi unit with
+  its block lines — a line on each, how to choose one and how to make your own.
 - **The key bar follows `Shift`, `Ctrl` and `Alt` on Windows too.** Holding one down shows
   what the function keys do with it, as FAR does. The Windows console never says a modifier
   went down on its own, so the program reads the keyboard while its window is in front; it

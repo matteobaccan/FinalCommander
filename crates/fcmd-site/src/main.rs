@@ -332,9 +332,32 @@ fn landing(lang: &Text) -> String {
         ));
     }
     body.push_str("</div>\n");
+    // The themes, each on the same scene, so that what differs is the colour and nothing else.
+    body.push_str("<h2 id=\"themes\">Themes</h2>\n<div class=\"shots\">\n");
+    for id in THEMES {
+        body.push_str(&format!(
+            "<figure><img src=\"docs/shots/theme-{id}.svg\" alt=\"{id}\" loading=\"lazy\">\
+             <figcaption>{id}</figcaption></figure>\n"
+        ));
+    }
+    body.push_str("</div>\n");
     body.push_str(&format!("<p class=\"note\">{}</p>\n", escape(lang.footer)));
     body
 }
+
+/// The themes the program ships, in its own order; each has its picture in `docs/shots`,
+/// drawn by the renderer's screenshot test.
+const THEMES: &[&str] = &[
+    "commander",
+    "far",
+    "black",
+    "white",
+    "matrix",
+    "tron",
+    "blade",
+    "github-dark",
+    "delphi-dark-2027",
+];
 
 /// A page built from one of the repository's documents, with the note that says it is English.
 fn document(
@@ -495,6 +518,43 @@ fn read(repo: &Path, path: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every theme the gallery shows has its picture, and the list is the program's: a
+    /// theme added without one, or a picture of a theme that went, fails here.
+    #[test]
+    fn every_theme_has_its_picture_and_no_picture_is_left_over() {
+        let shots = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/shots");
+        let mut found: Vec<String> = std::fs::read_dir(&shots)
+            .expect("the shots")
+            .flatten()
+            .filter_map(|e| {
+                let name = e.file_name().to_string_lossy().into_owned();
+                name.strip_prefix("theme-")?
+                    .strip_suffix(".svg")
+                    .map(str::to_string)
+            })
+            .collect();
+        found.sort();
+        let mut listed: Vec<String> = THEMES.iter().map(|t| t.to_string()).collect();
+        listed.sort();
+        assert_eq!(found, listed);
+        let themes_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../fcmd-ui/themes");
+        let mut shipped: Vec<String> = std::fs::read_dir(themes_dir)
+            .expect("the themes")
+            .flatten()
+            .filter_map(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .strip_suffix(".toml")
+                    .map(str::to_string)
+            })
+            .collect();
+        shipped.sort();
+        assert_eq!(
+            shipped, listed,
+            "the gallery lists the themes the program ships"
+        );
+    }
 
     /// The number a section heading carries: `### 1.8 Structure pane` is `1.8`, and
     /// `## 2b-quinquies. [[archiver]] blocks` is `2b-quinquies`. `None` for a heading that is

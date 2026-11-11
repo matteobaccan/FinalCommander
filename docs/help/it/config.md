@@ -244,11 +244,30 @@ diversa.
 
 # I colori
 
-`Ctrl+Shift+T` passa da un tema all'altro; il menu li offre come elenco. Nove arrivano col
-programma — fra questi `black`, solo nero dietro e testi chiari, `github-dark`, i colori del
-terminale scuro di GitHub, e `delphi-dark-2027`, il tema scuro dell'IDE di Delphi; uno tuo è un blocco `[[theme]]` di nomi di colore in `fcmd.toml`, oppure arriva con
-un plugin, e viene trovato all'avvio — non c'è niente da registrare e niente da ricompilare.
-`fcmd --list-themes` dice quali temi ci sono e da dove arriva ciascuno.
+Nove temi arrivano col programma:
+
+- `commander` — il blu classico dei commander ortodossi, quello di partenza.
+- `far` — la tavolozza di FAR Manager, presa dal suo codice.
+- `black` — nero dietro a tutto, testi chiari, il cursore in grassetto e sottolineato.
+- `white` — una pagina chiara per una stanza luminosa.
+- `matrix` — verde su nero.
+- `tron` — linee ciano su una notte blu scuro.
+- `blade` — ambra e verde acqua sotto la pioggia.
+- `github-dark` — i colori del terminale scuro di GitHub.
+- `delphi-dark-2027` — l'editor scuro dell'IDE di Delphi, per tutto il programma, linee dei blocchi comprese.
+
+`Ctrl+Shift+T` passa dall'uno all'altro mentre il programma gira; `F9` → Opzioni → Temi li
+offre come elenco, e `Shift+F9` tiene la scelta. In `fcmd.toml` è `theme = "far"` sotto `[ui]`,
+e `fcmd --theme far` ne sceglie uno per un'esecuzione sola. `fcmd --list-themes` dice quali temi
+ci sono e da dove arriva ciascuno. Il README del progetto ha un'immagine di ognuno, tutti sulla
+stessa scena.
+
+Uno tuo è un blocco `[[theme]]` di nomi di colore in `fcmd.toml`, oppure arriva con un plugin, e
+viene trovato all'avvio — non c'è niente da registrare e niente da ricompilare. Il modo più
+rapido per cominciare è scrivere fuori uno di quelli già fatti: `fcmd --export-theme tron >>
+~/.config/fcmd.toml`, poi cambiare `id`, `name` e i colori che vuoi diversi. Un blocco può fare
+`inherit` di un tema incluso e nominare solo quello che cambia, e uno con l'id di un tema incluso
+lo sostituisce.
 
 Il tema per default è la tavolozza di FAR, presa dal suo codice e non da uno screenshot.
 

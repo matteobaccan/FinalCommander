@@ -236,11 +236,29 @@ table.
 
 # Colours
 
-`Ctrl+Shift+T` steps through the themes; the menu offers them as a list. Nine ship with the
-program — among them `black`, black behind everything with light text, `github-dark`, GitHub's
-dark terminal colours, and `delphi-dark-2027`, the Delphi IDE's dark theme; one of your own is a `[[theme]]` block of colour names in `fcmd.toml`, or comes with a
-plugin, and is found at startup — there is nothing to register and nothing to rebuild.
-`fcmd --list-themes` says which themes there are and where each came from.
+Nine themes ship with the program:
+
+- `commander` — the classic blue of the orthodox commanders, the default.
+- `far` — FAR Manager's own palette, from its source.
+- `black` — black behind everything, light text, the cursor bold and underlined.
+- `white` — a light page for a light room.
+- `matrix` — green on black.
+- `tron` — cyan lines on a dark blue night.
+- `blade` — amber and teal in the rain.
+- `github-dark` — GitHub's dark terminal colours.
+- `delphi-dark-2027` — the Delphi IDE's dark editor, for the whole program, block lines included.
+
+`Ctrl+Shift+T` steps through them while the program runs; `F9` → Options → Themes offers them
+as a list, and `Shift+F9` keeps the choice. In `fcmd.toml` it is `theme = "far"` under `[ui]`,
+and `fcmd --theme far` picks one for a single run. `fcmd --list-themes` says which themes there
+are and where each came from. The project's README has a picture of each, all on the same
+scene.
+
+One of your own is a `[[theme]]` block of colour names in `fcmd.toml`, or comes with a plugin,
+and is found at startup — there is nothing to register and nothing to rebuild. The quickest
+start is a built-in one written out: `fcmd --export-theme tron >> ~/.config/fcmd.toml`, then
+change the `id`, the `name` and the colours you want different. A block may `inherit` a
+built-in theme and name only what it changes, and one with the id of a built-in replaces it.
 
 The default theme is FAR's own palette, taken from its source rather than from a screenshot.
 
