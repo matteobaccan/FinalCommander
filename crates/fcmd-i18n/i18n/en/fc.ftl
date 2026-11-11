@@ -1932,3 +1932,7 @@ trash-purge-body =
 trash-purge-note = This deletes permanently: nothing can put them back.
 trash-empty-title = Empty the wastebasket
 trash-empty-body = Delete everything in the wastebasket?
+opt-editor-external = External editor
+opt-editor-use-external = Use the external editor for F4 (Alt+F4 is then this one)
+opt-viewer-external = External viewer
+opt-viewer-use-external = Use the external viewer for F3 (Alt+F3 is then this one)

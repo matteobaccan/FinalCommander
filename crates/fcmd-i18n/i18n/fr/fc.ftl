@@ -1922,3 +1922,7 @@ trash-purge-body =
 trash-purge-note = La suppression est définitive : rien ne pourra les remettre.
 trash-empty-title = Vider la corbeille
 trash-empty-body = Supprimer tout ce que contient la corbeille ?
+opt-editor-external = Éditeur externe
+opt-editor-use-external = Utiliser l'éditeur externe pour F4 (Alt+F4 devient celui-ci)
+opt-viewer-external = Visionneuse externe
+opt-viewer-use-external = Utiliser la visionneuse externe pour F3 (Alt+F3 devient celle-ci)

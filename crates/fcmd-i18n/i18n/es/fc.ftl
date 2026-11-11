@@ -1922,3 +1922,7 @@ trash-purge-body =
 trash-purge-note = Esto borra definitivamente: nada podrá devolverlos.
 trash-empty-title = Vaciar la papelera
 trash-empty-body = ¿Borrar todo lo que hay en la papelera?
+opt-editor-external = Editor externo
+opt-editor-use-external = Usar el editor externo para F4 (Alt+F4 pasa a ser este)
+opt-viewer-external = Visor externo
+opt-viewer-use-external = Usar el visor externo para F3 (Alt+F3 pasa a ser este)

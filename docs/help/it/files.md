@@ -914,13 +914,43 @@ Senza nessun blocco su cui regolarsi, `Enter` consegna il file al desktop — `x
 macchina su cui questa sarebbe la cosa sbagliata. Con anche quello spento, dice che non c'è niente
 con cui aprire il file invece di tirare a indovinare.
 
-`F3` e `F4` sono sempre *nostri*: il visualizzatore e l'editor di questo programma, qualunque cosa
+`F3` e `F4` sono *nostri*: il visualizzatore e l'editor di questo programma, qualunque cosa
 dica un blocco. Un tasto che a volte aprisse qualcos'altro sarebbe un tasto di cui nessuno
 potrebbe fidarsi. Quello che un blocco nomina per leggere e per scrivere sta su `Alt+F3` e
 `Alt+F4` — i tasti di FAR per l'altro visualizzatore e l'altro editor — e se non c'è nominato
 niente nemmeno là, quei due ricadono su `$PAGER` e su `$VISUAL` o `$EDITOR`, che su una macchina
 che ha un'opinione sono già impostati. (Su alcuni desktop `Alt+F4` chiude la finestra prima che il
 programma lo veda; quello è il tasto del desktop, e il menu Comandi ha la stessa voce.)
+
+## Un editor e un visualizzatore tuoi
+
+Fra il blocco e l'ambiente c'è un'impostazione: un programma per tutti i file.
+
+```toml
+[editor]
+external = "vim +{line} {file}"    # oppure "code -w {file}", "notepad++ {file}"
+
+[viewer]
+external = "less {file}"
+```
+
+`{file}` è il file, fra virgolette quando il nome lo richiede, e `{line}` la riga a cui
+aprirlo (1 da un pannello); un'impostazione che è solo il nome di un programma riceve il file
+in coda. `Alt+F4` e `Alt+F3` eseguono allora questi — un blocco per quel tipo di file viene
+ancora prima, `$VISUAL`, `$EDITOR` e `$PAGER` dopo. Il programma ha il terminale tutto per sé
+mentre gira, come un programma a tutto schermo avviato dalla riga di comando, e i pannelli
+tornano, riletti, quando finisce. Con `code` scrivi `-w`, o ritorna prima che tu abbia
+battuto una lettera.
+
+Se quello esterno è quello che vuoi tutti i giorni, accendi *Usa l'editor esterno per F4*
+(`editor.use_external`) o *Usa il visualizzatore esterno per F3* (`viewer.use_external`): i
+due tasti si scambiano, come in FAR, così `F4` è il tuo e `Alt+F4` è il nostro. Un file su un
+server o dentro un archivio si apre comunque nel nostro editor, che è quello che sa
+rimandarlo indietro, e `F3` su una cartella continua a misurarla.
+
+Tutti e due stanno in *Opzioni → Impostazioni dell'editor* e *Impostazioni del
+visualizzatore*, in *Tutti i parametri*, e sulla riga di comando:
+`fcmd --set editor.external="code -w {file}" --set editor.use_external=true`.
 
 `Ctrl+PgGiù` resta il modo di entrare *dentro* un archivio e `Enter` su uno continua ad aprirlo
 come cartella: un'associazione per `*.zip` fermerebbe tutto questo, quindi gli archivi vengono

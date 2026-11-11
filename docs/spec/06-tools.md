@@ -422,11 +422,50 @@ safe is the wrong default.
 
 `F3` and `F4` stay the internal viewer and editor whatever a block says, which is FAR's
 arrangement and the reason the alternative keys exist; `Alt+F3` and `Alt+F4` take what a block
-names and otherwise `$PAGER` and `$VISUAL`/`$EDITOR`. With nothing to go on at all, `Enter`
+names, then what the settings name (§5a), and otherwise `$PAGER` and `$VISUAL`/`$EDITOR`.
+
+With nothing to go on at all, `Enter`
 hands the file to the desktop opener (`xdg-open`, `open`, `cmd /c start`), which
 `general.desktop_open` turns off. Deriving the defaults from the OS (xdg-mime,
 `LSCopyDefaultRoleHandler`, the registry) is still to come; the desktop opener is the stand-in
 and it is the same answer for most files.
+
+### 5a. The external editor and viewer (`editor.external`, `viewer.external`)
+
+One program for every file, where an `[[assoc]]` block is one for a kind of file:
+
+```toml
+[editor]
+external = "vim +{line} {file}"   # or "code -w {file}", "notepad++ {file}"
+use_external = false
+
+[viewer]
+external = "less {file}"
+use_external = false
+```
+
+- **The command line.** `{file}` is the file's path, quoted where the shell would split it;
+  `{line}` is the line to open it at, which is 1 from a panel. A setting that names only a
+  program (`nano`) gets the file after it. These two names are the whole of it: the line is
+  not the command line's, and FAR's metasymbols mean nothing in it.
+- **The order**, for `Alt+F4` and `Alt+F3`: the `edit` or `view` of an `[[assoc]]` block that
+  matches the file; then `editor.external` or `viewer.external`; then `$VISUAL`, `$EDITOR`
+  or `$PAGER`; and with none of them, a message that says so.
+- **The terminal is the program's while it runs.** The configured line goes the way a
+  full-screen program goes from the command line (§7.2, `tty:`): the input reader stops, raw
+  mode and the alternate screen are left, the program inherits the console, and everything
+  is taken back and the panels read again when it ends. An editor run with its output
+  caught would draw into a pipe and never see a key. One that opens a window of its own
+  loses nothing by it; one that returns at once (`code` without `-w`) gives the panels back
+  at once.
+- **`use_external`** is FAR's *use the external editor for F4* (and *viewer for F3*): the
+  two keys change places. `F4` then runs what `Alt+F4` ran, by the same order, and `Alt+F4`
+  is our editor — so the other one is always one key away. Three things stay ours whatever
+  the switch says: a file on a server or in an archive (it is a copy that has to be written
+  back on save), `F3` on a folder (its size), and a file nothing external is named for.
+  `Shift+F4`, `--edit`, `--view` and the keys inside the find results are not changed.
+- Both pairs are in *Options → Editor settings* and *Viewer settings*, in *All settings*,
+  and `--set editor.external=…` takes them.
 
 ### 5b. Substitutions, and FAR's spelling of them
 

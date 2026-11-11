@@ -982,6 +982,14 @@ pub struct EditCfg {
     /// a thousand is a long afternoon; the limit is there so that a file left open for days
     /// does not keep every key ever pressed in it.
     pub undo_depth: usize,
+    /// The editor that is not ours, as a command line: `{file}` is the file and `{line}`
+    /// the line to open it at — `code -w {file}`, `vim +{line} {file}`, `notepad++ {file}`.
+    /// `Alt+F4` runs it, before `$VISUAL` and `$EDITOR`; an `[[assoc]]` block for the file
+    /// still comes first. Empty is none.
+    pub external: String,
+    /// FAR's "use the external editor for F4": `F4` runs the external editor and `Alt+F4`
+    /// ours, instead of the other way round.
+    pub use_external: bool,
     /// Replacements kept under a name (`[[editor.replace]]`), offered by `Alt+Shift+F7`
     /// before the recent ones (FAR's issue #282).
     pub replace: Vec<ReplaceTemplate>,
@@ -1008,6 +1016,8 @@ impl Default for EditCfg {
             beyond_eol: false,
             trim_trailing: false,
             undo_depth: 1000,
+            external: String::new(),
+            use_external: false,
             replace: Vec::new(),
         }
     }
@@ -1053,6 +1063,13 @@ pub struct ViewCfg {
     pub cell_width: u16,
     /// The height of one cell in pixels. Zero asks the system and falls back to sixteen.
     pub cell_height: u16,
+    /// The viewer that is not ours, as a command line with `{file}` (and `{line}`, which is
+    /// 1): `less {file}`, `bat --paging=always {file}`. `Alt+F3` runs it, before `$PAGER`;
+    /// an `[[assoc]]` block for the file still comes first. Empty is none.
+    pub external: String,
+    /// FAR's "use the external viewer for F3": `F3` runs the external viewer and `Alt+F3`
+    /// ours, instead of the other way round.
+    pub use_external: bool,
 }
 
 impl Default for ViewCfg {
@@ -1065,6 +1082,8 @@ impl Default for ViewCfg {
             pixels: "auto".into(),
             cell_width: 0,
             cell_height: 0,
+            external: String::new(),
+            use_external: false,
             wrap: "off".into(),
             // The same eight `fcmd_view::TAB_WIDTH` has. This crate does not depend on the
             // viewer, so the number is written twice and a test compares the two.
@@ -2216,6 +2235,10 @@ impl Config {
             "editor.undo_depth" => {
                 self.editor.undo_depth = parse_usize(value)?.clamp(1, 100_000);
             }
+            "editor.external" => self.editor.external = value.trim().to_string(),
+            "editor.use_external" => self.editor.use_external = parse_bool(value)?,
+            "viewer.external" => self.viewer.external = value.trim().to_string(),
+            "viewer.use_external" => self.viewer.use_external = parse_bool(value)?,
             "viewer.key_bar" => self.viewer.key_bar = parse_bool(value)?,
             "viewer.status_line" => self.viewer.status_line = parse_bool(value)?,
             "viewer.scrollbar" => self.viewer.scrollbar = parse_bool(value)?,

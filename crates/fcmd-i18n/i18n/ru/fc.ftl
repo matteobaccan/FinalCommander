@@ -1896,3 +1896,7 @@ trash-purge-body =
 trash-purge-note = Удаление окончательное: вернуть их будет нечем.
 trash-empty-title = Очистить корзину
 trash-empty-body = Удалить всё, что есть в корзине?
+opt-editor-external = Внешний редактор
+opt-editor-use-external = Использовать внешний редактор по F4 (Alt+F4 тогда — этот)
+opt-viewer-external = Внешняя программа просмотра
+opt-viewer-use-external = Использовать внешнюю программу просмотра по F3 (Alt+F3 тогда — эта)

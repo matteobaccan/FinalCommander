@@ -1020,9 +1020,12 @@ per file with a "save all" action.
 
 ### 2.4 External editor
 
-`$VISUAL`/`$EDITOR` or a per-mask association (`assoc.toml`) can replace the internal editor
-for chosen types; the panel waits for the process and refreshes afterwards. `Alt+F4` always
-flips internal↔external (FAR's rule).
+A per-mask association (`[[assoc]]`), `editor.external` or `$VISUAL`/`$EDITOR` name the
+editor that is not ours; the panel waits for the process and refreshes afterwards. `Alt+F4`
+is the other one of the two, whichever `F4` is (FAR's rule): the external one by default, and
+ours once `editor.use_external` has given `F4` away. The viewer has the same pair
+(`viewer.external`, `viewer.use_external`, `Alt+F3`). SPEC 06 §5a has the order and the
+command line.
 
 ### 2.5 Hex mode (`F4` on a binary)
 

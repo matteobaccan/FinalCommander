@@ -9213,14 +9213,40 @@ impl App {
 
     /// `Alt+F3` and `Alt+F4`: read or write this file with something that is not us.
     ///
-    /// What an `[[assoc]]` block names comes first; with nothing to go on, the environment
-    /// does — `$PAGER` for reading, `$VISUAL` then `$EDITOR` for writing, which is the
-    /// convention every Unix program follows and the one a user has already set.
+    /// What an `[[assoc]]` block names for this kind of file comes first; then the program
+    /// the settings name for every file (`viewer.external`, `editor.external`); and with
+    /// neither, the environment — `$PAGER` for reading, `$VISUAL` then `$EDITOR` for writing,
+    /// which is the convention every Unix program follows and the one a user has already set.
     fn open_external(&mut self, which: Which) {
+        if !self.try_external(which) {
+            let msg = self.i18n.t(match which {
+                Which::View => "assoc-no-pager",
+                Which::Edit => "assoc-no-editor",
+            });
+            self.set_error(msg);
+        }
+    }
+
+    /// The line `editor.external` or `viewer.external` makes for one file: `{file}` is the
+    /// path, quoted where the shell would otherwise split it, and `{line}` the line to open
+    /// it at. A setting that names only a program — `nano` — gets the file after it, which
+    /// is what somebody who typed a program's name meant.
+    fn external_line(template: &str, file: &std::path::Path, line: usize) -> String {
+        let file = expand::quote(&file.to_string_lossy());
+        let template = template.trim().replace("{line}", &line.to_string());
+        match template.contains("{file}") {
+            true => template.replace("{file}", &file),
+            false => format!("{template} {file}"),
+        }
+    }
+
+    /// [`App::open_external`], saying whether anything was found to open the file with —
+    /// so that `F3` and `F4`, sent outside by `use_external`, can fall back on our own.
+    fn try_external(&mut self, which: Which) -> bool {
         let Some(entry) = self.panel().current().cloned() else {
             let m = self.i18n.t("msg-nothing-to-do");
             self.set_error(m);
-            return;
+            return true;
         };
         let name = entry.name_str().into_owned();
         let from_block = self
@@ -9241,15 +9267,29 @@ impl App {
                 .find(|v| !v.is_empty())
                 .map(|program| format!("{program} {{file}}"))
         };
-        match from_block.or_else(from_env) {
-            Some(cmd) => self.run_line(&cmd),
-            None => {
-                let msg = self.i18n.t(match which {
-                    Which::View => "assoc-no-pager",
-                    Which::Edit => "assoc-no-editor",
-                });
-                self.set_error(msg);
+        if let Some(cmd) = from_block {
+            self.run_line(&cmd);
+            return true;
+        }
+        // The program the settings name. It is given the terminal whatever it is: an editor
+        // or a pager draws on the whole screen and reads the keys, and one that opens a
+        // window of its own (`code -w`) loses nothing by it.
+        let configured = match which {
+            Which::View => self.cfg.viewer.external.trim(),
+            Which::Edit => self.cfg.editor.external.trim(),
+        };
+        if !configured.is_empty() {
+            let path = self.panel().path_of(&entry);
+            let line = Self::external_line(configured, path.as_path(), 1);
+            self.run_shell_with(line, None, true);
+            return true;
+        }
+        match from_env() {
+            Some(cmd) => {
+                self.run_line(&cmd);
+                true
             }
+            None => false,
         }
     }
 
@@ -12313,6 +12353,10 @@ impl App {
             // environment says one reads and writes with. `F3` and `F4` stay ours, always,
             // which is the half of this that matters — a key that sometimes opened something
             // else would be a key nobody trusts.
+            // FAR's "use the external viewer for F3": the two keys change places, so the
+            // one that is not the habit still reaches the other program.
+            Command::FileViewAlt if self.cfg.viewer.use_external => self.open_viewer_as(false),
+            Command::FileEditAlt if self.cfg.editor.use_external => self.open_editor_as(false),
             Command::FileViewAlt => self.open_external(Which::View),
             Command::FileEditAlt => self.open_external(Which::Edit),
             Command::FileEditNew => self.open_new_editor(),
@@ -12972,6 +13016,13 @@ impl App {
     /// `F3`: open the viewer on the item under the cursor. On a directory it measures it
     /// instead, as FAR does.
     fn open_viewer(&mut self) {
+        let outside = self.cfg.viewer.use_external;
+        self.open_viewer_as(outside);
+    }
+
+    /// [`App::open_viewer`]; `outside` hands a file on this disk to the external viewer
+    /// where there is one to hand it to (`viewer.use_external`).
+    fn open_viewer_as(&mut self, outside: bool) {
         // On the process list `F3` is not a file to read: it is the card for the process
         // under the cursor, which is what the key does in FAR's own process panel. On the
         // socket list it is the card for whatever holds the socket, which is the question
@@ -13041,6 +13092,9 @@ impl App {
             // The viewer reads a real file, so the bytes are brought out first — off a server
             // or out of an archive, the shape is the same.
             self.fetch_remote(path, entry.size, Fetched::View);
+            return;
+        }
+        if outside && self.try_external(Which::View) {
             return;
         }
         let local = path.as_path().to_path_buf();
@@ -26069,6 +26123,15 @@ impl App {
     }
 
     fn open_editor(&mut self) {
+        let outside = self.cfg.editor.use_external;
+        self.open_editor_as(outside);
+    }
+
+    /// [`App::open_editor`]; `outside` hands a file on this disk to the external editor
+    /// where there is one to hand it to (`editor.use_external`). A file on a server or in
+    /// an archive stays ours: it is a copy that has to be written back on save, which only
+    /// our own editor knows how to say.
+    fn open_editor_as(&mut self, outside: bool) {
         // On the list of what is installed there is no file to edit: `F4` there puts the
         // command that would remove the program on the command line, unrun.
         if self.panel().temp_origin() == Some(":programs") {
@@ -26117,6 +26180,9 @@ impl App {
             // container or off a server, the shape is the same; what differs is what the
             // write-back does, and that is `write_back`'s business.
             self.fetch_remote(path, entry.size, Fetched::Edit);
+            return;
+        }
+        if outside && self.try_external(Which::Edit) {
             return;
         }
         self.open_editor_on(&path);
@@ -51854,5 +51920,174 @@ abcdefghij
         };
         assert_eq!(result, Ok(1), "what was left, and only that");
         assert!(basket.held.borrow().is_empty());
+    }
+
+    // ── the external editor and viewer (SPEC 06 §5a) ────────────────────────────────────────
+
+    /// The line a program was given the terminal for, if one was — and not a line run with
+    /// its output caught, which is what an editor must never be.
+    fn terminal_line(app: &mut App) -> Option<String> {
+        app.take_requests().into_iter().find_map(|r| match r {
+            Request::Interactive { line, .. } => Some(line),
+            _ => None,
+        })
+    }
+
+    /// An app with the cursor on `a.txt`, and that file's path as a command line has it.
+    fn on_a_txt() -> (App, String) {
+        let mut app = app();
+        app.panel_mut().cursor_to(2);
+        let path = app.panel().current_path().expect("a row");
+        assert_eq!(path.display_name(), "a.txt");
+        let quoted = expand::quote(&path.as_path().to_string_lossy());
+        (app, quoted)
+    }
+
+    #[test]
+    fn alt_f4_and_alt_f3_run_the_programs_the_settings_name_with_the_terminal() {
+        let (mut app, file) = on_a_txt();
+        app.cfg
+            .set("editor.external", "vim +{line} {file}")
+            .unwrap();
+        press(&mut app, "Alt+F4");
+        assert_eq!(terminal_line(&mut app), Some(format!("vim +1 {file}")));
+        assert!(app.mode.editor().is_none(), "ours opened as well");
+
+        // A setting that only names the program gets the file after it.
+        let (mut app, file) = on_a_txt();
+        app.cfg.set("viewer.external", "  mypager ").unwrap();
+        assert_eq!(app.cfg.viewer.external, "mypager");
+        press(&mut app, "Alt+F3");
+        assert_eq!(terminal_line(&mut app), Some(format!("mypager {file}")));
+        assert!(app.mode.viewer().is_none());
+
+        // `F3` and `F4` are still ours while the switch is off.
+        let (mut app, _) = on_a_txt();
+        app.cfg.set("editor.external", "vim {file}").unwrap();
+        app.cfg.set("viewer.external", "less {file}").unwrap();
+        press(&mut app, "F4");
+        assert_eq!(terminal_line(&mut app), None);
+    }
+
+    #[test]
+    fn a_name_the_shell_would_split_goes_to_the_external_editor_as_one_argument() {
+        let file = std::path::Path::new("my docs").join("to do.txt");
+        let line = App::external_line("code -w {file}", &file, 1);
+        assert_eq!(
+            line,
+            format!("code -w {}", expand::quote(&file.to_string_lossy()))
+        );
+        assert_ne!(line, format!("code -w {}", file.display()), "not quoted");
+        assert_eq!(
+            App::external_line(
+                "ed -l {line} -r {line} {file}",
+                std::path::Path::new("a"),
+                12
+            ),
+            "ed -l 12 -r 12 a"
+        );
+    }
+
+    #[test]
+    fn an_association_for_the_file_comes_before_the_external_editor() {
+        let (mut app, _) = on_a_txt();
+        app.cfg.set("editor.external", "vim {file}").unwrap();
+        app.cfg.assocs.push(fcmd_config::AssocCfg {
+            mask: "*.txt".into(),
+            edit: "nano {file}".into(),
+            ..fcmd_config::AssocCfg::default()
+        });
+        press(&mut app, "Alt+F4");
+        let line = shell_line(&mut app).expect("a command ran");
+        assert!(line.starts_with("nano "), "{line}");
+    }
+
+    #[test]
+    fn use_external_makes_f4_and_f3_the_external_ones_and_the_alt_keys_ours() {
+        // The editor: `F4` goes out, `Alt+F4` stays in.
+        let (mut app, file) = on_a_txt();
+        app.cfg
+            .set("editor.external", "vim +{line} {file}")
+            .unwrap();
+        app.cfg.set("editor.use_external", "true").unwrap();
+        press(&mut app, "F4");
+        assert_eq!(terminal_line(&mut app), Some(format!("vim +1 {file}")));
+        assert!(app.mode.editor().is_none());
+
+        let (mut app, _) = on_a_txt();
+        app.cfg.set("editor.external", "vim {file}").unwrap();
+        app.cfg.set("editor.use_external", "true").unwrap();
+        press(&mut app, "Alt+F4");
+        assert_eq!(terminal_line(&mut app), None, "Alt+F4 is ours now");
+
+        // The viewer, the same way round; and one switch does not throw the other.
+        let (mut app, file) = on_a_txt();
+        app.cfg.set("viewer.external", "less {file}").unwrap();
+        app.cfg.set("viewer.use_external", "true").unwrap();
+        press(&mut app, "F3");
+        assert_eq!(terminal_line(&mut app), Some(format!("less {file}")));
+        assert!(app.mode.viewer().is_none());
+
+        let (mut app, _) = on_a_txt();
+        app.cfg.set("viewer.external", "less {file}").unwrap();
+        app.cfg.set("viewer.use_external", "true").unwrap();
+        app.cfg.set("editor.external", "vim {file}").unwrap();
+        press(&mut app, "Alt+F3");
+        assert_eq!(terminal_line(&mut app), None, "Alt+F3 is ours now");
+        press(&mut app, "F4");
+        assert_eq!(terminal_line(&mut app), None, "F4 was not asked to change");
+
+        // A folder is still measured by `F3`, not handed to a pager.
+        let (mut app, _) = on_a_txt();
+        app.cfg.set("viewer.external", "less {file}").unwrap();
+        app.cfg.set("viewer.use_external", "true").unwrap();
+        let folder = (0..app.panel().listing.len())
+            .find(|r| {
+                app.panel()
+                    .listing
+                    .row(*r)
+                    .is_some_and(|e| e.kind == fcmd_core::EntryKind::Dir)
+            })
+            .expect("a folder in the listing");
+        app.panel_mut().cursor_to(folder);
+        press(&mut app, "F3");
+        assert_eq!(terminal_line(&mut app), None);
+    }
+
+    #[test]
+    fn the_settings_dialogs_and_the_settings_list_hold_the_external_programs() {
+        let mut app = app();
+        app.cfg.set("editor.external", "code -w {file}").unwrap();
+        app.run(Command::OptEditor);
+        let Mode::Form(form) = &app.mode else {
+            panic!("the editor settings did not open: {:?}", app.mode)
+        };
+        assert_eq!(form.text_value("editor.external"), "code -w {file}");
+        assert_eq!(form.text_value("editor.use_external"), "false");
+        // The switch is a box like the others, and `F10` writes both rows.
+        set_toggle(&mut app, "editor.use_external", true);
+        press(&mut app, "F10");
+        assert!(app.cfg.editor.use_external);
+        assert_eq!(app.cfg.editor.external, "code -w {file}");
+
+        app.run(Command::OptViewer);
+        let Mode::Form(form) = &app.mode else {
+            panic!("the viewer settings did not open: {:?}", app.mode)
+        };
+        assert_eq!(form.text_value("viewer.external"), "");
+        assert_eq!(form.text_value("viewer.use_external"), "false");
+        press(&mut app, "Esc");
+
+        // And *All settings* lists the four, by the names `--set` takes.
+        let rows = app.cfg.settings();
+        for key in [
+            "editor.external",
+            "editor.use_external",
+            "viewer.external",
+            "viewer.use_external",
+        ] {
+            assert!(rows.iter().any(|(k, _)| k == key), "{key} is not listed");
+        }
+        assert!(app.cfg.set("viewer.use_external", "perhaps").is_err());
     }
 }

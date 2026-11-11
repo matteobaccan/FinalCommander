@@ -1922,3 +1922,7 @@ trash-purge-body =
 trash-purge-note = Das löscht endgültig: nichts kann sie zurückholen.
 trash-empty-title = Papierkorb leeren
 trash-empty-body = Alles im Papierkorb löschen?
+opt-editor-external = Externer Editor
+opt-editor-use-external = Den externen Editor für F4 verwenden (Alt+F4 ist dann dieser)
+opt-viewer-external = Externer Betrachter
+opt-viewer-use-external = Den externen Betrachter für F3 verwenden (Alt+F3 ist dann dieser)

@@ -1844,3 +1844,7 @@ trash-purge-body = 从回收站删除 { $count } 个项目（{ $name }）？
 trash-purge-note = 这是永久删除：无法再找回。
 trash-empty-title = 清空回收站
 trash-empty-body = 删除回收站里的所有内容？
+opt-editor-external = 外部编辑器
+opt-editor-use-external = F4 使用外部编辑器（Alt+F4 则是本编辑器）
+opt-viewer-external = 外部查看器
+opt-viewer-use-external = F3 使用外部查看器（Alt+F3 则是本查看器）

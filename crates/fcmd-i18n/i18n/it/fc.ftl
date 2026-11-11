@@ -1923,3 +1923,7 @@ trash-purge-body =
 trash-purge-note = L'eliminazione è definitiva: niente potrà rimetterli a posto.
 trash-empty-title = Svuota il cestino
 trash-empty-body = Eliminare tutto quello che c'è nel cestino?
+opt-editor-external = Editor esterno
+opt-editor-use-external = Usa l'editor esterno per F4 (Alt+F4 diventa questo)
+opt-viewer-external = Visualizzatore esterno
+opt-viewer-use-external = Usa il visualizzatore esterno per F3 (Alt+F3 diventa questo)

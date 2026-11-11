@@ -222,7 +222,7 @@ something readable rather than only into instructions.
 | 6.6 | Keep the original encoding, EOL, BOM and final newline on save; `Shift+F8` converts the end of line, the BOM and the code page, each one undo step | FAR | ✓ |
 | 6.7 | Syntax highlighting (tree-sitter), bracket matching, auto-indent, tabs/spaces policy, trailing-space trim | MTN2/NEW | ~ colouring for 25 languages and markups by a scanner of our own rather than tree-sitter, auto-indent, the three tab policies of `editor.tabs`, bracket matching (`Alt+B`), trailing blanks taken off (`Alt+Shift+T`, or at every save with `editor.trim_trailing`) |
 | 6.8 | Insert file name / path / current date, character by code, macros | FAR | ~ a character from a list filtered by its code (`Alt+Shift+C`); the name, path and date are not there yet |
-| 6.9 | External editor delegation (`$EDITOR`, per-type associations) | all | ✓ |
+| 6.9 | External editor delegation (`$EDITOR`, per-type associations, `editor.external` / `viewer.external` with `{file}` and `{line}`, and FAR's *use the external editor for F4*) | all | ✓ |
 | 6.10 | LSP-lite: completion/diagnostics for the open file (optional plugin) | NEW | ✗ M4 |
 | 6.11 | **Atomic save** (`name.fcmd-tmp` + rename, permissions carried over) and a save-as prompt | NEW | ✓ |
 | 6.12 | **External-change detection**: a file changed on disk is never overwritten without a confirmation, which offers to overwrite, to reload or to see what changed in the side-by-side diff first; reload on demand | FAR | ✓ |

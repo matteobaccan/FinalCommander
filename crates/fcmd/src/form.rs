@@ -336,6 +336,19 @@ impl Form {
                     t("opt-editor-trim-trailing"),
                     cfg.editor.trim_trailing,
                 ),
+                // The editor that is not this one, and FAR's switch for which of the two
+                // `F4` means.
+                Field::Separator,
+                Field::text(
+                    "editor.external",
+                    t("opt-editor-external"),
+                    cfg.editor.external.clone(),
+                ),
+                Field::toggle(
+                    "editor.use_external",
+                    t("opt-editor-use-external"),
+                    cfg.editor.use_external,
+                ),
             ],
             FormKind::ViewerSettings => vec![
                 // The three rows of chrome, in the order they are drawn: the top line, the
@@ -393,6 +406,17 @@ impl Form {
                     "viewer.remember",
                     t("opt-viewer-remember"),
                     cfg.viewer.remember,
+                ),
+                Field::Separator,
+                Field::text(
+                    "viewer.external",
+                    t("opt-viewer-external"),
+                    cfg.viewer.external.clone(),
+                ),
+                Field::toggle(
+                    "viewer.use_external",
+                    t("opt-viewer-use-external"),
+                    cfg.viewer.use_external,
                 ),
             ],
             FormKind::System => vec![

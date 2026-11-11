@@ -873,13 +873,41 @@ on macOS, `start` on Windows — which is what `general.desktop_open` turns off 
 where that is the wrong thing to do. With that off too, it says there is nothing to open the
 file with rather than guessing.
 
-`F3` and `F4` are always *ours*: the viewer and the editor in this program, whatever any
-block says. A key that sometimes opened something else would be a key nobody could trust.
+`F3` and `F4` are *ours*: the viewer and the editor in this program, whatever any block
+says. A key that sometimes opened something else would be a key nobody could trust.
 What a block names for reading and writing is on `Alt+F3` and `Alt+F4` — FAR's keys for the
 other viewer and the other editor — and with nothing named there either, those two fall back
 to `$PAGER` and to `$VISUAL` or `$EDITOR`, which are already set on a machine that has an
 opinion. (On some desktops `Alt+F4` closes the window before the program sees it; that is the
 desktop's key, and the Commands menu has the same entry.)
+
+## An editor and a viewer of your own
+
+Between the block and the environment there is a setting: one program for every file.
+
+```toml
+[editor]
+external = "vim +{line} {file}"    # or "code -w {file}", "notepad++ {file}"
+
+[viewer]
+external = "less {file}"
+```
+
+`{file}` is the file, quoted when its name needs it, and `{line}` the line to open it at
+(1 from a panel); a setting that is only a program's name gets the file after it. `Alt+F4`
+and `Alt+F3` then run these — a block for that kind of file still comes first, `$VISUAL`,
+`$EDITOR` and `$PAGER` after. The program has the terminal to itself while it runs, as a
+full-screen program started from the command line has, and the panels come back, read again,
+when it ends. With `code`, write `-w`, or it returns before you have typed a letter.
+
+If the external one is the one you want every day, turn on *Use the external editor for F4*
+(`editor.use_external`) or *Use the external viewer for F3* (`viewer.use_external`): the two
+keys change places, as in FAR, so `F4` is yours and `Alt+F4` is ours. A file on a server or
+inside an archive still opens in our editor, which is the one that knows how to send it
+back, and `F3` on a folder still measures it.
+
+Both are in *Options → Editor settings* and *Viewer settings*, in *All settings*, and on the
+command line: `fcmd --set editor.external="code -w {file}" --set editor.use_external=true`.
 
 `Ctrl+PgDn` is still the way *into* an archive and `Enter` on one still opens it as a
 directory: an association for `*.zip` would stop that, so archives are checked first.

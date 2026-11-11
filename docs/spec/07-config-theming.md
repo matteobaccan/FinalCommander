@@ -69,6 +69,8 @@ remember = true                 # open a file where it was left (SPEC 05 §1.12)
 pixels = "auto"                 # auto | kitty | iterm | sixel | off (SPEC 05 §1.14a)
 cell_width = 0                  # a cell's size in pixels, for sixel; 0 asks the system
 cell_height = 0
+external = ""                   # the other viewer, for Alt+F3: "less {file}" (SPEC 06 §5a)
+use_external = false            # F3 runs it, and Alt+F3 is ours
 detect_dump = true
 max_line = 10000
 
@@ -80,6 +82,8 @@ trim_trailing = false
 keep_eol = true
 max_open_size = "256MiB"
 undo_depth = 1000                 # steps Ctrl+Z can take back per file (SPEC 05 §2.2g)
+external = ""                     # the other editor, for Alt+F4: "vim +{line} {file}" (SPEC 06 §5a)
+use_external = false              # F4 runs it, and Alt+F4 is ours
 # [[editor.replace]]              # a replacement kept by name, for Alt+Shift+F7
 # name = "trailing commas"
 # find = ",\\s*$"

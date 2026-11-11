@@ -17,7 +17,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | F1 | help (context) | help | help | help | help (context) |
 | F2 | user menu | user menu | reread panel? | rename | user menu |
 | F3 | view (internal/assoc.); on a dir: compute size | view | view | view | **always our viewer** / dir size; an association is `Alt+F3` |
-| F4 | edit; on a dir: attributes dialog | edit | edit | edit | **always our editor**; an association is `Alt+F4` |
+| F4 | edit; on a dir: attributes dialog | edit | edit | edit | **our editor**, unless `editor.use_external` gives the key to the external one; an association is `Alt+F4` |
 | F5 | copy | copy | copy | copy | copy |
 | F6 | rename / move | rename/move | move/rename | move | move / rename |
 | F7 | make directory | make directory | new folder | new folder | make directory |
@@ -52,8 +52,8 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | --- | --- | --- | --- | --- |
 | Alt+F1 | drive menu, left panel | drive left | left bookmarks | drive/mount menu, left |
 | Alt+F2 | drive menu, right panel | drive right | right bookmarks | drive/mount menu, right |
-| Alt+F3 | alternative (external/internal) viewer | alternative viewer | — | **what an association's `view` names, else `$PAGER`** |
-| Alt+F4 | alternative editor | exit | — | **what an association's `edit` names, else `$VISUAL`/`$EDITOR`** |
+| Alt+F3 | alternative (external/internal) viewer | alternative viewer | — | **what an association's `view` names, else `viewer.external`, else `$PAGER`**; ours when `viewer.use_external` is on |
+| Alt+F4 | alternative editor | exit | — | **what an association's `edit` names, else `editor.external`, else `$VISUAL`/`$EDITOR`**; ours when `editor.use_external` is on |
 | Alt+F5 | print | pack | — | print / export list |
 | Alt+F6 | create hard/symlink | — | — | create link |
 | Alt+F7 | find files | search | — | find files |
