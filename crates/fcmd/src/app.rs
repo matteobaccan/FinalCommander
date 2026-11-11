@@ -3019,6 +3019,11 @@ pub struct App {
     /// The folder `F7` is making, as the panel and the row name to put the cursor on when
     /// the job ends.
     mkdir_cursor: Option<(usize, String)>,
+    /// The archive a test is reading, so its end can name it; and, after a test that found
+    /// damage, where each row of the list of bad entries is — the list shows the reasons,
+    /// and `Enter` wants the path.
+    testing: Option<VPath>,
+    test_bad: Vec<VPath>,
     /// What the git panel shows — what changed, the branches, a log — so that `Ctrl+R` and
     /// anything done to the repository can ask for it again.
     git_view: Option<GitAsk>,
@@ -3417,6 +3422,8 @@ impl App {
             tools: Vec::new(),
             plugins: Vec::new(),
             mkdir_cursor: None,
+            testing: None,
+            test_bad: Vec::new(),
             git_view: None,
             git_rows: std::collections::HashMap::new(),
             git_tree: false,
@@ -9897,11 +9904,83 @@ impl App {
             cancel: cancel.clone(),
             choice: 0,
         }));
+        self.testing = Some(archive.clone());
         self.requests.push(Request::ArcTest {
             id,
             archive,
             cancel,
         });
+    }
+
+    /// What a test found. An archive that is whole is one line saying so; one that is not
+    /// is a list of every entry that did not come out, each with the reason it gave, where
+    /// `Enter` goes to the entry — eight lines of a message box are no report of an archive
+    /// with a damaged block in it, which fails by the hundred.
+    fn test_finished(&mut self, outcome: Outcome) {
+        let archive = self.testing.take();
+        let name = archive
+            .as_ref()
+            .map(|path| path.display_name())
+            .unwrap_or_default();
+        if outcome.cancelled {
+            let kind = self.kind_label(JobKind::Test);
+            let m = self.i18n.t_args("job-cancelled", &[("kind", kind.into())]);
+            self.set_status(m);
+            return;
+        }
+        if outcome.errors.is_empty() {
+            let m = self.i18n.t_args(
+                "arc-test-whole",
+                &[
+                    ("name", name.into()),
+                    ("files", (outcome.files as i64).into()),
+                    ("bytes", fcmd_core::format_size(outcome.bytes).into()),
+                ],
+            );
+            self.set_status(m);
+            return;
+        }
+        // Nothing against an entry: the archive did not open, or the program that reads it
+        // could not be run. That is an error like any other job's, not a list of entries.
+        let about_entries = outcome
+            .errors
+            .iter()
+            .any(|(path, _)| path.leave().as_ref() == archive.as_ref() && archive.is_some());
+        if !about_entries {
+            self.job_summary(JobKind::Test, &outcome, true);
+            return;
+        }
+        let title = self.i18n.t_args(
+            "arc-test-bad-title",
+            &[
+                ("name", name.into()),
+                ("bad", (outcome.errors.len() as i64).into()),
+                ("files", (outcome.files as i64).into()),
+            ],
+        );
+        let rows = outcome
+            .errors
+            .iter()
+            .enumerate()
+            .map(|(at, (path, why))| PickRow {
+                // An entry is named by where it is in the archive; a complaint about the
+                // archive itself — a header, the program's own verdict — is its reason alone.
+                label: match archive
+                    .as_ref()
+                    .filter(|a| path.leave().as_ref() == Some(*a))
+                {
+                    Some(_) => format!("{} — {why}", path.inner_path().trim_start_matches('/')),
+                    None => why.clone(),
+                },
+                value: at.to_string(),
+                current: false,
+                hotkey: None,
+                separator: false,
+            })
+            .collect();
+        self.test_bad = outcome.errors.into_iter().map(|(path, _)| path).collect();
+        self.set_error(title.clone());
+        self.mode = Mode::Pick(Box::new(Pick::new(PickKind::ArcBad, title, rows, 0)));
     }
 
     /// Change an archive: one job, one progress box, and the old archive untouched until
@@ -10602,6 +10681,11 @@ impl App {
             self.set_status(msg);
             self.read_panel(0);
             self.read_panel(1);
+            return;
+        }
+
+        if kind == JobKind::Test {
+            self.test_finished(outcome);
             return;
         }
 
@@ -22839,6 +22923,8 @@ impl App {
             PickKind::Tunnels => return,
             // And `open_arc_commands`, which knows which archive it is about.
             PickKind::ArcCommands => return,
+            // And `test_finished`, which has the report.
+            PickKind::ArcBad => return,
             // And `open_with_list`, which knows what the cursor is on.
             PickKind::OpenWith => return,
             // And `open_user_menu`, which reads the file and keeps the level stack.
@@ -23966,6 +24052,26 @@ impl App {
                     }
                 }
             },
+            PickKind::ArcBad => {
+                // To the entry, in the archive: the panel goes into the folder that holds
+                // it and the cursor lands on it. A row about the archive itself has nowhere
+                // further to go than the archive.
+                let Some(path) = row
+                    .value
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|at| self.test_bad.get(at).cloned())
+                else {
+                    return;
+                };
+                if let Some(dir) = path.parent() {
+                    let index = self.active;
+                    self.panels[index].want_cursor = Some(path.display_name());
+                    if self.panel_go(index, dir, true) {
+                        self.read_panel(index);
+                    }
+                }
+            }
             PickKind::ArcCommands => {
                 let archive = self.archive_at_hand();
                 match (row.value.as_str(), archive) {

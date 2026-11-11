@@ -550,19 +550,60 @@ impl Archive {
     /// Read every entry and say which ones do not come out whole.
     ///
     /// This is what *test archive* means: the bytes are decompressed, checked by whatever
-    /// the format checks them with (a zip's CRC, a decompressor's own framing) and thrown
-    /// away. What comes back is the count, the size, and the entries that failed with the
-    /// reason each one gave.
+    /// the format checks them with and thrown away. What a format checks them with is: a
+    /// zip's and a 7z's CRC-32 per entry; gzip's CRC-32 and length, bzip2's CRC per block,
+    /// xz's own check (CRC-32, CRC-64 or SHA-256) and zstd's checksum when the frame carries
+    /// one, for a compressed stream and so for every member of a tarball inside it; a tar
+    /// header's own checksum, which says the walk is still on the headers; and the framing
+    /// of everything else — an entry that ends before its size says it should is not whole.
+    /// What comes back is the count, the size, and the entries that failed with the reason
+    /// each one gave.
+    ///
+    /// `progress` hears the entry being read, how many have been started and how many
+    /// bytes have come out so far — inside an entry too, since one entry can be most of an
+    /// archive.
     ///
     /// A compressed tar is one stream, so it is walked once instead of being reopened per
     /// entry: testing a thousand-member `.tar.gz` the other way would read the archive a
-    /// thousand times.
+    /// thousand times. An archive a program reads is handed to that program's own `Test`,
+    /// once ([`Archive::verify_through_tool`]).
     pub fn verify(
         &self,
         cancel: &CancelToken,
-        progress: &mut dyn FnMut(&str, u64),
+        progress: &mut dyn FnMut(&str, u64, u64),
     ) -> Result<Report> {
         let mut report = Report::default();
+        if self.format.is_none() {
+            return self.verify_through_tool(cancel, progress);
+        }
+        // One entry read to nowhere, counted as it goes. Its failure is the entry's and
+        // goes in the report; only a cancel is the caller's.
+        fn read_one(
+            report: &mut Report,
+            path: String,
+            bytes: &mut dyn Read,
+            cancel: &CancelToken,
+            progress: &mut dyn FnMut(&str, u64, u64),
+        ) -> Result<()> {
+            report.members += 1;
+            let (members, before) = (report.members, report.bytes);
+            progress(&path, members, before);
+            let mut read_so_far = 0;
+            let outcome = copy(bytes, &mut io::sink(), cancel, &mut |n| {
+                read_so_far = n;
+                progress(&path, members, before + n);
+            });
+            match outcome {
+                Ok(read) => report.bytes += read,
+                Err(ArcError::Cancelled) => return Err(ArcError::Cancelled),
+                Err(e) => {
+                    // What came out before it broke was still read.
+                    report.bytes += read_so_far;
+                    report.bad.push((path, reason_of(e)));
+                }
+            }
+            Ok(())
+        }
         if self.format == Some(Format::SevenZ) {
             // One pass over the whole archive rather than one read per entry: a 7z block holds
             // several files together, so asking for them one at a time would decode the block
@@ -579,15 +620,9 @@ impl Archive {
                     return Ok(true);
                 }
                 let path = normalise(&entry.name);
-                report.members += 1;
-                progress(&path, report.bytes);
-                match copy(bytes, &mut io::sink(), cancel, &mut |_| {}) {
-                    Ok(read) => report.bytes += read,
-                    Err(ArcError::Cancelled) => {
-                        stopped = Some(ArcError::Cancelled);
-                        return Ok(false);
-                    }
-                    Err(e) => report.bad.push((path, e.to_string())),
+                if let Err(e) = read_one(&mut report, path, bytes, cancel, progress) {
+                    stopped = Some(e);
+                    return Ok(false);
                 }
                 Ok(true)
             });
@@ -613,13 +648,7 @@ impl Archive {
                         return Ok(true);
                     }
                     let path = normalise(&member.name);
-                    report.members += 1;
-                    progress(&path, report.bytes);
-                    match copy(bytes, &mut io::sink(), cancel, &mut |_| {}) {
-                        Ok(read) => report.bytes += read,
-                        Err(ArcError::Cancelled) => return Err(ArcError::Cancelled),
-                        Err(e) => report.bad.push((path, e.to_string())),
-                    }
+                    read_one(&mut report, path, bytes, cancel, progress)?;
                     Ok(true)
                 },
             )?;
@@ -628,7 +657,20 @@ impl Archive {
         if self.format.is_some_and(|f| f.is_tar() && !f.seekable()) {
             let format = self.format.expect("just asked");
             let mut stream = crate::tar::Reader::new(decoder(&self.source, format)?);
-            while let Some(item) = stream.next().map_err(|e| self.broken(e))? {
+            loop {
+                let item = match stream.next() {
+                    Ok(Some(item)) => item,
+                    Ok(None) => break,
+                    // The stream gave out between two members: a wrong header checksum, or
+                    // the compressor's own check failing on the padding. Nothing after this
+                    // can be found, and the members before it were read whole — so it is
+                    // one line of the report, against the archive, rather than a test that
+                    // says nothing about the entries it did read.
+                    Err(e) => {
+                        report.bad.push((String::new(), e.to_string()));
+                        break;
+                    }
+                };
                 if cancel.is_cancelled() {
                     return Err(ArcError::Cancelled);
                 }
@@ -636,13 +678,7 @@ impl Archive {
                     continue;
                 }
                 let path = tar_name(&item.name);
-                report.members += 1;
-                progress(&path, report.bytes);
-                match copy(&mut stream, &mut io::sink(), cancel, &mut |_| {}) {
-                    Ok(bytes) => report.bytes += bytes,
-                    Err(ArcError::Cancelled) => return Err(ArcError::Cancelled),
-                    Err(e) => report.bad.push((path, e.to_string())),
-                }
+                read_one(&mut report, path, &mut stream, cancel, progress)?;
             }
             return Ok(report);
         }
@@ -655,14 +691,91 @@ impl Archive {
             }
             let path = entry.path.clone();
             report.members += 1;
-            progress(&path, report.bytes);
-            match self.copy_out(&path, &mut io::sink(), cancel, &mut |_| {}) {
+            let (members, before) = (report.members, report.bytes);
+            progress(&path, members, before);
+            let mut read_so_far = 0;
+            let outcome = self.copy_out(&path, &mut io::sink(), cancel, &mut |n| {
+                read_so_far = n;
+                progress(&path, members, before + n);
+            });
+            match outcome {
                 Ok(bytes) => report.bytes += bytes,
                 Err(ArcError::Cancelled) => return Err(ArcError::Cancelled),
-                Err(e) => report.bad.push((path, e.to_string())),
+                Err(e) => {
+                    report.bytes += read_so_far;
+                    report.bad.push((path, reason_of(e)));
+                }
             }
         }
         Ok(report)
+    }
+
+    /// The test of an archive a program reads: that program's own `Test`, run once.
+    ///
+    /// The names go in a list file as they do for an extraction, and what the program
+    /// printed about them comes back as the report: an entry it named in a complaint is a
+    /// bad entry with that line as its reason, and a complaint that names none is against
+    /// the archive (an empty name). A table with no `Test` line extracts everything into a
+    /// temporary folder instead and throws it away — every one of these programs checks
+    /// what it extracts — which can only say that the archive failed, not where.
+    ///
+    /// The program is one opaque run, so `progress` is told once, at the start.
+    fn verify_through_tool(
+        &self,
+        cancel: &CancelToken,
+        progress: &mut dyn FnMut(&str, u64, u64),
+    ) -> Result<Report> {
+        let (Some(tool), Some(runner)) = (&self.tool, &self.runner) else {
+            return Err(ArcError::External {
+                path: self.name(),
+                reason: "no program is attached to this archive".to_string(),
+            });
+        };
+        let files: Vec<&ArcEntry> = self
+            .entries
+            .iter()
+            .filter(|entry| entry.kind != EntryKind::Dir)
+            .collect();
+        let names: Vec<String> = files.iter().map(|entry| entry.path.clone()).collect();
+        let mut report = Report {
+            members: files.len() as u64,
+            bytes: files.iter().map(|entry| entry.size).sum(),
+            bad: Vec::new(),
+        };
+        progress("", 0, 0);
+        let temp = scratch()?;
+        let outcome = if tool.can(crate::ext::Op::Test) {
+            tool.test(&self.source, &names, &temp, runner.as_ref(), cancel)
+        } else {
+            tool.extract(&self.source, &names, &temp, runner.as_ref(), cancel)
+                .map(|()| Vec::new())
+        };
+        let _ = std::fs::remove_dir_all(&temp);
+        match outcome {
+            Ok(bad) => {
+                report.bad = bad
+                    .into_iter()
+                    .map(|(name, why)| match name.is_empty() {
+                        true => (name, why),
+                        false => (normalise(&name), why),
+                    })
+                    .collect();
+                Ok(report)
+            }
+            Err(crate::ext::ExtError::Cancelled) => Err(ArcError::Cancelled),
+            // It ran and said no, with nothing a test could use: that is the verdict.
+            Err(crate::ext::ExtError::Failed { .. }) if !tool.can(crate::ext::Op::Test) => {
+                report.bad.push((
+                    String::new(),
+                    format!("`{}` could not extract it whole", tool.program),
+                ));
+                Ok(report)
+            }
+            Err(other) => Err(ArcError::External {
+                path: self.name(),
+                reason: other.to_string(),
+            }),
+        }
     }
 
     fn copy_out(
@@ -879,6 +992,18 @@ pub(crate) fn sevenz_error(path: &Path, e: sevenz_rust2::Error) -> ArcError {
     }
 }
 
+/// Why an entry did not come out whole, for a report that already names the entry: the
+/// reason alone, without the archive's path that an error carries for a message of its own.
+fn reason_of(error: ArcError) -> String {
+    match error {
+        ArcError::Io { source, .. } => source.to_string(),
+        ArcError::Broken { reason, .. }
+        | ArcError::Refused { reason, .. }
+        | ArcError::External { reason, .. } => reason,
+        other => other.to_string(),
+    }
+}
+
 fn copy(
     from: &mut dyn Read,
     to: &mut dyn Write,
@@ -904,6 +1029,38 @@ fn copy(
         })?;
         total += read as u64;
         progress(total);
+    }
+}
+
+/// A zstd stream that fails at its end when the checksum in the frame is not the one of
+/// the bytes that came out.
+///
+/// The decoder computes the checksum as it goes and keeps the one the frame carries, and
+/// compares neither: a `.zst` with a flipped bit inside a literal run decodes without a
+/// word. A frame written without a checksum has nothing to compare and passes, as it does
+/// for `zstd -t`.
+struct ZstdChecked<R: Read> {
+    inner: ruzstd::decoding::StreamingDecoder<R, ruzstd::decoding::FrameDecoder>,
+    checked: bool,
+}
+
+impl<R: Read> Read for ZstdChecked<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let read = self.inner.read(buf)?;
+        if read == 0 && !buf.is_empty() && !self.checked {
+            self.checked = true;
+            let written = self.inner.decoder.get_checksum_from_data();
+            let computed = self.inner.decoder.get_calculated_checksum();
+            if let (Some(written), Some(computed)) = (written, computed) {
+                if written != computed {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "the zstd checksum does not match what was unpacked",
+                    ));
+                }
+            }
+        }
+        Ok(read)
     }
 }
 
@@ -934,14 +1091,13 @@ pub(crate) fn decoder(path: &Path, format: Format) -> Result<Box<dyn Read>> {
         Format::TarGz | Format::Gz => Box::new(flate2::read::GzDecoder::new(file)),
         Format::TarBz2 | Format::Bz2 => Box::new(bzip2::read::BzDecoder::new(file)),
         Format::TarXz | Format::Xz => Box::new(lzma_rust2::XzReader::new(file, true)),
-        Format::TarZst | Format::Zst => {
-            Box::new(ruzstd::decoding::StreamingDecoder::new(file).map_err(|e| {
-                ArcError::Broken {
-                    path: name,
-                    reason: e.to_string(),
-                }
-            })?)
-        }
+        Format::TarZst | Format::Zst => Box::new(ZstdChecked {
+            inner: ruzstd::decoding::StreamingDecoder::new(file).map_err(|e| ArcError::Broken {
+                path: name,
+                reason: e.to_string(),
+            })?,
+            checked: false,
+        }),
         Format::Zip
         | Format::SevenZ
         | Format::Ar
@@ -2733,7 +2889,7 @@ mod tests {
             write_archive(&path, format, &TREE);
             let mut seen: Vec<String> = Vec::new();
             let report = open(&path)
-                .verify(&CancelToken::new(), &mut |name, _| {
+                .verify(&CancelToken::new(), &mut |name, _, _| {
                     seen.push(name.trim_start_matches('/').to_string())
                 })
                 .expect("a whole archive");
@@ -2742,7 +2898,9 @@ mod tests {
             let total: u64 = TREE.iter().map(|(_, b)| b.len() as u64).sum();
             assert_eq!(report.bytes, total, "{}", format.label());
             // Every member is named as it is read, so the progress bar can say where it is.
+            // More than once each: when it is begun, and as its bytes come out.
             seen.sort();
+            seen.dedup();
             assert_eq!(
                 seen,
                 ["readme.md", "src/deep/notes.txt", "src/main.rs"],
@@ -2765,7 +2923,7 @@ mod tests {
         bytes[at] ^= 0xff;
         std::fs::write(&path, &bytes).unwrap();
         let report = open(&path)
-            .verify(&CancelToken::new(), &mut |_, _| {})
+            .verify(&CancelToken::new(), &mut |_, _, _| {})
             .expect("the listing still reads");
         assert!(!report.is_whole(), "the damage went unnoticed: {report:?}");
         assert_eq!(report.members, 3);
@@ -3007,7 +3165,7 @@ mod tests {
                 "{name}"
             );
         }
-        let report = archive.verify(&cancel, &mut |_, _| {}).expect("a test");
+        let report = archive.verify(&cancel, &mut |_, _, _| {}).expect("a test");
         assert!(report.is_whole(), "{report:?}");
         assert_eq!(report.members, TREE.len() as u64);
     }
@@ -3076,5 +3234,285 @@ mod tests {
             entry.mtime.is_some(),
             "and the time it was written with came back too"
         );
+    }
+
+    /// A compressed stream's own check is what a test of it rests on, and each of the four
+    /// has one: gzip's CRC-32, bzip2's block CRC, xz's check and zstd's checksum — which the
+    /// decoder computes and leaves for somebody else to compare.
+    #[test]
+    fn a_damaged_compressed_stream_is_caught_by_its_own_checksum() {
+        let dir = tempfile::tempdir().unwrap();
+        // Long enough, and unlike itself enough, that the compressed form has a middle.
+        let body: Vec<u8> = (0..40_000u32)
+            .flat_map(|n| n.wrapping_mul(2_654_435_761).to_le_bytes())
+            .collect();
+        for format in [Format::Gz, Format::Bz2, Format::Xz, Format::Zst] {
+            let path = dir.path().join(format!("dump.bin.{}", format.extension()));
+            write_single(&path, format, &body);
+            // Opened while it is whole and tested after the damage, as a file that went bad
+            // on the disk is: opening reads the stream once to learn how long the entry is.
+            let archive = open(&path);
+            let report = archive
+                .verify(&CancelToken::new(), &mut |_, _, _| {})
+                .expect("a test");
+            assert!(report.is_whole(), "{}: {:?}", format.label(), report.bad);
+            assert_eq!((report.members, report.bytes), (1, body.len() as u64));
+
+            // The checksum itself, where the format ends with one, so nothing but the
+            // comparison can notice; a byte of the data for bzip2, which checks per block.
+            let mut bytes = std::fs::read(&path).unwrap();
+            let at = match format {
+                // CRC-32 then the length, four bytes each, at the very end.
+                Format::Gz => bytes.len() - 8,
+                Format::Zst => bytes.len() - 1,
+                _ => bytes.len() / 2,
+            };
+            bytes[at] ^= 0x01;
+            std::fs::write(&path, bytes).unwrap();
+            let report = archive
+                .verify(&CancelToken::new(), &mut |_, _, _| {})
+                .expect("the entry is still listed");
+            assert_eq!(report.members, 1, "{}", format.label());
+            assert_eq!(report.bad.len(), 1, "{}: went unnoticed", format.label());
+            assert_eq!(report.bad[0].0, "/dump.bin", "{}", format.label());
+            assert!(
+                !report.bad[0].1.contains("dump.bin"),
+                "the reason alone, the entry is named beside it: {:?}",
+                report.bad[0]
+            );
+        }
+    }
+
+    /// A tarball whose second header is damaged: the member before it was read whole and
+    /// says so, and the walk that could not go on is one line against the archive rather
+    /// than a test that failed to say anything.
+    #[test]
+    fn a_tar_header_with_a_wrong_checksum_ends_the_test_with_a_reason() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut tar = tar_bytes(&TREE);
+        // The first member is one block of header and one of data; the second header's
+        // name starts the third block.
+        tar[1024] ^= 0x20;
+        let path = dir.path().join("tree.tar.gz");
+        let mut enc = flate2::write::GzEncoder::new(
+            File::create(&path).unwrap(),
+            flate2::Compression::fast(),
+        );
+        enc.write_all(&tar).unwrap();
+        enc.finish().unwrap();
+        // The index is built by the same walk, so the archive is opened from one that is
+        // whole and tested after the damage, as a file that went bad on the disk is.
+        let good = dir.path().join("good.tar.gz");
+        write_archive(&good, Format::TarGz, &TREE);
+        let mut archive = open(&good);
+        archive.source = path;
+
+        let report = archive
+            .verify(&CancelToken::new(), &mut |_, _, _| {})
+            .expect("a report, not a refusal");
+        assert_eq!(report.members, 1, "{report:?}");
+        assert_eq!(report.bytes, TREE[0].1.len() as u64);
+        assert_eq!(report.bad.len(), 1, "{report:?}");
+        assert_eq!(report.bad[0].0, "", "against the archive");
+        assert!(report.bad[0].1.contains("checksum"), "{report:?}");
+    }
+
+    /// The bar moves inside an entry and not only between two of them: one entry can be
+    /// most of an archive.
+    #[test]
+    fn a_test_reports_bytes_inside_an_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        let body = vec![7u8; 400_000];
+        let path = dir.path().join("big.zip");
+        write_zip(&path, &[("big.bin", &body), ("small.txt", b"x")]);
+        let mut calls: Vec<(String, u64, u64)> = Vec::new();
+        let report = open(&path)
+            .verify(&CancelToken::new(), &mut |name, members, bytes| {
+                calls.push((name.to_string(), members, bytes))
+            })
+            .expect("a test");
+        assert!(report.is_whole());
+        let inside = calls
+            .iter()
+            .filter(|(name, _, bytes)| name == "/big.bin" && *bytes > 0 && *bytes < 400_000)
+            .count();
+        assert!(inside >= 2, "{calls:?}");
+        assert!(
+            calls.windows(2).all(|w| w[0].2 <= w[1].2),
+            "never backwards"
+        );
+        assert_eq!(calls.last().map(|c| (c.1, c.2)), Some((2, 400_001)));
+    }
+
+    /// A runner that lists, and answers `t` with whatever a test wants a program to have
+    /// said.
+    #[derive(Debug)]
+    struct Tester {
+        code: i32,
+        out: &'static str,
+        err: &'static str,
+        asked: Mutex<Vec<Call>>,
+    }
+
+    impl crate::ext::Run for Tester {
+        fn run(
+            &self,
+            program: &Path,
+            args: &[OsString],
+            cwd: Option<&Path>,
+            _cancel: &CancelToken,
+        ) -> std::result::Result<crate::ext::Ran, crate::ext::ExtError> {
+            if args[0] == "l" {
+                return Ok(crate::ext::Ran {
+                    code: Some(0),
+                    out: WIM_LISTING.to_string(),
+                    err: String::new(),
+                });
+            }
+            self.asked.lock().unwrap().push(Call {
+                program: program.display().to_string(),
+                args: args
+                    .iter()
+                    .map(|a| a.to_string_lossy().into_owned())
+                    .collect(),
+                cwd: cwd.map(Path::to_path_buf),
+            });
+            // The names are where the table says they are: in the list file.
+            let names = std::fs::read_to_string(cwd.expect("a folder").join(".fcmd-names"))
+                .expect("the list file");
+            assert_eq!(names, "readme.md\nsrc/main.rs\nsrc/deep/x.bin\n");
+            Ok(crate::ext::Ran {
+                code: Some(self.code),
+                out: self.out.to_string(),
+                err: self.err.to_string(),
+            })
+        }
+    }
+
+    fn tested_by(runner: &Arc<Tester>, dir: &Path) -> Archive {
+        let path = dir.join("prova.wim");
+        std::fs::write(&path, b"MSWIM\x00\x00\x00").unwrap();
+        Archive::open_external(
+            &path,
+            Arc::new(table()),
+            runner.clone(),
+            &Limits::default(),
+            &CancelToken::new(),
+        )
+        .expect("it lists")
+    }
+
+    /// An archive a program reads is tested by that program's own `Test`, in one run, and
+    /// what it complains about comes back against the entries it names.
+    #[test]
+    fn a_program_s_archive_is_tested_by_the_program_s_own_test() {
+        let dir = tempfile::tempdir().unwrap();
+        let whole = Arc::new(Tester {
+            code: 0,
+            out: "Everything is Ok\n",
+            err: "",
+            asked: Mutex::new(Vec::new()),
+        });
+        let report = tested_by(&whole, dir.path())
+            .verify(&CancelToken::new(), &mut |_, _, _| {})
+            .expect("a test");
+        assert!(report.is_whole(), "{report:?}");
+        // What the listing said there is: nothing was read here to count.
+        assert_eq!((report.members, report.bytes), (3, 14));
+        let calls = whole.asked.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1, "one run for the whole archive");
+        assert_eq!(calls[0].args[0], "t");
+        assert!(
+            !calls[0].args.iter().any(|a| a.contains("main.rs")),
+            "no name on the line: {:?}",
+            calls[0].args
+        );
+        let folder = calls[0].cwd.clone().expect("a folder of ours");
+        assert!(!folder.exists(), "{folder:?} was left behind");
+
+        // What 7-Zip 23.01 really wrote on its standard error for a damaged `.wim`.
+        let damaged = Arc::new(Tester {
+            code: 2,
+            out: "Sub items Errors: 1\n\nArchives with Errors: 1\n",
+            err: "ERROR: CRC Failed : src/main.rs\n",
+            asked: Mutex::new(Vec::new()),
+        });
+        let report = tested_by(&damaged, dir.path())
+            .verify(&CancelToken::new(), &mut |_, _, _| {})
+            .expect("a report");
+        assert_eq!(
+            report.bad,
+            [(
+                "/src/main.rs".to_string(),
+                "ERROR: CRC Failed : src/main.rs".to_string()
+            )]
+        );
+
+        // A program that fails and names nothing has still failed: against the archive.
+        let mute = Arc::new(Tester {
+            code: 2,
+            out: "",
+            err: "",
+            asked: Mutex::new(Vec::new()),
+        });
+        let report = tested_by(&mute, dir.path())
+            .verify(&CancelToken::new(), &mut |_, _, _| {})
+            .expect("a report");
+        assert_eq!(report.bad.len(), 1);
+        assert_eq!(report.bad[0].0, "");
+        assert!(report.bad[0].1.contains("code 2"), "{report:?}");
+    }
+
+    /// The real thing, when the machine has it: a `.wim` 7z made, damaged in the middle of
+    /// its data, and 7z's own test naming the file the damage is in.
+    #[test]
+    fn a_damaged_wim_is_found_by_7z_s_own_test_when_7z_is_here() {
+        let Some(program) = crate::ext::which("7z") else {
+            eprintln!("no 7z on this machine: skipped");
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("src")).unwrap();
+        let big: Vec<u8> = (0..100_000u32)
+            .flat_map(|n| n.wrapping_mul(2_654_435_761).to_le_bytes())
+            .collect();
+        std::fs::write(dir.path().join("src/big one.bin"), &big).unwrap();
+        std::fs::write(dir.path().join("readme.md"), b"leggimi\n").unwrap();
+        let made = std::process::Command::new(&program)
+            .args(["a", "-bd", "-twim", "prova.wim", "src", "readme.md"])
+            .current_dir(dir.path())
+            .output()
+            .expect("7z runs");
+        assert!(made.status.success(), "{made:?}");
+        let path = dir.path().join("prova.wim");
+
+        let cache = Cache::new(Limits::default());
+        let report = cache
+            .open(&path, &CancelToken::new())
+            .expect("it opens")
+            .verify(&CancelToken::new(), &mut |_, _, _| {})
+            .expect("a test");
+        assert!(report.is_whole(), "{report:?}");
+        assert_eq!(report.members, 2);
+
+        // The large file is nearly all of the archive, so its middle is that file's data.
+        let mut bytes = std::fs::read(&path).unwrap();
+        let middle = bytes.len() / 2;
+        for byte in &mut bytes[middle..middle + 64] {
+            *byte ^= 0x55;
+        }
+        std::fs::write(&path, bytes).unwrap();
+        cache.forget(&path);
+        let report = cache
+            .open(&path, &CancelToken::new())
+            .expect("the listing still reads")
+            .verify(&CancelToken::new(), &mut |_, _, _| {})
+            .expect("a report");
+        assert_eq!(report.bad.len(), 1, "{report:?}");
+        assert_eq!(
+            report.bad[0].0, "/src/big one.bin",
+            "a name with a space in it"
+        );
+        assert!(report.bad[0].1.contains("CRC"), "{report:?}");
     }
 }

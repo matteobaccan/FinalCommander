@@ -130,6 +130,26 @@ where the code lives, not whether it is linked into the binary.
   never a half-written file. `Esc` kills the program and removes the folder; a program that
   fails is that reason against each file still waiting. An entry nobody foresaw (`F3`, the
   cache's own copies) is still one run into a temporary folder.
+- **Testing** (`arc.test`, also `file.archive.test`; *Test archive* in the Files menu and in
+  `Shift+F3`) is `Archive::verify`: every entry is read to nowhere and what does not come
+  out whole is reported. What "whole" is checked with: a zip's and a 7z's CRC-32 per entry;
+  for a compressed stream — alone or under a tar — gzip's CRC-32 and length, bzip2's block
+  CRC, xz's check, and zstd's content checksum, which the decoder computes but does not
+  compare and this does; a tar header's checksum; and for `ar`, `cpio` and `rpm`, which
+  carry none, that every entry has the length it declares. A header that fails in a
+  compressed tar ends the walk and is one line against the archive (nothing after it can be
+  found), with the entries before it counted as read. An archive a program reads is handed
+  to that program's `Test` line, once, with the names in a list file; an exit code the table
+  counts as success is a whole archive, and otherwise each line of its standard error (or
+  the lines of its standard output that speak of an error) is looked through for one of the
+  names it was given — as whole words, the longest winning, nothing about the wording
+  assumed — and becomes that entry's reason, or the archive's when it names none. A table
+  with no `Test` line extracts everything into a temporary folder instead and can only say
+  that it failed. It runs as a job outside the queue (SPEC 03 §5): entries and bytes
+  counted, inside an entry too, against the totals the index gives; `Esc` stops it, and
+  kills the program. The end is one line when everything was whole, and otherwise a list
+  of every bad entry with its reason, filtered by typing, where `Enter` goes to the entry.
+  A failure that is not about an entry — the archive would not open — is an error box.
 - An encrypted container asks for its password rather than refusing. **Implemented** for 7z,
   whose header may itself be encrypted: the refusal the reader answers with is the one the
   panel and the viewer turn into a masked prompt, and the answer goes into the container

@@ -978,18 +978,7 @@ impl Tool {
         let program = self.found().ok_or_else(|| ExtError::NotInstalled {
             program: self.program.clone(),
         })?;
-        let list = into.join(".fcmd-names");
-        let mut text = String::new();
-        for name in names {
-            // Inside an archive the separator is `/` and a leading one is ours, not the
-            // archive's: what goes in the file is the name the tool printed.
-            text.push_str(name.trim_start_matches('/'));
-            text.push('\n');
-        }
-        std::fs::write(&list, text).map_err(|e| ExtError::Io {
-            program: self.program.clone(),
-            reason: format!("{}: {e}", list.display()),
-        })?;
+        let list = self.write_names(names, into)?;
         let line = self.line(
             Op::Extract,
             &Fill {
@@ -1020,6 +1009,155 @@ impl Tool {
         }
         Ok(())
     }
+}
+
+impl Tool {
+    /// The list file: one name per line, in UTF-8, in `folder`.
+    fn write_names(&self, names: &[String], folder: &Path) -> Result<PathBuf, ExtError> {
+        let list = folder.join(".fcmd-names");
+        let mut text = String::new();
+        for name in names {
+            // Inside an archive the separator is `/` and a leading one is ours, not the
+            // archive's: what goes in the file is the name the tool printed.
+            text.push_str(name.trim_start_matches('/'));
+            text.push('\n');
+        }
+        std::fs::write(&list, text).map_err(|e| ExtError::Io {
+            program: self.program.clone(),
+            reason: format!("{}: {e}", list.display()),
+        })?;
+        Ok(list)
+    }
+
+    /// Run `Test` over these entries and say which of them the program complained about.
+    ///
+    /// An empty answer is an archive that tested whole: the program ended with a code the
+    /// table counts as success. Otherwise each line it wrote on its standard error — where
+    /// every one of these puts a complaint; its standard output, where it wrote nothing
+    /// there — is looked through for one of the names it was given, and comes back beside
+    /// that name; a line that names nothing comes back beside an empty name, which is a
+    /// complaint about the archive. A program that fails and says nothing at all is one
+    /// such line, with its exit code.
+    ///
+    /// `work` is a folder of the caller's for the list file, and where the program runs.
+    pub fn test(
+        &self,
+        archive: &Path,
+        names: &[String],
+        work: &Path,
+        runner: &dyn Run,
+        cancel: &CancelToken,
+    ) -> Result<Vec<(String, String)>, ExtError> {
+        let program = self.found().ok_or_else(|| ExtError::NotInstalled {
+            program: self.program.clone(),
+        })?;
+        let list = self.write_names(names, work)?;
+        let line = self.line(
+            Op::Test,
+            &Fill {
+                archive: Some(archive),
+                list_file: Some(&list),
+                ..Fill::default()
+            },
+        )?;
+        let ran = runner.run(&program, &line.args, Some(work), cancel);
+        let _ = std::fs::remove_file(&list);
+        let ran = ran?;
+        if ran.code.is_some_and(|code| code <= line.success_up_to) {
+            return Ok(Vec::new());
+        }
+        let known: std::collections::HashSet<&str> = names
+            .iter()
+            .map(|name| name.trim_start_matches('/'))
+            .collect();
+        let complaints: Vec<&str> = if ran.err.trim().is_empty() {
+            // On the standard output a complaint sits among the banner and the totals, so
+            // only the lines that call themselves one are taken.
+            ran.out
+                .lines()
+                .map(str::trim)
+                .filter(|line| {
+                    let lower = line.to_ascii_lowercase();
+                    lower.contains("error") || lower.contains("failed") || lower.contains("corrupt")
+                })
+                .collect()
+        } else {
+            ran.err
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .collect()
+        };
+        let mut bad: Vec<(String, String)> = Vec::new();
+        for complaint in complaints {
+            let name = named_in(complaint, &known).unwrap_or_default().to_string();
+            // One line per entry, and one per distinct thing said about the archive.
+            let said = bad
+                .iter()
+                .any(|(n, why)| *n == name && (!name.is_empty() || why == complaint));
+            if !said {
+                bad.push((name, complaint.to_string()));
+            }
+        }
+        if bad.is_empty() {
+            bad.push((
+                String::new(),
+                match ran.code {
+                    Some(code) => format!("`{}` ended with code {code}", self.program),
+                    None => format!("`{}` was killed", self.program),
+                },
+            ));
+        }
+        Ok(bad)
+    }
+}
+
+/// The entry a line of a program's complaint is about: the longest of the known names
+/// that stands in it as whole words.
+///
+/// No two programs word a complaint the same way — `ERROR: CRC Failed : src/a.bin`,
+/// `src/a.bin - checksum error`, `Checksum error in src/a.bin. The file is corrupt` — so
+/// the line is not parsed at all: every run of its words is looked up among the names the
+/// program was given, which finds a name with spaces in it and does not care what is
+/// written around it. A full stop, a colon or a quote stuck to the end of the name is
+/// tried without.
+fn named_in<'a>(line: &str, known: &std::collections::HashSet<&'a str>) -> Option<&'a str> {
+    // Where a word starts, and where one ends.
+    let mut starts = Vec::new();
+    let mut ends = Vec::new();
+    let mut inside = false;
+    for (at, c) in line.char_indices() {
+        if c.is_whitespace() {
+            if inside {
+                ends.push(at);
+            }
+            inside = false;
+        } else if !inside {
+            starts.push(at);
+            inside = true;
+        }
+    }
+    if inside {
+        ends.push(line.len());
+    }
+    let mut best: Option<&'a str> = None;
+    for &start in &starts {
+        for &end in ends.iter().filter(|&&end| end > start) {
+            let words = &line[start..end];
+            let bare = words
+                .trim_end_matches(['.', ':', ',', ';'])
+                .trim_matches(|c| matches!(c, '"' | '\'' | '`'))
+                .trim_end_matches(['.', ':', ',', ';']);
+            for candidate in [words, bare] {
+                if let Some(name) = known.get(candidate) {
+                    if best.is_none_or(|found| name.len() > found.len()) {
+                        best = Some(name);
+                    }
+                }
+            }
+        }
+    }
+    best
 }
 
 /// The first line with anything on it, trimmed — a program's reason, without its banner.
@@ -1682,5 +1820,42 @@ Blocks = 1\n\
         assert!(which("fcmd-no-such-program-anywhere").is_none());
         // A name with a separator in it is a path, and is not looked for on the PATH at all.
         assert!(which("no/such/program").is_none());
+    }
+
+    /// A complaint is not parsed: the entry it is about is whichever known name stands in
+    /// it, whatever the program wrote around it.
+    #[test]
+    fn the_entry_a_complaint_is_about_is_found_however_it_is_worded() {
+        let known: std::collections::HashSet<&str> = [
+            "src/a.bin",
+            "src/a.bin.bak",
+            "My Documents/annual report.doc",
+            "src",
+        ]
+        .into_iter()
+        .collect();
+        for (line, name) in [
+            // 7-Zip, unrar and RARLAB's `rar`, as each words it.
+            ("ERROR: CRC Failed : src/a.bin", Some("src/a.bin")),
+            ("src/a.bin - checksum error", Some("src/a.bin")),
+            (
+                "Checksum error in src/a.bin. The file is corrupt",
+                Some("src/a.bin"),
+            ),
+            // The longest name wins, so a file is not taken for the one it is named after
+            // or for the folder it is in.
+            ("ERROR: Data Error : src/a.bin.bak", Some("src/a.bin.bak")),
+            (
+                "ERROR: CRC Failed : My Documents/annual report.doc",
+                Some("My Documents/annual report.doc"),
+            ),
+            ("\"src/a.bin\": bad data", Some("src/a.bin")),
+            // Part of a word is not the word.
+            ("ERROR: CRC Failed : other/src/a.binary", None),
+            ("Archives with Errors: 1", None),
+            ("", None),
+        ] {
+            assert_eq!(named_in(line, &known), name, "{line}");
+        }
     }
 }

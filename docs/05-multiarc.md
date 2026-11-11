@@ -316,7 +316,11 @@ Still to build:
   `Extract` once for all of them, beside the destination; each file is moved into place as
   the program finishes it and its bytes are counted as they land (SPEC 04 §4). `Shift+F2`
   and the archive commands take a `.rar` like any other archive;
-- `Test` on `Alt+F6`;
+- ~~`Test` on `Alt+F6`~~ — built, as `Tool::test` behind *Test archive* (`arc.test`;
+  `Alt+F6` is the link dialog here and stays that): the table's `Test` line runs once over
+  every entry, and a complaint is matched to the entry it names without parsing the
+  wording, since no two programs word one alike (SPEC 04 §4). Checked against 7-Zip 23.01
+  on a `.wim` with a damaged file in it, which it reports as `ERROR: CRC Failed : <name>`;
 - ~~`[[archiver]]` blocks in the configuration~~ — built: SPEC 07 §2b-quinquies is the reference.
   They are read once at startup and installed into one table for the whole run, which every
   archive cache and the decision whether `Enter` goes into a file both read, so a format a user

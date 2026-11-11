@@ -174,6 +174,9 @@ pub enum PickKind {
     Tunnels,
     /// What can be done with the archive at hand (`Shift+F3`).
     ArcCommands,
+    /// The entries a test of an archive found damaged, each with its reason: `Enter` goes
+    /// to one (SPEC 04 §4).
+    ArcBad,
     /// The menu the user wrote (`F2`, SPEC 06 §4), one level of it at a time.
     UserMenu,
     /// One side's tabs (`Ctrl+Alt+A`, SPEC 02 §8): `Enter` goes to one, `Ctrl+↑/↓` move it.

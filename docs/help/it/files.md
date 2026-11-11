@@ -516,6 +516,28 @@ scrive in una cartella nascosta accanto alla destinazione (`.fcmd-unpack-…`), 
 suo posto appena il programma l'ha finito, e la barra conta i byte mentre arrivano. `Esc`
 ferma il programma e toglie la cartella con quello che c'era scritto a metà.
 
+## Provare un archivio
+
+*Prova archivio* — nel menu File e nel menu degli archivi, `Shift+F3` — legge ogni voce e non
+scrive niente: i byte vengono decompressi, controllati e buttati via, nello stesso riquadro di
+ogni lavoro, con le voci e i byte contati ed `Esc` per fermarsi. Con che cosa vengono
+controllati dipende dal formato: il CRC di ogni voce in uno zip e in un 7z; il CRC e la
+lunghezza di gzip, i checksum dei blocchi di bzip2, il controllo proprio di xz e il checksum
+di zstd per un file compresso e per ogni voce di un tar compresso con uno di questi; il
+checksum di ogni intestazione in un tar; e per il resto, che ogni voce sia lunga quanto
+dichiara.
+
+Un archivio intero finisce con una riga che lo dice, con quanto è stato letto. Uno che non lo
+è finisce con un elenco di **tutte** le voci che non sono uscite, ognuna con il suo motivo —
+scrivi per restringerlo, `Enter` va alla voce dentro l'archivio. Un'intestazione rovinata in
+un tar ferma lì la lettura, perché niente di ciò che segue si può più trovare, ed è una riga
+a sé.
+
+Un archivio letto attraverso un programma viene provato da quel programma — `7z t` — in un
+solo lancio; le righe con cui si lamenta tornano accanto alle voci che nominano. Il riquadro
+allora non ha una barra da muovere, solo il nome ed `Esc`: il programma non dice niente finché
+non ha finito.
+
 Si apre anche un archivio dentro un archivio, e uno su un server o in un bucket. Nessuno dei due
 è un file in cui questo programma possa spostarsi, quindi viene prima copiato nella cartella
 temporanea, una volta sola, e letto da lì — una pausa la prima volta e niente dopo, con il

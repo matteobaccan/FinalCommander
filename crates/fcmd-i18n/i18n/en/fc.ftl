@@ -1844,3 +1844,7 @@ ai-rewrite-same = the model gave the block back as it is: nothing to replace
 ai-answer-kept = the answer is { $name } in the answers' folder (ai:) — the editor was left in front
 ai-failure-question = This command ended with exit code { $code }: `{ $command }` — why did it fail, and what would fix it? Briefly.
 ai-send-failure = The command that failed and the last { $lines } lines it printed go to { $host }.
+
+# archives and jobs
+arc-test-whole = { $name }: { $files } entries tested, { $bytes } — all of them whole
+arc-test-bad-title = { $name }: { $bad } of { $files } entries did not come out whole

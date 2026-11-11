@@ -1392,8 +1392,10 @@ impl Command {
             ("file.strip_metadata", _) => Command::FileStripMeta,
             ("file.pack", _) => Command::FilePack,
             ("file.unpack", _) => Command::FileUnpack,
-            ("arc.commands", _) => Command::ArcCommands,
-            ("arc.test", _) => Command::ArcTest,
+            // Both under the name `docs/03-keymap.md` gives them as well, which a keymap
+            // written from that page uses; `id` answers the short one.
+            ("arc.commands" | "file.archive.commands", _) => Command::ArcCommands,
+            ("arc.test" | "file.archive.test", _) => Command::ArcTest,
             ("net.tunnel", _) => Command::NetTunnel,
             ("net.tunnels", _) => Command::NetTunnels,
             ("tool.usermenu", _) => Command::ToolUserMenu,
@@ -1624,5 +1626,17 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The archive commands answer to the names the keymap page writes them under too.
+    #[test]
+    fn the_archive_commands_have_two_names() {
+        assert_eq!(Command::parse("file.archive.test"), Some(Command::ArcTest));
+        assert_eq!(Command::parse("arc.test"), Some(Command::ArcTest));
+        assert_eq!(
+            Command::parse("file.archive.commands"),
+            Some(Command::ArcCommands)
+        );
+        assert_eq!(Command::ArcTest.id(), "arc.test");
     }
 }

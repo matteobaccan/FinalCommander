@@ -1772,3 +1772,7 @@ ai-rewrite-same = 模型原样返回了该块：无需替换
 ai-answer-kept = 回答是回答文件夹（ai:）中的 { $name }——编辑器仍在前台
 ai-failure-question = 此命令以退出码 { $code } 结束：`{ $command }`——为什么失败，如何修复？请简要说明。
 ai-send-failure = 失败的命令及其最后 { $lines } 行输出将发送到 { $host }。
+
+# archives and jobs
+arc-test-whole = { $name }：已测试 { $files } 个条目，{ $bytes } — 全部完好
+arc-test-bad-title = { $name }：{ $files } 个条目中有 { $bad } 个已损坏

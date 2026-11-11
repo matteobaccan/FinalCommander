@@ -1834,3 +1834,7 @@ ai-rewrite-same = das Modell gab den Block unverändert zurück: nichts zu erset
 ai-answer-kept = die Antwort ist { $name } im Antwortordner (ai:) — der Editor blieb vorn
 ai-failure-question = Dieser Befehl endete mit Exit-Code { $code }: `{ $command }` — warum ist er gescheitert, und was würde ihn beheben? Kurz.
 ai-send-failure = Der gescheiterte Befehl und die letzten { $lines } Zeilen seiner Ausgabe gehen an { $host }.
+
+# archives and jobs
+arc-test-whole = { $name }: { $files } Einträge geprüft, { $bytes } — alle unversehrt
+arc-test-bad-title = { $name }: { $bad } von { $files } Einträgen sind beschädigt

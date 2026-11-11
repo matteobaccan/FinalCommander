@@ -8706,4 +8706,109 @@ third line
         assert!(top.contains("00:00 / 00:02"), "{top}");
         assert!(top.contains("64×48"), "{top}");
     }
+
+    /// A test that found damage ends in a list: every entry that did not come out, with the
+    /// reason it gave, under a title that says how many of how many — and `Enter` goes to
+    /// the entry in the archive. A test that found none says so on the status line, and one
+    /// that could not read the archive at all is an error, not a list.
+    #[test]
+    fn a_test_that_found_damage_lists_every_bad_entry_and_enter_goes_to_one() {
+        use fcmd_jobs::{JobKind, Outcome};
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("backup.zip"), b"PK\x05\x06").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        let archive = app.panel().cwd.join("backup.zip");
+        let test = |app: &mut App, outcome: Outcome| {
+            app.mode = Mode::Normal;
+            app.take_requests();
+            app.run(fcmd_cmd::Command::ArcTest);
+            let id = app
+                .take_requests()
+                .into_iter()
+                .find_map(|r| match r {
+                    crate::app::Request::ArcTest { id, .. } => Some(id),
+                    _ => None,
+                })
+                .expect("a test was asked for");
+            app.handle_event(Event::JobDone {
+                id,
+                kind: JobKind::Test,
+                outcome,
+            });
+        };
+
+        test(
+            &mut app,
+            Outcome {
+                files: 12,
+                bytes: 3 * 1024 * 1024,
+                ..Outcome::default()
+            },
+        );
+        assert!(matches!(app.mode, Mode::Normal), "{:?}", app.mode);
+        assert!(!app.status_error, "{}", app.status);
+        assert!(app.status.contains("backup.zip"), "{}", app.status);
+        assert!(app.status.contains("12"), "{}", app.status);
+        assert!(app.status.contains("whole"), "{}", app.status);
+
+        let mut errors: Vec<(VPath, String)> = (0..20)
+            .map(|n| {
+                (
+                    archive.enter(format!("/photos/img{n:02}.jpg")),
+                    "CRC mismatch".to_string(),
+                )
+            })
+            .collect();
+        errors.push((
+            archive.enter("/src/main.rs"),
+            "invalid checksum".to_string(),
+        ));
+        test(
+            &mut app,
+            Outcome {
+                files: 40,
+                errors,
+                ..Outcome::default()
+            },
+        );
+        let text = frame(&mut app, 80, 24);
+        assert!(
+            text.contains("backup.zip: 21 of 40 entries did not come out whole"),
+            "{text}"
+        );
+        assert!(text.contains("photos/img00.jpg — CRC mismatch"), "{text}");
+        // All of them are in the list, not the first eight: the last is a keystroke away.
+        press(&mut app, "End");
+        let text = frame(&mut app, 80, 24);
+        assert!(text.contains("src/main.rs — invalid checksum"), "{text}");
+        app.take_requests();
+        press(&mut app, "Enter");
+        assert!(matches!(app.mode, Mode::Normal), "{:?}", app.mode);
+        assert_eq!(app.panel().cwd, archive.enter("/src"));
+        assert_eq!(app.panel().want_cursor.as_deref(), Some("main.rs"));
+
+        // The archive itself would not open: one reason, in the box every job's errors use.
+        app.panels[app.active].go(VPath::local(dir.path()), true);
+        let entries = fcmd_vfs::local::list_blocking(
+            &VPath::local(dir.path()),
+            &fcmd_core::CancelToken::new(),
+        )
+        .unwrap();
+        app.handle_event(Event::Listed {
+            panel: app.active,
+            generation: app.panel().generation,
+            result: Ok(entries),
+        });
+        press(&mut app, "Down");
+        test(
+            &mut app,
+            Outcome {
+                errors: vec![(archive.clone(), "broken archive (no index)".to_string())],
+                ..Outcome::default()
+            },
+        );
+        assert!(app.status_error, "{}", app.status);
+        assert!(matches!(app.mode, Mode::Message { .. }), "{:?}", app.mode);
+    }
 }

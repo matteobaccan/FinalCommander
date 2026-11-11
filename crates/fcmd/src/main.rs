@@ -4139,27 +4139,36 @@ fn run_test(
     // one rather than the container it came out of.
     let outcome = match archives.open_host(&archive, &cancel) {
         Ok(handle) => {
-            let total = handle
+            let files = handle
                 .entries()
                 .iter()
-                .filter(|e| e.kind != fcmd_core::EntryKind::Dir)
-                .count() as u64;
-            let mut done = 0u64;
-            let mut last = std::time::Instant::now();
-            let report = handle.verify(&cancel, &mut |name, bytes| {
-                done += 1;
-                if last.elapsed() < std::time::Duration::from_millis(100) {
+                .filter(|e| e.kind != fcmd_core::EntryKind::Dir);
+            let (total, bytes_total) = files.fold((0u64, 0u64), |(files, bytes), entry| {
+                (files + 1, bytes.saturating_add(entry.size))
+            });
+            let mut last: Option<std::time::Instant> = None;
+            let report = handle.verify(&cancel, &mut |name, members, bytes| {
+                // The first is always sent, so the box says what is being tested at once —
+                // a program testing a large archive reports nothing else until it ends.
+                if last.is_some_and(|at| at.elapsed() < std::time::Duration::from_millis(100)) {
                     return;
                 }
-                last = std::time::Instant::now();
+                last = Some(std::time::Instant::now());
                 let _ = tx.send(Event::JobProgress {
                     id,
                     progress: Progress {
                         phase: Phase::Running,
-                        files_done: done,
+                        // The entry being read is not done yet.
+                        files_done: members.saturating_sub(1),
                         files_total: total,
                         bytes_done: bytes,
-                        current: Some(archive.enter(name)),
+                        // What the index says it unpacks to. A listing that gave no sizes
+                        // leaves this at nothing and the bar counts files instead.
+                        bytes_total,
+                        current: Some(match name.is_empty() {
+                            true => archive.clone(),
+                            false => archive.enter(name),
+                        }),
                         elapsed: started.elapsed(),
                         ..Progress::default()
                     },
@@ -4172,7 +4181,11 @@ fn run_test(
                     errors: report
                         .bad
                         .into_iter()
-                        .map(|(name, why)| (archive.enter(name), why))
+                        // A complaint with no name is about the archive, not an entry.
+                        .map(|(name, why)| match name.is_empty() {
+                            true => (archive.clone(), why),
+                            false => (archive.enter(name), why),
+                        })
                         .collect(),
                     ..Outcome::default()
                 },

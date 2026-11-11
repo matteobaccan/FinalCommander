@@ -1834,3 +1834,7 @@ ai-rewrite-same = el modelo devolvió el bloque tal cual: nada que sustituir
 ai-answer-kept = la respuesta es { $name } en la carpeta de respuestas (ai:) — el editor quedó delante
 ai-failure-question = Este comando terminó con código de salida { $code }: `{ $command }` — ¿por qué falló y qué lo arreglaría? Brevemente.
 ai-send-failure = El comando que falló y las últimas { $lines } líneas que imprimió van a { $host }.
+
+# archives and jobs
+arc-test-whole = { $name }: { $files } entradas comprobadas, { $bytes } — todas íntegras
+arc-test-bad-title = { $name }: { $bad } de { $files } entradas están dañadas

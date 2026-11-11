@@ -496,6 +496,25 @@ hidden folder beside the destination (`.fcmd-unpack-…`), each file moves into 
 as the program has finished it, and the bar counts the bytes as they land. `Esc` stops the
 program and removes the folder with whatever was half written in it.
 
+## Testing an archive
+
+*Test archive* — in the Files menu and in the archive menu, `Shift+F3` — reads every entry
+and writes nothing: the bytes are unpacked, checked and thrown away, in the same box as any
+job, with the entries and the bytes counted and `Esc` to stop. What they are checked with is
+whatever the format carries: the CRC of every entry in a zip and a 7z; gzip's CRC and
+length, bzip2's block checksums, xz's own check and zstd's checksum for a compressed file
+and for every entry of a tarball packed with one; the checksum of each header in a tar; and
+for the rest, that every entry is as long as it says.
+
+An archive that is whole ends in one line saying so, with what was read. One that is not
+ends in a list of **every** entry that did not come out, each with its reason — type to
+narrow it, `Enter` goes to the entry inside the archive. A damaged header in a tarball stops
+the walk there, since nothing after it can be found, and that is a line of its own.
+
+An archive read through a program is tested by that program — `7z t` — in one run; the
+lines it complains in come back against the entries they name. The box has no bar to move
+then, only the name and `Esc`: the program says nothing until it has finished.
+
 An archive inside an archive opens too, and so does one on a server or in a bucket. Neither is
 a file this program can seek in, so it is copied into the temporary directory first, once, and
 read from there — a pause the first time and nothing afterwards, with the path still saying

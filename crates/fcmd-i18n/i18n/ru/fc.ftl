@@ -1820,3 +1820,7 @@ ai-rewrite-same = модель вернула блок без изменений
 ai-answer-kept = ответ — { $name } в папке ответов (ai:); редактор оставлен на экране
 ai-failure-question = Эта команда завершилась с кодом { $code }: `{ $command }` — почему она не удалась и что это исправит? Кратко.
 ai-send-failure = Неудавшаяся команда и последние { $lines } строк её вывода уходят на { $host }.
+
+# archives and jobs
+arc-test-whole = { $name }: проверено записей: { $files }, { $bytes } — все целы
+arc-test-bad-title = { $name }: повреждено записей: { $bad } из { $files }
