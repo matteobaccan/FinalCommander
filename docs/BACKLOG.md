@@ -13,6 +13,178 @@ Still in the order the menus mention things, with the sections after them taken 
 have. **Open question** marks the rows where a decision comes before the code, and the row
 says what the decision stands on.
 
+## Parity after 0.41
+
+"Do we do everything the other commanders do?" — **no: about three quarters of it.** For
+0.41.0 the sources of the others were read rather than their brochures: FAR Manager, far2l,
+Midnight Commander, Double Commander, Krusader, muCommander, nnn, ranger, lf, yazi, broot,
+vifm, superfile and xplr from their repositories; Total Commander from the 394 internal
+commands Double Commander records for compatibility; Directory Opus and TheFile.Ninja from
+their home pages; Commander One from its Wikipedia article. The sites of Total Commander,
+Commander One, ForkLift, Marta and Krusader could not be reached from where this was read, so
+ForkLift and Marta appear below only where a feature is one they are known for. What was read
+from each, and the count per program, is in `docs/02-features.md` §12: 1038 groups of features,
+706 there, 92 partly, 240 not — 72% counting a part as half, 74% against the seven orthodox
+commanders alone, from 55% (xplr, which is a scripting host first) to 83%.
+
+The quarter that is missing is mostly the same dozen things in program after program. Every
+gap is below, a gap already written further down this file included, with a pointer instead
+of a second description. **Who** is who has it. **Work** is `S` (days, inside one crate), `M`
+(a week or two, or a new dialog and a spec section) or `L` (a subsystem, or a dependency to
+argue for). **Rules** is whether `AGENTS.md` and *Settled* below allow it: no GUI toolkit, no
+GPL dependency, a dependency only with a justification, no Lua and no macro conditions, and
+anything that is another program's job done by running that program (SPEC 02 §14: found on
+the `PATH`, listed in the external programs panel, named when it is missing).
+
+Three findings that are not gaps against anybody:
+
+* **`app.palette` is declared and not built.** The command is in the vocabulary, the `far`
+  keymap puts it on `Ctrl+Shift+P`, SPEC 07 and SPEC 08 name it, and the application answers
+  that it is not implemented. It is the only command of the vocabulary with no code behind it.
+  `S`: the list-that-narrows of *All settings* over `Command::all()` and its sentences.
+* **The feature table was behind the code** in both directions, and is corrected: `4.5b` said
+  `~` for a row whose SMB, NFS, MTP/ADB and rclone halves do not exist at all; `2.10` said `✓`
+  with drag and drop with the desktop in it, which is decided against; `5.8`, `8.8` and `9.6`
+  said "not there" for things that partly are; and six things the program does had no row.
+* **The two open issues from users are both answered in released versions** and still open on
+  GitHub: #38 (`Shift+↑`/`Shift+↓` select, bound in `far.toml`) and #29 (`Ctrl+C` on the
+  command line copies it); `CHANGELOG.md` names both. They want closing, not work.
+
+### Panels and navigation
+
+| Item | Who | Work | Rules | Note |
+| --- | --- | --- | --- | --- |
+| Cut, copy and paste of files inside the program | Total Commander, Double Commander, Krusader, muCommander, ranger, lf, yazi, nnn, vifm, superfile | S | yes | *Cut and paste of files* below. A list of sources remembered with a verb; pasting is the copy or move dialog with them. The most common thing we lack |
+| Marks that survive a change of folder | nnn, ranger, lf, yazi, broot, xplr, Double Commander (stash) | M | yes | Feature 2.7. The temporary panel is half of it; the other half is the marks staying when the panel moves |
+| Icons | yazi, lf, nnn, superfile, broot | S | yes | Feature 1.22. Glyphs of a Nerd Font by kind and extension, off by default; a table, no dependency |
+| Stacked layout | Total Commander, Double Commander, Midnight Commander, Krusader, muCommander | S–M | yes | Feature 1.2: one panel above the other |
+| Thumbnail view | Total Commander, Double Commander, Krusader, Directory Opus, Commander One | M | yes | *Thumbnail view* below; the real pixels it waited for are in |
+| Miller columns | ranger, lf, yazi, vifm, TheFile.Ninja | M | yes, as a third layout | **Open question**: it is the other school of file manager, and the quick view panel is our answer to its preview column |
+| `vi` keys with counts, a visual mode and registers | vifm, ranger, lf, yazi, nnn, superfile | M–L | yes | *More keymap profiles* below. The profile is a file; counts and the visual mode are new machinery in the key reader |
+| `tc` keymap profile | Total Commander, Double Commander, Krusader's own profile for it | S–M | yes | *More keymap profiles* below |
+| Synchronised browsing | Total Commander, Double Commander, Krusader, ForkLift | S | yes | Entering `x` on one side enters `x` on the other while it is on; the natural companion of comparing two trees |
+| Tabs: reopen a closed one, close the duplicates or the others, sets kept under a name | Total Commander, Double Commander, Krusader, muCommander | S | yes | The state file already holds the tabs |
+| Sessions under a name | vifm, nnn, Krusader | S–M | yes | One session is restored today |
+| The files themselves on the desktop's clipboard | Total Commander, Double Commander, Krusader, muCommander, FAR | L | only as programs (`wl-copy`, `xclip`, `pbcopy`, PowerShell) | *The files themselves on the clipboard* below |
+| The selection to a file and back; the listing written out or printed | Total Commander, Double Commander, Directory Opus | S | yes | *Export or print a listing* below |
+| Showing only the selected rows | Total Commander, ranger | S | yes | A filter whose condition is "selected" |
+| Entries per folder as a column; sort by permissions, by group, at random; the cursor to the next selected row | lf, broot, ranger, muCommander, yazi, Total Commander | S each | yes | Small, and each is one program's habit |
+| A tree with the files in it, folding in place | broot, vifm | M | yes | The tree panel holds folders; the branch view is flat |
+| A standing list of names never shown | Total Commander, Double Commander, lf | S | yes | A named filter that is always on |
+| Tags, labels, ratings | Directory Opus, TheFile.Ninja, ranger, lf, ForkLift | M | parked by the author | *Tags, labels, ratings* below |
+| A sidebar; more than two panels | superfile, Directory Opus, ForkLift, broot | M | yes | *Sidebar* and *More than two panels* below |
+
+### File operations
+
+| Item | Who | Work | Rules | Note |
+| --- | --- | --- | --- | --- |
+| The wastebasket as a place: list it, put a file back, empty it | Krusader, muCommander, broot, vifm, yazi, Total Commander | M | yes | Feature 4.10, *The wastebasket as a panel* below. The `trash` crate already in the tree lists and restores on Linux and Windows; macOS has no listing |
+| Elevated operations | Krusader, Commander One, Double Commander, FAR, far2l, nnn | L | **no** — *Settled*: a privileged helper is a security design | Feature 3.19. The one large thing six of them have and we have decided not to |
+| Renaming many files by editing their names in the editor | ranger, vifm, nnn, yazi, Total Commander | S | yes | The names into our own editor, one per line; on save the lines become the plan the multi-rename tool already previews and undoes |
+| More digests: SHA-512, SHA-3, BLAKE | Krusader, Double Commander, Total Commander, muCommander | S | SHA-512 yes (`sha2` is in the tree); the others are a dependency each | |
+| Opening the desktop's file manager or terminal on the item | muCommander, Total Commander, ForkLift, Marta | S | yes, as programs | Feature 8.8 |
+| A log of every operation in a file | Total Commander, Double Commander | S | yes | With the per-job log of *A queue for jobs* below |
+| Changing where a symbolic link points | Midnight Commander, ranger | S | yes | A row in the link dialog |
+| Extended flags (`chattr`) and access-control lists | Midnight Commander, Total Commander | M | flags yes (an `ioctl` in `fcmd-platform`); ACLs are *Settled* as another model | *ACL editor* below |
+| Merging in the comparison | Midnight Commander | M | yes | *Two files side by side* below is the place |
+| Several files made at once from a list | yazi, nnn | S | yes | `F7` already takes a nested path; a list is the same dialog |
+| Printing | Total Commander, Krusader, FAR, Directory Opus | S | yes, through `lp` | Feature 7.9 |
+| Encoding UUE, XXE, MIME; sending by mail; `gpg` on a file | Total Commander, muCommander, Midnight Commander, nnn | S each | `gpg` and mail as programs | One program each: user-menu material rather than core |
+| Pictures converted and resized, metadata written | Directory Opus, nnn | M | as a program | *Image conversion* and *Editing metadata* below |
+
+### Archives, servers and other filesystems
+
+| Item | Who | Work | Rules | Note |
+| --- | --- | --- | --- | --- |
+| SMB | far2l, muCommander, Krusader, Double Commander, Commander One, ForkLift | L in process; M through `smbclient` | a pure-Rust client is a dependency to argue for; the program is allowed | *SMB, NFS, AFP* below. The widest gap on the network side, and the table used to hide it |
+| Phones: MTP and ADB | far2l, muCommander, Commander One, nnn | M through `adb`; MTP is L | `adb` as a program | Feature 4.5b |
+| Google Drive, Dropbox, OneDrive | muCommander, Commander One, ForkLift, Double Commander | L each in process; M once through `rclone` | `rclone` as a program is the route the rules allow: one bridge, every cloud it knows | Feature 4.5b names the bridge |
+| A filesystem from a plugin | FAR, Total Commander, Double Commander, yazi | M–L | yes: a program speaking list/read/write on its standard streams, the way `[[archiver]]` tables already do for archives | Feature 4.11 |
+| Passwords in the system's keyring | Krusader, Commander One, ForkLift, muCommander | S–M | as programs (`secret-tool`, `security`); a crate is a dependency | Feature 4.6. The vault holds them today |
+| Mounting, unmounting, ejecting | Krusader, vifm, yazi, nnn, Total Commander, Double Commander | M | as programs (`udisksctl`, `diskutil`) | *Mounting from the drive list* below; *Settled* leaves USB removal and CD eject to the platform's tool |
+| NFS without a mount | far2l, muCommander | L | a dependency | Low: the system mounts it |
+| The Windows registry | FAR, muCommander | M | yes, Windows only | Feature 4.9 |
+| Torrent files, patches, installed packages as folders | Midnight Commander, Double Commander | S, M, S | torrent in process (a small parser); packages through `dpkg`/`rpm` | One program's corner each |
+| Servers found on the local network | muCommander, FAR, Total Commander | M | mDNS is a dependency | |
+| Containers as panels; virtual-machine disks | far2l (a plugin), muCommander | M | `docker` as a program | Plugin material |
+| FTP resume and active mode | Total Commander | S | yes | *FTP* below |
+
+### Viewer and editor
+
+| Item | Who | Work | Rules | Note |
+| --- | --- | --- | --- | --- |
+| Previews from rules: a program per mask, with a timeout | yazi, ranger, lf, nnn, vifm, broot; Total Commander and Double Commander as lister plugins | M | yes — it is SPEC 05 §1.7, written and not built | Feature 5.8. `[[decompile]]` is the same shape; this is the quick view asking it |
+| Fonts and SVG drawn; HTML and RTF laid out | yazi, Total Commander, Double Commander | S as programs (`rsvg-convert`, `magick`); M in process | as programs | Would fall out of the row above |
+| Sound | Total Commander, Double Commander, nnn | S | **no** — decided with the video | |
+| Line numbers in the editor; a right margin; a ruler in the viewer | Midnight Commander | S | yes | |
+| A block through a command; a file or a command's output inserted; a block written out | Midnight Commander, far2l | S | yes | The hex editor's blocks already do the file half |
+| A paragraph reflowed, wrap while typing, a block aligned; the case of a block; boxes drawn | Midnight Commander, FAR, far2l | S each | yes | FAR ships them as plugins (`align`, `autowrap`, `editcase`, `drawline`) |
+| The syntax chosen by hand | Midnight Commander, far2l | S | yes | For the file whose name says nothing |
+| Search while typing; the next occurrence of the word under the cursor | far2l | S | yes | |
+| Git's changes in the editor's margin | far2l | M | yes | The git panel and blame are in |
+| Spell check | Midnight Commander | M | as a program (`aspell`, `hunspell`) | |
+| Name, path and date inserted | Midnight Commander, FAR | S | yes | Feature 6.8 |
+| A scratchpad kept between runs | far2l | S | yes | |
+
+### Tools, the shell and extending it
+
+| Item | Who | Work | Rules | Note |
+| --- | --- | --- | --- | --- |
+| Chooser mode: print the chosen files and end | nnn, ranger, lf, yazi, vifm, broot, xplr | S | yes | `--choose FILE` beside `-P`. It is what lets an editor or a desktop portal use the program as its file dialog; seven of the eight terminal managers read have it |
+| A list of paths on standard input as a panel | nnn, vifm | S | yes | The other half of the row above: `fd … \| fcmd -` |
+| Hooks: on entering a folder, on a selection, when a job ends, on leaving | lf, yazi, xplr, vifm, ranger, TheFile.Ninja | M | yes — a `[[hook]]` naming a plugin command, which is a program; no language | Feature 10.6 |
+| A running instance told what to do from outside | vifm, lf, yazi, xplr, nnn | M | yes, a local socket; nothing over the network | With the row above it is what the others' "scripting" is mostly used for |
+| A language inside the program | FAR, far2m, yazi, xplr, Marta, TheFile.Ninja (Lua); ranger, far2l (Python); vifm; Directory Opus; Double Commander | L | **no** — *Settled*: no Lua. A plugin is a program | Features 7.8 and 10.2. Eleven of them have one; the two rows above and WASM (10.3) are the answer we chose |
+| The command palette | Total Commander (command browser), Double Commander, Marta, ForkLift | S | yes | Declared and not built: see the top of this section |
+| A dialog that binds keys | Total Commander, Double Commander, Krusader, muCommander, Commander One | M | yes | The keymap is a file; `F4` on a row of the keys chapter would be the place |
+| Plugins installed from a list | yazi, nnn, Krusader, far2l | M | yes, on an explicit action only (feature 9.9) | Feature 10.5 |
+| The command line without the screen: a copy, a saved synchronisation | TheFile.Ninja, yazi (`ya`) | M | yes | Feature 10.7, *Synchronise folders* below |
+| "Open with" from the desktop's own table | ranger, yazi, muCommander, far2l, nnn | M | as programs (`xdg-mime`, `gio`) | *File associations* below |
+| A notice when a long job ends | nnn | S | yes: the bell, or `OSC 9` | |
+| Suspending with `Ctrl+Z`; the terminal locked when idle | Midnight Commander, yazi, ranger, vifm, lf; nnn | S | yes | `Ctrl+O` and the terminal pane answer the first |
+| A mode for screen readers | nnn | M | yes | Feature 9.6 |
+| A scheduler, versioned backup, transfer by a code | TheFile.Ninja | L | the first is `cron`'s job | *Scheduler* and its neighbours below |
+| Toolbars and button bars, mouse gestures, the desktop's context menu, drag and drop with the desktop, replacing the system's file manager | Total Commander, Double Commander, Krusader, muCommander, Directory Opus | — | **no** — a window system's, and *Settled* | Left out of the count |
+
+### What we have and none of them has
+
+Checked against the same sources: none of the programs above does these out of the box.
+(Where one comes close it is said.)
+
+* **A disassembler in the viewer** — x86, x86-64 and AArch64, with symbols, following a call
+  and coming back — and **an assembler in the hex editor**, one instruction into the patch list.
+* **Decompilation**: JVM bytecode and .NET IL listed in process, the rest by rule through the
+  tools on the machine.
+* **The structure pane**: what a file is, field by field — PE, ELF, Mach-O, NE, LE, LX, TE,
+  signatures, version resources, and the metadata of media, PDF and office files. far2l's
+  `inside` does a part of the ELF half.
+* **A hex editor with a patch list and byte blocks** that go through the job engine; Midnight
+  Commander and far2l edit bytes, without either.
+* **Table mode**: CSV, TSV, JSONL and DBF with its memo files as a table that sorts, filters
+  and marks rows.
+* **SQLite databases, JSON documents and mailboxes as folders**, and **IMAP** read as a panel.
+  Midnight Commander reads an mbox; nobody reads the other three without a plugin.
+* **A copy that goes on after a crash**, from a journal.
+* **Raw devices** opened in the viewer and the hex editor.
+* **Base64, PEM and `data:` decoded in the viewer.**
+* **`.editorconfig`** honoured by the built-in editor.
+* **A git panel**: stage, unstage, diff, commit, log, branches and blame. broot, yazi and
+  TheFile.Ninja show a state; far2l marks the editor's margin.
+* **Tunnels and a jump host** from the connection list.
+* **AI with its guard rails**: questions with the secrets masked first, a switch that keeps
+  everything on this machine, words to a rename, to a search and to a rewritten block shown as
+  a diff, a failed command explained, a commit message drafted. TheFile.Ninja has an assistant
+  that writes scripts; none masks what is sent.
+* **Video played in the terminal** through `ffmpeg`; yazi shows one thumbnail.
+* **FAR's own files understood**: `FarMenu.ini` read as it stands, and archiver tables written
+  in MultiArc's own keys.
+* **Picture metadata taken out.**
+* **The help generated from the keymap in force**, and a manual page a test compares with the
+  options.
+* **All of it in one executable that is the same on Linux, macOS and Windows.** FAR is
+  Windows, far2l and Midnight Commander are Unix, Total Commander is Windows; the ones that
+  run everywhere are Double Commander and muCommander, with a GUI toolkit or a JVM under them.
+
 ## Panels
 
 | Item | Where | What is left |
