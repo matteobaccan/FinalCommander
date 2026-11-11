@@ -12,6 +12,7 @@
 
 use std::sync::Arc;
 
+use fcmd_core::VPath;
 use fcmd_tui::{Pixels, Placement};
 use fcmd_ui::{Buffer, Rect, Style};
 use fcmd_view::picture::Picture;
@@ -54,6 +55,20 @@ pub struct Key {
     /// What shows through where the picture is transparent — for sixel, which is given the
     /// colour because it cannot be given the transparency.
     pub under: [u8; 3],
+}
+
+impl Key {
+    /// Is `other` the same window drawn the same way, whatever picture is in it?
+    fn same_window(&self, other: &Key) -> bool {
+        (self.cols, self.rows, self.cell, self.protocol, self.under)
+            == (
+                other.cols,
+                other.rows,
+                other.cell,
+                other.protocol,
+                other.under,
+            )
+    }
 }
 
 /// A picture to encode, for a worker.
@@ -100,6 +115,7 @@ pub fn encode(ask: &Ask) -> Option<Drawn> {
 struct Ready {
     key: Key,
     slot: Slot,
+    path: VPath,
     drawn: Drawn,
 }
 
@@ -112,7 +128,7 @@ pub struct Screen {
     cell: (u16, u16),
     ready: Vec<Ready>,
     /// What a worker is encoding now, and for whom.
-    pending: Vec<(Key, Slot)>,
+    pending: Vec<(Key, Slot, VPath)>,
     /// What this frame wants on the screen, for the backend.
     placements: Vec<Placement>,
     /// The style each placement's cells were marked in, to tell a cell that was drawn over
@@ -224,11 +240,19 @@ impl Screen {
             under,
         };
         let exact = self.ready.iter().position(|r| r.key == key);
-        if exact.is_none() && !self.pending.iter().any(|(k, _)| *k == key) {
-            self.pending.push((key, slot));
+        if exact.is_none() && !self.pending.iter().any(|(k, _, _)| *k == key) {
+            self.pending.push((key, slot, viewer.path.clone()));
             self.asks.push(Ask { key, picture });
         }
-        let found = exact;
+        // The frame before this one of the same film, in the same window, stays up until the
+        // new one is ready: falling back to half blocks between two frames would make a film
+        // blink. A different picture gets no such courtesy — the old one would be a lie.
+        let found = exact.or_else(|| {
+            viewer.film.as_ref()?;
+            self.ready
+                .iter()
+                .position(|r| r.slot == slot && r.path == viewer.path && r.key.same_window(&key))
+        });
         let Some(found) = found else {
             return false;
         };
@@ -289,23 +313,27 @@ impl Screen {
     /// A worker's answer. An answer nobody is waiting for — the protocol changed meanwhile —
     /// is dropped; one that failed is forgotten, and the picture stays in half blocks.
     pub fn arrived(&mut self, key: Key, drawn: Option<Drawn>) {
-        let Some(at) = self.pending.iter().position(|(k, _)| *k == key) else {
+        let Some(at) = self.pending.iter().position(|(k, _, _)| *k == key) else {
             return;
         };
-        let (_, slot) = self.pending.remove(at);
+        let (_, slot, path) = self.pending.remove(at);
         let Some(drawn) = drawn else {
             return;
         };
         // One picture a window: the one before it is megabytes nobody will draw again.
         self.ready.retain(|r| r.slot != slot);
-        self.ready.push(Ready { key, slot, drawn });
+        self.ready.push(Ready {
+            key,
+            slot,
+            path,
+            drawn,
+        });
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fcmd_core::VPath;
     use fcmd_view::BytesSource;
 
     /// A viewer on a PNG of `w × h` red pixels, written here.
@@ -530,5 +558,52 @@ mod tests {
             [0; 3],
             Style::default()
         ));
+    }
+
+    #[test]
+    fn the_last_frame_of_a_film_stays_up_while_the_next_is_encoded() {
+        let film = fcmd_view::media::Film {
+            seconds: 100.0,
+            codec: "VP9".into(),
+            width: 64,
+            height: 64,
+        };
+        let frame = |shade: u8| {
+            Picture::from_rgba(64, 64, "PNG", [shade, shade, shade, 255].repeat(64 * 64)).unwrap()
+        };
+        let mut v = Viewer::new(
+            Box::new(BytesSource::new(
+                b"\0\0\0\x18ftypisom\0\0\0\0isommp42".to_vec(),
+            )),
+            VPath::local("film.mp4".to_string()),
+        );
+        let ask = v.film_ask();
+        v.show_frame(ask, film.clone(), 10.0, frame(10));
+
+        let mut s = screen(Pixels::Kitty);
+        let mut buf = Buffer::new(40, 12);
+        let area = Rect::new(0, 1, 40, 10);
+        let base = Style::default();
+        s.begin(false);
+        s.place(Slot::Viewer, &mut v, &mut buf, area, [0; 3], base);
+        let first = s.take_asks().remove(0);
+        s.arrived(first.key, encode(&first));
+        s.begin(false);
+        assert!(s.place(Slot::Viewer, &mut v, &mut buf, area, [0; 3], base));
+        let shown = s.placements()[0].id;
+
+        // The next frame arrives. Its pixels are asked for, and until they come the frame
+        // before it is what is placed — the same image, so the backend sends nothing.
+        let (_, ask) = v.film_step(1).unwrap();
+        v.show_frame(ask, film, 20.0, frame(20));
+        s.begin(false);
+        assert!(s.place(Slot::Viewer, &mut v, &mut buf, area, [0; 3], base));
+        assert_eq!(s.placements()[0].id, shown);
+        let second = s.take_asks().remove(0);
+        assert_ne!(second.key.serial, first.key.serial);
+        s.arrived(second.key, encode(&second));
+        s.begin(false);
+        assert!(s.place(Slot::Viewer, &mut v, &mut buf, area, [0; 3], base));
+        assert_eq!(s.placements()[0].id, second.key.serial);
     }
 }

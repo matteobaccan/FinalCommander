@@ -162,7 +162,7 @@ Perché ognuno è un programma a parte e non è dentro fcmd:
 | `7z` | gli archivi che fcmd non legge da sé: rar, cab, iso, lha, arj, msi, wim, dmg… | il codice che spacchetta RAR ha una licenza sua, non aperta, e gli altri sono decine di formati che un programma legge già bene. Lo guida una tabella (`[[archiver]]`, *Formati tuoi*) e gli si chiede soltanto di elencare ed estrarre |
 | `git` | il pannello Git (`Ctrl+Alt+G`) e il ramo nel prompt | cosa contiene un repository è quello che dice `git`; una seconda implementazione dentro fcmd potrebbe non essere d'accordo con la prima |
 | `javap`, `ilspycmd`, `python3`, `wasm2wat`, `objdump`, `retdec-decompiler` | `Shift+F6` nel visualizzatore, tramite le regole `[[decompile]]` | ognuno è il lavoro di uno specialista per un tipo di codice; fcmd disassembla da sé il codice macchina e lascia a loro la decompilazione |
-| `ffmpeg` | i fotogrammi dei video nel visualizzatore — in arrivo: per ora nessuno lo esegue | i codec video sono coperti da brevetti, le librerie che li decodificano sono LGPL o GPL e non c'è ancora un decoder pronto in Rust puro; `F11` legge già il contenitore di un video senza di lui |
+| `ffmpeg` | i fotogrammi di un video nel visualizzatore e nella vista rapida (`F3`, `Ctrl+Q`), e la sua riproduzione senza audio | i codec video sono coperti da brevetti, le librerie che li decodificano sono LGPL o GPL e non c'è ancora un decoder pronto in Rust puro; senza, un video si apre come i suoi byte e `F11` ne legge comunque il contenitore |
 | `xdg-open` / `open` | aprire un link nel browser | quale browser è una scelta del desktop, non di fcmd |
 | `journalctl` / `log` / `wevtutil` | *Comandi → Log di sistema* | ogni sistema ha un solo strumento che conosce il suo log |
 | `systemctl` / `launchctl` | il pannello dei servizi | solo il gestore dei servizi può avviare e fermare un servizio |
@@ -175,7 +175,8 @@ nessun'altra parte. L'installatore di 7-Zip per Windows, per esempio, mette `7z.
 
 # Immagini a pixel veri
 
-`viewer.pixels` dice come il visualizzatore e la vista rapida disegnano un'immagine. È una riga di *Opzioni → Impostazioni del visualizzatore* (*Immagini*)
+`viewer.pixels` dice come il visualizzatore e la vista rapida disegnano un'immagine o il
+fotogramma di un video. È una riga di *Opzioni → Impostazioni del visualizzatore* (*Immagini*)
 e una riga di *Tutte le impostazioni*.
 
 | Valore | Cosa viene disegnato |

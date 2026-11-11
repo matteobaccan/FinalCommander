@@ -91,6 +91,17 @@ pub enum Request {
     },
     /// Scale and encode a picture for the terminal's own pixels (SPEC 05 §1.14a).
     Pixels(crate::pixels::Ask),
+    /// Fetch one frame of a film through `ffmpeg` (SPEC 05 §1.15). `key` is the viewer's
+    /// own path, which is how the answer finds its way back to it.
+    VideoFrame {
+        key: VPath,
+        ask: crate::video::Ask,
+    },
+    /// Play a film from a moment on: frames until it ends or the ask is outdated.
+    VideoPlay {
+        key: VPath,
+        ask: crate::video::Ask,
+    },
     /// Run a `sql:` query on a database, its rows written as CSV for the viewer.
     SqlQuery {
         db: std::path::PathBuf,
@@ -948,6 +959,18 @@ pub enum Event {
     Pixels {
         key: crate::pixels::Key,
         drawn: Option<crate::pixels::Drawn>,
+    },
+    /// A frame of a film, or why there is none. `number` is the ask it answers.
+    VideoFrame {
+        key: VPath,
+        number: u64,
+        result: Result<crate::video::Frame, crate::video::Failure>,
+    },
+    /// A film stopped playing: it ended, or `ffmpeg` did.
+    VideoEnded {
+        key: VPath,
+        number: u64,
+        result: Result<(), crate::video::Failure>,
     },
     /// A language model's answer, written into a Markdown file, or why there is none.
     AiDone {
@@ -2782,6 +2805,9 @@ pub struct App {
     /// Pictures drawn as real pixels: what is encoded, what is asked for, what this frame
     /// places (SPEC 05 §1.14a). Half blocks until the loop says which protocol to use.
     pub pixels: crate::pixels::Screen,
+    /// The number of the newest frame asked of `ffmpeg`, shared with the workers: one that
+    /// is fetching an older frame gives up, and one that is playing stops.
+    video_newest: std::sync::Arc<std::sync::atomic::AtomicU64>,
     /// The last sum, so the calculator opens on it.
     pub last_calc: String,
     /// What the plugins provide (SPEC 08 §1): `F11` lists these.
@@ -3115,6 +3141,7 @@ impl App {
             quick_why: None,
             quick_size: (40, 20),
             pixels: crate::pixels::Screen::default(),
+            video_newest: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
             last_calc: String::new(),
             plugin_commands,
             plugin_dim: Vec::new(),
@@ -3381,6 +3408,16 @@ impl App {
             Event::GitDone { panel, result } => self.git_done(panel, result),
             Event::TextReady { result } => self.git_done(self.active, result.map(GitOut::Text)),
             Event::Pixels { key, drawn } => self.pixels.arrived(key, drawn),
+            Event::VideoFrame {
+                key,
+                number,
+                result,
+            } => self.frame_arrived(&key, number, result),
+            Event::VideoEnded {
+                key,
+                number,
+                result,
+            } => self.film_ended(&key, number, result),
             Event::StripDone {
                 done,
                 removed,
@@ -5936,6 +5973,11 @@ impl App {
         // file's position, and `Enter` follows the row. Everything else still goes to the
         // keymap, so `F3` still closes the viewer from inside the pane.
         if self.structure_pane_key(key) {
+            return;
+        }
+        // `Space` on a film plays it and pauses it; everywhere else in the viewer it is a
+        // page down, which a single frame has no use for.
+        if key == Key::new(KeyCode::Char(' '), Mods::NONE) && self.film_toggle() {
             return;
         }
         if let Some(cmd) = self.keymap.resolve(&[Scope::Viewer, Scope::Global], key) {
@@ -11893,6 +11935,11 @@ impl App {
                 // is a table), but what a file opens as has to be predictable.
                 if self.cfg.ui.table && viewer.reads_table() {
                     viewer.as_table();
+                }
+                // A film opens as what it is underneath, and turns to its frame when
+                // `ffmpeg` has one to give (SPEC 05 §1.15).
+                if viewer.may_be_film() {
+                    viewer.film_file = Some(local.to_path_buf());
                 }
                 self.mode = Mode::Viewer(Box::new(viewer));
             }
@@ -23018,7 +23065,12 @@ impl App {
             .next()
             .and_then(fcmd_view::Mode::from_letter)
         {
-            viewer.set_mode(mode);
+            // A film was left as a picture, and is one again only when `ffmpeg` gives a
+            // frame: until then — and for good, on a machine without the program — it is
+            // what it opens as, not a picture mode with no picture in it.
+            if !(mode == ViewerMode::Image && viewer.may_be_film()) {
+                viewer.set_mode(mode);
+            }
         }
         if let Some(wrap) = fcmd_view::Wrap::parse(&seen.wrap) {
             viewer.wrap = wrap;
@@ -24078,6 +24130,246 @@ impl App {
         self.run_filter("git blame --date=short --".into());
     }
 
+    // ── films (SPEC 05 §1.15) ──────────────────────────────────────────────────────────────
+
+    /// Ask for the first frame of a file that may be a film: the one a tenth of the way in.
+    ///
+    /// Asked of every container the viewer opens from this disk, on the strength of its
+    /// first bytes alone. Whether it really holds a film is found out on the worker, which
+    /// reads the container before it looks for `ffmpeg`; a file of sound alone answers
+    /// "not a film" and stays as it opened.
+    ///
+    /// Called where the viewer is drawn and not where it is opened, because the frame is
+    /// scaled to the window it is drawn in and that is only known once it has been laid
+    /// out. It asks once: a viewer that has asked has a number.
+    pub fn first_frame(&mut self, viewer: &mut Viewer, size: (u16, u16)) {
+        if viewer.film_asked() != 0 {
+            return;
+        }
+        let Some(file) = viewer.film_file.clone() else {
+            return;
+        };
+        let number = viewer.film_ask();
+        let ask = self.frame_ask(
+            file,
+            crate::video::At::Fraction(crate::video::FIRST_LOOK),
+            None,
+            number,
+            size,
+        );
+        self.requests.push(Request::VideoFrame {
+            key: viewer.path.clone(),
+            ask,
+        });
+    }
+
+    /// One ask for `ffmpeg`, sized to the window the frame will be drawn in. Making one
+    /// outdates every ask before it: there is one film on screen at a time.
+    fn frame_ask(
+        &mut self,
+        file: PathBuf,
+        at: crate::video::At,
+        film: Option<fcmd_view::media::Film>,
+        number: u64,
+        size: (u16, u16),
+    ) -> crate::video::Ask {
+        let cell = self.pixels.cell();
+        self.video_newest
+            .store(number, std::sync::atomic::Ordering::Relaxed);
+        crate::video::Ask {
+            file,
+            at,
+            film,
+            bounds: (
+                u32::from(size.0.max(1)) * u32::from(cell.0),
+                u32::from(size.1.max(1)) * u32::from(cell.1),
+            ),
+            number,
+            newest: self.video_newest.clone(),
+        }
+    }
+
+    /// The viewer showing `key`, wherever it is — open, under a prompt, or the quick view —
+    /// and whether it is the quick view, which says less about what goes wrong.
+    fn film_viewer_mut(&mut self, key: &VPath) -> Option<(&mut Viewer, bool)> {
+        if matches!(&self.mode, Mode::Viewer(v) if v.path == *key) {
+            return self.mode.viewer_mut().map(|v| (v, false));
+        }
+        if self
+            .viewer_under_prompt
+            .as_ref()
+            .is_some_and(|v| v.path == *key)
+        {
+            return self.viewer_under_prompt.as_deref_mut().map(|v| (v, false));
+        }
+        if self.quick.as_ref().is_some_and(|v| v.path == *key) {
+            return self.quick.as_deref_mut().map(|v| (v, true));
+        }
+        None
+    }
+
+    /// A frame came back from `ffmpeg`, or the reason there is none.
+    fn frame_arrived(
+        &mut self,
+        key: &VPath,
+        number: u64,
+        result: Result<crate::video::Frame, crate::video::Failure>,
+    ) {
+        use crate::video::Failure;
+        use std::sync::atomic::Ordering;
+        let newest = self.video_newest.clone();
+        let Some((viewer, quick)) = self.film_viewer_mut(key) else {
+            // The viewer was closed. If this was a film playing, nobody is watching it.
+            let _ = newest.compare_exchange(number, 0, Ordering::Relaxed, Ordering::Relaxed);
+            return;
+        };
+        if viewer.film_asked() != number {
+            return;
+        }
+        let said = match result {
+            Ok(frame) => {
+                viewer.show_frame(number, frame.film, frame.at, frame.picture);
+                // The reader went on to the bytes while it played: a film nobody sees is
+                // not kept running.
+                if viewer.mode != ViewerMode::Image
+                    && viewer.film.as_ref().is_some_and(|f| f.playing)
+                {
+                    if let Some((_, stop)) = viewer.film_play(false) {
+                        newest.store(stop, Ordering::Relaxed);
+                    }
+                }
+                None
+            }
+            Err(Failure::NotAFilm | Failure::Outdated) => None,
+            // The quick view says nothing: it would say it again on every film the cursor
+            // passed, and `F3` is where the reader asks to see one.
+            Err(_) if quick => None,
+            Err(Failure::NoProgram(film)) => Some((
+                false,
+                self.i18n.t_args(
+                    "video-needs-program",
+                    &[
+                        ("program", crate::video::PROGRAM.into()),
+                        (
+                            "what",
+                            format!("{} {}×{}", film.codec, film.width, film.height).into(),
+                        ),
+                    ],
+                ),
+            )),
+            Err(Failure::Failed(why)) => Some((
+                true,
+                self.i18n.t_args("video-no-frame", &[("why", why.into())]),
+            )),
+        };
+        match said {
+            Some((true, text)) => self.set_error(text),
+            Some((false, text)) => self.set_status(text),
+            None => {}
+        }
+    }
+
+    /// A film stopped playing by itself.
+    fn film_ended(&mut self, key: &VPath, number: u64, result: Result<(), crate::video::Failure>) {
+        let Some((viewer, _)) = self.film_viewer_mut(key) else {
+            return;
+        };
+        if !viewer.film_stopped(number) {
+            return;
+        }
+        match result {
+            Err(crate::video::Failure::Failed(why)) => {
+                let m = self.i18n.t_args("video-no-frame", &[("why", why.into())]);
+                self.set_error(m);
+            }
+            _ => {
+                let m = self.i18n.t("video-ended");
+                self.set_status(m);
+            }
+        }
+    }
+
+    /// The keys that turn pages, on a film: a tenth of it back or forward, its first frame,
+    /// its last. `false` when there is no film on screen, and the key means what it always
+    /// did.
+    fn film_key(&mut self, cmd: Command) -> bool {
+        let size = self.live_viewer_size();
+        let Some(viewer) = self.live_viewer_mut() else {
+            return false;
+        };
+        if viewer.mode != ViewerMode::Image || viewer.film.is_none() {
+            return false;
+        }
+        let moved = match cmd {
+            Command::NavPageDown | Command::ViewerRight => viewer.film_step(1),
+            Command::NavPageUp | Command::ViewerLeft => viewer.film_step(-1),
+            Command::NavTop => viewer.film_end(false),
+            Command::NavBottom => viewer.film_end(true),
+            _ => return false,
+        };
+        let (Some((at, number)), Some(file), Some(state)) =
+            (moved, viewer.film_file.clone(), viewer.film.as_ref())
+        else {
+            return true;
+        };
+        let (key, film) = (viewer.path.clone(), state.film.clone());
+        let ask = self.frame_ask(
+            file,
+            crate::video::At::Seconds(at),
+            Some(film),
+            number,
+            size,
+        );
+        self.requests.push(Request::VideoFrame { key, ask });
+        true
+    }
+
+    /// `Space` on a film: play it from the frame on screen, or pause it there. `false`
+    /// when there is no film on screen.
+    fn film_toggle(&mut self) -> bool {
+        let size = self.live_viewer_size();
+        let Some(viewer) = self.live_viewer_mut() else {
+            return false;
+        };
+        if viewer.mode != ViewerMode::Image {
+            return false;
+        }
+        let Some(state) = viewer.film.as_ref() else {
+            return false;
+        };
+        let (play, film) = (!state.playing, state.film.clone());
+        let (Some(file), Some((at, number))) = (viewer.film_file.clone(), viewer.film_play(play))
+        else {
+            return true;
+        };
+        let key = viewer.path.clone();
+        if play {
+            let ask = self.frame_ask(
+                file,
+                crate::video::At::Seconds(at),
+                Some(film),
+                number,
+                size,
+            );
+            self.requests.push(Request::VideoPlay { key, ask });
+            let m = self.i18n.t_args(
+                "video-playing",
+                &[("fps", i64::from(crate::video::PLAY_FPS).into())],
+            );
+            self.set_status(m);
+        } else {
+            // The new number is what stops the worker: its frames are for the old one.
+            self.video_newest
+                .store(number, std::sync::atomic::Ordering::Relaxed);
+            let m = self.i18n.t_args(
+                "video-paused",
+                &[("at", fcmd_view::media::Film::clock(at).into())],
+            );
+            self.set_status(m);
+        }
+        true
+    }
+
     /// A prompt that keeps the viewer underneath it (search, go to).
     fn mode_prompt_over_viewer(&mut self, kind: PromptKind, title: String, text: String) {
         let Mode::Viewer(viewer) = std::mem::replace(&mut self.mode, Mode::Normal) else {
@@ -24109,6 +24401,10 @@ impl App {
         let favourites = self.codepage_favourites();
         if cmd == Command::ViewerCodepageList {
             self.open_codepages();
+            return;
+        }
+        // On a film the keys that turn pages step through it instead (SPEC 05 §1.15).
+        if self.film_key(cmd) {
             return;
         }
         let mut message: Option<String> = None;
@@ -25450,6 +25746,11 @@ impl App {
                 // on every arrow key: a directory of photographs would feel stuck. Small
                 // ones are shown, the rest wait for `F3`.
                 viewer.limit_pictures(QUICK_PICTURE_LIMIT);
+                // A film shows the frame a tenth of the way in, fetched on a worker: the
+                // cursor moves on without waiting for it.
+                if viewer.may_be_film() {
+                    viewer.film_file = Some(path.os().to_path_buf());
+                }
                 self.quick = Some(Box::new(viewer));
                 self.quick_of = Some(path);
                 self.quick_why = None;

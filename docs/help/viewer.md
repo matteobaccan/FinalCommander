@@ -93,6 +93,34 @@ viewer's own background through it.
 Nothing scrolls — the picture is already the size of the window — and a file that is damaged,
 too large, or not a picture says so instead of leaving you looking at a blank screen.
 
+# Video
+
+`F3` on a video — MP4, MOV, MKV, WebM, AVI — shows a frame of it, drawn as a picture is: real
+pixels where the terminal has them, half blocks elsewhere. It opens a tenth of the way in,
+past the black frame most films start with, and the top line says where the frame is, how long
+the film runs, and what it is: `00:12 / 02:00  H.264/AVC 1920×1080`.
+
+| Key | What it does |
+| --- | --- |
+| `PgDn`, `→` | a tenth of the film forward |
+| `PgUp`, `←` | a tenth back |
+| `Home`, `End` | the first frame, the last one |
+| `Space` | play from this frame, and pause |
+| `F4` | on to the dump and the hex, where the keys turn pages again |
+| `F11` | the container: tracks, codecs, tags |
+
+The quick view (`Ctrl+Q`) shows the same frame, a tenth of the way in, as the cursor passes.
+
+Playing is a preview and not a player: eight frames a second and no sound, because every frame
+is a whole picture sent to the terminal. It stops at the end, when you step, and when you
+leave. Over a slow connection half blocks keep up where pixels do not (`viewer.pixels = "off"`).
+
+fcmd decodes no video itself. The frames come from **`ffmpeg`**, run as a program when it is
+on the `PATH` and never part of fcmd. Without it the viewer says that it is missing and what
+the file is, opens the file as its bytes as it always did, and `F11` still reads the
+container; `Alt+F1` → *External programs* lists `ffmpeg`, and `F4` there installs it. A file
+that holds only sound — an `.m4a`, a `.mka` — is not a film and is not handed to it.
+
 # Base64
 
 `Alt+B` decodes a file that is base64 and shows what came out, keeping the file's own name in
@@ -269,8 +297,9 @@ The same key answers for the files that are not programs:
 - **music** — MP3, FLAC, Ogg Vorbis, Opus: the title, the artist, the album, the year, the
   track, the genre, whether there is a cover, and for FLAC and Ogg the stream and its length.
 
-Neither shows a picture of the file: for a frame of a video or a page of a PDF rendered as an
-image, set up a `[[decompile]]` rule (`ffprobe`, `pdftotext`) and press `Shift+F6`.
+`F11` shows no picture of the file. A video's frames are what `F3` itself shows (*Video*,
+above); for the text of a PDF or `ffprobe`'s own account of a film, set up a `[[decompile]]`
+rule (`pdftotext`, `ffprobe`) and press `Shift+F6`.
 
 `Shift+F5` does the same thing without a rule: it asks for a command, hands it this file, and
 reads what the command printed instead of the file — `strings`, `xxd`, `pdftotext`, `objdump

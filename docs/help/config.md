@@ -158,7 +158,7 @@ Why each one is a program and not part of fcmd:
 | `7z` | archives fcmd does not read itself: rar, cab, iso, lha, arj, msi, wim, dmg… | RAR's unpacking code comes under its own licence, not an open one, and the rest are dozens of formats one program already reads well. A table drives it (`[[archiver]]`, *Formats of your own*), and it is only ever asked to list and extract |
 | `git` | the Git panel (`Ctrl+Alt+G`) and the branch in the prompt | what a repository holds is what `git` says it holds; a second implementation inside fcmd could disagree with the first |
 | `javap`, `ilspycmd`, `python3`, `wasm2wat`, `objdump`, `retdec-decompiler` | `Shift+F6` in the viewer, through the `[[decompile]]` rules | each is a specialist's project for one kind of code; fcmd disassembles machine code itself and leaves decompiling to them |
-| `ffmpeg` | video frames in the viewer — coming: nothing runs it yet | video codecs carry patents, the libraries that decode them are LGPL or GPL, and no pure-Rust decoder is ready; `F11` already reads a video's container without it |
+| `ffmpeg` | the frames of a video in the viewer and the quick view (`F3`, `Ctrl+Q`), and playing one without sound | video codecs carry patents, the libraries that decode them are LGPL or GPL, and no pure-Rust decoder is ready; without it a video opens as its bytes and `F11` still reads its container |
 | `xdg-open` / `open` | opening a link in the browser | which browser is the desktop's choice, not fcmd's |
 | `journalctl` / `log` / `wevtutil` | *Commands → System log* | each system has one tool that knows its log |
 | `systemctl` / `launchctl` | the services panel | the service manager is the only thing that can start and stop a service |
@@ -171,7 +171,7 @@ adding it to the `PATH`: the panel then says it is missing, and adding that fold
 
 # Pictures in real pixels
 
-`viewer.pixels` says how the viewer and the quick view draw a picture.
+`viewer.pixels` says how the viewer and the quick view draw a picture or a frame of a video.
 It is a row of *Options → Viewer settings* (*Pictures*) and a line of *All settings*.
 
 | Value | What is drawn |

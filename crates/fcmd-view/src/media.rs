@@ -47,6 +47,105 @@ const EPOCH_2001: u64 = 978_307_200;
 /// Decode a container, or decide this is not one. `None` is the normal answer: most files are
 /// not videos.
 pub fn read(src: &mut dyn Bytes, head: &[u8], len: u64) -> Option<Structure> {
+    read_with(src, head, len, &mut None)
+}
+
+/// What a film is, as far as showing its frames needs to know (SPEC 05 §1.15): how long it
+/// runs and what its picture track is. Read from the container by the same walk `F11` shows,
+/// so the two can never disagree about a file.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Film {
+    /// The running time in seconds; zero when the container does not say.
+    pub seconds: f64,
+    /// The codec by the name `F11` gives it: `H.264/AVC`, `VP9`.
+    pub codec: String,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl Film {
+    /// The last moment worth asking a frame of. The very end of a film has no frame after
+    /// it, so the last stop is a little before: a hundredth of the film, a second at most.
+    pub fn last(&self) -> f64 {
+        (self.seconds - (self.seconds / 100.0).min(1.0)).max(0.0)
+    }
+
+    /// Where `tenths` steps from `at` lands: a step is a tenth of the film, and the two ends
+    /// stop it. A film whose length is not known steps by ten seconds and has no end to stop
+    /// at, which is the best a reader can be offered without one.
+    pub fn step(&self, at: f64, tenths: i32) -> f64 {
+        if self.seconds <= 0.0 {
+            return (at + 10.0 * f64::from(tenths)).max(0.0);
+        }
+        (at + self.seconds / 10.0 * f64::from(tenths)).clamp(0.0, self.last())
+    }
+
+    /// A moment as a clock, to the second: `01:30`, `1:02:03`.
+    pub fn clock(seconds: f64) -> String {
+        let total = if seconds.is_finite() && seconds > 0.0 {
+            seconds.floor() as u64
+        } else {
+            0
+        };
+        let (h, m, s) = (total / 3600, (total % 3600) / 60, total % 60);
+        if h > 0 {
+            format!("{h}:{m:02}:{s:02}")
+        } else {
+            format!("{m:02}:{s:02}")
+        }
+    }
+}
+
+/// Could these first bytes be a container with a film in it? A guess from the magic number
+/// alone, cheap enough to ask of every file that is opened: the real answer is [`film`],
+/// which reads the tracks and is asked on a worker.
+pub fn may_be_film(head: &[u8]) -> bool {
+    if head.len() >= 12 && head[..4] == *b"RIFF" {
+        return head[8..12] == *b"AVI ";
+    }
+    if head.len() >= 4 && head[..4] == [0x1A, 0x45, 0xDF, 0xA3] {
+        return true;
+    }
+    head.len() >= 8
+        && head[..4] != *b"\0\0\0\0"
+        && matches!(
+            &head[4..8],
+            b"ftyp" | b"moov" | b"mdat" | b"free" | b"skip" | b"wide" | b"pnot" | b"styp"
+        )
+}
+
+/// The film in a container: its first picture track and the running time. `None` for a file
+/// that is not a container, and for one that holds only sound — an `.m4a` is an MP4 too.
+pub fn film(src: &mut dyn Bytes, head: &[u8], len: u64) -> Option<Film> {
+    let mut found = None;
+    read_with(src, head, len, &mut found)?;
+    found
+}
+
+/// Note the first picture track of a container as its film.
+fn note_film(film: &mut Option<Film>, track: &Track, seconds: f64) {
+    // `vide` and never `pict`: a HEIF photograph is ISO base media with a picture in it,
+    // and it is not a film.
+    if film.is_none() && track.handler == "vide" && track.width > 0 && track.height > 0 {
+        *film = Some(Film {
+            seconds: if seconds > 0.0 {
+                seconds
+            } else {
+                track.seconds
+            },
+            codec: codec_name(&track.codec).to_string(),
+            width: track.width,
+            height: track.height,
+        });
+    }
+}
+
+fn read_with(
+    src: &mut dyn Bytes,
+    head: &[u8],
+    len: u64,
+    film: &mut Option<Film>,
+) -> Option<Structure> {
     // ISO base media says what it is in its first box, which is `ftyp` in everything written
     // this century. QuickTime predates `ftyp`, so a `.mov` from the nineties opens with
     // whichever box the writer put first, and those are the ones below.
@@ -56,21 +155,21 @@ pub fn read(src: &mut dyn Bytes, head: &[u8], len: u64) -> Option<Structure> {
         // say — so a file opening with four zero bytes is four zero bytes, not a container.
         let sized = head[..4] != *b"\0\0\0\0";
         if kind == b"ftyp" && sized {
-            return Some(isobmff(src, len));
+            return Some(isobmff(src, len, film));
         }
         if matches!(
             kind,
             b"moov" | b"mdat" | b"free" | b"skip" | b"wide" | b"pnot" | b"styp"
         ) && sized
         {
-            return Some(isobmff(src, len));
+            return Some(isobmff(src, len, film));
         }
     }
     if head.len() >= 4 && head[..4] == [0x1A, 0x45, 0xDF, 0xA3] {
-        return Some(matroska(src, len));
+        return Some(matroska(src, len, film));
     }
     if head.len() >= 12 && head[..4] == *b"RIFF" {
-        return Some(riff(src, head, len));
+        return Some(riff(src, head, len, film));
     }
     None
 }
@@ -96,7 +195,7 @@ impl Bx {
     }
 }
 
-fn isobmff(src: &mut dyn Bytes, len: u64) -> Structure {
+fn isobmff(src: &mut dyn Bytes, len: u64, film: &mut Option<Film>) -> Structure {
     let mut rows = Vec::new();
     let (top, short) = boxes(src, 0, len);
 
@@ -175,6 +274,7 @@ fn isobmff(src: &mut dyn Bytes, len: u64) -> Structure {
                 track.headline()
             )));
             rows.extend(track.rows(bx.body() + start as u64, len));
+            note_film(film, &track, duration);
             tracks.push(track);
         }
         // The tags an audio player writes: `udta > meta > ilst`, iTunes' own layout, which is
@@ -735,7 +835,7 @@ struct El {
     size: Option<u64>,
 }
 
-fn matroska(src: &mut dyn Bytes, len: u64) -> Structure {
+fn matroska(src: &mut dyn Bytes, len: u64, film: &mut Option<Film>) -> Structure {
     let mut rows = Vec::new();
     let mut short = false;
     let (top, s) = elements(src, 0, len);
@@ -837,6 +937,7 @@ fn matroska(src: &mut dyn Bytes, len: u64) -> Structure {
                     t.headline()
                 )));
                 rows.extend(t.rows(0, 0));
+                note_film(film, &t, duration);
                 if let Some(b) = t.brief() {
                     shape.push(b);
                 }
@@ -1141,7 +1242,7 @@ fn el_name(id: u64) -> String {
 
 // ── RIFF: AVI, WAV, WebP ────────────────────────────────────────────────────────────────────
 
-fn riff(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
+fn riff(src: &mut dyn Bytes, head: &[u8], len: u64, film: &mut Option<Film>) -> Structure {
     let form = fourcc(&head[8..12]);
     // The declared length counts from after `RIFF` and its own size field, so eight bytes of
     // the file are outside it. A file whose real length disagrees was cut short or padded.
@@ -1159,7 +1260,7 @@ fn riff(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
 
     let mut summary = form_name(&form).to_string();
     match form.as_str() {
-        "AVI " | "AVIX" => avi(src, &top, &mut rows, &mut summary, len),
+        "AVI " | "AVIX" => avi(src, &top, &mut rows, &mut summary, len, film),
         "WAVE" => wave(src, &top, &mut rows, &mut summary, len),
         "WEBP" => webp(src, &top, &mut rows, &mut summary, len),
         _ => {}
@@ -1278,7 +1379,14 @@ fn chunks_in(buf: &[u8]) -> Vec<([u8; 4], usize, usize)> {
     out
 }
 
-fn avi(src: &mut dyn Bytes, top: &[Chunk], rows: &mut Vec<Row>, summary: &mut String, len: u64) {
+fn avi(
+    src: &mut dyn Bytes,
+    top: &[Chunk],
+    rows: &mut Vec<Row>,
+    summary: &mut String,
+    len: u64,
+    film: &mut Option<Film>,
+) {
     let Some(hdrl) = top
         .iter()
         .find(|c| c.kind == *b"LIST" && c.form == Some(*b"hdrl"))
@@ -1428,6 +1536,7 @@ fn avi(src: &mut dyn Bytes, top: &[Chunk], rows: &mut Vec<Row>, summary: &mut St
         };
         rows.push(Row::group(format!("Stream {} · {}", i + 1, t.headline())));
         rows.extend(t.rows(0, 0));
+        note_film(film, &t, seconds);
         if let Some(b) = t.brief() {
             if !shape.iter().any(|s| b.contains(s)) {
                 shape.push(b);
@@ -2398,5 +2507,93 @@ mod tests {
         assert_eq!(clock(90.0), "01:30.000");
         assert_eq!(clock(3661.25), "1:01:01.250");
         assert_eq!(clock(f64::INFINITY), "0.000");
+    }
+
+    // ── films (SPEC 05 §1.15) ──────────────────────────────────────────────────────────────
+
+    fn film_of(bytes: &[u8]) -> Option<Film> {
+        let mut src: &[u8] = bytes;
+        let head = &bytes[..bytes.len().min(64)];
+        film(&mut src, head, bytes.len() as u64)
+    }
+
+    #[test]
+    fn a_container_with_a_picture_track_is_a_film_with_a_length_and_a_codec() {
+        let f = film_of(&mp4()).expect("an MP4 with a video track");
+        assert_eq!(f.codec, "H.264/AVC");
+        assert_eq!((f.width, f.height), (1920, 1080));
+        assert_eq!(f.seconds, 90.0);
+
+        let f = film_of(&mkv("matroska")).expect("a Matroska file with a video track");
+        assert_eq!(f.codec, "H.265/HEVC");
+        assert_eq!((f.width, f.height), (3840, 2160));
+        assert_eq!(f.seconds, 90.0);
+
+        let f = film_of(&avi_file()).expect("an AVI with a video stream");
+        assert_eq!((f.width, f.height), (720, 576));
+        assert_eq!(f.seconds, 60.0);
+    }
+
+    #[test]
+    fn a_container_of_sound_alone_is_not_a_film() {
+        // The same MP4 with its picture track taken out is what an `.m4a` is.
+        let mut moov = mvhd(1000, 90_000, 0);
+        moov.extend(trak(
+            1,
+            b"soun",
+            audio_stsd(b"mp4a", 2, 48_000, 16),
+            0,
+            0,
+            "eng",
+        ));
+        let mut file = bx(b"ftyp", b"M4A \0\0\0\0M4A mp42");
+        file.extend(bx(b"moov", &moov));
+        assert!(may_be_film(&file), "the first bytes cannot tell");
+        assert_eq!(film_of(&file), None, "the tracks can");
+        // A WAV is RIFF and is not asked at all; neither is a text file.
+        assert!(!may_be_film(b"RIFF\x10\0\0\0WAVEfmt "));
+        assert!(may_be_film(b"RIFF\x10\0\0\0AVI LIST"));
+        assert!(may_be_film(&[0x1A, 0x45, 0xDF, 0xA3, 0, 0, 0, 0]));
+        assert!(!may_be_film(b"plain text"));
+        assert!(!may_be_film(b""));
+    }
+
+    #[test]
+    fn a_step_is_a_tenth_of_the_film_and_stops_at_both_ends() {
+        let f = Film {
+            seconds: 200.0,
+            codec: "VP9".into(),
+            width: 640,
+            height: 360,
+        };
+        // The quick view's frame is at 10%; three steps on is 40%.
+        assert_eq!(f.step(20.0, 1), 40.0);
+        assert_eq!(f.step(20.0, 3), 80.0);
+        assert_eq!(f.step(40.0, -1), 20.0);
+        // The start stops it, and so does the end — a second short of it, because the last
+        // instant of a film has no frame.
+        assert_eq!(f.step(10.0, -1), 0.0);
+        assert_eq!(f.last(), 199.0);
+        assert_eq!(f.step(190.0, 1), 199.0);
+        assert_eq!(f.step(199.0, 1), 199.0);
+        // A short film keeps a hundredth of itself rather than a whole second.
+        let short = Film {
+            seconds: 2.0,
+            ..f.clone()
+        };
+        assert_eq!(short.last(), 1.98);
+        // A film that does not say how long it is steps by ten seconds, and only backwards
+        // has a stop.
+        let unknown = Film { seconds: 0.0, ..f };
+        assert_eq!(unknown.step(0.0, 1), 10.0);
+        assert_eq!(unknown.step(5.0, -1), 0.0);
+    }
+
+    #[test]
+    fn a_moment_is_written_as_a_clock_to_the_second() {
+        assert_eq!(Film::clock(0.0), "00:00");
+        assert_eq!(Film::clock(90.7), "01:30");
+        assert_eq!(Film::clock(3723.0), "1:02:03");
+        assert_eq!(Film::clock(f64::NAN), "00:00");
     }
 }

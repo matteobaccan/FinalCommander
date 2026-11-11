@@ -29,6 +29,7 @@ mod tools;
 mod tree;
 mod undo;
 mod vault;
+mod video;
 mod watch;
 
 use std::path::{Path, PathBuf};
@@ -1923,6 +1924,38 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                             key: ask.key,
                             drawn,
                         });
+                    });
+                }
+                Request::VideoFrame { key, ask } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let result = video::frame(&ask);
+                        let _ = tx.send(Event::VideoFrame {
+                            key,
+                            number: ask.number,
+                            result,
+                        });
+                    });
+                }
+                Request::VideoPlay { key, ask } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        // Each frame is an event of its own, sent as `ffmpeg` writes it:
+                        // the film is driven from here and the loop keeps no clock for it.
+                        let result = video::play(&ask, |frame| {
+                            let _ = tx.send(Event::VideoFrame {
+                                key: key.clone(),
+                                number: ask.number,
+                                result: Ok(frame),
+                            });
+                        });
+                        if result != Err(video::Failure::Outdated) {
+                            let _ = tx.send(Event::VideoEnded {
+                                key,
+                                number: ask.number,
+                                result,
+                            });
+                        }
                     });
                 }
                 Request::StripMeta { files, how, backup } => {
@@ -6901,6 +6934,9 @@ dir_attr = "D"
                         drawn,
                     });
                 }
+                // `ffmpeg` is not run for every test that opens a container: the ones about
+                // films run it themselves, where it is installed.
+                Request::VideoFrame { .. } | Request::VideoPlay { .. } => {}
                 Request::DirSize { .. }
                 | Request::UpdateCheck { .. }
                 | Request::ToolVersions { .. }

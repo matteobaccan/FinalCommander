@@ -28,7 +28,7 @@ bytecode and the other architectures decoded in process.
 | `hex` | offset + hex + ASCII/decoded pane | bytes-per-row adjustable (the arrows, since sideways means nothing else in a dump) in **blocks of eight** — 8, 16, 24, 32, 40, 48, 56, 64, the group the dump already draws a gap between — the widest the window can hold, and jumps aligned to the width |
 | `markdown` | Markdown laid out to be read: the marks off, headings ruled, lists bulleted, tables drawn | **Implemented** (`Shift+F2`, and in `Shift+F4`'s ring). The one mode that reads the whole file, because a table's columns cannot be laid out from the part of it on screen: limited to 4 MiB, over which the file stays its source and says so. Every rendered line carries the `(offset, sub)` pair of the source line it came from, so scrolling, the bookmarks and the search need no line index. A search here searches what is on screen, not the marks behind it. |
 | `table` | a tabular file as columns: a header row, aligned columns, horizontal scroll | see §1.11 — one mode for CSV, TSV, JSONL and DBF, because what differs between them is the reader and not the screen |
-| `image` | a picture, in real pixels or half blocks | see §1.14 — PNG, JPEG, GIF and BMP, decided by the file's first bytes; `F3` on a picture opens here and `F4` goes on to the bytes. §1.14a is the pixels |
+| `image` | a picture or a frame of a film, in real pixels or half blocks | see §1.14 — PNG, JPEG, GIF and BMP, decided by the file's first bytes; `F3` on a picture opens here and `F4` goes on to the bytes. §1.14a is the pixels, §1.15 the films |
 | `preview` | rendered content (markdown, PDF page, media info, archive listing) | pluggable, see §1.7 |
 | `structure` | a side pane that decodes what the file *is*: header fields, section and segment tables, imports and exports | `F11`, see §1.8; it rides alongside `hex` and `disasm` rather than replacing them |
 
@@ -318,8 +318,9 @@ What a container reader deliberately does *not* do is decode a frame, and what t
 does not do is pull out the text: the first wants a video codec — a C library and a licence
 this project has refused — and the second wants the content stream's operators and the font's
 `ToUnicode` map, which is a typesetting engine that still gets a scanned page wrong. Both have
-an honest answer already: a `[[decompile]]` rule with `ffprobe` or `pdftotext` (SPEC 06 §5b),
-chosen by mask and run on `Shift+F6`.
+an honest answer: a film's frames come from `ffmpeg` run as a program (§1.15), and a PDF's
+text from a `[[decompile]]` rule with `pdftotext` (SPEC 06 §5b), chosen by mask and run on
+`Shift+F6`.
 
 What none of the three executable families gets is the equivalent of the PE reader's import and export walks:
 those want a second format each — a stream of counted strings, a stream of entry bundles —
@@ -513,7 +514,7 @@ picture's number, the bytes — handed to `Term::draw_with` beside the buffer:
 - A placement that is **gone or changed** is taken off: kitty is told to delete the image;
   for sixel and iTerm2 the cells it covered are forgotten from the previous frame, so the
   diff writes every one of them again, which is what erases it. Where another picture takes
-  exactly the same cells, the cells are not written in between.
+  exactly the same cells — the next frame of a film — the cells are not written in between.
 - A placement whose cells **were written this frame** is sent again for sixel and iTerm2,
   where writing a cell erases what was drawn in it. kitty keeps its images on a layer of
   their own and needs nothing.
@@ -530,10 +531,52 @@ picture's number, the bytes — handed to `Term::draw_with` beside the buffer:
 **Half blocks are always there.** They are what is drawn with no protocol, while a picture's
 pixels are being encoded, under a dialog, and in every test and every screenshot — drawn in
 the cells the pixels will take, so a picture sharpens where it stands rather than changing
-size.
+size. The film's previous frame stays up while the next is encoded, so stepping and playing
+do not blink through them.
 
 Tested against a real terminal: sixel in xterm (VT340 mode). kitty's and iTerm2's are tested
 by the bytes they are sent.
+
+### 1.15 Films: frames through `ffmpeg`
+
+`F3` and the quick view on a video show a frame of it. fcmd decodes no video — the codecs
+carry patents, the complete libraries are LGPL or GPL, and no decoder in Rust is ready — so
+the frame is asked of the **`ffmpeg` on the machine, run as a program and never linked**, by
+the rule every external program follows (SPEC 02 §14): found on the `PATH`, listed in the
+external programs panel, and named by the viewer when it is missing.
+
+- **What is a film.** A container the structure pane reads (§1.8) — ISO base media, Matroska,
+  AVI — with a picture track. The first bytes only say "perhaps" (`media::may_be_film`); the
+  tracks say, and they are read on the worker (`media::film`), which is also where the
+  running time and the codec on the status line come from. An `.m4a` is a container of sound
+  and is not a film; other containers (MPEG-TS, FLV, ASF) are not recognised yet.
+- **One frame**: `ffmpeg -hide_banner -loglevel error -nostdin -ss <t> -i <file> -frames:v 1
+  -an -sn -vf scale='min(W,iw)':'min(H,ih)':force_original_aspect_ratio=decrease -f image2pipe
+  -vcodec png -`. The seek comes before the input, so the last minute is as quick as the
+  first; the frame is scaled by `ffmpeg` to the window it will be drawn in, in pixels, and
+  never up; fifteen seconds is the limit, after which the program is stopped. What comes
+  down the pipe is a PNG, and from there a frame is a picture (§1.14, §1.14a).
+- **Where it opens**: a tenth of the way in, in the viewer and the quick view alike.
+- **Stepping**: `PgDn`/`→` and `PgUp`/`←` move by a tenth of the running time, `Home` and
+  `End` go to the first frame and to the last one worth asking for (a hundredth of the film,
+  at most a second, before its end — the very end has no frame). Steps add up before their
+  frames arrive: three quick presses are three tenths. A film that does not say how long it
+  is steps by ten seconds.
+- **The status line** leads with `time / duration  codec width×height`.
+- **Playing** (`Space`, and `Space` again to pause): `ffmpeg -re … -vf fps=8,scale=… -f
+  image2pipe -vcodec png -`, a stream of PNGs cut where each ends, eight a second, without
+  sound. `-re` makes `ffmpeg` keep the film's own time, the worker sends one event a frame,
+  and the loop keeps no clock. It stops at the end of the film, on a step, on `F4`, and when
+  the viewer closes. A preview, not a player.
+- **An answer for a question that was replaced is dropped.** Every ask has a number; the
+  viewer keeps the newest, the workers share it, and a worker fetching an older frame stops
+  its `ffmpeg` and says nothing.
+- **Without `ffmpeg`** the viewer says so on the status line, with what the film is, and the
+  file stays what it opened as — `F11` still reads the container. The quick view says
+  nothing: it would say it for every film the cursor passed. A frame `ffmpeg` could not give
+  is an error with `ffmpeg`'s own first line in it.
+- Only a file on this disk: a film on a server is fetched whole by `F3` first, as every file
+  is, and the quick view does not fetch.
 
 ### 1.11 Table mode: the tabular formats
 
@@ -699,7 +742,8 @@ Rules: every preview runs in a task with a timeout and a memory cap; failures de
 or hex, never block; results are cached by (path, size, mtime, geometry). Quick-view panel uses
 the same pipeline at lower priority. The block-character renderer this promised is built and is
 §1.14 — it is not a preview rule but a view of its own, because a picture one opened with `F3`
-is the file and not a preview of it. The kitty, iTerm2 and sixel protocols are §1.14a.
+is the file and not a preview of it. The kitty, iTerm2 and sixel protocols are §1.14a, and a
+video's frames §1.15.
 
 ## 2. Editor (`F4`)
 

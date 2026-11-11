@@ -102,6 +102,36 @@ vedere lo sfondo del visualizzatore.
 Non si scorre — l'immagine è già grande quanto la finestra — e un file rovinato, troppo grande
 o che non è un'immagine lo dice, invece di lasciarti davanti a uno schermo vuoto.
 
+# I video
+
+`F3` su un video — MP4, MOV, MKV, WebM, AVI — ne mostra un fotogramma, disegnato come
+un'immagine: pixel veri dove il terminale li ha, mezzi blocchi altrove. Si apre a un decimo
+della durata, oltre il fotogramma nero con cui comincia quasi ogni film, e la riga in alto dice
+dov'è il fotogramma, quanto dura il film e che cos'è: `00:12 / 02:00  H.264/AVC 1920×1080`.
+
+| Tasto | Cosa fa |
+| --- | --- |
+| `PgDn`, `→` | un decimo del film in avanti |
+| `PgUp`, `←` | un decimo indietro |
+| `Home`, `End` | il primo fotogramma, l'ultimo |
+| `Spazio` | riproduce da questo fotogramma, e mette in pausa |
+| `F4` | prosegue verso il dump e l'esadecimale, dove i tasti tornano a girare pagina |
+| `F11` | il contenitore: tracce, codec, tag |
+
+La vista rapida (`Ctrl+Q`) mostra lo stesso fotogramma, a un decimo della durata, mentre il
+cursore passa.
+
+La riproduzione è un'anteprima e non un lettore: otto fotogrammi al secondo e niente audio,
+perché ogni fotogramma è un'immagine intera spedita al terminale. Si ferma alla fine, quando
+salti, e quando esci. Su una connessione lenta i mezzi blocchi tengono il passo dove i pixel
+non ce la fanno (`viewer.pixels = "off"`).
+
+fcmd non decodifica nessun video. I fotogrammi vengono da **`ffmpeg`**, eseguito come
+programma quando è nel `PATH` e mai parte di fcmd. Senza, il visualizzatore dice che manca e
+che cos'è il file, apre il file come i suoi byte come ha sempre fatto, e `F11` legge comunque
+il contenitore; `Alt+F1` → *Programmi esterni* elenca `ffmpeg`, e lì `F4` lo installa. Un file
+che contiene solo suono — un `.m4a`, un `.mka` — non è un film e non gli viene passato.
+
 # Base64
 
 `Alt+B` decodifica un file che è base64 e mostra quello che ne esce, tenendo nel titolo il nome
@@ -285,9 +315,9 @@ Lo stesso tasto risponde anche per i file che non sono programmi:
 - **la musica** — MP3, FLAC, Ogg Vorbis, Opus: titolo, artista, album, anno, traccia, genere,
   se c'è una copertina, e per FLAC e Ogg il flusso e la durata.
 
-Nessuno dei due mostra un'immagine del file: per un fotogramma di un video o una pagina di PDF
-resa come immagine si prepara una regola `[[decompile]]` (`ffprobe`, `pdftotext`) e si preme
-`Shift+F6`.
+`F11` non mostra un'immagine del file. I fotogrammi di un video li mostra `F3` stesso (*I
+video*, qui sopra); per il testo di un PDF o per quello che `ffprobe` dice di un film si
+prepara una regola `[[decompile]]` (`pdftotext`, `ffprobe`) e si preme `Shift+F6`.
 
 `Shift+F5` fa la stessa cosa senza regola: chiede un comando, gli passa questo file, e legge
 quello che il comando ha stampato invece del file — `strings`, `xxd`, `pdftotext`, `objdump

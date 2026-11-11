@@ -5,7 +5,7 @@
 //! open archives with (`fcmd_arc::tables()`, so an `[[archiver]]` block of one's own is here
 //! too), the decompilers from the `[[decompile]]` rules, and the rest are the few programs the
 //! code names by hand: `git`, the system's own log, its services and its opener — and
-//! `ffmpeg`, which nothing runs yet and which is here because the video frames will.
+//! `ffmpeg`, which the viewer asks for the frames of a film (`crate::video`).
 //!
 //! Finding a program is the shell's rule and nothing else ([`fcmd_arc::which`]): what is not
 //! on the `PATH` is not installed as far as fcmd can tell, which is what the card says. Its
@@ -24,7 +24,7 @@ pub enum Use {
     Decompile,
     /// The Git panel (`Ctrl+Alt+G`) and the branch in the prompt.
     Git,
-    /// The video frames in the viewer (planned: nothing runs it yet).
+    /// The frames of a film in the viewer and the quick view (SPEC 05 §1.15).
     Video,
     /// Opening a link in the desktop's browser.
     Open,

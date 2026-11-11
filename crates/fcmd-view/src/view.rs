@@ -213,11 +213,33 @@ const BASE64_MIN: usize = 16;
 /// biggest picture a form carries as text and is read in a moment.
 const SYNTAX_LOOKBACK: u64 = 1024 * 1024;
 
+/// A film in the viewer: what it is and which of its frames is on screen (SPEC 05 §1.15).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FilmState {
+    pub film: crate::media::Film,
+    /// The moment of the frame on screen, in seconds.
+    pub at: f64,
+    /// The moment last asked for. It runs ahead of `at` while a frame is being fetched, so
+    /// three quick steps are three tenths and not one.
+    pub want: f64,
+    /// Is it playing? Frames then arrive on their own until the film ends or `Space` stops it.
+    pub playing: bool,
+}
+
 /// A number no other picture in this process has. One counter for every viewer, so the quick
 /// view's picture and the viewer's can share a cache of what was encoded for the screen.
 fn next_picture_serial() -> u64 {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The film in a file on this disk, read from its container. For a worker: it reads as much
+/// of the file as the container's index takes, which is megabytes on a long film.
+pub fn film_in(path: &std::path::Path) -> Option<crate::media::Film> {
+    let mut source = crate::source::FileSource::open(path).ok()?;
+    let head = source.read_vec(0, 64).ok()?;
+    let len = source.len();
+    crate::media::film(&mut SourceBytes(&mut source), &head, len)
 }
 
 pub struct Viewer {
@@ -265,6 +287,16 @@ pub struct Viewer {
     /// decode and each frame, so what was encoded for the screen from one picture is never
     /// drawn for another (SPEC 05 §1.14a).
     picture_serial: u64,
+    /// Do the first bytes look like a container that could hold a film (SPEC 05 §1.15)?
+    may_be_film: bool,
+    /// The number of the last frame asked for. An answer carrying an older number is for a
+    /// position the reader has already left, and is dropped.
+    film_ask: u64,
+    /// The film whose frame is on screen, once one has arrived.
+    pub film: Option<FilmState>,
+    /// Where the film is as a file on this disk, for the program that reads its frames: the
+    /// path shown may be on a server, and this is the copy that was fetched.
+    pub film_file: Option<std::path::PathBuf>,
     /// How large a picture file this viewer will decode. [`PICTURE_LIMIT`] for the one `F3`
     /// opens, where the reader asked for this file and will wait for it; much smaller for the
     /// quick view, where the cursor walks a directory of photographs and every step would
@@ -399,6 +431,10 @@ impl Viewer {
             tab_width: TAB_WIDTH,
             picture: None,
             picture_serial: 0,
+            may_be_film: crate::media::may_be_film(&head),
+            film_ask: 0,
+            film: None,
+            film_file: None,
             picture_limit: PICTURE_LIMIT,
             binary: None,
             show_structure: false,
@@ -1767,6 +1803,127 @@ impl Viewer {
     pub fn picture_shared(&mut self) -> Option<(u64, std::sync::Arc<crate::picture::Picture>)> {
         let picture = self.decode_picture().as_ref().ok()?.clone();
         Some((self.picture_serial, picture))
+    }
+
+    // ── films (SPEC 05 §1.15) ──────────────────────────────────────────────────────────────
+
+    /// Could this file be a film? Decided on the first bytes when it was opened; a view
+    /// derived from something else — a decompiler's output, a decoded base64 — never is.
+    pub fn may_be_film(&self) -> bool {
+        self.may_be_film && self.derived.is_none()
+    }
+
+    /// A new number for a frame about to be asked for, which outdates every earlier one.
+    pub fn film_ask(&mut self) -> u64 {
+        self.film_ask = next_picture_serial();
+        self.film_ask
+    }
+
+    /// The number of the last frame asked for.
+    pub fn film_asked(&self) -> u64 {
+        self.film_ask
+    }
+
+    /// The film stopped playing by itself — it ended, or the program playing it did. `false`
+    /// when that is news of a play that was already replaced by something else.
+    pub fn film_stopped(&mut self, ask: u64) -> bool {
+        match &mut self.film {
+            Some(state) if ask == self.film_ask && state.playing => {
+                state.playing = false;
+                state.want = state.at;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Show a frame of the film: the answer to the ask numbered `ask`, at `at` seconds.
+    ///
+    /// `false` when the answer is to a question that has been replaced since, and nothing
+    /// changes. The first frame turns the viewer to the picture, the way a `.png` opens as
+    /// one; later frames leave the mode alone, because a reader who went on to the bytes
+    /// with `F4` while a frame was on its way meant to.
+    pub fn show_frame(
+        &mut self,
+        ask: u64,
+        film: crate::media::Film,
+        at: f64,
+        picture: crate::picture::Picture,
+    ) -> bool {
+        if ask != self.film_ask {
+            return false;
+        }
+        self.picture = Some(Ok(std::sync::Arc::new(picture)));
+        self.picture_serial = next_picture_serial();
+        match &mut self.film {
+            Some(state) => {
+                state.film = film;
+                state.at = at;
+                // A frame that arrives while the film plays is one of many under the same
+                // number; a still frame is the answer, and the wait is over.
+                if !state.playing {
+                    state.want = at;
+                }
+            }
+            None => {
+                self.film = Some(FilmState {
+                    film,
+                    at,
+                    want: at,
+                    playing: false,
+                });
+                self.set_mode(Mode::Image);
+            }
+        }
+        true
+    }
+
+    /// Step through the film by tenths of its length: where to ask the next frame, and the
+    /// number to ask it under. `None` when there is no film on screen to step through.
+    pub fn film_step(&mut self, tenths: i32) -> Option<(f64, u64)> {
+        let state = self.film.as_mut()?;
+        state.want = state.film.step(state.want, tenths);
+        state.playing = false;
+        let want = state.want;
+        Some((want, self.film_ask()))
+    }
+
+    /// Go to the first frame or to the last one worth asking for.
+    pub fn film_end(&mut self, last: bool) -> Option<(f64, u64)> {
+        let state = self.film.as_mut()?;
+        state.want = if last { state.film.last() } else { 0.0 };
+        state.playing = false;
+        let want = state.want;
+        Some((want, self.film_ask()))
+    }
+
+    /// Start or stop playing. The number returned is the one the frames will arrive under
+    /// when it starts, and the one that outdates them when it stops; the position is where
+    /// playing starts from, which is the frame on screen.
+    pub fn film_play(&mut self, play: bool) -> Option<(f64, u64)> {
+        let state = self.film.as_mut()?;
+        state.playing = play;
+        // Played to the end: the next play starts the film again rather than showing its
+        // last frame for ever.
+        if play && state.film.seconds > 0.0 && state.at >= state.film.last() {
+            state.at = 0.0;
+        }
+        state.want = state.at;
+        let at = state.at;
+        Some((at, self.film_ask()))
+    }
+
+    /// The film's line for the status: where the frame is, how long the film runs, and what
+    /// it is encoded as — `00:12 / 02:00  H.264/AVC 1920×1080`.
+    pub fn film_note(&self) -> Option<String> {
+        let state = self.film.as_ref()?;
+        let film = &state.film;
+        let mut out = crate::media::Film::clock(state.at);
+        if film.seconds > 0.0 {
+            out.push_str(&format!(" / {}", crate::media::Film::clock(film.seconds)));
+        }
+        out.push_str(&format!("  {} {}×{}", film.codec, film.width, film.height));
+        Some(out)
     }
 
     /// Is this a file the base64 decoder can read whole (SPEC 05 §1.13)?
@@ -3820,5 +3977,109 @@ mod tests {
         let mut v = viewer(b"caf\xe9\n");
         assert_eq!(v.codepage, Codepage::Cp1252);
         assert_eq!(texts(&mut v, 20, 1), vec!["café"]);
+    }
+
+    fn a_film() -> crate::media::Film {
+        crate::media::Film {
+            seconds: 120.0,
+            codec: "H.264/AVC".into(),
+            width: 1920,
+            height: 1080,
+        }
+    }
+
+    fn a_frame(shade: u8) -> crate::picture::Picture {
+        crate::picture::Picture::from_rgba(2, 2, "PNG", vec![shade; 16]).expect("four pixels")
+    }
+
+    #[test]
+    fn a_frame_of_a_film_is_shown_as_a_picture_and_stepped_by_tenths() {
+        // The first bytes of an MP4, which is all the viewer looks at when it opens one.
+        let mut bytes = b"\0\0\0\x18ftypisom\0\0\0\0isommp42".to_vec();
+        bytes.extend_from_slice(&[0u8; 64]);
+        let mut v = Viewer::new(
+            Box::new(BytesSource::new(bytes)),
+            VPath::local("film.mp4".to_string()),
+        );
+        assert!(v.may_be_film());
+        assert_ne!(v.mode, Mode::Image, "nothing to draw until a frame arrives");
+        assert_eq!(v.film_note(), None);
+        assert_eq!(v.film_step(1), None, "and nothing to step through");
+
+        // The frame at 10% arrives: the viewer turns to it and says where it is.
+        let ask = v.film_ask();
+        assert!(v.show_frame(ask, a_film(), 12.0, a_frame(10)));
+        assert_eq!(v.mode, Mode::Image);
+        assert_eq!(
+            v.film_note().as_deref(),
+            Some("00:12 / 02:00  H.264/AVC 1920×1080")
+        );
+        let (first, _) = v.picture_shared().expect("the frame is the picture");
+
+        // Two steps before the first has answered are two tenths, not one.
+        let (want, _) = v.film_step(1).unwrap();
+        assert_eq!(want, 24.0);
+        let (want, ask) = v.film_step(1).unwrap();
+        assert_eq!(want, 36.0);
+        assert!(v.show_frame(ask, a_film(), 36.0, a_frame(20)));
+        let (second, _) = v.picture_shared().unwrap();
+        assert_ne!(
+            first, second,
+            "a new frame is a new picture to whoever encoded the old"
+        );
+        assert_eq!(v.film.as_ref().unwrap().at, 36.0);
+
+        // The ends.
+        assert_eq!(v.film_end(true).unwrap().0, 119.0);
+        assert_eq!(v.film_end(false).unwrap().0, 0.0);
+    }
+
+    #[test]
+    fn a_frame_that_answers_an_old_question_is_dropped() {
+        let mut v = Viewer::new(
+            Box::new(BytesSource::new(
+                b"\0\0\0\x18ftypisom\0\0\0\0isommp42".to_vec(),
+            )),
+            VPath::local("film.mp4".to_string()),
+        );
+        let old = v.film_ask();
+        let new = v.film_ask();
+        assert!(!v.show_frame(old, a_film(), 12.0, a_frame(1)));
+        assert_eq!(v.film, None);
+        assert!(v.show_frame(new, a_film(), 24.0, a_frame(2)));
+        // `F4` goes on to the bytes, and a frame that arrives afterwards does not drag the
+        // reader back to the picture.
+        v.set_mode(Mode::Hex);
+        let (_, ask) = v.film_step(1).unwrap();
+        assert!(v.show_frame(ask, a_film(), 36.0, a_frame(3)));
+        assert_eq!(v.mode, Mode::Hex);
+        // The wheel still comes round to the frame.
+        assert!(v.as_picture());
+        assert_eq!(v.mode, Mode::Image);
+    }
+
+    #[test]
+    fn playing_starts_from_the_frame_on_screen_and_again_from_the_start_at_the_end() {
+        let mut v = Viewer::new(
+            Box::new(BytesSource::new(
+                b"\0\0\0\x18ftypisom\0\0\0\0isommp42".to_vec(),
+            )),
+            VPath::local("film.mp4".to_string()),
+        );
+        assert_eq!(v.film_play(true), None, "no frame yet, nothing to play");
+        let ask = v.film_ask();
+        v.show_frame(ask, a_film(), 12.0, a_frame(1));
+        let (from, ask) = v.film_play(true).unwrap();
+        assert_eq!(from, 12.0);
+        assert!(v.film.as_ref().unwrap().playing);
+        // Frames arrive under the one number and move the position on.
+        assert!(v.show_frame(ask, a_film(), 12.5, a_frame(2)));
+        assert!(v.show_frame(ask, a_film(), 119.5, a_frame(3)));
+        // Pausing outdates the frames still on their way.
+        let (_, _) = v.film_play(false).unwrap();
+        assert!(!v.show_frame(ask, a_film(), 13.0, a_frame(4)));
+        assert!(!v.film.as_ref().unwrap().playing);
+        // At the end, playing starts over.
+        assert_eq!(v.film_play(true).unwrap().0, 0.0);
     }
 }

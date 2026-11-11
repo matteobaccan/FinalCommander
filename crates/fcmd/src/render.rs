@@ -2112,6 +2112,11 @@ fn draw_quick_view(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
     app.quick_view_for(1 - index);
     // A page in the preview is a page of what is on screen, so the keys need the geometry.
     app.quick_size = (inner.w.saturating_sub(1), inner.h);
+    // A film's frame is asked for once the frame it goes in has a size (SPEC 05 §1.15).
+    if let Some(mut quick) = app.quick.take() {
+        app.first_frame(&mut quick, app.quick_size);
+        app.quick = Some(quick);
+    }
     let Some(viewer) = app.quick.as_mut() else {
         // Nothing under the cursor, or nothing we can read from here: the reason is a line of
         // its own rather than an empty frame that looks broken.
@@ -2548,7 +2553,14 @@ fn draw_viewer(app: &mut App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer) 
     if header_h == 1 {
         let header = app.theme.viewer_status();
         buf.fill(Rect::new(0, 0, w, 1), ' ', header);
-        let status_text = app.viewer_status(&status);
+        let mut status_text = app.viewer_status(&status);
+        // A film says where its frame is, how long it runs and what it is encoded as, ahead
+        // of the rest: on a frame that is the position that means something.
+        if viewer.mode == fcmd_view::Mode::Image {
+            if let Some(note) = viewer.film_note() {
+                status_text = format!("{note}  {status_text}");
+            }
+        }
         let status_w = status_text.chars().count().min(w as usize) as u16;
         let name_w = w.saturating_sub(status_w + 2);
         buf.put_str(
@@ -2597,6 +2609,10 @@ fn draw_viewer(app: &mut App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer) 
     } else {
         None
     };
+
+    // A film's first frame is asked for here, now that the window it will be drawn in has
+    // a size (SPEC 05 §1.15).
+    app.first_frame(viewer, (body.w, body.h));
 
     // Where the content ended up, for the mouse: the wheel over a viewer scrolls it, and
     // the sideways wheel moves a long line. Recorded after the scrollbar and the structure
@@ -8097,7 +8113,7 @@ third line
         assert!(out.contains("index") && out.contains("html"), "{out}");
     }
 
-    // ── pictures in real pixels (SPEC 05 §1.14a) ───────────────────────────────────────────
+    // ── pictures in real pixels, and films (SPEC 05 §1.14a, §1.15) ─────────────────────────
 
     /// The environment of a terminal, for the tests that choose a protocol from one.
     fn terminal(pairs: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
@@ -8278,5 +8294,337 @@ third line
         assert_eq!(placed.len(), 1);
         assert!(placed[0].x >= 50, "in the other panel: {:?}", placed[0]);
         assert!(placed[0].data.starts_with(b"\x1bP0;1;0q"));
+    }
+
+    /// The first bytes of an MP4: enough for the viewer to ask whether it is a film.
+    fn mp4_head() -> Vec<u8> {
+        let mut bytes = b"\0\0\0\x18ftypisom\0\0\0\0isommp42".to_vec();
+        bytes.extend_from_slice(&[0u8; 256]);
+        bytes
+    }
+
+    fn a_film() -> fcmd_view::media::Film {
+        fcmd_view::media::Film {
+            seconds: 120.0,
+            codec: "H.264/AVC".into(),
+            width: 64,
+            height: 48,
+        }
+    }
+
+    /// A frame made here: a picture of one colour, at a moment.
+    fn a_frame(at: f64, shade: u8) -> crate::video::Frame {
+        crate::video::Frame {
+            film: a_film(),
+            at,
+            picture: fcmd_view::picture::Picture::from_rgba(
+                64,
+                48,
+                "PNG",
+                [shade, 0, 255 - shade, 255].repeat(64 * 48),
+            )
+            .expect("the right number of bytes"),
+        }
+    }
+
+    /// The one frame the app asked for, taken off its requests.
+    fn frame_asked(app: &mut App) -> (VPath, crate::video::Ask, bool) {
+        let mut found = Vec::new();
+        for request in app.take_requests() {
+            match request {
+                crate::app::Request::VideoFrame { key, ask } => found.push((key, ask, false)),
+                crate::app::Request::VideoPlay { key, ask } => found.push((key, ask, true)),
+                _ => {}
+            }
+        }
+        assert_eq!(found.len(), 1, "one frame asked for: {found:?}");
+        found.remove(0)
+    }
+
+    #[test]
+    fn a_film_opens_on_the_frame_a_tenth_of_the_way_in_and_steps_by_tenths() {
+        let (_dir, mut app) = app_with_viewer("film.mp4", &mp4_head());
+        let out = frame(&mut app, 80, 24);
+        assert!(
+            !out.contains('▀'),
+            "no frame yet: the bytes, as before\n{out}"
+        );
+        // `F3` asked a worker for the first frame, sized to the window in pixels.
+        let (key, ask, play) = frame_asked(&mut app);
+        assert!(!play);
+        assert_eq!(ask.at, crate::video::At::Fraction(0.1));
+        assert_eq!(ask.film, None, "the worker reads the container");
+        assert_eq!(ask.bounds, (80 * 8, 22 * 16));
+
+        // The frame arrives: the viewer turns to it, and the top line says where it is, how
+        // long the film runs and what it is encoded as.
+        app.handle_event(Event::VideoFrame {
+            key: key.clone(),
+            number: ask.number,
+            result: Ok(a_frame(12.0, 40)),
+        });
+        let out = frame(&mut app, 80, 24);
+        assert!(out.contains('▀'), "{out}");
+        let top = out.lines().next().unwrap();
+        assert!(top.contains("00:12 / 02:00  H.264/AVC 64×48"), "{top}");
+
+        // `PgDn` is a tenth of the film on; two of them before any answer are two tenths.
+        press(&mut app, "PgDn");
+        let (_, first, _) = frame_asked(&mut app);
+        assert_eq!(first.at, crate::video::At::Seconds(24.0));
+        assert_eq!(
+            first.film,
+            Some(a_film()),
+            "the container is not read twice"
+        );
+        press(&mut app, "Right");
+        let (_, second, _) = frame_asked(&mut app);
+        assert_eq!(second.at, crate::video::At::Seconds(36.0));
+        // The answer to the first is late, and dropped; the second's is shown.
+        app.handle_event(Event::VideoFrame {
+            key: key.clone(),
+            number: first.number,
+            result: Ok(a_frame(24.0, 80)),
+        });
+        assert!(frame(&mut app, 80, 24).contains("00:12 / 02:00"));
+        app.handle_event(Event::VideoFrame {
+            key: key.clone(),
+            number: second.number,
+            result: Ok(a_frame(36.0, 120)),
+        });
+        assert!(frame(&mut app, 80, 24).contains("00:36 / 02:00"));
+
+        // Back, and the two ends.
+        press(&mut app, "PgUp");
+        assert_eq!(frame_asked(&mut app).1.at, crate::video::At::Seconds(24.0));
+        press(&mut app, "Home");
+        assert_eq!(frame_asked(&mut app).1.at, crate::video::At::Seconds(0.0));
+        press(&mut app, "End");
+        assert_eq!(frame_asked(&mut app).1.at, crate::video::At::Seconds(119.0));
+
+        // `F4` still goes on to the bytes, where the same keys turn pages again.
+        press(&mut app, "F4");
+        press(&mut app, "PgDn");
+        assert!(app.take_requests().is_empty());
+    }
+
+    #[test]
+    fn a_film_left_on_its_frame_opens_as_its_bytes_until_a_frame_comes_again() {
+        let (_dir, mut app) = app_with_viewer("film.mp4", &mp4_head());
+        let before = frame(&mut app, 80, 24);
+        let (key, ask, _) = frame_asked(&mut app);
+        app.handle_event(Event::VideoFrame {
+            key,
+            number: ask.number,
+            result: Ok(a_frame(12.0, 40)),
+        });
+        // Left while the frame was showing, so what is remembered of the file is "a picture".
+        press(&mut app, "Esc");
+        press(&mut app, "F3");
+        // Opened again, it is not a picture mode with no picture in it: on a machine where
+        // `ffmpeg` has gone since, that is how it would stay.
+        let again = frame(&mut app, 80, 24);
+        assert_eq!(again, before);
+        assert!(!again.contains("not a picture"), "{again}");
+        // And the frame is asked for afresh.
+        assert_eq!(frame_asked(&mut app).1.at, crate::video::At::Fraction(0.1));
+    }
+
+    #[test]
+    fn space_plays_a_film_and_pauses_it() {
+        let (_dir, mut app) = app_with_viewer("film.mp4", &mp4_head());
+        frame(&mut app, 80, 24);
+        let (key, ask, _) = frame_asked(&mut app);
+        app.handle_event(Event::VideoFrame {
+            key: key.clone(),
+            number: ask.number,
+            result: Ok(a_frame(12.0, 40)),
+        });
+
+        press(&mut app, "Space");
+        let (_, playing, play) = frame_asked(&mut app);
+        assert!(play, "a film to play, not a frame to fetch");
+        assert_eq!(playing.at, crate::video::At::Seconds(12.0));
+        assert!(app.status.contains("8 frames a second"), "{}", app.status);
+        // Frames arrive under the one number, each moving the clock on.
+        for (at, shade) in [(12.0, 40), (12.125, 41), (13.0, 48)] {
+            app.handle_event(Event::VideoFrame {
+                key: key.clone(),
+                number: playing.number,
+                result: Ok(a_frame(at, shade)),
+            });
+        }
+        assert!(frame(&mut app, 80, 24).contains("00:13 / 02:00"));
+
+        // `Space` again: paused where it was, and a frame still on its way is not shown.
+        press(&mut app, "Space");
+        assert!(app.take_requests().is_empty(), "pausing asks for nothing");
+        assert!(app.status.contains("00:13"), "{}", app.status);
+        app.handle_event(Event::VideoFrame {
+            key: key.clone(),
+            number: playing.number,
+            result: Ok(a_frame(14.0, 56)),
+        });
+        assert!(frame(&mut app, 80, 24).contains("00:13 / 02:00"));
+
+        // Played to the end, the film says so and `Space` starts it over.
+        press(&mut app, "Space");
+        let (_, again, _) = frame_asked(&mut app);
+        app.handle_event(Event::VideoFrame {
+            key: key.clone(),
+            number: again.number,
+            result: Ok(a_frame(119.5, 200)),
+        });
+        app.handle_event(Event::VideoEnded {
+            key,
+            number: again.number,
+            result: Ok(()),
+        });
+        assert!(app.status.contains("ended"), "{}", app.status);
+        press(&mut app, "Space");
+        assert_eq!(frame_asked(&mut app).1.at, crate::video::At::Seconds(0.0));
+    }
+
+    #[test]
+    fn without_ffmpeg_the_viewer_says_what_to_install_and_shows_the_file_as_before() {
+        let (_dir, mut app) = app_with_viewer("film.mp4", &mp4_head());
+        let before = frame(&mut app, 80, 24);
+        let (key, ask, _) = frame_asked(&mut app);
+        app.handle_event(Event::VideoFrame {
+            key: key.clone(),
+            number: ask.number,
+            result: Err(crate::video::Failure::NoProgram(a_film())),
+        });
+        assert!(
+            app.status.contains("`ffmpeg`") && app.status.contains("not installed"),
+            "{}",
+            app.status
+        );
+        assert!(app.status.contains("H.264/AVC 64×48"), "{}", app.status);
+        assert!(app.status.contains("F11"), "{}", app.status);
+        // Nothing else changed: no frame, no picture mode, and the keys turn pages.
+        app.status.clear();
+        assert_eq!(frame(&mut app, 80, 24), before);
+        press(&mut app, "PgDn");
+        press(&mut app, "Space");
+        assert!(app.take_requests().is_empty());
+
+        // A container of sound alone is not a film, and nothing is said about it at all.
+        let (_dir, mut app) = app_with_viewer("song.m4a", &mp4_head());
+        frame(&mut app, 80, 24);
+        let (key, ask, _) = frame_asked(&mut app);
+        app.status.clear();
+        app.handle_event(Event::VideoFrame {
+            key,
+            number: ask.number,
+            result: Err(crate::video::Failure::NotAFilm),
+        });
+        assert!(app.status.is_empty(), "{}", app.status);
+
+        // And a frame `ffmpeg` could not give is an error with its reason in it.
+        let (_dir, mut app) = app_with_viewer("film.mp4", &mp4_head());
+        frame(&mut app, 80, 24);
+        let (key, ask, _) = frame_asked(&mut app);
+        app.handle_event(Event::VideoFrame {
+            key,
+            number: ask.number,
+            result: Err(crate::video::Failure::Failed("moov atom not found".into())),
+        });
+        assert!(app.status.contains("moov atom not found"), "{}", app.status);
+        assert!(app.status_error);
+    }
+
+    #[test]
+    fn the_quick_view_shows_a_film_by_its_frame_and_keeps_quiet_without_ffmpeg() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("film.mp4"), mp4_head()).unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "Ctrl+Q");
+        let mut buf = Buffer::new(100, 30);
+        draw(&mut app, &mut buf);
+        let (key, ask, _) = frame_asked(&mut app);
+        assert_eq!(ask.at, crate::video::At::Fraction(0.1));
+        // Drawing again does not ask again: the cursor has not moved.
+        draw(&mut app, &mut buf);
+        assert!(app.take_requests().is_empty());
+
+        app.handle_event(Event::VideoFrame {
+            key: key.clone(),
+            number: ask.number,
+            result: Ok(a_frame(12.0, 90)),
+        });
+        draw(&mut app, &mut buf);
+        assert!(buf.to_text().contains('▀'), "{}", buf.to_text());
+
+        // On a machine without the program the quick view says nothing — it would say it
+        // on every film the cursor passed.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("film.mp4"), mp4_head()).unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "Ctrl+Q");
+        draw(&mut app, &mut buf);
+        let (key, ask, _) = frame_asked(&mut app);
+        app.status.clear();
+        app.handle_event(Event::VideoFrame {
+            key,
+            number: ask.number,
+            result: Err(crate::video::Failure::NoProgram(a_film())),
+        });
+        assert!(app.status.is_empty(), "{}", app.status);
+    }
+
+    #[test]
+    fn a_frame_for_a_viewer_that_was_closed_stops_the_film_it_came_from() {
+        let (_dir, mut app) = app_with_viewer("film.mp4", &mp4_head());
+        frame(&mut app, 80, 24);
+        let (key, ask, _) = frame_asked(&mut app);
+        app.handle_event(Event::VideoFrame {
+            key: key.clone(),
+            number: ask.number,
+            result: Ok(a_frame(12.0, 40)),
+        });
+        press(&mut app, "Space");
+        let (_, playing, _) = frame_asked(&mut app);
+        let newest = playing.newest.clone();
+        let now = |cell: &std::sync::Arc<std::sync::atomic::AtomicU64>| {
+            cell.load(std::sync::atomic::Ordering::Relaxed)
+        };
+        assert_eq!(now(&newest), playing.number, "the worker plays on");
+        // `Esc` closes the viewer; the next frame finds nobody, and that outdates the ask —
+        // which is what the worker looks at before every frame.
+        press(&mut app, "Esc");
+        app.handle_event(Event::VideoFrame {
+            key,
+            number: playing.number,
+            result: Ok(a_frame(12.125, 41)),
+        });
+        assert_ne!(now(&newest), playing.number);
+    }
+
+    #[test]
+    fn ffmpeg_draws_a_real_film_in_the_viewer() {
+        let dir = tempfile::tempdir().unwrap();
+        let Some((_, film)) = crate::video::tests::a_film_in(dir.path()) else {
+            eprintln!("skipped: ffmpeg is not installed here");
+            return;
+        };
+        let (_keep, mut app) = app_with_viewer("film.mkv", &std::fs::read(&film).unwrap());
+        frame(&mut app, 80, 24);
+        let (key, ask, _) = frame_asked(&mut app);
+        // What the loop's worker does with the request.
+        let result = crate::video::frame(&ask);
+        assert!(result.is_ok(), "{result:?}");
+        app.handle_event(Event::VideoFrame {
+            key,
+            number: ask.number,
+            result,
+        });
+        let out = frame(&mut app, 80, 24);
+        assert!(out.contains('▀'), "{out}");
+        let top = out.lines().next().unwrap();
+        assert!(top.contains("00:00 / 00:02"), "{top}");
+        assert!(top.contains("64×48"), "{top}");
     }
 }
