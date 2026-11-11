@@ -487,7 +487,9 @@ the program again, into a temporary folder that is removed afterwards, and `Esc`
 (see *Unpacking* below). Such an archive is **read only**, and on purpose: nothing driven that way ever
 creates an archive, adds to one or deletes from one, so the pack dialog keeps offering only
 the formats this program writes itself. Where the program is not installed, the panel says
-which one to install instead of calling the archive broken. Another program, or other switches
+which one to install instead of calling the archive broken. A `.rar` wants a `7z` that was
+built with RAR in it, which some distributions leave out; `unrar` is not used in its place,
+because the free one most of them ship lists differently and tests nothing. Another program, or other switches
 for `7z`, go in `fcmd.toml` as an `[[archiver]]` block — see *Formats of your own*.
 
 ## Unpacking

@@ -331,3 +331,13 @@ Still to build:
   added is the same format everywhere. A block named like a shipped one replaces it; a block
   with a line for an operation that writes is refused by name, which is where §9 is enforced;
 - a `rar` table, which wants a machine with RARLAB's `rar` on it to be verified the same way.
+  What a `.rar` gets meanwhile is checked against the real thing as far as a machine without
+  `rar` allows: a RAR 5 archive of stored files is written by hand in a test (nothing free
+  writes one) and the shipped `7z` table lists it, reads an entry out of it, passes it
+  through `7z t`, and names the file a damaged copy is damaged in. The test skips where `7z`
+  is missing or was built without RAR, which some distributions do. One thing learnt on the
+  way and worth keeping: the `unrar` on a Debian-family machine is usually **unrar-free**
+  (0.1.3 here), not RARLAB's. It prints two lines per entry, in a layout of its own, and its
+  `t` only lists — it answered 0 for the damaged archive. A table named `unrar` written
+  against one of the two would misread the other, so none is shipped, and a table for
+  RARLAB's must tell them apart by the banner before trusting either.

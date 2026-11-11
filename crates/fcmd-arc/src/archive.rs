@@ -3936,4 +3936,136 @@ mod tests {
         assert_eq!(archive.format(), Some(Format::Cab));
         assert_eq!(runner.calls().len(), 1, "nothing was run for it");
     }
+
+    // ── rar, through the table ──────────────────────────────────────────────────────────────
+
+    /// A RAR 5 archive of stored files, written by hand from RARLAB's own description of
+    /// the format (`technote.txt`): nothing free writes a `.rar`, so a test that wants one
+    /// has to. Each header is a CRC-32, a length, and fields that are all variable-length
+    /// integers; a stored file's bytes follow its header as they are.
+    fn rar5(members: &[(&str, &[u8])]) -> Vec<u8> {
+        fn vint(mut n: u64) -> Vec<u8> {
+            let mut out = Vec::new();
+            loop {
+                let low = (n & 0x7f) as u8;
+                n >>= 7;
+                if n == 0 {
+                    out.push(low);
+                    return out;
+                }
+                out.push(low | 0x80);
+            }
+        }
+        fn crc(bytes: &[u8]) -> [u8; 4] {
+            let mut crc = flate2::Crc::new();
+            crc.update(bytes);
+            crc.sum().to_le_bytes()
+        }
+        fn header(body: &[u8]) -> Vec<u8> {
+            let mut sized = vint(body.len() as u64);
+            sized.extend_from_slice(body);
+            let mut out = crc(&sized).to_vec();
+            out.extend_from_slice(&sized);
+            out
+        }
+        let mut out = b"Rar!\x1a\x07\x01\x00".to_vec();
+        // The archive's own header: type 1, no flags of either kind.
+        out.extend(header(&[1, 0, 0]));
+        for (name, body) in members {
+            let mut fields = vec![2u8]; // a file
+            fields.extend(vint(0x0002)); // with a data area after the header
+            fields.extend(vint(body.len() as u64));
+            fields.extend(vint(0x0002 | 0x0004)); // a Unix time and a CRC-32 follow
+            fields.extend(vint(body.len() as u64));
+            fields.extend(vint(0o644));
+            fields.extend_from_slice(&1_762_250_232u32.to_le_bytes());
+            fields.extend_from_slice(&crc(body));
+            fields.extend(vint(0)); // stored
+            fields.extend(vint(1)); // made on Unix
+            fields.extend(vint(name.len() as u64));
+            fields.extend_from_slice(name.as_bytes());
+            out.extend(header(&fields));
+            out.extend_from_slice(body);
+        }
+        out.extend(header(&[5, 0, 0])); // the end of the archive
+        out
+    }
+
+    /// A `.rar` through the shipped table, with the real `7z` and a real RAR 5 archive: it
+    /// lists, an entry comes out, the program's test passes it, and a file damaged on the
+    /// disk is the one the test names. Skipped where there is no `7z`, and where the one
+    /// that is there was built without RAR — some distributions take it out.
+    #[test]
+    fn a_rar_is_listed_read_and_tested_through_7z_when_7z_reads_rar() {
+        let Some(program) = crate::ext::which("7z") else {
+            eprintln!("no 7z on this machine: skipped");
+            return;
+        };
+        let formats = std::process::Command::new(&program)
+            .arg("i")
+            .output()
+            .expect("7z runs");
+        if !String::from_utf8_lossy(&formats.stdout).contains("Rar5") {
+            eprintln!("this 7z does not read rar: skipped");
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("prova.rar");
+        let wide: Vec<u8> = (0..=255u8).cycle().take(1024).collect();
+        let members: [(&str, &[u8]); 3] = [
+            ("readme.md", b"leggimi\n"),
+            ("src/main.rs", b"fn main() {}\n"),
+            ("src/deep/x y.bin", &wide),
+        ];
+        let bytes = rar5(&members);
+        std::fs::write(&path, &bytes).unwrap();
+
+        let cache = Cache::new(Limits::default());
+        let archive = cache.open(&path, &CancelToken::new()).expect("it opens");
+        assert_eq!(archive.format(), None, "no reader of ours parsed it");
+        assert_eq!(archive.label(), "7z");
+        let files: Vec<(&str, u64)> = archive
+            .entries()
+            .iter()
+            .filter(|e| e.kind == EntryKind::File)
+            .map(|e| (e.path.as_str(), e.size))
+            .collect();
+        assert_eq!(
+            files,
+            [
+                ("/readme.md", 8),
+                ("/src/main.rs", 13),
+                ("/src/deep/x y.bin", 1024)
+            ]
+        );
+        assert!(archive.is_dir("/src/deep"));
+        assert_eq!(
+            archive
+                .read("/src/deep/x y.bin", &CancelToken::new())
+                .expect("it comes out"),
+            wide
+        );
+        let report = archive
+            .verify(&CancelToken::new(), &mut |_, _, _| {})
+            .expect("a test");
+        assert!(report.is_whole(), "{report:?}");
+        assert_eq!((report.members, report.bytes), (3, 8 + 13 + 1024));
+
+        // One letter of the second file, changed where it lies in the archive.
+        let mut damaged = bytes.clone();
+        let at = damaged
+            .windows(7)
+            .position(|w| w == b"fn main")
+            .expect("stored as it is");
+        damaged[at] ^= 0x20;
+        std::fs::write(&path, damaged).unwrap();
+        cache.forget(&path);
+        let report = cache
+            .open(&path, &CancelToken::new())
+            .expect("the listing still reads")
+            .verify(&CancelToken::new(), &mut |_, _, _| {})
+            .expect("a report");
+        let bad: Vec<&str> = report.bad.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(bad, ["/src/main.rs"], "{report:?}");
+    }
 }

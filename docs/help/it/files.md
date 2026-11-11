@@ -507,7 +507,9 @@ archivio del genere è **in sola lettura**, e di proposito:
 niente di ciò che viene guidato così crea mai un archivio, ci aggiunge o ne toglie qualcosa, per
 cui il dialogo di compressione continua a offrire solo i formati che questo programma scrive da
 sé. Dove il programma non è installato, il pannello dice quale installare invece di dare
-l'archivio per rotto. Un altro programma, o altre opzioni per `7z`, vanno in `fcmd.toml` come
+l'archivio per rotto. Un `.rar` vuole un `7z` compilato con il supporto RAR, che alcune
+distribuzioni lasciano fuori; `unrar` non viene usato al suo posto, perché quello libero che
+quasi tutte installano elenca in un altro modo e non prova niente. Un altro programma, o altre opzioni per `7z`, vanno in `fcmd.toml` come
 blocco `[[archiver]]` — vedi *Formati tuoi*.
 
 ## Estrarre
