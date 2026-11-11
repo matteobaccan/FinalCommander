@@ -36,6 +36,10 @@ struct Stages {
     /// and in the archive's own order — which is the order a program writes them in.
     foreseen: HashMap<PathBuf, Vec<String>>,
     running: HashMap<PathBuf, Stage>,
+    /// The entries a run that failed was also going to write, with what it failed of: each
+    /// is told so once, when it is asked for, without the program being started again to
+    /// say it. Once only, so that a retry of the file is a real second attempt.
+    failed: HashMap<PathBuf, (Vec<String>, Ended)>,
 }
 
 /// One run of an archiver, writing a set of entries into a folder of ours beside where they
@@ -162,6 +166,14 @@ impl<F: JobFs> ArcFs<F> {
             .stages
             .lock()
             .map_err(|_| io::Error::other("the unpacking state is poisoned"))?;
+        if let Some((names, ended)) = stages.failed.get_mut(&key) {
+            if let Some(at) = names.iter().position(|name| name == inner) {
+                names.swap_remove(at);
+                if let Err((kind, reason)) = ended.clone() {
+                    return Err(io::Error::new(kind, reason));
+                }
+            }
+        }
         let mut stage = match stages.running.remove(&key) {
             Some(stage) if stage.names.iter().any(|name| name == inner) => stage,
             other => {
@@ -202,7 +214,18 @@ impl<F: JobFs> ArcFs<F> {
             }
             match ended {
                 Some(Ok(())) => break,
-                Some(Err((kind, reason))) => return Err(io::Error::new(kind, reason)),
+                Some(Err((kind, reason))) => {
+                    let others = stage
+                        .names
+                        .iter()
+                        .filter(|name| *name != inner)
+                        .cloned()
+                        .collect();
+                    stages
+                        .failed
+                        .insert(key, (others, Err((kind, reason.clone()))));
+                    return Err(io::Error::new(kind, reason));
+                }
                 None => {}
             }
             // All of its bytes, and the program already on to a later entry: finished.
@@ -1210,7 +1233,7 @@ mod tests {
     }
 
     /// A program that says no is an error against each file it was asked for, in its own
-    /// words, and leaves nothing behind either.
+    /// words — said by one run of it, not one per file — and leaves nothing behind either.
     #[test]
     fn a_program_that_refuses_to_extract_is_an_error_per_file() {
         let dir = tempfile::tempdir().unwrap();
@@ -1228,20 +1251,36 @@ mod tests {
         };
         let spec = JobSpec::new(
             JobKind::Copy,
-            vec![archive.enter("/readme.md")],
+            vec![archive.enter("/readme.md"), archive.enter("/src")],
             Some(VPath::local(&out)),
         )
         .with_options(options);
         let cancel = CancelToken::new();
         let plan = plan(&fs, &spec, &cancel).expect("the plan");
         let outcome = execute(&fs, &spec, plan, &mut Quiet, &cancel);
-        drop(fs);
-        assert_eq!(outcome.errors.len(), 1, "{outcome:?}");
+        assert_eq!(outcome.errors.len(), 3, "{outcome:?}");
         assert!(
-            outcome.errors[0].1.contains("Unsupported Method"),
+            outcome
+                .errors
+                .iter()
+                .all(|(_, why)| why.contains("Unsupported Method")),
             "{outcome:?}"
         );
-        assert_eq!(left_in(&out), Vec::<String>::new());
+        assert_eq!(*archiver.runs.lock().unwrap(), 1, "asked once");
+        // The folders the job made are its own; nothing of the program's is among them.
+        assert_eq!(left_in(&out), ["src", "src/deep"]);
+
+        // And a file asked for again is a second attempt, not the first one's answer.
+        let again = fs.copy_file(
+            &archive.enter("/readme.md"),
+            &VPath::local(out.join("readme.md")),
+            CopyHow::buffered(4096),
+            &mut |_| true,
+        );
+        assert!(again.is_err());
+        assert_eq!(*archiver.runs.lock().unwrap(), 2);
+        drop(fs);
+        assert_eq!(left_in(&out), ["src", "src/deep"]);
     }
 
     /// The real thing, when the machine has it: `7z` makes a `.wim`, which nothing here
