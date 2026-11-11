@@ -79,6 +79,7 @@ Notable changes, newest first. The format follows
   hides the keys.
 - The feature table was read against the sources of eighteen other file managers; its states
   are corrected both ways, and BACKLOG opens with what they have and this does not.
+- `rusqlite` 0.42 (SQLite 3.54.1) and `object` 0.41.
 
 ### Fixed
 
