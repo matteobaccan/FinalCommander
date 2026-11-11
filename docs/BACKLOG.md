@@ -13,6 +13,15 @@ Still in the order the menus mention things, with the sections after them taken 
 have. **Open question** marks the rows where a decision comes before the code, and the row
 says what the decision stands on.
 
+## Next release (0.43)
+
+Decided with the author on 11 November 2026: these go into the first release after 0.42.0.
+
+| Item | Work | Note |
+| --- | --- | --- |
+| **Startup programs as a panel** — what starts at login, and switching it off | M | A *Startup* row in `Alt+F1`/`Alt+F2`, like the process and service lists. Columns: name, command, where it comes from, enabled or not. `F8` disables or enables again, `F3` the card (full command, the key or file it lives in, the publisher), `F4` opens the file that defines it, `Shift+F8` removes it after asking. **Windows**: `Run`/`RunOnce` of the user and of the machine, the two *Startup* folders, scheduled tasks that run at logon; disabled the way Task Manager does it (`StartupApproved`), so both show the same state. **Linux**: `~/.config/autostart` and `/etc/xdg/autostart`, disabled with a `Hidden=true` copy in the user's folder as GNOME and KDE do; enabled `systemd --user` units. **macOS**: `LaunchAgents` (user and `/Library`) and `LaunchDaemons`, through `launchctl disable`/`bootout`. What belongs to the machine is shown read-only without the rights to change it, and says why. Nothing is deleted to disable |
+| **Services: how they start** | S | A *Start* column in the service list (automatic, manual, disabled) and a key that changes it — `systemctl enable`/`disable`, the service's start type on Windows, `launchctl enable`/`disable` on macOS — beside the start, stop and restart there already are |
+
 ## Parity after 0.41
 
 "Do we do everything the other commanders do?" — **no: about three quarters of it.** For
