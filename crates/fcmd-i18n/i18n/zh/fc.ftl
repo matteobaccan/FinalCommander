@@ -1632,3 +1632,18 @@ opt-sort-case-auto = 按本系统的习惯
 opt-sort-case-yes = 区分
 opt-sort-case-no = 不区分
 copy-keep-xattrs = 保留扩展属性
+
+# editor conversions, disk diff and guides (0.41)
+editor-convert-title = 文件写入格式
+editor-convert-hint = 输入以筛选 · Enter：转换（F2 写入，Ctrl+Z 撤销）· Esc：返回
+editor-convert-eol = 行尾：{ $eol }
+editor-convert-bom-on = 字节顺序标记（BOM）：写入
+editor-convert-bom-off = 字节顺序标记（BOM）：不写入
+editor-convert-page = 代码页：{ $page }
+editor-converted-eol = { $name }：下次保存时行尾为 { $what }
+editor-converted-bom-on = { $name }：下次保存将写入字节顺序标记
+editor-converted-bom-off = { $name }：下次保存不写入字节顺序标记
+editor-converted-page = { $name }：下次保存将以 { $what } 写入
+editor-convert-same = 文件已是这种写法
+editor-convert-no-bom = { $page } 没有字节顺序标记：只有 UTF-8 和 UTF-16 才有
+editor-convert-lossy = { $page } 无法容纳 { $name } 的所有字符：未作任何更改

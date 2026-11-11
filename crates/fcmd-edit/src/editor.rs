@@ -1435,6 +1435,38 @@ impl Editor {
         true
     }
 
+    // ── conversions ────────────────────────────────────────────────────────────────────────
+    //
+    // Each is one undo step and none touches the text: they change what the next save
+    // writes. `Ok(false)` is "it is already written that way".
+
+    /// End every line with `eol` from the next save on.
+    pub fn convert_eol(&mut self, eol: crate::Eol) -> Result<bool, EditorError> {
+        self.burst = None;
+        Ok(self.buffer.convert_eol(eol, self.cursor)?)
+    }
+
+    /// Write the byte order mark, or leave it out.
+    pub fn convert_bom(&mut self, bom: bool) -> Result<bool, EditorError> {
+        self.burst = None;
+        Ok(self.buffer.convert_bom(bom, self.cursor)?)
+    }
+
+    /// Save in another code page from now on.
+    pub fn convert_codepage(&mut self, codepage: fcmd_view::Codepage) -> Result<bool, EditorError> {
+        self.burst = None;
+        Ok(self.buffer.convert_codepage(codepage, self.cursor)?)
+    }
+
+    /// Can `codepage` hold every character of the text? Asked before converting to it, so
+    /// that a letter is never turned into a question mark by a save.
+    pub fn fits_codepage(&self, codepage: fcmd_view::Codepage) -> bool {
+        self.buffer
+            .lines()
+            .iter()
+            .all(|line| codepage.can_encode(line))
+    }
+
     // ── saving ─────────────────────────────────────────────────────────────────────────────
 
     /// Did the file change under us since it was opened?
@@ -1537,6 +1569,11 @@ impl Editor {
             self.buffer.eol.as_str(),
             self.buffer.codepage.name()
         );
+        // Said only when it is there: most files have none, and the ones that do are the
+        // ones somebody is about to ask why a script will not start.
+        if self.buffer.bom {
+            text.push_str(" BOM");
+        }
         if self.buffer.mixed_eol {
             text.push_str("  mixed EOL");
         }

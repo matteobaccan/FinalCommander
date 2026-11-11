@@ -1694,3 +1694,18 @@ opt-sort-case-auto = como este sistema
 opt-sort-case-yes = distinguirlas
 opt-sort-case-no = un solo alfabeto
 copy-keep-xattrs = Conservar los atributos extendidos
+
+# editor conversions, disk diff and guides (0.41)
+editor-convert-title = Escribir el archivo como
+editor-convert-hint = Escriba para filtrar · Intro: convierte (F2 lo escribe, Ctrl+Z lo deshace) · Esc: volver
+editor-convert-eol = Fin de línea: { $eol }
+editor-convert-bom-on = Marca de orden de bytes (BOM): se escribe
+editor-convert-bom-off = Marca de orden de bytes (BOM): no se escribe
+editor-convert-page = Página de códigos: { $page }
+editor-converted-eol = { $name }: las líneas terminarán con { $what } al guardar
+editor-converted-bom-on = { $name }: al guardar se escribirá la marca de orden de bytes
+editor-converted-bom-off = { $name }: al guardar no se escribirá la marca de orden de bytes
+editor-converted-page = { $name }: al guardar se escribirá en { $what }
+editor-convert-same = El archivo ya se escribe así
+editor-convert-no-bom = { $page } no tiene marca de orden de bytes: solo UTF-8 y UTF-16 la tienen
+editor-convert-lossy = { $page } no puede contener todos los caracteres de { $name }: no se cambió nada

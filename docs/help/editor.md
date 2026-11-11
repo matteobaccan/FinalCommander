@@ -47,6 +47,34 @@ opened afterwards.
 A column block is a rectangle rather than a run of lines, which is how a column of numbers is
 moved without touching what is beside it.
 
+# End of line, byte order mark and code page
+
+A save writes a file the way it was read: the same line endings, the same code page, a byte
+order mark if it had one, and no newline after the last line if there was none. The status
+line says which — `LF`, `CRLF` or `CR`, then the code page, then `BOM` when the file starts
+with one.
+
+`Shift+F8` is where you change it. The list has three groups, and in each the row that is true
+now is marked: the end of line (LF, CRLF, CR), the byte order mark (written or not), and every
+code page, in the order the viewer's list has them. `Enter` on a row converts; type to narrow
+the list, which is the quick way to a page among forty.
+
+A conversion changes nothing on the disk by itself. The file becomes modified, the status line
+shows the new answer, and `F2` writes it; `Ctrl+Z` takes it back, one conversion at a time,
+like any other edit.
+
+- A file with **mixed line endings** has none of the three rows marked. Choosing one gives
+  every line the same ending.
+- Only UTF-8 and UTF-16 have a **byte order mark**. Converting to UTF-16 adds it, because
+  without one nothing but a guess tells the two byte orders apart; converting to a page that
+  has none drops it.
+- A **code page** that has no byte for one of the file's characters is refused, and nothing
+  changes: `中` does not fit in Windows-1252, and a save that turned it into `?` would be a
+  word quietly lost.
+
+In the viewer the same key reads the bytes as another page. Here the text is already read, so
+the page you choose is the one it will be written in.
+
 # Colours
 
 A file whose name says what it is — Rust, C, C++, Java, C#, JavaScript, TypeScript, PHP,

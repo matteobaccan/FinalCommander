@@ -127,6 +127,9 @@ pub enum PickKind {
     ReplaceTemplates,
     /// Every line of the edited file that a search matches: `Enter` goes to it.
     EditorMatches,
+    /// How the edited file is written (`Shift+F8`, SPEC 05 §2.1): the end of line, the byte
+    /// order mark and the code page, each row a conversion.
+    EditorConvert,
     /// The `[[sort_group]]` bands, in the order they cut the listing (SPEC 02 §4).
     SortGroups,
     /// The named mask lists every mask field can use as `<name>` (SPEC 02 §5b).

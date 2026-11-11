@@ -1695,3 +1695,18 @@ opt-sort-case-auto = come fa questo sistema
 opt-sort-case-yes = distinguile
 opt-sort-case-no = un solo alfabeto
 copy-keep-xattrs = Conserva gli attributi estesi
+
+# editor conversions, disk diff and guides (0.41)
+editor-convert-title = Scrivi il file come
+editor-convert-hint = Scrivi per restringere · Invio: converte (F2 lo scrive, Ctrl+Z lo annulla) · Esc: indietro
+editor-convert-eol = Fine riga: { $eol }
+editor-convert-bom-on = Byte order mark (BOM): scritto
+editor-convert-bom-off = Byte order mark (BOM): non scritto
+editor-convert-page = Tabella codici: { $page }
+editor-converted-eol = { $name }: al prossimo salvataggio le righe finiranno con { $what }
+editor-converted-bom-on = { $name }: il prossimo salvataggio scrive il byte order mark
+editor-converted-bom-off = { $name }: il prossimo salvataggio non scrive il byte order mark
+editor-converted-page = { $name }: il prossimo salvataggio scrive in { $what }
+editor-convert-same = Il file è già scritto così
+editor-convert-no-bom = { $page } non ha byte order mark: lo hanno solo UTF-8 e UTF-16
+editor-convert-lossy = { $page } non può contenere tutti i caratteri di { $name }: nulla è stato cambiato

@@ -1219,6 +1219,13 @@ keys = ["Ctrl+Alt+L"]
 scope = "editor"
 cmd = "editor.readonly.toggle"
 
+# FAR's key for the code page in the editor too. Here it is the whole of how the file is
+# written — end of line, byte order mark, code page — since all three are one question.
+[[bind]]
+keys = ["Shift+F8"]
+scope = "editor"
+cmd = "editor.convert"
+
 [[bind]]
 keys = ["Ctrl+R"]
 scope = "editor"

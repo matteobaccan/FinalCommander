@@ -1128,6 +1128,7 @@ fn draw_pick(
         crate::menu::PickKind::PluginsConfig => "plugins-config-hint",
         crate::menu::PickKind::ReplaceTemplates => "replace-tpl-hint",
         crate::menu::PickKind::EditorMatches => "editor-matches-hint",
+        crate::menu::PickKind::EditorConvert => "editor-convert-hint",
         crate::menu::PickKind::Jobs => "jobs-hint",
         // A history has three keys of its own, and a footer that does not name them is a
         // footer that keeps them secret.

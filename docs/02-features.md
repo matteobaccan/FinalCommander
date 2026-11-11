@@ -211,7 +211,7 @@ something readable rather than only into instructions.
 | 6.3 | Undo/redo grouped per command and per burst of typing, `Backspace` or `Del`; the depth a setting (`editor.undo_depth`) | FAR | ✓ |
 | 6.4 | Search/replace: text or regular expression, case, whole words, wrap; replace next and replace all with capture references (`$1`, `${name}`) and "preserve style"; a list of every matching line | FAR | ~ replace inside a block only; the separator half of FAR's preserve style (`foo_bar` ↔ `fooBar`) |
 | 6.5 | Go to `line` or `line:column`, bookmarks 0..9 | FAR | ✓ and `Alt+B` to the matching bracket |
-| 6.6 | Keep the original encoding, EOL, BOM and final newline on save | FAR | ~ explicit conversion commands |
+| 6.6 | Keep the original encoding, EOL, BOM and final newline on save; `Shift+F8` converts the end of line, the BOM and the code page, each one undo step | FAR | ✓ |
 | 6.7 | Syntax highlighting (tree-sitter), bracket matching, auto-indent, tabs/spaces policy, trailing-space trim | MTN2/NEW | ~ colouring for 25 languages and markups by a scanner of our own rather than tree-sitter, auto-indent, the three tab policies of `editor.tabs`, bracket matching (`Alt+B`), trailing blanks taken off (`Alt+Shift+T`, or at every save with `editor.trim_trailing`) |
 | 6.8 | Insert file name / path / current date, character by code, macros | FAR | ~ a character from a list filtered by its code (`Alt+Shift+C`); the name, path and date are not there yet |
 | 6.9 | External editor delegation (`$EDITOR`, per-type associations) | all | ✓ |

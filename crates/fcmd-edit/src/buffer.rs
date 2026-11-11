@@ -97,6 +97,21 @@ enum Edit {
     Insert { at: Position, text: String },
     /// Remove `range` (undoing an insert).
     Delete { range: Range, text: String },
+    /// Write the file the way it was written before a conversion: `from` is what undo puts
+    /// back and `to` what redo sets again. The text is not touched by either.
+    Format { from: Format, to: Format },
+}
+
+/// How the text becomes bytes: everything a save needs besides the lines themselves.
+///
+/// Kept together because a conversion changes them together — a file sent to Windows-1252
+/// loses its byte order mark in the same step — and undo has to give all of it back at once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Format {
+    pub eol: Eol,
+    pub mixed_eol: bool,
+    pub codepage: Codepage,
+    pub bom: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -513,6 +528,7 @@ impl Buffer {
                     self.insert_raw(*at, text);
                 }
                 Edit::Delete { range, .. } => self.delete_raw(*range),
+                Edit::Format { from, .. } => self.put_format(*from),
             }
         }
         let cursor = group.cursor_before;
@@ -538,6 +554,7 @@ impl Buffer {
                 Edit::Delete { range, text } => {
                     self.insert_raw(range.start, text);
                 }
+                Edit::Format { to, .. } => self.put_format(*to),
             }
         }
         let cursor = group.cursor_after;
@@ -556,6 +573,94 @@ impl Buffer {
 
     pub fn can_redo(&self) -> bool {
         !self.redo.is_empty()
+    }
+
+    // ── conversions ────────────────────────────────────────────────────────────────────────
+
+    /// How the buffer would be written right now.
+    pub fn format(&self) -> Format {
+        Format {
+            eol: self.eol,
+            mixed_eol: self.mixed_eol,
+            codepage: self.codepage,
+            bom: self.bom,
+        }
+    }
+
+    fn put_format(&mut self, format: Format) {
+        self.eol = format.eol;
+        self.mixed_eol = format.mixed_eol;
+        self.codepage = format.codepage;
+        self.bom = format.bom;
+    }
+
+    /// Write the file another way from now on, as one undo step of its own.
+    ///
+    /// Nothing happens to the lines: the conversion is what the next save does with them.
+    /// It still counts as a change — the bytes on disk will differ — so the buffer is
+    /// modified and the step can be taken back like any other. `Ok(false)` when the file is
+    /// already written that way.
+    fn convert(&mut self, to: Format, cursor: Position) -> Result<bool, BufferError> {
+        if self.read_only {
+            return Err(BufferError::ReadOnly);
+        }
+        let from = self.format();
+        if from == to {
+            return Ok(false);
+        }
+        // A step of its own, whatever was being typed before it and whatever comes after.
+        self.end_group(cursor);
+        self.put_format(to);
+        self.record(Edit::Format { from, to }, cursor);
+        self.end_group(cursor);
+        Ok(true)
+    }
+
+    /// End every line with `eol` when the file is next written. A file with mixed endings
+    /// stops being one: every line gets the same.
+    pub fn convert_eol(&mut self, eol: Eol, cursor: Position) -> Result<bool, BufferError> {
+        let to = Format {
+            eol,
+            mixed_eol: false,
+            ..self.format()
+        };
+        self.convert(to, cursor)
+    }
+
+    /// Write a byte order mark, or stop writing one. Only the pages that have a mark can be
+    /// given one — [`has_bom`] says which — and asking for it elsewhere changes nothing.
+    pub fn convert_bom(&mut self, bom: bool, cursor: Position) -> Result<bool, BufferError> {
+        let to = Format {
+            bom: bom && has_bom(self.codepage),
+            ..self.format()
+        };
+        self.convert(to, cursor)
+    }
+
+    /// Write the file in another code page. The text in memory is Unicode and stays as it
+    /// is; whether `codepage` can hold all of it is the caller's to ask first
+    /// ([`Codepage::can_encode`]), because what to do about a character that does not fit
+    /// is a question for a person.
+    ///
+    /// The mark follows the page: UTF-16 gets one, since without it nothing but a guess
+    /// tells the two byte orders apart; UTF-8 keeps whatever it had; a page with no mark
+    /// loses it.
+    pub fn convert_codepage(
+        &mut self,
+        codepage: Codepage,
+        cursor: Position,
+    ) -> Result<bool, BufferError> {
+        let bom = match codepage {
+            Codepage::Utf16Le | Codepage::Utf16Be => true,
+            Codepage::Utf8 => self.bom,
+            _ => false,
+        };
+        let to = Format {
+            codepage,
+            bom,
+            ..self.format()
+        };
+        self.convert(to, cursor)
     }
 
     // ── line operations ────────────────────────────────────────────────────────────────────
@@ -697,6 +802,15 @@ fn split_lines(text: &str) -> Vec<String> {
     lines
 }
 
+/// Whether files in this code page can start with a byte order mark: the three Unicode
+/// forms, and nothing else.
+pub fn has_bom(codepage: Codepage) -> bool {
+    matches!(
+        codepage,
+        Codepage::Utf8 | Codepage::Utf16Le | Codepage::Utf16Be
+    )
+}
+
 /// Where inserting `text` at `at` ends.
 fn end_of(at: Position, text: &str) -> Position {
     let pieces: Vec<&str> = text.split('\n').collect();
@@ -713,6 +827,103 @@ fn end_of(at: Position, text: &str) -> Position {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn converting_the_end_of_line_changes_what_is_written_and_not_the_lines() {
+        let mut buffer = Buffer::from_text("a\nb\n");
+        assert!(buffer.convert_eol(Eol::Crlf, Position::default()).unwrap());
+        assert_eq!(buffer.len(), 2);
+        assert_eq!(buffer.to_text(), "a\r\nb\r\n");
+        assert!(buffer.modified(), "the bytes on disk will differ");
+        assert!(buffer.convert_eol(Eol::Cr, Position::default()).unwrap());
+        assert_eq!(buffer.to_text(), "a\rb\r");
+        // Asking for what the file already has is not a change, and leaves no step behind.
+        let mut same = Buffer::from_text("a\nb\n");
+        assert!(!same.convert_eol(Eol::Lf, Position::default()).unwrap());
+        assert!(!same.modified());
+        assert!(!same.can_undo());
+    }
+
+    #[test]
+    fn converting_a_file_with_mixed_endings_gives_every_line_the_same() {
+        let mut buffer = Buffer::from_text("a\r\nb\nc\n");
+        assert!(buffer.mixed_eol);
+        // The majority already is LF, and it is still a conversion: the file changes.
+        assert!(buffer.convert_eol(Eol::Lf, Position::default()).unwrap());
+        assert!(!buffer.mixed_eol);
+        assert!(buffer.modified());
+        buffer.undo();
+        assert!(buffer.mixed_eol, "undo says it is mixed again");
+    }
+
+    #[test]
+    fn a_conversion_is_one_undo_step_apart_from_the_typing_around_it() {
+        let mut buffer = Buffer::from_text("a\n");
+        buffer.begin_burst(Position::default(), false);
+        buffer.insert(Position::new(0, 1), "b").unwrap();
+        buffer.end_burst(Position::new(0, 2));
+        buffer.convert_eol(Eol::Crlf, Position::new(0, 2)).unwrap();
+        buffer.begin_burst(Position::new(0, 2), true);
+        buffer.insert(Position::new(0, 2), "c").unwrap();
+        buffer.end_burst(Position::new(0, 3));
+
+        buffer.undo();
+        assert_eq!((buffer.line(0), buffer.eol), ("ab", Eol::Crlf));
+        buffer.undo();
+        assert_eq!((buffer.line(0), buffer.eol), ("ab", Eol::Lf));
+        buffer.undo();
+        assert_eq!(buffer.line(0), "a");
+        buffer.redo();
+        buffer.redo();
+        assert_eq!((buffer.line(0), buffer.eol), ("ab", Eol::Crlf));
+    }
+
+    #[test]
+    fn the_byte_order_mark_is_added_and_removed_only_where_there_is_one() {
+        let mut buffer = Buffer::from_text("ciao\n");
+        buffer.eol = Eol::Lf;
+        assert!(buffer.convert_bom(true, Position::default()).unwrap());
+        assert_eq!(buffer.to_bytes(), b"\xEF\xBB\xBFciao\n");
+        assert!(buffer.convert_bom(false, Position::default()).unwrap());
+        assert_eq!(buffer.to_bytes(), b"ciao\n");
+        // Windows-1252 has no mark to write: nothing changes, and nothing is recorded.
+        buffer.mark_saved();
+        buffer.codepage = Codepage::Cp1252;
+        assert!(!buffer.convert_bom(true, Position::default()).unwrap());
+        assert!(!buffer.bom && !buffer.modified());
+    }
+
+    #[test]
+    fn another_code_page_is_what_the_next_save_writes_and_the_mark_follows_it() {
+        let mut buffer = Buffer::from_text("perch\u{e9}\n");
+        buffer.eol = Eol::Lf;
+        buffer.bom = true;
+        assert!(buffer
+            .convert_codepage(Codepage::Cp1252, Position::default())
+            .unwrap());
+        assert_eq!(buffer.to_bytes(), b"perch\xE9\n", "one byte, and no mark");
+        assert!(buffer
+            .convert_codepage(Codepage::Utf16Le, Position::default())
+            .unwrap());
+        assert_eq!(&buffer.to_bytes()[..4], b"\xFF\xFEp\0", "UTF-16 is marked");
+        // Two steps back is the file as it was read: UTF-8 with its mark.
+        buffer.undo();
+        buffer.undo();
+        assert_eq!(buffer.codepage, Codepage::Utf8);
+        assert!(buffer.bom);
+        assert_eq!(buffer.line(0), "perch\u{e9}", "the text never changed");
+    }
+
+    #[test]
+    fn a_read_only_buffer_refuses_a_conversion() {
+        let mut buffer = Buffer::from_text("a\n");
+        buffer.read_only = true;
+        assert!(matches!(
+            buffer.convert_eol(Eol::Crlf, Position::default()),
+            Err(BufferError::ReadOnly)
+        ));
+        assert!(!buffer.modified());
+    }
 
     #[test]
     fn text_round_trips_with_its_line_endings() {

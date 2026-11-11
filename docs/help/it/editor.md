@@ -50,6 +50,34 @@ momento.
 Un blocco a colonne è un rettangolo invece di una sequenza di righe: è così che si sposta una
 colonna di numeri senza toccare quello che le sta accanto.
 
+# Fine riga, byte order mark e tabella codici
+
+Un salvataggio scrive il file com'è stato letto: gli stessi fine riga, la stessa tabella
+codici, il byte order mark se c'era, e nessun a capo dopo l'ultima riga se non c'era. La riga
+di stato dice quali — `LF`, `CRLF` o `CR`, poi la tabella codici, poi `BOM` quando il file
+comincia con quello.
+
+`Shift+F8` è dove si cambia. L'elenco ha tre gruppi, e in ognuno la riga vera in questo
+momento è segnata: il fine riga (LF, CRLF, CR), il byte order mark (scritto o no), e tutte le
+tabelle codici, nell'ordine dell'elenco del visualizzatore. `Enter` su una riga converte;
+scrivi per restringere l'elenco, che è il modo svelto di arrivare a una tabella fra quaranta.
+
+Una conversione da sola non cambia nulla sul disco. Il file risulta modificato, la riga di
+stato mostra la nuova risposta, e `F2` la scrive; `Ctrl+Z` la annulla, una conversione alla
+volta, come ogni altra modifica.
+
+- Un file con **fine riga misti** non ha nessuna delle tre righe segnata. Sceglierne una dà a
+  tutte le righe lo stesso fine riga.
+- Solo UTF-8 e UTF-16 hanno un **byte order mark**. Convertire in UTF-16 lo aggiunge, perché
+  senza non c'è che un'ipotesi a distinguere i due ordini dei byte; convertire in una tabella
+  che non ne ha lo toglie.
+- Una **tabella codici** che non ha un byte per uno dei caratteri del file viene rifiutata, e
+  non cambia nulla: `中` non sta in Windows-1252, e un salvataggio che lo trasformasse in `?`
+  sarebbe una parola persa in silenzio.
+
+Nel visualizzatore lo stesso tasto legge i byte con un'altra tabella. Qui il testo è già
+letto, quindi la tabella che scegli è quella in cui verrà scritto.
+
 # I colori
 
 Un file il cui nome dice cos'è — Rust, C, C++, Java, C#, JavaScript, TypeScript, PHP, Python,

@@ -572,6 +572,9 @@ pub enum Command {
     /// `Ctrl+Del`, `Ctrl+T`: the word after the cursor.
     EditorDeleteWordRight,
     EditorToggleReadOnly,
+    /// `Shift+F8`: how the file is written — its end of line, its byte order mark, its code
+    /// page — to change any of them.
+    EditorConvert,
 }
 
 impl Command {
@@ -866,6 +869,7 @@ impl Command {
             Command::EditorDeleteWordLeft,
             Command::EditorDeleteWordRight,
             Command::EditorToggleReadOnly,
+            Command::EditorConvert,
         ];
         for v in ViewMode::ALL {
             out.push(Command::PanelViewSet(v));
@@ -1172,6 +1176,7 @@ impl Command {
             Command::EditorDeleteWordLeft => "editor.delete.word.left".into(),
             Command::EditorDeleteWordRight => "editor.delete.word.right".into(),
             Command::EditorToggleReadOnly => "editor.readonly.toggle".into(),
+            Command::EditorConvert => "editor.convert".into(),
         }
     }
 
@@ -1453,6 +1458,7 @@ impl Command {
             ("editor.delete.word.left", _) => Command::EditorDeleteWordLeft,
             ("editor.delete.word.right", _) => Command::EditorDeleteWordRight,
             ("editor.readonly.toggle", _) => Command::EditorToggleReadOnly,
+            ("editor.convert", _) => Command::EditorConvert,
             _ => return None,
         };
         Some(cmd)
@@ -1527,6 +1533,7 @@ mod tests {
             Command::EditorSave,
             Command::EditorPaste,
             Command::EditorToggleReadOnly,
+            Command::EditorConvert,
         ];
         for c in all {
             assert_eq!(Command::parse(&c.id()), Some(c), "{}", c.id());

@@ -1704,3 +1704,18 @@ opt-sort-case-auto = as this system does
 opt-sort-case-yes = tell them apart
 opt-sort-case-no = one alphabet
 copy-keep-xattrs = Keep the extended attributes
+
+# editor conversions, disk diff and guides (0.41)
+editor-convert-title = Write the file as
+editor-convert-hint = Type to narrow · Enter: convert (F2 writes it, Ctrl+Z takes it back) · Esc: back
+editor-convert-eol = End of line: { $eol }
+editor-convert-bom-on = Byte order mark (BOM): written
+editor-convert-bom-off = Byte order mark (BOM): not written
+editor-convert-page = Code page: { $page }
+editor-converted-eol = { $name }: lines will end with { $what } at the next save
+editor-converted-bom-on = { $name }: the next save writes a byte order mark
+editor-converted-bom-off = { $name }: the next save writes no byte order mark
+editor-converted-page = { $name }: the next save writes { $what }
+editor-convert-same = The file is already written that way
+editor-convert-no-bom = { $page } has no byte order mark: only UTF-8 and UTF-16 do
+editor-convert-lossy = { $page } cannot hold every character of { $name }: nothing was changed

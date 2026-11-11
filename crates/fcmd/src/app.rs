@@ -12462,6 +12462,148 @@ impl App {
         )));
     }
 
+    /// `Shift+F8` in the editor: how the file is written, as a list where each row writes it
+    /// another way — the three ends of line, the byte order mark, and every code page.
+    ///
+    /// One list rather than three commands because it is one question, "what will the save
+    /// put on the disk", and the row the cursor opens on in each group is the answer as it
+    /// stands. The viewer's `Shift+F8` reads the same bytes as another page; here the text is
+    /// already read, so choosing a page is choosing what to write it in.
+    fn open_editor_convert(&mut self) {
+        let Some(editor) = self.mode.editor() else {
+            return;
+        };
+        let format = editor.buffer.format();
+        let mut rows: Vec<PickRow> = Vec::new();
+        for eol in [fcmd_edit::Eol::Lf, fcmd_edit::Eol::Crlf, fcmd_edit::Eol::Cr] {
+            rows.push(PickRow::plain(
+                self.i18n
+                    .t_args("editor-convert-eol", &[("eol", eol.as_str().into())]),
+                format!("eol:{}", eol.as_str()),
+                // A file with mixed endings has none of the three: every row would change it.
+                format.eol == eol && !format.mixed_eol,
+            ));
+        }
+        rows.push(PickRow::rule());
+        rows.push(PickRow::plain(
+            self.i18n.t("editor-convert-bom-on"),
+            "bom:on",
+            format.bom,
+        ));
+        rows.push(PickRow::plain(
+            self.i18n.t("editor-convert-bom-off"),
+            "bom:off",
+            !format.bom,
+        ));
+        rows.push(PickRow::rule());
+        // The pages in the order the viewer's list has them: the favourites, then the rest.
+        let favourites = self.codepage_favourites();
+        let rest: Vec<fcmd_view::Codepage> = fcmd_view::Codepage::every()
+            .into_iter()
+            .filter(|cp| !favourites.contains(cp))
+            .collect();
+        for cp in favourites.into_iter().chain(rest) {
+            rows.push(PickRow::plain(
+                self.i18n.t_args(
+                    "editor-convert-page",
+                    &[("page", self.codepage_label(cp).into())],
+                ),
+                format!("cp:{}", cp.id()),
+                format.codepage == cp,
+            ));
+        }
+        self.park_editor();
+        let title = self.i18n.t("editor-convert-title");
+        let mut pick = Pick::new(PickKind::EditorConvert, title, rows, self.active);
+        // Three rows are "current" and the list opens on the first of them, the end of line.
+        pick.cursor = pick.rows.iter().position(|r| r.current).unwrap_or(0);
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
+    /// A row of that list was chosen: `eol:CRLF`, `bom:on`, `cp:<id>`.
+    ///
+    /// Nothing is written here. The conversion is one undo step that marks the file changed,
+    /// and `F2` is what puts it on the disk — so one can convert, look at the status line,
+    /// and take it back.
+    fn editor_convert(&mut self, what: &str) {
+        let Some(editor) = self.mode.editor_mut() else {
+            return;
+        };
+        let name = editor.name();
+        let Some((kind, value)) = what.split_once(':') else {
+            return;
+        };
+        // What to say when it worked: the id and what goes in its `{ $what }`.
+        let (outcome, said) = match kind {
+            "eol" => {
+                let Some(eol) = [fcmd_edit::Eol::Lf, fcmd_edit::Eol::Crlf, fcmd_edit::Eol::Cr]
+                    .into_iter()
+                    .find(|e| e.as_str() == value)
+                else {
+                    return;
+                };
+                (
+                    editor.convert_eol(eol),
+                    ("editor-converted-eol", value.to_string()),
+                )
+            }
+            "bom" => {
+                let on = value == "on";
+                let page = editor.buffer.codepage;
+                if on && !fcmd_edit::buffer::has_bom(page) {
+                    // Only Unicode has a mark: say so, rather than set a flag no save writes.
+                    let label = self.codepage_label(page);
+                    let m = self
+                        .i18n
+                        .t_args("editor-convert-no-bom", &[("page", label.into())]);
+                    self.set_error(m);
+                    return;
+                }
+                let id = if on {
+                    "editor-converted-bom-on"
+                } else {
+                    "editor-converted-bom-off"
+                };
+                (editor.convert_bom(on), (id, String::new()))
+            }
+            "cp" => {
+                let Some(page) = fcmd_view::Codepage::parse(value) else {
+                    return;
+                };
+                if !editor.fits_codepage(page) {
+                    // A character the page has no byte for would be saved as `?`. Refused
+                    // outright: the file is somebody's text, not a search query.
+                    let label = self.codepage_label(page);
+                    let m = self.i18n.t_args(
+                        "editor-convert-lossy",
+                        &[("page", label.into()), ("name", name.into())],
+                    );
+                    self.set_error(m);
+                    return;
+                }
+                let outcome = editor.convert_codepage(page);
+                (
+                    outcome,
+                    ("editor-converted-page", self.codepage_label(page)),
+                )
+            }
+            _ => return,
+        };
+        match outcome {
+            Ok(true) => {
+                let m = self
+                    .i18n
+                    .t_args(said.0, &[("name", name.into()), ("what", said.1.into())]);
+                self.set_status(m);
+            }
+            Ok(false) => {
+                let m = self.i18n.t("editor-convert-same");
+                self.set_status(m);
+            }
+            Err(e) => self.set_error(e.to_string()),
+        }
+    }
+
     /// The editor's replace dialog answered: how to search goes into the editor, where the
     /// next `Ctrl+F7`, `Shift+F7` and `Alt+Shift+F7` find it, and then one or all are replaced.
     fn apply_editor_replace_form(&mut self, form: &Form, button: usize) {
@@ -20526,6 +20668,8 @@ impl App {
             PickKind::CharMap => return,
             PickKind::ReplaceTemplates => return,
             PickKind::EditorMatches => return,
+            // And `open_editor_convert`, which knows how the file is written now.
+            PickKind::EditorConvert => return,
             PickKind::AiServices => return,
             PickKind::AiContext | PickKind::AiThreads | PickKind::StripMeta => return,
             PickKind::PluginsConfig => return,
@@ -20852,7 +20996,8 @@ impl App {
             KeyCode::Esc | KeyCode::F(10)
                 if kind == PickKind::CharMap
                     || kind == PickKind::ReplaceTemplates
-                    || kind == PickKind::EditorMatches =>
+                    || kind == PickKind::EditorMatches
+                    || kind == PickKind::EditorConvert =>
             {
                 self.mode = Mode::Normal;
                 self.restore_editor();
@@ -21646,6 +21791,10 @@ impl App {
                     editor.select_hit(fcmd_edit::Hit { line, start, end });
                     editor.scroll_into_view(height as usize, width as usize);
                 }
+            }
+            PickKind::EditorConvert => {
+                self.restore_editor();
+                self.editor_convert(&row.value);
             }
             PickKind::CharMap => {
                 self.restore_editor();
@@ -22542,6 +22691,10 @@ impl App {
             }
             Command::EditorReplaceTemplates => {
                 self.open_replace_templates();
+                return;
+            }
+            Command::EditorConvert => {
+                self.open_editor_convert();
                 return;
             }
             Command::EditorDeleteMatching => {
@@ -40763,6 +40916,126 @@ abcdefghij
             format!("hi{}", fcmd_edit::Eol::detect("").0.bytes())
         );
         assert_eq!(app.mode.editor().unwrap().name(), "new.txt");
+    }
+
+    /// Put the cursor of the open list on the row with this value and take it.
+    fn choose_row(app: &mut App, value: &str) {
+        let Mode::Pick(pick) = &mut app.mode else {
+            panic!("no list is open: {:?}", app.mode)
+        };
+        pick.cursor = pick
+            .rows
+            .iter()
+            .position(|r| r.value == value)
+            .unwrap_or_else(|| panic!("no row {value}"));
+        press(app, "Enter");
+    }
+
+    /// Feature 6.6: `Shift+F8` in the editor lists how the file is written, the row of each
+    /// group that is true now marked; a row converts, the status line says the new end of
+    /// line, the file is modified, and `F2` writes exactly that.
+    #[test]
+    fn shift_f8_in_the_editor_converts_the_end_of_line_and_the_save_writes_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes.txt");
+        std::fs::write(&path, b"alpha\nbeta\n").unwrap();
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+
+        press(&mut app, "Shift+F8");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("expected the list, got {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::EditorConvert);
+        let current: Vec<&str> = pick
+            .rows
+            .iter()
+            .filter(|r| r.current)
+            .map(|r| r.value.as_str())
+            .collect();
+        assert_eq!(current, ["eol:LF", "bom:off", "cp:utf-8"]);
+        assert_eq!(pick.rows[pick.cursor].value, "eol:LF");
+
+        choose_row(&mut app, "eol:CRLF");
+        let editor = app.mode.editor().expect("back in the editor");
+        assert!(editor.buffer.modified(), "a conversion is a change");
+        assert!(editor.status().contains("CRLF"), "{}", editor.status());
+        assert!(app.status.contains("CRLF"), "{}", app.status);
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            b"alpha\nbeta\n",
+            "nothing is written until F2"
+        );
+        press(&mut app, "F2");
+        assert_eq!(std::fs::read(&path).unwrap(), b"alpha\r\nbeta\r\n");
+
+        // `Esc` in the list leaves the file as it is and gives the editor back.
+        press(&mut app, "Shift+F8");
+        press(&mut app, "Esc");
+        let editor = app.mode.editor().expect("the editor came back");
+        assert!(!editor.buffer.modified());
+    }
+
+    /// The mark and the page are conversions too: each one undo step, each what `F2` writes.
+    #[test]
+    fn the_editor_adds_a_byte_order_mark_changes_the_code_page_and_undoes_each() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes.txt");
+        std::fs::write(&path, "perch\u{e9}\n".as_bytes()).unwrap();
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+
+        press(&mut app, "Shift+F8");
+        choose_row(&mut app, "bom:on");
+        let status = app.mode.editor().unwrap().status();
+        assert!(status.contains("UTF-8 BOM"), "{status}");
+        press(&mut app, "F2");
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            b"\xEF\xBB\xBFperch\xC3\xA9\n"
+        );
+
+        press(&mut app, "Shift+F8");
+        choose_row(&mut app, "cp:windows-1252");
+        let editor = app.mode.editor().unwrap();
+        assert_eq!(editor.buffer.codepage, fcmd_view::Codepage::Cp1252);
+        assert!(!editor.buffer.bom, "Windows-1252 has no mark to keep");
+        press(&mut app, "F2");
+        assert_eq!(std::fs::read(&path).unwrap(), b"perch\xE9\n");
+
+        // One `Ctrl+Z` is the whole conversion, mark included; the next save says so.
+        press(&mut app, "Shift+F8");
+        choose_row(&mut app, "cp:utf-16le");
+        press(&mut app, "Ctrl+Z");
+        let editor = app.mode.editor().unwrap();
+        assert_eq!(editor.buffer.codepage, fcmd_view::Codepage::Cp1252);
+        assert!(!editor.buffer.bom);
+    }
+
+    /// What cannot be done is said and changes nothing: a mark on a page that has none, and
+    /// a page that has no byte for a character of the text.
+    #[test]
+    fn a_conversion_that_would_lose_a_character_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes.txt");
+        std::fs::write(&path, "\u{4e2d}\u{6587}\n".as_bytes()).unwrap();
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+
+        press(&mut app, "Shift+F8");
+        choose_row(&mut app, "cp:windows-1252");
+        let editor = app.mode.editor().unwrap();
+        assert_eq!(editor.buffer.codepage, fcmd_view::Codepage::Utf8);
+        assert!(!editor.buffer.modified());
+        assert!(app.status.contains("notes.txt"), "{}", app.status);
+
+        // Asking for what is already so is said, and is not a change either.
+        press(&mut app, "Shift+F8");
+        choose_row(&mut app, "bom:off");
+        assert!(!app.mode.editor().unwrap().buffer.modified());
     }
 
     #[test]

@@ -633,7 +633,8 @@ ones that repeat an earlier line (the first of each stays where it is, so the bl
 sorted), `Alt+Shift+R` to reverse them and `Alt+Shift+N` to number them from 1, right-aligned
 to the widest, and `Alt+Shift+T` (or `editor.trim_trailing` at every save) to take trailing
 blanks off — each one undo step. A stream block that ends at column 0 of a line does not
-include that line.
+include that line. Since 0.41.0, `Shift+F8` converts the end of line, the byte order mark and
+the code page (§2.2i).
 **Still to come**: the rope (today's buffer is a `Vec<String>` of lines — enough for the
 256 MiB open limit and far simpler to keep correct; it will be swapped for a rope when
 streaming edits of larger files land), persistent-block mode, multi-caret, replace inside a
@@ -645,7 +646,8 @@ block only, macros, the buffer list (§2.3) and the external editor (§2.4).
 - Opens files up to the configured limit (default 256 MiB) fully; above it, read-only "huge
   file" mode with chunked editing refused and an explanation.
 - Encoding on open = viewer's detection; on save: keep original encoding and EOL by default
-  (FAR's `KeepEditorEOL`), with explicit conversion commands. BOM preserved unless changed.
+  (FAR's `KeepEditorEOL`), with explicit conversion commands (§2.2i). BOM preserved unless
+  changed.
 - Atomic save: write `name.fcmd-tmp` in the same directory, copy permissions/owner where
   possible, fsync, rename. Option for in-place save for special files (`/proc`, sockets,
   hardlink-sensitive paths).
@@ -776,6 +778,37 @@ two lines.
   non-empty hit, the rule the regex engine itself iterates by.
 
 The replacements of §2.2f run with the options the dialog was last set to.
+
+### 2.2i Conversions: end of line, byte order mark, code page (`Shift+F8`)
+
+A save writes what was read (§2.1). `Shift+F8` (`editor.convert`) is the one place that
+changes it: a list of three groups separated by rules — *End of line* LF / CRLF / CR, *Byte
+order mark* written / not written, and one row per code page, favourites first, in the order
+of §1.12 — with the row that describes the file now marked in each group and the cursor on the
+first of them. The list filters as every list does. `Enter` converts and returns to the
+editor; `Esc` returns with nothing changed.
+
+- **A conversion is an edit that touches no line.** It changes what the next save writes,
+  marks the buffer modified, and is one undo step of its own — never joined to the typing
+  before or after it — recorded with the whole of how the file was written before, so `Ctrl+Z`
+  gives back end of line, mark and page together. Nothing is written until `F2`. A read-only
+  buffer refuses it like any other edit; a row that is already true says so and records
+  nothing.
+- **End of line**: every line gets the chosen terminator. A file with mixed endings has no
+  row marked, and any of the three is a change — including the majority one, which the status
+  line was already showing.
+- **Byte order mark**: only UTF-8, UTF-16LE and UTF-16BE have one; asking for it in any other
+  page is refused with a message.
+- **Code page**: the text in memory is Unicode and is not touched; the page is what it is
+  encoded in at the next save. A page that cannot hold every character of the text
+  (`Codepage::can_encode`) is refused and nothing changes — the save never writes a `?` for a
+  character it could not encode. The mark follows the page: UTF-16 gets one, UTF-8 keeps what
+  it had, any other page loses it.
+- The editor's status line names the result: `LF`/`CRLF`/`CR`, the page, and ` BOM` when a
+  mark is written.
+
+This is not the viewer's `Shift+F8` (§1.12), which decodes the same bytes as another page.
+Reading an open file again in another page is not implemented in the editor.
 
 ### 2.2b Syntax highlighting
 

@@ -1680,3 +1680,18 @@ opt-sort-case-auto = как в этой системе
 opt-sort-case-yes = различать
 opt-sort-case-no = один алфавит
 copy-keep-xattrs = Сохранять расширенные атрибуты
+
+# editor conversions, disk diff and guides (0.41)
+editor-convert-title = Записывать файл как
+editor-convert-hint = Печатайте для отбора · Enter: преобразовать (F2 записывает, Ctrl+Z отменяет) · Esc: назад
+editor-convert-eol = Конец строки: { $eol }
+editor-convert-bom-on = Метка порядка байтов (BOM): записывается
+editor-convert-bom-off = Метка порядка байтов (BOM): не записывается
+editor-convert-page = Кодовая страница: { $page }
+editor-converted-eol = { $name }: при следующем сохранении строки будут заканчиваться на { $what }
+editor-converted-bom-on = { $name }: следующее сохранение запишет метку порядка байтов
+editor-converted-bom-off = { $name }: следующее сохранение не запишет метку порядка байтов
+editor-converted-page = { $name }: следующее сохранение запишет в { $what }
+editor-convert-same = Файл уже записывается так
+editor-convert-no-bom = У { $page } нет метки порядка байтов: она есть только у UTF-8 и UTF-16
+editor-convert-lossy = { $page } не вмещает все символы { $name }: ничего не изменено

@@ -1694,3 +1694,18 @@ opt-sort-case-auto = wie dieses System
 opt-sort-case-yes = unterscheiden
 opt-sort-case-no = ein Alphabet
 copy-keep-xattrs = Erweiterte Attribute behalten
+
+# editor conversions, disk diff and guides (0.41)
+editor-convert-title = Datei schreiben als
+editor-convert-hint = Tippen zum Eingrenzen · Enter: umwandeln (F2 schreibt, Ctrl+Z nimmt es zurück) · Esc: zurück
+editor-convert-eol = Zeilenende: { $eol }
+editor-convert-bom-on = Byte Order Mark (BOM): wird geschrieben
+editor-convert-bom-off = Byte Order Mark (BOM): wird nicht geschrieben
+editor-convert-page = Codepage: { $page }
+editor-converted-eol = { $name }: die Zeilen enden beim nächsten Speichern mit { $what }
+editor-converted-bom-on = { $name }: das nächste Speichern schreibt ein Byte Order Mark
+editor-converted-bom-off = { $name }: das nächste Speichern schreibt kein Byte Order Mark
+editor-converted-page = { $name }: das nächste Speichern schreibt { $what }
+editor-convert-same = Die Datei wird bereits so geschrieben
+editor-convert-no-bom = { $page } hat kein Byte Order Mark: nur UTF-8 und UTF-16 haben eines
+editor-convert-lossy = { $page } kann nicht jedes Zeichen von { $name } aufnehmen: nichts wurde geändert
