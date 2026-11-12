@@ -830,7 +830,6 @@ dependencies = [
  "serde",
  "tempfile",
  "thiserror",
- "unicode-width",
 ]
 
 [[package]]
@@ -986,7 +985,6 @@ version = "0.42.1"
 dependencies = [
  "chrono",
  "fcmd-core",
- "fcmd-i18n",
  "serde",
  "tempfile",
  "thiserror",

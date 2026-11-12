@@ -29413,19 +29413,19 @@ impl App {
     fn select_in_both(&mut self, names: &[String]) {
         let wanted: std::collections::HashSet<String> =
             names.iter().map(|n| n.to_lowercase()).collect();
-        for side in 0..2 {
-            let listing = self.panels[side].listing.clone();
-            self.panels[side].selection.clear();
+        for panel in &mut self.panels {
+            let listing = panel.listing.clone();
+            panel.selection.clear();
             for row in 0..listing.len() {
                 let entry = listing.row(row).expect("row in range");
                 if entry.kind.is_dirlike() {
                     continue;
                 }
                 if wanted.contains(&entry.name_str().to_lowercase()) {
-                    self.panels[side].selection.set(entry.id, true);
+                    panel.selection.set(entry.id, true);
                 }
             }
-            self.panels[side].rebuild();
+            panel.rebuild();
         }
     }
 

@@ -21,7 +21,6 @@ authors = ["Matteo Baccan and the FinalCommander contributors"]
 # cutting a release is then the one `version` above, and not a version in twenty manifests
 # that a build only notices when one of them is left behind. There is deliberately no
 # `version` here — nothing is published to crates.io, and a path is all a workspace needs.
-fcmd = { path = "crates/fcmd" }
 fcmd-arc = { path = "crates/fcmd-arc" }
 fcmd-cmd = { path = "crates/fcmd-cmd" }
 fcmd-config = { path = "crates/fcmd-config" }
