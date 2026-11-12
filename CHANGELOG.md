@@ -6,6 +6,27 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.42.1] — 2026-11-12
+
+### Fixed
+
+- **The viewer and the editor stopped answering on a line with an `@` in it** (issue 44): a
+  Java or Kotlin annotation (`@ApplicationScoped`), a Python or TypeScript decorator, a Ruby
+  instance variable. The `@` starts a word but cannot continue one, so the word the colouring
+  read was empty and it never moved past it; the program had to be killed. Every language is
+  now coloured to the end of such a line, and a test runs them all against a timeout.
+- **A shell that is not installed is named** (issue 43). With `[term] shell = "pwsh"` and only
+  Windows PowerShell on the machine, every command answered `cmd: program not found`, as though
+  `cmd` were missing; it now says that `pwsh` is not installed, which line did not run, and
+  where to change the setting.
+
+### Added
+
+- **A shell's name typed alone is a shell to work in** (issue 43): `cmd`, `powershell`, `pwsh`,
+  `bash`, `zsh` and the others are given the terminal, as FAR does, and `exit` brings the
+  panels back where they were. Followed by anything — `bash build.sh` — the line runs like any
+  other and its output is kept.
+
 ## [0.42.0] — 2026-11-11
 
 ### Added

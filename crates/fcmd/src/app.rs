@@ -20,6 +20,23 @@ use crate::form::{Form, Pick, PickRow, TextEdit};
 use crate::menu::{self, Action, FormKind, Mark, PickKind};
 use crate::panel::Panel;
 
+/// The shells a line can name to be one to work in (`cmd`, then `exit`): see
+/// [`App::interactive_line`].
+const SHELLS: &[&str] = &[
+    "cmd",
+    "powershell",
+    "pwsh",
+    "bash",
+    "zsh",
+    "fish",
+    "sh",
+    "dash",
+    "ksh",
+    "tcsh",
+    "csh",
+    "nu",
+];
+
 /// Work the application wants done off the UI thread. The runner drains these.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Request {
@@ -17461,12 +17478,20 @@ impl App {
             .unwrap_or(first)
             .to_ascii_lowercase();
         let name = name.strip_suffix(".exe").unwrap_or(&name);
-        self.cfg
-            .term
-            .interactive
-            .iter()
-            .any(|program| program.eq_ignore_ascii_case(name))
-            .then(|| line.to_string())
+        // A shell's name on its own is a shell to work in, typed the way FAR is asked for one:
+        // `cmd`, `powershell`, then `exit` back to the panels. With anything after it —
+        // `bash build.sh`, `sh -c …` — it is a command like any other, and what it prints is
+        // kept for the user screen.
+        let alone = line.split_whitespace().count() == 1;
+        let shell = alone && SHELLS.contains(&name);
+        (shell
+            || self
+                .cfg
+                .term
+                .interactive
+                .iter()
+                .any(|program| program.eq_ignore_ascii_case(name)))
+        .then(|| line.to_string())
     }
 
     /// Hand a line to the user's shell, off the UI thread.
@@ -42187,6 +42212,20 @@ run = ["echo one", "echo two", "echo three"]
         // However the name is spelled.
         assert!(a.interactive_line("C:\\Tools\\FCMD.EXE").is_some());
         assert!(a.interactive_line("/usr/bin/Vim x").is_some());
+        // A shell named alone is one to work in, as FAR opens one for `cmd` (issue 43); with
+        // a script or a command after it, it runs like any other line and its output is kept.
+        for shell in [
+            "cmd",
+            "powershell",
+            "powershell.exe",
+            "PWSH",
+            "bash",
+            "C:\\Windows\\System32\\cmd.exe",
+        ] {
+            assert!(a.interactive_line(shell).is_some(), "{shell}");
+        }
+        assert!(a.interactive_line("bash build.sh").is_none());
+        assert!(a.interactive_line("cmd /c dir").is_none());
         // And the list is the configuration's: emptied, a program is caught like any other.
         a.cfg.term.interactive = vec![];
         assert_eq!(run(&mut a, "fcmd"), Some(("fcmd".into(), false)));

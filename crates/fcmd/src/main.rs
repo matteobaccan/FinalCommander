@@ -2787,16 +2787,31 @@ fn set_line_shell(shell: &str) {
     }
 }
 
+/// What to say when the shell itself could not be started. A missing shell used to be
+/// reported under the line it was asked to run — `cmd: program not found` — which reads as
+/// though `cmd` were missing, when it is `[term] shell` that names a program this machine
+/// has not got, and every line fails the same way until it is changed.
+fn shell_failed(program: &str, line: &str, e: &std::io::Error) -> String {
+    if e.kind() == std::io::ErrorKind::NotFound {
+        format!(
+            "{program}: the shell is not installed, so `{line}` could not run; \
+             set [term] shell to one that is (F9 > Options > All settings > term.shell)"
+        )
+    } else {
+        format!("{program}: the shell could not start ({e}), so `{line}` did not run")
+    }
+}
+
 /// Run a line with the terminal given to it: the program reads the keyboard and draws on the
 /// screen itself, and what it prints is not kept — it was on the screen, where it belongs.
 fn run_interactive(line: &str, cwd: &std::path::Path) -> Option<i32> {
     use std::process::Command;
     let shell = LINE_SHELL.read().map(|s| s.clone()).unwrap_or_default();
     let (program, args) = fcmd_term::run_line_with(&shell, line);
-    match Command::new(program).args(args).current_dir(cwd).status() {
+    match Command::new(&program).args(args).current_dir(cwd).status() {
         Ok(status) => status.code(),
         Err(e) => {
-            eprintln!("{line}: {e}");
+            eprintln!("{}", shell_failed(&program, line, &e));
             Some(-1)
         }
     }
@@ -2818,7 +2833,7 @@ fn run_pipe(line: &str, cwd: &std::path::Path, input: Option<&str>) -> Result<St
 
     let shell = LINE_SHELL.read().map(|s| s.clone()).unwrap_or_default();
     let (program, args) = fcmd_term::run_line_with(&shell, line);
-    let mut child = Command::new(program)
+    let mut child = Command::new(&program)
         .args(args)
         .current_dir(cwd)
         .stdin(if input.is_some() {
@@ -2829,7 +2844,7 @@ fn run_pipe(line: &str, cwd: &std::path::Path, input: Option<&str>) -> Result<St
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| shell_failed(&program, line, &e))?;
 
     // A thread writes and a thread reads the errors while this one reads the output: a
     // filter that prints as it reads fills its pipe long before it has taken all of a large
@@ -2902,7 +2917,7 @@ fn run_shell(
     // Each shell asked its own way: `cmd /C`, PowerShell's `-Command`, everybody else's `-c`.
     let shell = LINE_SHELL.read().map(|s| s.clone()).unwrap_or_default();
     let (program, args) = fcmd_term::run_line_with(&shell, line);
-    let mut command = Command::new(program);
+    let mut command = Command::new(&program);
     command.args(args);
     command
         .current_dir(cwd)
@@ -2912,7 +2927,7 @@ fn run_shell(
 
     let mut child = match command.spawn() {
         Ok(child) => child,
-        Err(e) => return (format!("{line}: {e}\n"), Some(-1)),
+        Err(e) => return (format!("{}\n", shell_failed(&program, line, &e)), Some(-1)),
     };
 
     // Both pipes are pumped into one channel, so the two come out interleaved the way they
@@ -5712,6 +5727,20 @@ fn open_url(url: &str) {
 
 #[cfg(test)]
 mod tests {
+    /// A shell that is not there is named, with the setting that names it; the line it was
+    /// to run is said as what did not happen, not as what is missing (issue 43: every line
+    /// came back "cmd: program not found" because `pwsh` was not installed).
+    #[test]
+    fn a_shell_that_is_not_installed_is_named_and_the_line_is_not_blamed() {
+        let e = std::io::Error::from(std::io::ErrorKind::NotFound);
+        let m = super::shell_failed("pwsh", "cmd", &e);
+        assert!(m.starts_with("pwsh: the shell is not installed"), "{m}");
+        assert!(m.contains("term.shell") && m.contains("`cmd`"), "{m}");
+        let e = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+        let m = super::shell_failed("/bin/zsh", "ls", &e);
+        assert!(m.starts_with("/bin/zsh: the shell could not start"), "{m}");
+    }
+
     use super::*;
 
     /// A real command, run the way the application runs one: what it prints has to arrive

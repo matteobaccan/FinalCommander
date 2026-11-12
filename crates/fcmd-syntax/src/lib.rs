@@ -742,7 +742,13 @@ fn scan_number(text: &str, from: usize) -> usize {
     end
 }
 
+///
+/// The first character is the word's by definition — the caller saw it start one — so the
+/// scan begins after it. A word may start with a character that cannot continue one (`@`, the
+/// annotation and decorator sign), and a scan that began on it would end where it began: the
+/// line's scanner would never move past it, and the program would stop answering.
 fn scan_word(text: &str, from: usize) -> usize {
+    let from = step(text, from);
     let mut end = text.len();
     for (offset, ch) in text[from..].char_indices() {
         if !is_word_char(ch) {
@@ -788,6 +794,39 @@ pub fn start() -> State {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A line with an `@` in it — a Java or Kotlin annotation, a Python or TypeScript
+    /// decorator, a Ruby instance variable, an address in a comment's neighbour — is coloured
+    /// and the scan ends, in every language. It once did not: `@` starts a word but cannot
+    /// continue one, the word came out empty, and the scanner stood still on it for ever,
+    /// taking the viewer and the editor with it (issue 44). Run on a thread, so that a
+    /// regression fails here instead of hanging the test run.
+    #[test]
+    fn a_line_with_an_at_sign_is_coloured_in_every_language_and_the_scan_ends() {
+        let lines = [
+            "@ApplicationScoped",
+            "    @Inject EventBus bus;",
+            "@dataclass(frozen=True)",
+            "class A: @property",
+            "  @name = name",
+            "@",
+            "a @ b",
+            "x@@y",
+            "@Override public String toString() { return \"a@b\"; }",
+        ];
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            for syntax in SYNTAXES {
+                let mut state = start();
+                for line in lines {
+                    state = syntax.line(line, state).1;
+                }
+            }
+            let _ = tx.send(());
+        });
+        rx.recv_timeout(std::time::Duration::from_secs(10))
+            .expect("a line with an @ never finished colouring");
+    }
 
     fn classes(syntax: &Syntax, line: &str) -> Vec<(String, Class)> {
         let (spans, _) = syntax.line(line, State::default());

@@ -871,7 +871,8 @@ pub struct TermCfg {
     /// commander — and so are given it while they run, the way FAR gives the console away,
     /// rather than having their output caught for the user screen. Compared with the first
     /// word of the line, its directory and `.exe` taken off, without regard to case. A line
-    /// that starts with `!` is given the terminal whatever its program.
+    /// that starts with `tty:` is given the terminal whatever its program, and a shell's name
+    /// typed alone (`cmd`, `powershell`, `bash`…) is a shell to work in until `exit`, as in FAR.
     pub interactive: Vec<String>,
 }
 

@@ -210,7 +210,13 @@ Un programma che prende tutto lo schermo — un altro `fcmd`, `far`, `mc`, `vim`
 `less`, `htop`, `ssh`, `python` — riceve il terminale per tutto il tempo in cui gira, come FAR
 cede la console, e i pannelli tornano quando finisce: catturato come gli altri comandi non
 vedrebbe mai un tasto. L'elenco è `[term] interactive` in `fcmd.toml`; `tty:comando` dà il
-terminale a qualsiasi altra riga.
+terminale a qualsiasi altra riga. Il nome di una shell scritto da solo — `cmd`, `powershell`,
+`pwsh`, `bash`, `zsh` — è una shell in cui lavorare, come la apre FAR: i pannelli spariscono,
+`exit` li riporta dov'erano. Con qualcosa dopo (`bash build.sh`) è un comando come un altro.
+
+Se la shell indicata da `[term] shell` non è installata — `pwsh` dove c'è solo Windows
+PowerShell — ogni riga lo dice, nominando la shell e l'impostazione, invece di fallire col
+proprio nome.
 
 *Sinistra* / *Destra* → *Code page dei nomi…* legge i nomi di questo pannello in una code page
 scelta. Ogni pannello parte da *come li dà il sistema*, che su Linux e macOS vuol dire che i

@@ -200,7 +200,12 @@ A program that takes the whole screen — another `fcmd`, `far`, `mc`, `vim`, `n
 `htop`, `ssh`, `python` — is given the terminal while it runs, the way FAR gives the console
 away, and the panels come back when it ends: caught like other commands, it would never see a
 key. The list is `[term] interactive` in `fcmd.toml`; `tty:command` gives the terminal to any
-other line.
+other line. A shell's name typed on its own — `cmd`, `powershell`, `pwsh`, `bash`, `zsh` — is
+a shell to work in, as FAR opens one: the panels go, `exit` brings them back where they were.
+With something after it (`bash build.sh`) it is an ordinary command.
+
+If the shell `[term] shell` names is not installed — `pwsh` where only Windows PowerShell is —
+every line says so, naming the shell and the setting, rather than failing under its own name.
 
 *Left* / *Right* → *Names code page…* reads the names in this panel in a chosen code page.
 Every panel starts at *as the system gives them*, which on Linux and macOS means the bytes are

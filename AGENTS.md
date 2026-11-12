@@ -191,13 +191,15 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.42.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.42.1 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.42.1** — fixes from the first issues on 0.42.0: the colouring that hung on an `@`
+  (issue 44), a missing shell named as such and a shell's name alone opening one (issue 43).
 - **0.42.0** — the same day again, on the author's word: the wastebasket as a panel with
   restore, an external editor and viewer of one's own with FAR's switch for `F4`/`F3`, the
   internal editor's line numbers, block through a command, case, syntax by hand, search as you
