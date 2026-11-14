@@ -188,8 +188,12 @@ command runs where you are looking. `Ctrl+C` on the output screen sends the inte
 whatever is running in it.
 
 The shell is your own — `$SHELL`, or whatever `[term] shell` names — and `bash`, `zsh`, `fish`
-and a plain `sh` can all be asked where they are. `cmd.exe` and PowerShell cannot, so with
-either of them each command runs on its own; nothing is half-done. Each is asked the way it
+and a plain `sh` can all be asked where they are, and so can PowerShell (`pwsh` or
+`powershell`): a variable or a function one command sets is there for the next, and a `cd`
+moves the panel. If PowerShell's marks do not come through — an old Windows 10 console can
+drop them — it is given up after a few seconds, the status line says so, and each command
+runs on its own as before. `cmd.exe` cannot be asked, so with it each command runs on its own;
+nothing is half-done. Each is asked the way it
 expects — `cmd /C`, PowerShell with `-Command`, the rest with `-c` — so with
 `shell = "pwsh"` under `[term]` the command line is PowerShell's: its pipes, its cmdlets, its
 quoting. *Options → All parameters
@@ -280,6 +284,8 @@ what the panel had before it went into one that keeps its own.
 edge up — they get shorter, and the rows they give up show the output of the last command,
 which is how you watch a build go by without leaving the panels; `Ctrl+↓` gives the rows back.
 `Ctrl+Alt+R` undoes the lot: the line back in the middle and the panels at their full height.
+In the Windows console FAR's own keys work too: `Ctrl+Clear` (the keypad's 5 with Num Lock off)
+for the width alone, `Ctrl+Alt+Clear` for the height alone.
 Both are settings, so `Shift+F9` keeps them.
 
 `Ctrl++` and `Ctrl+−` ask the terminal for a larger or smaller font, and `Ctrl+Alt+0` for the

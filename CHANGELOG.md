@@ -6,6 +6,21 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.42.2] — 2026-11-14
+
+### Added
+
+- **PowerShell is kept behind the command line** (issue 43), as bash, zsh, fish and sh already
+  were: a variable or a function one command sets is there for the next, and a `cd` moves the
+  panel. With `[term] shell = "pwsh"` or `"powershell"`. A PowerShell whose marks never come
+  through — an old Windows 10 console host can drop them — is given up after eight seconds:
+  the status line says so, and each command runs on its own as before.
+- **FAR's `Ctrl+Clear` and `Ctrl+Alt+Clear` in the Windows console** (issue 45): the keypad's 5
+  with Num Lock off puts back the width between the panels, and with Alt the panels' height,
+  each alone. The console says which key it was, so it is read there before the terminal
+  library, which has no name for it, drops it. `Ctrl+Alt+R` still puts both back, in every
+  terminal; `panel.width.reset` and `panel.height.reset` are the two halves.
+
 ## [0.42.1] — 2026-11-12
 
 ### Fixed

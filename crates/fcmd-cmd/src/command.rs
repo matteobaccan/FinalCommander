@@ -195,6 +195,10 @@ pub enum Command {
     /// The panels as they were before `Ctrl+←/→/↑/↓`: the line between them back in the middle
     /// and their full height back — FAR's `Ctrl+Clear` and `Ctrl+Alt+Clear` in one key.
     PanelLayoutReset,
+    /// Only the line between the panels back in the middle: FAR's `Ctrl+Clear`.
+    PanelWidthReset,
+    /// Only the panels' full height back: FAR's `Ctrl+Alt+Clear`.
+    PanelHeightReset,
     /// Directories before files, or mixed in with them (`Shift+F11`, FAR's `Group`).
     PanelDirsFirst,
     /// The selected files first in the order (`Shift+F12`, FAR's `SelUp`).
@@ -700,6 +704,8 @@ impl Command {
             Command::PanelHeight(-1),
             Command::PanelHeight(1),
             Command::PanelLayoutReset,
+            Command::PanelWidthReset,
+            Command::PanelHeightReset,
             Command::PanelDirsFirst,
             Command::PanelSelectedFirst,
             Command::PanelFilterQuick,
@@ -1050,6 +1056,8 @@ impl Command {
             Command::PanelSplit(by) => format!("panel.split({by})"),
             Command::PanelHeight(by) => format!("panel.height({by})"),
             Command::PanelLayoutReset => "panel.layout.reset".into(),
+            Command::PanelWidthReset => "panel.width.reset".into(),
+            Command::PanelHeightReset => "panel.height.reset".into(),
             Command::PanelDirsFirst => "panel.dirs.first".into(),
             Command::PanelSelectedFirst => "panel.selected.first".into(),
             Command::PanelFilterQuick => "panel.filter.quick".into(),
@@ -1377,6 +1385,8 @@ impl Command {
             ("panel.split", Some(a)) => Command::PanelSplit(a.trim().parse().ok()?),
             ("panel.height", Some(a)) => Command::PanelHeight(a.trim().parse().ok()?),
             ("panel.layout.reset", _) => Command::PanelLayoutReset,
+            ("panel.width.reset", _) => Command::PanelWidthReset,
+            ("panel.height.reset", _) => Command::PanelHeightReset,
             ("panel.dirs.first", _) => Command::PanelDirsFirst,
             ("panel.selected.first", _) => Command::PanelSelectedFirst,
             ("panel.filter.quick", _) => Command::PanelFilterQuick,

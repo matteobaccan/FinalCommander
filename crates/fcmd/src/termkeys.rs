@@ -58,6 +58,8 @@ pub fn bytes_for(key: Key) -> Option<Vec<u8>> {
         KeyCode::Down => return Some(arrow(b'B', shift, alt, ctrl)),
         KeyCode::Right => return Some(arrow(b'C', shift, alt, ctrl)),
         KeyCode::Left => return Some(arrow(b'D', shift, alt, ctrl)),
+        // The keypad's 5 with Num Lock off, which xterm sends as `CSI E` — the "begin" key.
+        KeyCode::Clear => return Some(arrow(b'E', shift, alt, ctrl)),
         KeyCode::Home => return Some(arrow(b'H', shift, alt, ctrl)),
         KeyCode::End => return Some(arrow(b'F', shift, alt, ctrl)),
         KeyCode::Insert => return Some(tilde(2, shift, alt, ctrl)),

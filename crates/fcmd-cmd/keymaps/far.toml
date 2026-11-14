@@ -106,6 +106,19 @@ keys = ["Ctrl+Alt+R"]
 scope = "panel"
 cmd = "panel.layout.reset"
 
+# FAR's own two keys, where they can be told apart: the Windows console says which key the
+# keypad's 5 is with Num Lock off, and it is read there before anything else drops it
+# (issue 45). Width and height apart, as in FAR; `Ctrl+Alt+R` above is both, everywhere.
+[[bind]]
+keys = ["Ctrl+Clear"]
+scope = "panel"
+cmd = "panel.width.reset"
+
+[[bind]]
+keys = ["Ctrl+Alt+Clear"]
+scope = "panel"
+cmd = "panel.height.reset"
+
 # Synchronise the two panels' directories. Total Commander's key for this is `Ctrl+Y`, which
 # is FAR's own "clear the command line" and stays that — so one modifier along, and
 # `--check-keymap` is what said so.

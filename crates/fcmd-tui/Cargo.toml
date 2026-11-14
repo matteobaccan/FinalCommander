@@ -12,5 +12,8 @@ authors.workspace = true
 unicode-width = "0.2"
 crossterm = "0.29.0"
 fcmd-cmd = { workspace = true }
+# The Windows console's own reading of the keypad's Clear key, which the terminal library
+# drops (issue 45). Ours, so no crate the tree did not already have.
+fcmd-platform = { workspace = true }
 fcmd-ui = { workspace = true }
 thiserror = "2.0.21"

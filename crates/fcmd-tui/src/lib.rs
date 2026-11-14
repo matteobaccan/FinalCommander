@@ -801,6 +801,9 @@ impl Handover {
 /// [`read_input_loop`], with a way to stop it reading while the terminal is someone else's.
 pub fn read_input_loop_with(tx: Sender<Input>, handover: &Handover) {
     use std::sync::atomic::Ordering;
+    // Whether the terminal library may be holding events it has already read, so the next
+    // turn asks it straight away instead of waiting on the console first.
+    let mut waiting_behind = false;
     loop {
         if handover.away.load(Ordering::SeqCst) {
             handover.stopped.store(true, Ordering::SeqCst);
@@ -808,11 +811,51 @@ pub fn read_input_loop_with(tx: Sender<Input>, handover: &Handover) {
             continue;
         }
         handover.stopped.store(false, Ordering::SeqCst);
+        // On Windows the console is asked first, and the keypad's `Clear` taken off it: the
+        // terminal library reads key records and drops the ones with no character and no
+        // name, which is that one (issue 45). Anything else stays queued for it. The wait is
+        // there, rather than in the library's poll, so the key is looked at before the
+        // library has read it; and it is skipped when the library may still hold events it
+        // read in a batch, which waiting on the console would only delay.
+        if cfg!(windows) {
+            let wait = if waiting_behind {
+                Duration::ZERO
+            } else {
+                Duration::from_millis(50)
+            };
+            if let fcmd_platform::ConsoleKey::Clear(held) = fcmd_platform::console_key(wait) {
+                let mut mods = Mods::NONE;
+                if held.ctrl {
+                    mods.insert(Mods::CTRL);
+                }
+                if held.alt {
+                    mods.insert(Mods::ALT);
+                }
+                if held.shift {
+                    mods.insert(Mods::SHIFT);
+                }
+                if tx.send(Input::Key(Key::new(KeyCode::Clear, mods))).is_err() {
+                    return;
+                }
+                waiting_behind = true;
+                continue;
+            }
+        }
         // Asked with a timeout rather than read outright, so a hand-over is noticed within a
-        // moment instead of after the next key — which would be the program's key.
-        match event::poll(Duration::from_millis(50)) {
-            Ok(false) => continue,
-            Ok(true) => {}
+        // moment instead of after the next key — which would be the program's key. On
+        // Windows the console has already been waited on above, so the library is only
+        // asked whether it has anything now.
+        let wait = if cfg!(windows) {
+            Duration::ZERO
+        } else {
+            Duration::from_millis(50)
+        };
+        match event::poll(wait) {
+            Ok(false) => {
+                waiting_behind = false;
+                continue;
+            }
+            Ok(true) => waiting_behind = true,
             Err(_) => {
                 let _ = tx.send(Input::Eof);
                 return;

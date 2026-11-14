@@ -1620,3 +1620,63 @@ pub fn held_keys() -> Option<super::HeldKeys> {
         alt: down(VK_MENU),
     })
 }
+
+/// The keypad's `Clear`, read off the console before the terminal library sees it (issue 45).
+///
+/// The library reads key records and keeps the ones that carry a character or have a name;
+/// `VK_CLEAR` has neither, so it is lost there. So the first record is looked at — peeked, not
+/// read — and taken only when it is that key going down. Everything else is left where it
+/// is, in its place in the queue, for the library to read as it always has.
+pub fn console_key(wait: std::time::Duration) -> super::ConsoleKey {
+    use super::ConsoleKey;
+    use windows_sys::Win32::Foundation::{INVALID_HANDLE_VALUE, WAIT_OBJECT_0};
+    use windows_sys::Win32::System::Console::{
+        GetConsoleMode, GetStdHandle, PeekConsoleInputW, ReadConsoleInputW, INPUT_RECORD,
+        KEY_EVENT, LEFT_ALT_PRESSED, LEFT_CTRL_PRESSED, RIGHT_ALT_PRESSED, RIGHT_CTRL_PRESSED,
+        SHIFT_PRESSED, STD_INPUT_HANDLE,
+    };
+    use windows_sys::Win32::System::Threading::WaitForSingleObject;
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_CLEAR;
+
+    let ms = u32::try_from(wait.as_millis()).unwrap_or(u32::MAX);
+    // SAFETY: the handle is the process's own standard input, checked before use; the record
+    // is a plain struct the calls fill, one at a time, and the counts are read only after the
+    // call that sets them has said it succeeded.
+    unsafe {
+        // Input that is not a console — redirected from a file or a pipe — is always
+        // "ready" to a wait, and would turn the reader's loop into a spin: there, the time
+        // is waited out and the library left to read as it does anyway.
+        let input = GetStdHandle(STD_INPUT_HANDLE);
+        let mut mode = 0u32;
+        if input.is_null() || input == INVALID_HANDLE_VALUE || GetConsoleMode(input, &mut mode) == 0
+        {
+            std::thread::sleep(wait);
+            return ConsoleKey::Other;
+        }
+        if WaitForSingleObject(input, ms) != WAIT_OBJECT_0 {
+            return ConsoleKey::Nothing;
+        }
+        let mut record: INPUT_RECORD = std::mem::zeroed();
+        let mut count = 0u32;
+        if PeekConsoleInputW(input, &mut record, 1, &mut count) == 0 || count == 0 {
+            return ConsoleKey::Nothing;
+        }
+        if u32::from(record.EventType) != KEY_EVENT {
+            return ConsoleKey::Other;
+        }
+        let key = record.Event.KeyEvent;
+        if key.bKeyDown == 0 || key.wVirtualKeyCode != VK_CLEAR {
+            return ConsoleKey::Other;
+        }
+        let mut taken = 0u32;
+        if ReadConsoleInputW(input, &mut record, 1, &mut taken) == 0 || taken == 0 {
+            return ConsoleKey::Other;
+        }
+        let state = key.dwControlKeyState;
+        ConsoleKey::Clear(super::HeldKeys {
+            shift: state & SHIFT_PRESSED != 0,
+            ctrl: state & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED) != 0,
+            alt: state & (LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED) != 0,
+        })
+    }
+}

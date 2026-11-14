@@ -235,6 +235,34 @@ pub fn held_keys() -> Option<HeldKeys> {
     }
 }
 
+/// What the console has for the keyboard reader, asked before the terminal library reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConsoleKey {
+    /// Nothing arrived in the time given.
+    Nothing,
+    /// Something did, and it is the terminal library's to read as usual.
+    Other,
+    /// The keypad's `Clear` — the 5 with Num Lock off, FAR's `Ctrl+Clear` — taken off the
+    /// console here, with the modifiers held, because the terminal library drops it: it has
+    /// no character and no name there.
+    Clear(HeldKeys),
+}
+
+/// Wait up to `wait` for console input and take a keypad `Clear` off it if that is what came
+/// (issue 45). On every platform but Windows there is no console to ask, and the answer is
+/// [`ConsoleKey::Other`] at once: the terminal library reads as it always did.
+pub fn console_key(wait: std::time::Duration) -> ConsoleKey {
+    #[cfg(windows)]
+    {
+        windows::console_key(wait)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = wait;
+        ConsoleKey::Other
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

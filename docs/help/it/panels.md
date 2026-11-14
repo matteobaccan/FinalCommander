@@ -199,8 +199,12 @@ spostando il pannello la shell viene dietro, così il comando dopo gira dove sta
 `Ctrl+C` sullo schermo dell'output manda l'interruzione a quello che ci sta girando dentro.
 
 La shell è la tua — `$SHELL`, o quello che dice `[term] shell` — e a `bash`, `zsh`, `fish` e a
-una `sh` qualunque si può chiedere dove sono. A `cmd.exe` e a PowerShell no, quindi con loro
-ogni comando gira per conto suo; niente a metà. Ognuna viene chiamata come si aspetta — `cmd
+una `sh` qualunque si può chiedere dove sono, e anche a PowerShell (`pwsh` o `powershell`): una
+variabile o una funzione che un comando imposta c'è ancora per il successivo, e un `cd` sposta
+il pannello. Se i segnali di PowerShell non arrivano — una console di Windows 10 vecchia può
+perderli — dopo qualche secondo viene lasciata, la riga di stato lo dice, e ogni comando gira
+per conto suo come prima. A `cmd.exe` non si può chiedere, quindi con lui ogni comando gira per
+conto suo; niente a metà. Ognuna viene chiamata come si aspetta — `cmd
 /C`, PowerShell con `-Command`, le altre con `-c` — così con `shell = "pwsh"` sotto `[term]` la
 riga di comando è quella di PowerShell: le sue pipe, i suoi cmdlet, le sue virgolette. *Opzioni → Tutti i parametri →
 `term.subshell`* spegne del tutto la shell tenuta viva, e `term.follow_cwd` spegne solo
@@ -296,7 +300,8 @@ prima di entrare in una che tiene i suoi.
 pannelli — diventano più corti, e le righe che cedono mostrano l'output dell'ultimo comando,
 che è come si guarda scorrere una compilazione senza lasciare i pannelli; `Ctrl+↓` restituisce
 le righe. `Ctrl+Alt+R` rimette tutto com'era: la linea di nuovo a metà e i pannelli alti quanto
-lo schermo. Sono entrambe impostazioni, quindi `Shift+F9` le conserva.
+lo schermo. Nella console di Windows funzionano anche i tasti di FAR: `Ctrl+Clear` (il 5 del
+tastierino con Num Lock spento) per la sola larghezza, `Ctrl+Alt+Clear` per la sola altezza. Sono entrambe impostazioni, quindi `Shift+F9` le conserva.
 
 `Ctrl++` e `Ctrl+−` chiedono al terminale un font più grande o più piccolo, e `Ctrl+Alt+0`
 quello iniziale — `Ctrl+0` è la decima vista, come in FAR. Se poi succeda qualcosa è affare del

@@ -12058,6 +12058,12 @@ impl App {
                 self.cfg.panel.split = start.split;
                 self.cfg.panel.height_cut = start.height_cut;
             }
+            Command::PanelWidthReset => {
+                self.cfg.panel.split = fcmd_config::PanelCfg::default().split;
+            }
+            Command::PanelHeightReset => {
+                self.cfg.panel.height_cut = fcmd_config::PanelCfg::default().height_cut;
+            }
             Command::PanelHeight(by) => {
                 let was = self.cfg.panel.height_cut as i32;
                 // The step is the panels' height and the setting is what they give up, so the
@@ -33419,6 +33425,29 @@ mod tests {
         let start = fcmd_config::PanelCfg::default();
         assert_eq!(app.cfg.panel.split, start.split);
         assert_eq!(app.cfg.panel.height_cut, start.height_cut);
+    }
+
+    /// FAR's own two keys for it, where the console can tell them apart (issue 45): the
+    /// keypad's `Clear` with Ctrl puts back the width alone, with Ctrl and Alt the height
+    /// alone, and neither touches what the other one set.
+    #[test]
+    fn ctrl_clear_puts_back_the_width_and_ctrl_alt_clear_the_height() {
+        let mut app = app();
+        for key in ["Ctrl+Left", "Ctrl+Left", "Ctrl+Up", "Ctrl+Up"] {
+            press(&mut app, key);
+        }
+        let start = fcmd_config::PanelCfg::default();
+        let (split, cut) = (app.cfg.panel.split, app.cfg.panel.height_cut);
+        assert_ne!(split, start.split);
+        assert_ne!(cut, start.height_cut);
+        press(&mut app, "Ctrl+Clear");
+        assert_eq!(app.cfg.panel.split, start.split, "the width came back");
+        assert_eq!(app.cfg.panel.height_cut, cut, "the height did not move");
+        press(&mut app, "Ctrl+Alt+Clear");
+        assert_eq!(
+            app.cfg.panel.height_cut, start.height_cut,
+            "the height came back"
+        );
     }
 
     #[test]

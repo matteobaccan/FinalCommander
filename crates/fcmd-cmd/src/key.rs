@@ -54,6 +54,9 @@ pub enum KeyCode {
     Down,
     Left,
     Right,
+    /// The keypad's 5 with Num Lock off. Only the Windows console says which key it was; a
+    /// terminal elsewhere sends nothing a program can tell apart (issue 45).
+    Clear,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -167,6 +170,7 @@ impl FromStr for Key {
             "down" => KeyCode::Down,
             "left" => KeyCode::Left,
             "right" => KeyCode::Right,
+            "clear" => KeyCode::Clear,
             "space" => KeyCode::Char(' '),
             _ => {
                 // `F1`..`F24` are function keys; a bare `F` is the letter.
@@ -221,6 +225,7 @@ impl fmt::Display for Key {
             KeyCode::Down => write!(f, "Down"),
             KeyCode::Left => write!(f, "Left"),
             KeyCode::Right => write!(f, "Right"),
+            KeyCode::Clear => write!(f, "Clear"),
         }
     }
 }
@@ -228,6 +233,17 @@ impl fmt::Display for Key {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The keypad's `Clear` has a name a keymap can use, and is written back the same way.
+    #[test]
+    fn the_keypad_clear_key_has_a_name() {
+        for text in ["Ctrl+Clear", "ctrl+clear", "Ctrl+Alt+Clear"] {
+            let key: Key = text.parse().expect(text);
+            assert_eq!(key.code, KeyCode::Clear, "{text}");
+        }
+        let key: Key = "Ctrl+Alt+Clear".parse().unwrap();
+        assert_eq!(key.to_string(), "Ctrl+Alt+Clear");
+    }
 
     #[test]
     fn parses_function_keys_with_modifiers() {
