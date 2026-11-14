@@ -857,6 +857,7 @@ cmd-interrupted = do polecenia wysłano przerwanie
 cmd-done = { $command } zakończone
 cmd-failed = { $command } zakończyło się kodem { $code }
 cmd-busy = jakieś polecenie już działa
+shell-not-kept = { $shell } nie oznaczył znaku zachęty na czas: każde polecenie działa teraz osobno, jak wcześniej
 prompt-apply = Polecenie do uruchomienia dla każdego z plików ({ $count }):
 cmd-apply-no-ask = polecenia, które pyta o wartość, nie da się stosować plik po pliku
 cmd-apply-progress = { $command }  ({ $done } z { $total })

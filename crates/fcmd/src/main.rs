@@ -2478,6 +2478,9 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
         if let Some(step) = app.ai_wait() {
             wait = Some(wait.map_or(step, |w: std::time::Duration| w.min(step)));
         }
+        if let Some(step) = app.shell_wait() {
+            wait = Some(wait.map_or(step, |w: std::time::Duration| w.min(step)));
+        }
         // The secrets file's password is forgotten on time, not only at the next key.
         if let Some(left) = app.vault_wait() {
             let left = left.max(std::time::Duration::from_secs(1));
@@ -2501,6 +2504,9 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                 app.forget_idle_vault();
             }
         }
+        // On every turn, not only on the timer: a PowerShell that prints its banner but never
+        // its marks keeps waking the loop, and is still given up on.
+        app.shell_check();
         // Coalesce whatever else is already queued, then draw once.
         while let Ok(event) = rx.try_recv() {
             app.handle_event(event);

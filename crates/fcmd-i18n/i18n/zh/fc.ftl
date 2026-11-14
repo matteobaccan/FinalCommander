@@ -831,6 +831,7 @@ cmd-interrupted = 已向命令发送中断
 cmd-done = { $command } 已结束
 cmd-failed = { $command } 退出码 { $code }
 cmd-busy = 已有命令在执行
+shell-not-kept = { $shell } 未及时标记提示符：现在每条命令单独运行，与之前相同
 prompt-apply = 对 { $count } 个文件逐个执行的命令：
 cmd-apply-no-ask = 需要输入值的命令无法逐个文件执行
 cmd-apply-progress = { $command }（{ $done } / { $total }）

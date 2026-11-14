@@ -843,6 +843,7 @@ cmd-interrupted = Unterbrechung an den Befehl gesendet
 cmd-done = { $command } beendet
 cmd-failed = { $command } endete mit { $code }
 cmd-busy = es läuft schon ein Befehl
+shell-not-kept = { $shell } hat seine Eingabeaufforderung nicht rechtzeitig markiert: jeder Befehl läuft jetzt für sich, wie zuvor
 prompt-apply = Befehl für jede der { $count } Dateien:
 cmd-apply-no-ask = ein Befehl, der nach einem Wert fragt, lässt sich nicht Datei für Datei anwenden
 cmd-apply-progress = { $command }  ({ $done } von { $total })

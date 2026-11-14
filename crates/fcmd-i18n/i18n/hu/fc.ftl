@@ -851,6 +851,7 @@ cmd-interrupted = megszakítás elküldve a parancsnak
 cmd-done = { $command } befejeződött
 cmd-failed = { $command } kilépési kódja: { $code }
 cmd-busy = már fut egy parancs
+shell-not-kept = a(z) { $shell } nem jelölte időben a promptját: minden parancs mostantól külön fut, mint korábban
 prompt-apply = Parancs, amely mind a(z) { $count } fájlon lefut:
 cmd-apply-no-ask = értéket kérő parancs nem alkalmazható fájlonként
 cmd-apply-progress = { $command }  ({ $done } / { $total })

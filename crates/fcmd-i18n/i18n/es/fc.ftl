@@ -843,6 +843,7 @@ cmd-interrupted = interrupción enviada al comando
 cmd-done = { $command } terminado
 cmd-failed = { $command } salió con { $code }
 cmd-busy = ya hay un comando en curso
+shell-not-kept = { $shell } no marcó su indicador a tiempo: cada orden se ejecuta ahora por separado, como antes
 prompt-apply = Orden a ejecutar en cada uno de los { $count } archivos:
 cmd-apply-no-ask = una orden que pide un valor no se puede aplicar archivo por archivo
 cmd-apply-progress = { $command }  ({ $done } de { $total })

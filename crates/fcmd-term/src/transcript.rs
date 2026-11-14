@@ -180,7 +180,15 @@ impl Transcript {
             None if rest.starts_with('/') => rest,
             None => return,
         };
-        let path = percent_decode(path);
+        let mut path = percent_decode(path);
+        // A Windows directory arrives as `file://HOST/C:/Users/x` — PowerShell's spelling, and
+        // the URL standard's — so what follows the host is `/C:/Users/x`. The slash before the
+        // drive letter is the URL's, not the path's.
+        if let [b'/', drive, b':', ..] = path.as_bytes() {
+            if drive.is_ascii_alphabetic() {
+                path.remove(0);
+            }
+        }
         if !path.is_empty() {
             self.cwd = Some(PathBuf::from(path));
         }
@@ -319,6 +327,17 @@ fn percent_decode(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    /// The directory PowerShell says it is in on Windows, `file://HOST/C:/Users/mb`, is the
+    /// drive's path, not `/C:/…` (issue 43); a Unix one is untouched.
+    #[test]
+    fn a_windows_directory_in_a_file_url_keeps_its_drive_letter() {
+        let mut out = Transcript::default();
+        feed(&mut out, b"\x1b]7;file://DESKTOP/C:/Users/mb%20x\x07");
+        assert_eq!(out.cwd, Some(PathBuf::from("C:/Users/mb x")));
+        feed(&mut out, b"\x1b]7;file://host/home/mb\x07");
+        assert_eq!(out.cwd, Some(PathBuf::from("/home/mb")));
+    }
+
     use super::*;
 
     /// Feed bytes through the parser, as the reader thread does.

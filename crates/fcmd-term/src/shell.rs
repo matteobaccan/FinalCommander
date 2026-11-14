@@ -43,6 +43,11 @@ pub struct Shell {
     waiting: Option<String>,
     /// The shell as it was named, for the message that says one is running.
     pub program: String,
+    /// When it was started, so a shell that never reaches a marked prompt can be given up on.
+    pub started: std::time::Instant,
+    /// What ends a line written into it: `\r` for PowerShell, which reads its console the way
+    /// a person's `Enter` arrives, and `\n` for the rest, as it always was.
+    newline: &'static [u8],
 }
 
 impl std::fmt::Debug for Shell {
@@ -107,6 +112,8 @@ impl Shell {
             gone,
             waiting: None,
             program: head.clone(),
+            started: std::time::Instant::now(),
+            newline: if is_powershell(&head) { b"\r" } else { b"\n" },
         };
         if let Some(hook) = hook_for(&head) {
             shell.line(&hook)?;
@@ -161,7 +168,21 @@ impl Shell {
     /// One line, with the newline that runs it.
     fn line(&mut self, line: &str) -> Result<(), TermError> {
         self.send(line.as_bytes())?;
-        self.send(b"\n")
+        let newline = self.newline;
+        self.send(newline)
+    }
+
+    /// Has it reached a marked prompt at least once? A shell that never does is one whose
+    /// marks are not getting through — a console host that drops the sequences it does not
+    /// know — and the caller gives it up after a while rather than wait for ever.
+    pub fn ready(&self) -> bool {
+        self.with_out(|out| out.ready())
+    }
+
+    /// The line that was waiting for the first prompt, taken back: the caller runs it some
+    /// other way when this shell is given up on.
+    pub fn take_waiting(&mut self) -> Option<String> {
+        self.waiting.take()
     }
 
     /// Look at what has been printed. The lock is held only while the caller looks.
@@ -228,11 +249,7 @@ impl Drop for Shell {
 /// already run by the time this line is sent.
 pub fn hook_for(program: &str) -> Option<String> {
     const DONE: &str = r#"printf "\033]133;D;%s\007\033]7;file://%s%s\007""#;
-    let name = Path::new(program)
-        .file_stem()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_else(|| program.to_string())
-        .to_ascii_lowercase();
+    let name = shell_name(program);
     match name.as_str() {
         "bash" => Some(format!(
             "PS0=$'\\033]133;C\\007'; PROMPT_COMMAND='{DONE} \"$?\" \"$HOSTNAME\" \"$PWD\"'"
@@ -256,8 +273,45 @@ pub fn hook_for(program: &str) -> Option<String> {
         "sh" | "dash" | "ash" | "busybox" | "ksh" | "mksh" => {
             Some(format!("PS1='$({DONE} \"$?\" \"\" \"$PWD\" >/dev/tty)'"))
         }
+        // PowerShell has the hook too: `prompt` is a function it calls before every prompt,
+        // and what it writes to the console goes to the terminal before the prompt does. The
+        // status is `$?` read first, before anything in the function can change it, with the
+        // exit code of a program that failed in place of a bare 1. The directory is the
+        // provider's path with forward slashes, which is how a file URL spells `C:\Users`.
+        // PSReadLine is unloaded in this one shell nobody types at: it redraws the line it
+        // is given in colour, and the plain echo is what the transcript knows to leave out.
+        "pwsh" | "powershell" => Some(
+            "Remove-Module PSReadLine -ErrorAction SilentlyContinue; \
+             function global:prompt { \
+             $ok = $?; \
+             $s = if ($ok) { 0 } elseif ($global:LASTEXITCODE) { $global:LASTEXITCODE } else { 1 }; \
+             $p = $PWD.ProviderPath -replace '\\\\', '/'; \
+             if (-not $p.StartsWith('/')) { $p = '/' + $p }; \
+             $e = [char]27; $b = [char]7; \
+             [Console]::Write(\"$e]133;D;$s$b$e]7;file://$env:COMPUTERNAME$p$b\"); \
+             ' ' }"
+                .to_string(),
+        ),
         _ => None,
     }
+}
+
+/// The shell's name as the tables here know it: the file name without its directory, written
+/// either way, and without `.exe`, in lower case. `C:\Program Files\PowerShell\7\pwsh.exe`
+/// is `pwsh` on every system, which matters because the configuration is read on all three.
+pub fn shell_name(program: &str) -> String {
+    let base = program.rsplit(['/', '\\']).next().unwrap_or(program);
+    Path::new(base)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default()
+}
+
+/// Is this one of the PowerShells? They take a line ended the way a console's `Enter` ends
+/// it, and say their first prompt later than the others, so the caller waits longer and has a
+/// way out if the marks never come.
+pub fn is_powershell(program: &str) -> bool {
+    matches!(shell_name(program).as_str(), "pwsh" | "powershell")
 }
 
 /// The program and the arguments that run one command line in `shell` — the shell the
@@ -275,11 +329,7 @@ pub fn run_line_with(shell: &str, line: &str) -> (String, Vec<String>) {
     }
     let program = words.remove(0);
     // The name whichever way the path is written: a Windows path read on any system.
-    let base = program.rsplit(['/', '\\']).next().unwrap_or(&program);
-    let name = Path::new(base)
-        .file_stem()
-        .map(|s| s.to_string_lossy().to_ascii_lowercase())
-        .unwrap_or_default();
+    let name = shell_name(&program);
     let mut args = words;
     match name.as_str() {
         "cmd" => {
@@ -390,10 +440,36 @@ mod tests {
     #[test]
     fn a_shell_with_no_hook_to_set_says_so_rather_than_half_setting_one() {
         assert!(hook_for("cmd.exe").is_none());
-        assert!(hook_for("powershell").is_none());
+        assert!(hook_for("C:\\Windows\\System32\\cmd.exe").is_none());
         assert!(hook_for("/bin/bash").is_some());
         assert!(hook_for("/usr/bin/zsh").is_some());
         assert!(hook_for("/bin/sh").is_some());
+    }
+
+    /// PowerShell is kept like the POSIX shells (issue 43): a `prompt` function that marks the
+    /// end of each command with its status and says where it is, under every spelling of its
+    /// name, and with `Enter` as a console sends it.
+    #[test]
+    fn powershell_has_a_prompt_hook_under_every_spelling_of_its_name() {
+        for name in [
+            "pwsh",
+            "powershell",
+            "PowerShell.exe",
+            "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+            "/usr/local/bin/pwsh",
+        ] {
+            let hook = hook_for(name).unwrap_or_else(|| panic!("{name} has no hook"));
+            assert!(hook.contains("function global:prompt"), "{hook}");
+            assert!(hook.contains("133;D;$s"), "the status is marked: {hook}");
+            assert!(hook.contains("]7;file://"), "the directory is said: {hook}");
+            assert!(is_powershell(name), "{name}");
+        }
+        assert!(!is_powershell("/bin/bash"));
+        assert!(!is_powershell("cmd.exe"));
+        // The status is read before anything else in the function can change it.
+        let hook = hook_for("pwsh").unwrap();
+        let body = &hook[hook.find("function global:prompt").unwrap()..];
+        assert!(body.find("$ok = $?") < body.find("$s ="), "{body}");
     }
 
     /// The directory does not travel in the prompt, and this is the line that says so.

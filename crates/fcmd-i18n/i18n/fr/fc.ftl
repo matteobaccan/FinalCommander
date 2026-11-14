@@ -843,6 +843,7 @@ cmd-interrupted = interruption envoyée à la commande
 cmd-done = { $command } terminé
 cmd-failed = { $command } s'est terminé avec { $code }
 cmd-busy = une commande est déjà en cours
+shell-not-kept = { $shell } n’a pas marqué son invite à temps : chaque commande s’exécute désormais seule, comme avant
 prompt-apply = Commande à exécuter sur chacun des { $count } fichiers :
 cmd-apply-no-ask = une commande qui demande une valeur ne peut pas être appliquée fichier par fichier
 cmd-apply-progress = { $command }  ({ $done } sur { $total })

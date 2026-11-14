@@ -860,6 +860,7 @@ cmd-interrupted = komandai nusiųstas pertraukimas
 cmd-done = { $command } baigta
 cmd-failed = { $command } baigėsi kodu { $code }
 cmd-busy = komanda jau vykdoma
+shell-not-kept = { $shell } laiku nepažymėjo raginimo: kiekviena komanda dabar vykdoma atskirai, kaip anksčiau
 prompt-apply = Komanda, vykdoma kiekvienam iš { $count } failų:
 cmd-apply-no-ask = komandos, kuri prašo reikšmės, negalima taikyti failas po failo
 cmd-apply-progress = { $command }  ({ $done } iš { $total })

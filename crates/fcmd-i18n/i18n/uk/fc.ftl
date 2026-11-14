@@ -860,6 +860,7 @@ cmd-interrupted = команді надіслано переривання
 cmd-done = { $command } завершено
 cmd-failed = { $command } завершилась із кодом { $code }
 cmd-busy = команда вже виконується
+shell-not-kept = { $shell } не позначив запрошення вчасно: кожна команда тепер виконується окремо, як раніше
 prompt-apply = Команда для кожного з файлів ({ $count }):
 cmd-apply-no-ask = команду, що запитує значення, не можна застосувати до файлів по одному
 cmd-apply-progress = { $command }  ({ $done } з { $total })

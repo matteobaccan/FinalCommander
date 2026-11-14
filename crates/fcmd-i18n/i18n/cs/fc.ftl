@@ -857,6 +857,7 @@ cmd-interrupted = příkazu bylo posláno přerušení
 cmd-done = { $command } dokončen
 cmd-failed = { $command } skončil s kódem { $code }
 cmd-busy = nějaký příkaz už běží
+shell-not-kept = { $shell } neoznačil výzvu včas: každý příkaz nyní běží samostatně, jako dříve
 prompt-apply = Příkaz, který se spustí pro každý ze souborů ({ $count }):
 cmd-apply-no-ask = příkaz, který se ptá na hodnotu, nelze aplikovat soubor po souboru
 cmd-apply-progress = { $command }  ({ $done } z { $total })

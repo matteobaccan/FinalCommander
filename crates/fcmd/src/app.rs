@@ -20,6 +20,11 @@ use crate::form::{Form, Pick, PickRow, TextEdit};
 use crate::menu::{self, Action, FormKind, Mark, PickKind};
 use crate::panel::Panel;
 
+/// How long a kept PowerShell has to reach its first marked prompt before it is given up on
+/// for the session. PowerShell starts slowly — a second or two, more with a profile — so this
+/// is generous; what it guards against is a wait with no end.
+pub const SHELL_PATIENCE: std::time::Duration = std::time::Duration::from_secs(8);
+
 /// The shells a line can name to be one to work in (`cmd`, then `exit`): see
 /// [`App::interactive_line`].
 const SHELLS: &[&str] = &[
@@ -3626,6 +3631,10 @@ pub struct App {
     /// Started by the first command rather than at startup: a session that never runs one
     /// never pays for it, and a shell nobody has typed at is a process for nothing.
     subshell: Option<fcmd_term::Shell>,
+    /// A shell given up on this session because its prompt marks never arrived — a console
+    /// that drops the sequences it does not know — so each line runs in a child of its own
+    /// instead, as before there was a kept shell.
+    subshell_refused: Option<String>,
     /// The directory that shell last said it was in, so a move is noticed once and so the
     /// panel and the shell do not chase each other round the same directory.
     shell_cwd: Option<std::path::PathBuf>,
@@ -3921,6 +3930,7 @@ impl App {
             recode: None,
             last_recode: ("utf8".to_string(), "keep".to_string()),
             subshell: None,
+            subshell_refused: None,
             shell_cwd: None,
             prev_dir: [None, None],
             remote_edit: None,
@@ -16579,6 +16589,53 @@ impl App {
             .map(|_| std::time::Duration::from_secs(1))
     }
 
+    /// How long the main loop may sleep while a kept PowerShell has not yet reached its
+    /// first marked prompt: it is looked at again on time, because a shell whose marks never
+    /// arrive prints nothing that would wake anything.
+    pub fn shell_wait(&self) -> Option<std::time::Duration> {
+        let shell = self.subshell.as_ref()?;
+        (fcmd_term::is_powershell(&shell.program) && !shell.ready())
+            .then(|| std::time::Duration::from_millis(500))
+    }
+
+    /// Give up on a kept PowerShell that has not reached a marked prompt in time (issue 43).
+    ///
+    /// The marks are what say a command has ended and where the shell is; a console host
+    /// that swallows sequences it does not know (an old Windows 10 one) would leave every
+    /// command "running" for ever. So after [`SHELL_PATIENCE`] the shell is dropped, the line
+    /// that was waiting for it runs in a child of its own, and so does every line after it
+    /// this session — PowerShell as it was before, which works, rather than a session that
+    /// hangs.
+    pub fn shell_check(&mut self) {
+        let Some(shell) = self.subshell.as_mut() else {
+            return;
+        };
+        if !fcmd_term::is_powershell(&shell.program)
+            || shell.ready()
+            || shell.started.elapsed() < SHELL_PATIENCE
+        {
+            return;
+        }
+        let waiting = shell.take_waiting();
+        let program = shell.program.clone();
+        self.subshell = None;
+        self.shell_cwd = None;
+        self.subshell_refused = Some(self.shell_program());
+        let msg = self
+            .i18n
+            .t_args("shell-not-kept", &[("shell", program.into())]);
+        self.set_status(msg);
+        if let (Some(line), Some((id, _))) = (waiting, self.shell.clone()) {
+            let cwd = self.panel().cwd.as_path().to_path_buf();
+            self.requests.push(Request::Shell {
+                id,
+                line,
+                cwd,
+                into: None,
+            });
+        }
+    }
+
     pub fn vault_wait(&self) -> Option<std::time::Duration> {
         self.vault
             .as_ref()
@@ -17682,7 +17739,9 @@ impl App {
             return true;
         }
         let program = self.shell_program();
-        if fcmd_term::hook_for(&program).is_none() {
+        if fcmd_term::hook_for(&program).is_none()
+            || self.subshell_refused.as_deref() == Some(program.as_str())
+        {
             return false;
         }
         // A panel inside an archive or on a server has no directory the operating system
@@ -42447,6 +42506,54 @@ run = ["echo one", "echo two", "echo three"]
             std::thread::sleep(std::time::Duration::from_millis(25));
         }
         false
+    }
+
+    /// A PowerShell whose marks never arrive — a console host that drops them — is given up
+    /// on instead of leaving the command "running" for ever (issue 43): the line it was given
+    /// runs in a child of its own, the status line says why, and the session goes on without
+    /// a kept shell. Here the "PowerShell" is `cat` under that name: it answers nothing.
+    #[cfg(unix)]
+    #[test]
+    fn a_powershell_that_never_marks_its_prompt_is_given_up_and_the_line_still_runs() {
+        let dir = tempfile::tempdir().unwrap();
+        let fake = dir.path().join("pwsh");
+        std::os::unix::fs::symlink("/bin/cat", &fake).unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.cfg.term.shell = fake.to_string_lossy().into_owned();
+        app.cfg.term.subshell = true;
+
+        app.run_shell("Get-ChildItem".into(), None);
+        assert!(app.subshell.is_some(), "a shell was started for it");
+        // Not yet: it has the time a slow PowerShell needs.
+        app.shell_check();
+        assert!(app.subshell.is_some(), "given up before its time");
+        assert!(app.shell_wait().is_some(), "the loop is told to look again");
+        assert!(
+            !app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::Shell { .. })),
+            "the line went to a child while the shell still had time"
+        );
+
+        // Past its time: dropped, said, and the waiting line goes to a child.
+        if let Some(shell) = app.subshell.as_mut() {
+            shell.started = std::time::Instant::now() - SHELL_PATIENCE * 2;
+        }
+        app.shell_check();
+        assert!(app.subshell.is_none());
+        assert!(app.status.contains("pwsh"), "{}", app.status);
+        let lines: Vec<String> = app
+            .take_requests()
+            .into_iter()
+            .filter_map(|r| match r {
+                Request::Shell { line, .. } => Some(line),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(lines, ["Get-ChildItem"]);
+        // And the session does not try again.
+        assert!(!app.start_subshell(), "a refused shell was started again");
+        assert!(app.shell_wait().is_none());
     }
 
     /// The point of keeping a shell: a `cd` typed at the command line moves the panel, and
