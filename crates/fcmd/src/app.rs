@@ -52053,7 +52053,7 @@ abcdefghij
         app.show_services(
             0,
             vec![
-                service("cron.service", fcmd_platform::ServiceStart::Manual),
+                service("cron.service", fcmd_platform::ServiceStart::Disabled),
                 service("ssh.service", fcmd_platform::ServiceStart::Automatic),
             ],
         );
@@ -52073,7 +52073,7 @@ abcdefghij
             .name_str()
             .to_string();
         assert!(name.starts_with("cron.service"), "{name}");
-        assert!(name.contains(&app.i18n.t("svc-start-manual")), "{name}");
+        assert!(name.contains(&app.i18n.t("svc-start-disabled")), "{name}");
         let bar = app.keybar();
         assert!(bar
             .iter()
@@ -52084,7 +52084,7 @@ abcdefghij
             panic!("no choice: {:?}", app.mode)
         };
         assert_eq!(pick.kind, PickKind::ServiceStart);
-        assert_eq!(pick.rows[pick.cursor].value, "manual");
+        assert_eq!(pick.rows[pick.cursor].value, "disabled");
         assert!(pick.rows[pick.cursor].current);
 
         // What is already set: nothing goes to the system.
@@ -52098,8 +52098,8 @@ abcdefghij
         pick.cursor = pick
             .rows
             .iter()
-            .position(|r| r.value == "disabled")
-            .expect("disabled is offered");
+            .position(|r| r.value == "automatic")
+            .expect("automatic is offered");
         press(&mut app, "Enter");
         assert!(app.mode.is_normal(), "it asked: {:?}", app.mode);
         let requests = app.take_requests();
@@ -52109,7 +52109,7 @@ abcdefghij
                 Request::ServiceControl {
                     id,
                     action: fcmd_platform::ServiceAction::SetStart(
-                        fcmd_platform::ServiceStart::Disabled
+                        fcmd_platform::ServiceStart::Automatic
                     ),
                     ..
                 } if id == "cron.service"
