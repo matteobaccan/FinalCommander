@@ -290,7 +290,7 @@ What FAR ships as **plugins**, and what it tells us about scope:
 | `ftp` | FTP/FTPS client as a panel | ✅ FTP and FTPS, beside SFTP, SCP, WebDAV, S3 and IMAP (SPEC 04 §6) |
 | `network` | network browser | ⊘ |
 | `tmppanel` | a panel made of an arbitrary file list | ✅ the temporary panel, and the find and panelize results land in one |
-| `proclist` | the process list as a panel | ✅ processes, sockets, services and the installed programs, each with a card on `F3` |
+| `proclist` | the process list as a panel | ✅ processes, sockets, services (with their start type on `F4`), what starts at login and the installed programs, each with a card on `F3` |
 | `compare` | folder compare with contents and subfolders | ✅ shipped, with the dialog, the subfolders, and a side-by-side diff of two files beside it (`Ctrl+Shift+D`), which FAR has in no plugin of its own |
 | `emenu` | the OS context menu | ⊘ |
 | `farcmds` | the command prefixes above | ✅ mostly: `view:`, `edit:`, `goto:` and the rest; `clip:` and `link:` are on the backlog |

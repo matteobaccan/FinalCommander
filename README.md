@@ -253,7 +253,11 @@ every key on the screen you are looking at does.
   an interrupted operation never leaves a file that looks finished. `F8` hands what you chose
   to the system's own wastebasket — the one your desktop's file manager shows — and `Shift+Del`
   deletes outright. Checksums (MD5, SHA-1, SHA-256) are written in the format `sha256sum`
-  reads, and a list can be checked back against the files beside it. `Ctrl+Shift+Y`
+  reads, and a list can be checked back against the files beside it. *Files → Encode /
+  Decode* writes a file as base64, base32, UUencode, XXencode, yEnc, quoted-printable, hex or
+  percent-encoding — split into parts if asked — and reads one back, joining the parts and
+  checking yEnc's checksums; the editor does the same on a block (`Alt+Shift+B`) and the
+  viewer's `Alt+B` decodes any of them. `Ctrl+Shift+Y`
   synchronises two directories through a table you can edit before anything is written.
 - **Panels**: `Tab` / `Ctrl+U`, arrows / `PgUp` / `PgDn` / `Home` / `End` / `Enter` /
   `Ctrl+PgUp` / `Backspace` / `Ctrl+\` with history (`Alt+←/→`), `Ins` and `+` / `-` / `*`
@@ -276,7 +280,11 @@ every key on the screen you are looking at does.
   **processes** (`F3` on one is its card: command line, memory, threads, parent, the user it
   runs as), the **sockets** that are listening or connected with the process behind each one,
   the **programs installed** on the machine (`F3` for the card, and its uninstall command put
-  on the command line for you to read before you run it), the **services**, the **external
+  on the command line for you to read before you run it), the **services** (start, stop,
+  restart, and when each starts — automatic, manual, disabled — with `F4`), what **starts at
+  login** (the `Run` keys, *Startup* folders and logon tasks on Windows, `autostart` and
+  `systemd --user` on Linux, `LaunchAgents` on macOS, switched off with `F8` the system's own
+  way, nothing deleted), the **external
   programs** fcmd runs (found or not, with their version, installed with `F4`), and a temporary
   panel of files gathered by hand from anywhere.
 - **Comparison**: the two panels side by side by name, size and time, or by what is actually in
@@ -298,7 +306,8 @@ every key on the screen you are looking at does.
 - **Archives**: zip (and the packages that are zips — `.jar`, `.apk`, `.docx`…), 7z, the tar
   family (plain, gzip, bzip2, xz, zstd), `ar` and `.deb`, `cpio` and `rpm`, `cab` (stored and
   MSZIP), and a single `.gz` or `.xz`, read in process by pure-Rust decoders, with no `7z.dll`. `Enter` opens one as a
-  panel, `F3` reads an entry, `F5` copies out through the same job engine as any other copy,
+  panel — and a file it opens says so before you press it: the archive colour, a `▸` after the
+  name and the status line's `Enter: open as an archive (zip)`; `F3` reads an entry, `F5` copies out through the same job engine as any other copy,
   and zip, 7z and the tar family are written to as well. `rar`, `iso`, `msi`, `wim`, `dmg`,
   a `cab` packed with LZX and the rest open through a `7z` already on the machine, if there is one — *External
   programs* in `Alt+F1` says which of those programs are there and installs the missing ones.
