@@ -191,13 +191,15 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.43.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.43.1 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.43.1** — the same day: Rust 1.100 as the minimum to build from source, and the README,
+  the menus spec, the keymap and the FAR inventory brought in line with 0.43.0.
 - **0.43.0** — started early on the author's word: what starts at login as a panel, switched
   off the system's own way; a service's start type; what `Enter` opens made visible (computed
   `<arc>`, the `▸` mark, the status line); Outlook `.msg` read with our own OLE reader, and the

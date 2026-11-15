@@ -6,10 +6,16 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.43.1] — 2026-11-15
+
 ### Changed
 
 - Building from source wants Rust 1.100 or newer (`rust-version`), the version the CI and the
   releases are built with; it was 1.89 on paper and never checked.
+- The documentation caught up with 0.43.0: the README says what starts at login, a service's
+  start type, encode and decode and the `▸` mark; *Encode* and *Decode* are in the Files menu of
+  the menus spec; the keymap's `Alt+B` row names every format it decodes and `Shift+F2`; and the
+  FAR inventory's process-list row has the start type and the startup panel.
 
 ## [0.43.0] — 2026-11-15
 
