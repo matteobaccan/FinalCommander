@@ -78,6 +78,8 @@ pub struct Highlight {
     exec: Option<MaskSet>,
     arc: Option<MaskSet>,
     temp: Option<MaskSet>,
+    /// Draw a `▸` after the name of a file `Enter` goes into (`panel.mark_openable`).
+    mark_openable: bool,
 }
 
 impl Default for Highlight {
@@ -104,6 +106,7 @@ impl Highlight {
             exec: compile("<exec>"),
             arc: compile("<arc>"),
             temp: compile("<temp>,<delphi>"),
+            mark_openable: false,
         }
     }
 
@@ -135,6 +138,7 @@ impl Highlight {
             exec: None,
             arc: None,
             temp: None,
+            mark_openable: false,
         }
     }
 
@@ -188,6 +192,24 @@ impl Highlight {
         "panel.fg"
     }
 
+    /// The same, marking the files `Enter` goes into or not.
+    pub fn marking_openable(mut self, on: bool) -> Self {
+        self.mark_openable = on;
+        self
+    }
+
+    /// Does `Enter` go into this row — a file, not a folder, that `<arc>` names? `<arc>` is
+    /// computed from what the program opens (`fcmd_arc::openable_masks`), so the archive
+    /// colour and this answer are one and the same.
+    pub fn opens(&self, e: &Entry) -> bool {
+        matches!(e.kind, EntryKind::File) && self.matches(&self.arc, e)
+    }
+
+    /// The mark after a name, where there is one to draw.
+    pub fn mark(&self, e: &Entry) -> Option<char> {
+        (self.mark_openable && self.opens(e)).then_some('▸')
+    }
+
     fn matches(&self, set: &Option<MaskSet>, e: &Entry) -> bool {
         set.as_ref().is_some_and(|s| s.matches(e))
     }
@@ -198,6 +220,27 @@ mod tests {
     use super::*;
     use fcmd_core::{EntryId, EntryKind};
     use std::ffi::OsString;
+
+    /// A file `<arc>` names is one `Enter` goes into, and gets the mark when it is asked for;
+    /// a folder that happens to be called `x.zip` does not, and nothing is marked when the
+    /// setting is off.
+    #[test]
+    fn a_file_enter_opens_is_marked_and_a_folder_is_not() {
+        let mut groups = fcmd_core::filter::Groups::new();
+        groups.insert("arc", "*.zip,*.eml");
+        let on = Highlight::far_default_with(&groups).marking_openable(true);
+        let zip = entry("a.zip", EntryKind::File, EntryFlags::empty());
+        let mail = entry("b.EML", EntryKind::File, EntryFlags::empty());
+        let dir = entry("c.zip", EntryKind::Dir, EntryFlags::empty());
+        let text = entry("d.txt", EntryKind::File, EntryFlags::empty());
+        assert_eq!(on.mark(&zip), Some('▸'));
+        assert_eq!(on.mark(&mail), Some('▸'));
+        assert_eq!(on.mark(&dir), None);
+        assert_eq!(on.mark(&text), None);
+        let off = Highlight::far_default_with(&groups);
+        assert!(off.opens(&zip));
+        assert_eq!(off.mark(&zip), None);
+    }
 
     fn entry(name: &str, kind: EntryKind, flags: EntryFlags) -> Entry {
         Entry {

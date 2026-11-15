@@ -345,6 +345,10 @@ pub struct PanelCfg {
     /// Re-read a local directory when something in it changes, without `Ctrl+R`. On by
     /// default: a panel that is showing a directory as it was ten minutes ago is lying.
     pub auto_refresh: bool,
+    /// A `▸` after the name of a file `Enter` goes into — an archive, a mailbox, a database —
+    /// as a link has `@`. On by default: in a theme whose archive colour is close to the
+    /// plain one, the colour alone does not say it.
+    pub mark_openable: bool,
     /// How much of the width the left panel takes, as a percentage. `Ctrl+Left` and
     /// `Ctrl+Right` move it; 50 is the even split FAR starts from.
     pub split: u16,
@@ -387,6 +391,7 @@ impl Default for PanelCfg {
             free_space: true,
             remember_view: false,
             auto_refresh: true,
+            mark_openable: true,
             split: 50,
             height_cut: 0,
             quick_search: QuickSearch::Alt,
@@ -2065,6 +2070,10 @@ impl Config {
     /// something unhelpful about a line nobody is looking at.
     pub fn mask_groups(&self) -> fcmd_core::filter::Groups {
         let mut groups = fcmd_core::filter::default_groups();
+        // `<arc>` is what this run opens, computed rather than written down, so its colour
+        // means "`Enter` goes into it" (SPEC 02 §5). A `[[mask_group]]` called `arc` still
+        // replaces it below.
+        groups.insert("arc", &fcmd_arc::openable_masks());
         // A plugin's groups first, so one of the configuration's own of the same name wins.
         for block in self.plugin_mask_groups.iter().chain(&self.mask_groups) {
             let (name, mask) = (block.name.trim(), block.mask.trim());
@@ -2361,6 +2370,7 @@ impl Config {
             "panel.scrollbar" => self.panel.scrollbar = parse_bool(value)?,
             "panel.free_space" => self.panel.free_space = parse_bool(value)?,
             "panel.auto_refresh" => self.panel.auto_refresh = parse_bool(value)?,
+            "panel.mark_openable" => self.panel.mark_openable = parse_bool(value)?,
             "panel.remember_view" => self.panel.remember_view = parse_bool(value)?,
             "general.confirm_exit" => self.general.confirm_exit = parse_bool(value)?,
             "general.confirm_delete" => self.general.confirm_delete = parse_bool(value)?,

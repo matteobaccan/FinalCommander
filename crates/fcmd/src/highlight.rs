@@ -69,7 +69,7 @@ pub fn groups(cfg: &Config, warnings: &mut Vec<String>) -> fcmd_ui::Highlight {
             Err(problem) => warnings.push(format!("highlight group `{name}`: {problem}")),
         }
     }
-    fcmd_ui::Highlight::with_rules_in(rules, &groups)
+    fcmd_ui::Highlight::with_rules_in(rules, &groups).marking_openable(cfg.panel.mark_openable)
 }
 
 /// One `[[highlight]]` block as a rule: every condition it names, parsed the way the filter

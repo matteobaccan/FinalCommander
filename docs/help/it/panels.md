@@ -292,6 +292,14 @@ nome su cui stava. L'impostazione è `Aggiorna il pannello automaticamente` in
 `Opzioni → Impostazioni del pannello` (`panel.auto_refresh`); `Ctrl+R` c'è ancora per un
 server, un archivio, e le volte in cui la sorveglianza non ha niente da riferire.
 
+Un file in cui `Invio` entra — un archivio, un pacchetto che è uno zip sotto un altro nome
+(`.whl`, `.apk`, `.nupkg`), un messaggio o una casella di posta, un database SQLite, un file
+JSON — è disegnato col colore degli archivi, ha un `▸` dopo il nome, e la riga di stato del
+pannello dice cosa farà `Invio`: `Invio: apri come archivio (zip)`, `Invio: apri come casella
+di posta`. Un `.rar` o un `.iso` contano solo dove è installato 7-Zip per leggerli. Il segno è
+`Segna i file che Invio apre` nello stesso dialogo (`panel.mark_openable`, attivo di default);
+un `[[mask_group]]` chiamato `arc` sostituisce l'elenco, come per ogni altro gruppo.
+
 `Ogni cartella tiene la sua vista e il suo ordinamento`, nello stesso dialogo
 (`panel.remember_view`, spento di default), dà a ogni cartella la vista e l'ordinamento che vi
 hai scelto l'ultima volta: una cartella di foto può restare in `Brief` per data mentre le altre

@@ -2901,7 +2901,13 @@ fn cursor_line(app: &App, panel: &crate::panel::Panel) -> String {
                 .get(name.as_ref())
                 .map(|d| format!("  {}", fcmd_core::descriptions::one_line(d)))
                 .unwrap_or_default();
-            format!("{name}{size}{time}{descr}")
+            // And what `Enter` will do with it, where it goes into it rather than handing it
+            // to a program: the line says it in words, beside the colour and the `▸`.
+            let opens = app
+                .enter_opens(e)
+                .map(|what| format!("  {what}"))
+                .unwrap_or_default();
+            format!("{name}{size}{time}{opens}{descr}")
         }
         None if panel.loading => app.i18n.t("panel-loading"),
         None => app.i18n.t("panel-empty"),

@@ -545,6 +545,11 @@ impl Form {
                     t("opt-auto-refresh"),
                     cfg.panel.auto_refresh,
                 ),
+                Field::toggle(
+                    "panel.mark_openable",
+                    t("opt-mark-openable"),
+                    cfg.panel.mark_openable,
+                ),
                 // FAR's issue #389: each folder keeps the view and the sort it was given.
                 Field::toggle(
                     "panel.remember_view",

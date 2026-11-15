@@ -11059,6 +11059,31 @@ impl App {
         fcmd_arc::Format::of_name(name).is_some() || fcmd_arc::claimed_by_a_tool(name)
     }
 
+    /// What `Enter` does to this row, said for the panel's status line: "Enter: open as an
+    /// archive (zip)", "… as a mailbox", "… as a database". `None` for a row it does not go
+    /// into, which is every folder and every file `<arc>` does not name — the same answer
+    /// the colour and the `▸` give, so the three never disagree.
+    pub(crate) fn enter_opens(&self, e: &fcmd_core::Entry) -> Option<String> {
+        if !self.highlight.opens(e) {
+            return None;
+        }
+        let name = e.name_str();
+        let (id, what) = match fcmd_arc::Format::of_name(&name) {
+            Some(fcmd_arc::Format::Eml) => ("enter-opens-message", String::new()),
+            Some(fcmd_arc::Format::Mbox) => ("enter-opens-mailbox", String::new()),
+            Some(fcmd_arc::Format::Sqlite) => ("enter-opens-database", String::new()),
+            Some(fcmd_arc::Format::Json) => ("enter-opens-json", String::new()),
+            Some(format) => ("enter-opens-archive", format.label().to_string()),
+            // A format only a program on this machine reads: the program is named, since it
+            // is what will run.
+            None => (
+                "enter-opens-archive",
+                fcmd_arc::tool_claiming(&name)?.name.clone(),
+            ),
+        };
+        Some(self.i18n.t_args(id, &[("format", what.into())]))
+    }
+
     /// An archive's name without what marks it as one: `src.tar.gz` is `src`, and a format
     /// only a program reads loses its last extension.
     fn archive_stem(name: &str) -> String {
@@ -23054,6 +23079,11 @@ impl App {
             self.requests.push(Request::Mouse {
                 on: self.cfg.ui.mouse,
             });
+        }
+        // The mark after an openable name is drawn from the highlighting, so that is what
+        // is built again when it is turned on or off.
+        if keys.contains(&"panel.mark_openable") {
+            self.apply_highlight();
         }
     }
 
@@ -51066,6 +51096,63 @@ abcdefghij
             "F1 did not open the help: {:?}",
             app.mode
         );
+    }
+
+    /// What `Enter` opens is said three ways, from one answer: the archive colour, the `▸`
+    /// after the name (on by default) and a sentence on the status line naming the format.
+    /// Turning the mark off takes the mark away and leaves the other two.
+    #[test]
+    fn what_enter_opens_is_said_on_the_row_and_on_the_status_line() {
+        let mut app = app();
+        // The highlighting the program starts with, from the configuration — the test
+        // application is built with FAR's fixed one.
+        app.apply_highlight();
+        let file = |name: &str, kind| fcmd_core::Entry {
+            name: name.into(),
+            kind,
+            size: 1,
+            mtime: None,
+            btime: None,
+            atime: None,
+            flags: fcmd_core::EntryFlags::empty(),
+            id: fcmd_core::EntryId::Name(1),
+            link_target: None,
+        };
+        let zip = file("photos.ZIP", fcmd_core::EntryKind::File);
+        let wheel = file("pkg-1.0-py3-none-any.whl", fcmd_core::EntryKind::File);
+        let mail = file("note.eml", fcmd_core::EntryKind::File);
+        let db = file("data.sqlite", fcmd_core::EntryKind::File);
+        let text = file("notes.txt", fcmd_core::EntryKind::File);
+        let dir = file("folder.zip", fcmd_core::EntryKind::Dir);
+
+        assert_eq!(app.highlight.key(&zip), "file.archive");
+        assert_eq!(app.highlight.key(&wheel), "file.archive");
+        assert_eq!(app.highlight.mark(&zip), Some('▸'));
+        assert_eq!(app.highlight.mark(&text), None);
+        assert_eq!(app.highlight.mark(&dir), None);
+        assert_eq!(
+            app.enter_opens(&zip),
+            Some(
+                app.i18n
+                    .t_args("enter-opens-archive", &[("format", "zip".into())])
+            )
+        );
+        assert_eq!(
+            app.enter_opens(&mail),
+            Some(app.i18n.t("enter-opens-message"))
+        );
+        assert_eq!(
+            app.enter_opens(&db),
+            Some(app.i18n.t("enter-opens-database"))
+        );
+        assert_eq!(app.enter_opens(&text), None);
+        assert_eq!(app.enter_opens(&dir), None);
+
+        app.cfg.set("panel.mark_openable", "false").unwrap();
+        app.apply_config(&["panel.mark_openable"]);
+        assert_eq!(app.highlight.mark(&zip), None);
+        assert!(app.enter_opens(&zip).is_some());
+        assert_eq!(app.highlight.key(&zip), "file.archive");
     }
 
     /// `F4` on a service is when it starts: the three choices with the one in force under

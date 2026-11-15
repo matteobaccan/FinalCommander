@@ -568,7 +568,7 @@ fn draw_brief(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect,
             let w = col_w as u16 - 1;
             buf.fill(Rect::new(x, inner.y + row as u16, w, 1), ' ', style);
             let name_w = w.saturating_sub(size_w);
-            let name = shift_name(&decorate(e), p.name_scroll);
+            let name = shift_name(&decorate(e, p.highlight), p.name_scroll);
             buf.put_str(
                 x,
                 inner.y + row as u16,
@@ -956,7 +956,7 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
         );
         buf.fill(Rect::new(inner.x, y, inner.w, 1), ' ', style);
 
-        let name = shift_name(&cased(decorate(e), e, flags), p.name_scroll);
+        let name = shift_name(&cased(decorate(e, p.highlight), e, flags), p.name_scroll);
 
         // The columns, in the one order the titles and the rules also read. A filesystem that
         // does not keep a date, a device that never said how big its clusters are and a row
@@ -1192,14 +1192,19 @@ fn cased(name: String, e: &Entry, flags: fcmd_core::ColumnFlags) -> String {
     name
 }
 
-fn decorate(e: &Entry) -> String {
+fn decorate(e: &Entry, highlight: &crate::Highlight) -> String {
     let name = e.name_str().into_owned();
     match e.kind {
         // No trailing slash: the size column says `Folder`, and FAR leaves the name alone.
         EntryKind::Dir => name,
         EntryKind::Symlink => format!("{name}@"),
         _ if e.flags.contains(EntryFlags::EXECUTABLE) => format!("{name}*"),
-        _ => name,
+        // A file `Enter` goes into, where the configuration asks for the mark: in a theme
+        // whose archive colour is close to the plain one, the colour alone does not say it.
+        _ => match highlight.mark(e) {
+            Some(mark) => format!("{name}{mark}"),
+            None => name,
+        },
     }
 }
 

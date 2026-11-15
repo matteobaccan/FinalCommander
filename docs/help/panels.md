@@ -277,6 +277,14 @@ setting is `Refresh the panel automatically` in `Options → Panel settings`
 (`panel.auto_refresh`); `Ctrl+R` is still there for a server, an archive, and the times a
 watch has nothing to report.
 
+A file that `Enter` goes into — an archive, a package that is a zip under another name
+(`.whl`, `.apk`, `.nupkg`), a mail message or mailbox, an SQLite database, a JSON file — is
+drawn in the archive colour, has a `▸` after its name, and the panel's status line says what
+`Enter` will do with it: `Enter: open as an archive (zip)`, `Enter: open as a mailbox`. A
+`.rar` or an `.iso` counts only where 7-Zip is installed to read it. The mark is
+`Mark the files Enter opens` in the same dialog (`panel.mark_openable`, on by default); a
+`[[mask_group]]` called `arc` replaces the list, as for any other group.
+
 `Each folder keeps its own view and sort`, in the same dialog (`panel.remember_view`, off by
 default), gives every folder the view and the sort you last chose in it: a folder of photos
 can stay in `Brief` by date while the rest stay as they are. A folder you never changed shows

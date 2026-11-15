@@ -493,6 +493,17 @@ name a group: `<arc>` is every archive, `<temp>` every file somebody meant to th
 a `[[mask_group]]` block adds one, and a block with the name of a built-in one replaces it —
 which is how somebody who keeps `.cbz` files teaches `<arc>` about them.
 
+`<arc>` is not a list written down: it is computed at startup from what `Enter` goes into —
+every name ending `fcmd-arc` reads (`Format::suffixes`: the zip family with the packages that
+are zips under another name, the tar family, `.7z`, `.cab`, `ar`/`.deb`, `.cpio`, `.rpm`, the
+single compressed files, `.eml`/`.mbox`, SQLite, `.json`), then the extensions of the
+`[[archiver]]` tables whose program is on the `PATH` (`fcmd_arc::openable_masks`). So the
+archive colour means "this opens": a `.rar` is coloured where 7-Zip is and is a plain file
+where it is not. The same answer draws a `▸` after the name (`panel.mark_openable`, on by
+default, for themes whose archive colour is close to the plain one) and puts a sentence on
+the panel's status line — `Enter: open as an archive (zip)`, `… as a mailbox`, `… as a
+database` — so the three never disagree. A folder is never marked, whatever it is called.
+
 ```toml
 [[mask_group]]
 name = "images"

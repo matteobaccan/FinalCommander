@@ -1250,6 +1250,47 @@ pub fn claimed_by_a_tool(name: &str) -> bool {
     tables().iter().any(|tool| tool.claims(name, &[]))
 }
 
+/// The tool that would open a file called this, by its name alone, as
+/// [`claimed_by_a_tool`] decides — for saying which one before anything is run.
+pub fn tool_claiming(name: &str) -> Option<&'static Tool> {
+    tables().iter().find(|tool| tool.claims(name, &[]))
+}
+
+/// Every file `Enter` goes into, as a mask list: each name ending this crate reads, then the
+/// extensions of the tables whose program is on this machine. This is what `<arc>` is when
+/// the configuration does not say otherwise, so the archive colour means "this opens" —
+/// a `.rar` is coloured where there is a program to read it and is a plain file where there
+/// is not.
+///
+/// A table that claims by its magic alone is left out: nothing about the name says it.
+/// Asked once the tables are installed, the answer is kept for the run, since looking for
+/// each program on the `PATH` is not something to do on every frame.
+pub fn openable_masks() -> String {
+    static KEPT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    if let Some(kept) = KEPT.get() {
+        return kept.clone();
+    }
+    let mut masks: Vec<String> = crate::Format::suffixes()
+        .map(|suffix| format!("*{suffix}"))
+        .collect();
+    for tool in tables() {
+        if tool.magic_only || tool.found().is_none() {
+            continue;
+        }
+        for ext in &tool.extensions {
+            let mask = format!("*.{}", ext.to_ascii_lowercase());
+            if !masks.contains(&mask) {
+                masks.push(mask);
+            }
+        }
+    }
+    let masks = masks.join(",");
+    if INSTALLED.get().is_some() {
+        let _ = KEPT.set(masks.clone());
+    }
+    masks
+}
+
 /// The tables this program comes with.
 ///
 /// One, for now, and deliberately the one MultiArc itself reaches for: `custom.ini` sends
@@ -1339,6 +1380,27 @@ fn sevenzip() -> Tool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// What `<arc>` is by default: every name ending this crate reads, the packages that are
+    /// zips under another name and the mail and database files with them — and no format a
+    /// program would have to read unless that program is here.
+    #[test]
+    fn the_openable_masks_are_what_this_program_reads() {
+        let masks = openable_masks();
+        let has = |m: &str| masks.split(',').any(|x| x == m);
+        for m in [
+            "*.zip", "*.tar.gz", "*.7z", "*.whl", "*.apk", "*.deb", "*.eml", "*.mbox",
+        ] {
+            assert!(has(m), "{m} missing from {masks}");
+        }
+        assert!(has("*.sqlite") && has("*.json") && has("*.gz"), "{masks}");
+        // A `.rar` is there only where 7-Zip is.
+        let sevenzip = builtin_tools()
+            .into_iter()
+            .find(|t| t.name == "7z")
+            .and_then(|t| t.found());
+        assert_eq!(has("*.rar"), sevenzip.is_some(), "{masks}");
+    }
 
     fn words(line: &Line) -> Vec<String> {
         line.args

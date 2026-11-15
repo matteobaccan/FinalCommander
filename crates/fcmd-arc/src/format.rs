@@ -225,70 +225,81 @@ impl Format {
     /// `Cr24` header in front of it, so it is not one.
     pub fn of_name(name: &str) -> Option<Format> {
         let lower = name.to_ascii_lowercase();
-        const BY_SUFFIX: [(&str, Format); 45] = [
-            (".tar.gz", Format::TarGz),
-            (".tgz", Format::TarGz),
-            (".tar.bz2", Format::TarBz2),
-            (".tbz2", Format::TarBz2),
-            (".tbz", Format::TarBz2),
-            (".tar.xz", Format::TarXz),
-            (".txz", Format::TarXz),
-            (".tar.zst", Format::TarZst),
-            (".tzst", Format::TarZst),
-            (".tar", Format::Tar),
-            (".7z", Format::SevenZ),
-            (".zip", Format::Zip),
-            // A zip under another name, for the packages one opens to look inside.
-            (".jar", Format::Zip),
-            (".war", Format::Zip),
-            (".ear", Format::Zip),
-            (".aar", Format::Zip),
-            (".apk", Format::Zip),
-            (".aab", Format::Zip),
-            (".ipa", Format::Zip),
-            (".whl", Format::Zip),
-            (".nupkg", Format::Zip),
-            (".vsix", Format::Zip),
-            (".xpi", Format::Zip),
-            // The Unix archive, and the Debian package that is one.
-            (".a", Format::Ar),
-            (".ar", Format::Ar),
-            (".deb", Format::Ar),
-            (".udeb", Format::Ar),
-            (".ddeb", Format::Ar),
-            (".cpio", Format::Cpio),
-            (".rpm", Format::Rpm),
-            (".cab", Format::Cab),
-            // SQLite under the names it is given. `.db` is not here: half the `.db` files on
-            // a disk are not SQLite (`Thumbs.db`), so one is let in only when its first bytes
-            // say so — `ArcFs::looks_like_archive` asks `sqlite::is_database`.
-            (".sqlite", Format::Sqlite),
-            (".sqlite3", Format::Sqlite),
-            (".db3", Format::Sqlite),
-            (".s3db", Format::Sqlite),
-            (".json", Format::Json),
-            (".eml", Format::Eml),
-            (".mbox", Format::Mbox),
-            (".mbx", Format::Mbox),
-            // One compressed file, no tar. Last, so every `.tar.*` and `.t?z` above wins:
-            // the list is searched in order and `.tar.gz` ends with `.gz` as well.
-            (".gz", Format::Gz),
-            (".bz2", Format::Bz2),
-            (".bz", Format::Bz2),
-            (".xz", Format::Xz),
-            (".zst", Format::Zst),
-            (".zstd", Format::Zst),
-        ];
         BY_SUFFIX
             .iter()
             .find(|(suffix, _)| lower.ends_with(suffix))
             .map(|(_, format)| *format)
     }
 
+    /// Every name ending this crate opens by, as `.zip`, `.tar.gz`, `.eml` — the list
+    /// [`Format::of_name`] searches, for whoever has to say in advance which files `Enter`
+    /// goes into (the `<arc>` group).
+    pub fn suffixes() -> impl Iterator<Item = &'static str> {
+        BY_SUFFIX.iter().map(|(suffix, _)| *suffix)
+    }
+
     pub fn of_path(path: &Path) -> Option<Format> {
         Format::of_name(&path.file_name()?.to_string_lossy())
     }
+}
 
+/// The name endings, in the order [`Format::of_name`] tries them.
+const BY_SUFFIX: [(&str, Format); 45] = [
+    (".tar.gz", Format::TarGz),
+    (".tgz", Format::TarGz),
+    (".tar.bz2", Format::TarBz2),
+    (".tbz2", Format::TarBz2),
+    (".tbz", Format::TarBz2),
+    (".tar.xz", Format::TarXz),
+    (".txz", Format::TarXz),
+    (".tar.zst", Format::TarZst),
+    (".tzst", Format::TarZst),
+    (".tar", Format::Tar),
+    (".7z", Format::SevenZ),
+    (".zip", Format::Zip),
+    // A zip under another name, for the packages one opens to look inside.
+    (".jar", Format::Zip),
+    (".war", Format::Zip),
+    (".ear", Format::Zip),
+    (".aar", Format::Zip),
+    (".apk", Format::Zip),
+    (".aab", Format::Zip),
+    (".ipa", Format::Zip),
+    (".whl", Format::Zip),
+    (".nupkg", Format::Zip),
+    (".vsix", Format::Zip),
+    (".xpi", Format::Zip),
+    // The Unix archive, and the Debian package that is one.
+    (".a", Format::Ar),
+    (".ar", Format::Ar),
+    (".deb", Format::Ar),
+    (".udeb", Format::Ar),
+    (".ddeb", Format::Ar),
+    (".cpio", Format::Cpio),
+    (".rpm", Format::Rpm),
+    (".cab", Format::Cab),
+    // SQLite under the names it is given. `.db` is not here: half the `.db` files on
+    // a disk are not SQLite (`Thumbs.db`), so one is let in only when its first bytes
+    // say so — `ArcFs::looks_like_archive` asks `sqlite::is_database`.
+    (".sqlite", Format::Sqlite),
+    (".sqlite3", Format::Sqlite),
+    (".db3", Format::Sqlite),
+    (".s3db", Format::Sqlite),
+    (".json", Format::Json),
+    (".eml", Format::Eml),
+    (".mbox", Format::Mbox),
+    (".mbx", Format::Mbox),
+    // One compressed file, no tar. Last, so every `.tar.*` and `.t?z` above wins:
+    // the list is searched in order and `.tar.gz` ends with `.gz` as well.
+    (".gz", Format::Gz),
+    (".bz2", Format::Bz2),
+    (".bz", Format::Bz2),
+    (".xz", Format::Xz),
+    (".zst", Format::Zst),
+    (".zstd", Format::Zst),
+];
+
+impl Format {
     /// The format the *bytes* say it is. A `.docx` is a zip and a tarball someone renamed is
     /// still a tarball, so what the file starts with wins over what it is called — except for
     /// the compressed tars, where the magic says "gzip" and only the name says "tar inside".
