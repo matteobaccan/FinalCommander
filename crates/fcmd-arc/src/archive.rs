@@ -192,6 +192,7 @@ impl Archive {
             Format::Json => crate::json::index(path, &name, limits, cancel)?,
             Format::Eml => crate::mail::index_eml(path, &name, limits, cancel)?,
             Format::Mbox => crate::mail::index_mbox(path, &name, limits, cancel)?,
+            Format::Msg => crate::msg::index(path, &name, limits, cancel)?,
             f if f.is_single() => index_single(path, &name, &leaf, format, limits, cancel)?,
             _ => index_tar(path, &name, format, limits, cancel)?,
         };
@@ -933,6 +934,11 @@ impl Archive {
                 progress(n);
                 Ok(n)
             }
+            Format::Msg => {
+                let n = crate::msg::copy_out(&self.source, &self.name(), &inner, out)?;
+                progress(n);
+                Ok(n)
+            }
             Format::Json => {
                 let n = crate::json::copy_out(&self.source, &self.name(), &inner, out)?;
                 progress(n);
@@ -1260,7 +1266,8 @@ pub(crate) fn decoder(path: &Path, format: Format) -> Result<Box<dyn Read>> {
         | Format::Sqlite
         | Format::Json
         | Format::Eml
-        | Format::Mbox => {
+        | Format::Mbox
+        | Format::Msg => {
             return Err(ArcError::Broken {
                 path: name,
                 reason: format!("a {} is not a stream", format.label()),
@@ -2385,7 +2392,7 @@ mod tests {
             f.holds_many()
                 && !matches!(
                     f,
-                    Format::Sqlite | Format::Json | Format::Eml | Format::Mbox
+                    Format::Sqlite | Format::Json | Format::Eml | Format::Mbox | Format::Msg
                 )
         }) {
             let path = dir.path().join(format!("tree.{}", format.extension()));
@@ -3090,7 +3097,7 @@ mod tests {
             f.holds_many()
                 && !matches!(
                     f,
-                    Format::Sqlite | Format::Json | Format::Eml | Format::Mbox
+                    Format::Sqlite | Format::Json | Format::Eml | Format::Mbox | Format::Msg
                 )
         }) {
             let path = dir.path().join(format!("tree.{}", format.extension()));

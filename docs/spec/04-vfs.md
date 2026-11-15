@@ -246,6 +246,55 @@ FARMail's and MailView's idea — their code is GPL and none of it is used (`fcm
   `message.html` (the first text and HTML parts, in UTF-8 whatever charset they were sent in),
   and each attachment under its own name (`filename` or `name`, RFC 2231 included), decoded
   from base64 or quoted-printable; a part with no name is `partN.<ext>`. Multiparts nest.
+* **`structure.txt`** (0.43) is in every message opened this way: the tree of its parts as
+  the walk met them, kept instead of flattened — one line per part with its type, its
+  transfer encoding, its decoded size and its name, drawn with `├`, `└` and `│`. A
+  `message/rfc822` part shows the attached message's own tree under it; the attachment
+  itself stays one `.eml` file, which opens in turn. An attachment that is itself called
+  `structure.txt` becomes `2 structure.txt`, by the rule for any duplicate name. The viewer's
+  structure pane shows the same tree from the same code (SPEC 05 §1.8).
+* **An Outlook message** (`.msg`, 0.43; `fcmd-arc::msg`) is the same folder. The file is an
+  OLE compound file, read by our own reader and no crate (`fcmd-arc::cfb`, MS-CFB): the
+  header, the DIFAT (the 109 entries of the header and the chain of sectors after them), the
+  FAT, the directory, the mini-FAT and the mini-stream, in sectors of 512 bytes (version 3)
+  or 4096 (version 4). A storage's children are a red-black tree in the file and a flat list
+  here, since nothing is inserted. Everything in the file is checked before it is used: a
+  sector number against the size of the file, a stream's length against the file (or the
+  mini-stream) that would have to hold it, every chain against the length of its table — a
+  chain longer than its table has looped, and is an error — and a directory entry is given
+  to the first storage that reaches it, so a tree that loops lists each entry once. On top
+  of that, MS-OXMSG: the fixed-size properties from `__properties_version1.0` (32 bytes of
+  header in the file's message, 24 in an attached one, 8 in a recipient or an attachment),
+  the others from their `__substg1.0_XXXXYYYY` streams, strings as UTF-16 (`001F`) or as
+  bytes (`001E`) in the code page the message names (`PR_MESSAGE_CODEPAGE`, else
+  `PR_INTERNET_CPID`, else 1252).
+  * `headers.txt` is written from the properties: `From` (the sender's name, and the SMTP
+    address where the message has one — `PR_SENDER_SMTP_ADDRESS` before
+    `PR_SENDER_EMAIL_ADDRESS`, which inside Exchange is a directory path), `To`/`Cc`/`Bcc`
+    from the `__recip_version1.0_#` storages (or the display lines when there are none),
+    `Subject`, `Date` (`PR_CLIENT_SUBMIT_TIME`, else `PR_MESSAGE_DELIVERY_TIME`, in UTC) and
+    `Delivered` when both are there and differ; the transport headers Outlook kept
+    (`PR_TRANSPORT_MESSAGE_HEADERS`) follow after an empty line.
+  * `message.txt` is the plain body (`0x1000`); `message.html` the HTML one (`0x1013`, as
+    its bytes). The compressed RTF (`0x1009`) is unpacked (`fcmd-arc::rtf`, MS-OXRTFCP: the
+    LZFu dictionary with its preset, and the CRC, a mismatch being a body that is not read)
+    and used for what is missing: read as text when there is no plain body — control words
+    dropped, `\par` and its kin as line breaks, `\'hh` in the code page `\ansicpg` names,
+    `\uN` with its fallback skipped, font and colour tables and every `\*` group left out —
+    and unwrapped to HTML when there is no HTML body and the RTF says `\fromhtml`
+    (MS-OXRTFEX: the `\*\htmltag` groups kept, the `\htmlrtf` stretches dropped). RTF that
+    wraps neither is the form the message was written in and is kept as `message.rtf`.
+  * Attachments (`__attach_version1.0_#`) come out under `PR_ATTACH_LONG_FILENAME`, else
+    the short name, else the display name, else `attachmentN.bin`, with separators and
+    control characters replaced. An attached message — a storage where the data would be
+    (`__substg1.0_3701000D`) with a property table of its own — is a folder `Name.msg/`
+    holding the same files, sixteen levels deep at most.
+  * `structure.txt` for a `.msg` is the forms its body is kept in (`text/plain`,
+    `text/html`, `application/rtf  compressed`) and the attachments with their MIME type
+    (`PR_ATTACH_MIME_TAG`, else `application/octet-stream`), an attached message with its
+    own tree under it.
+  * The limits of §4 apply: the count of entries to the directory of the compound file and
+    to the files that come out, the total size to what they add up to.
 * Read only, and a file over 512 MiB is refused. Mail on a server is read through IMAP
   (§6.6); sending is not planned.
 

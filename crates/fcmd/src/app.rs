@@ -11140,7 +11140,9 @@ impl App {
         }
         let name = e.name_str();
         let (id, what) = match fcmd_arc::Format::of_name(&name) {
-            Some(fcmd_arc::Format::Eml) => ("enter-opens-message", String::new()),
+            Some(fcmd_arc::Format::Eml | fcmd_arc::Format::Msg) => {
+                ("enter-opens-message", String::new())
+            }
             Some(fcmd_arc::Format::Mbox) => ("enter-opens-mailbox", String::new()),
             Some(fcmd_arc::Format::Sqlite) => ("enter-opens-database", String::new()),
             Some(fcmd_arc::Format::Json) => ("enter-opens-json", String::new()),

@@ -21,14 +21,17 @@
 
 mod archive;
 mod cab;
+pub mod cfb;
 mod cpio;
 mod ext;
 mod format;
 pub mod json;
 mod limits;
 pub mod mail;
+pub mod msg;
 mod nest;
 mod rebuild;
+pub mod rtf;
 pub mod sqlite;
 mod tar;
 mod write;

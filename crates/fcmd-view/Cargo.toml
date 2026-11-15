@@ -10,6 +10,9 @@ authors.workspace = true
 
 [dependencies]
 fcmd-core = { workspace = true }
+# The readers of mail and of the OLE compound file live with the archives, where a message
+# is opened as a folder; the structure pane shows the same tree from the same code.
+fcmd-arc = { workspace = true }
 # A raw device on Windows: how long it is and the sector it insists on being read in, which
 # are the two calls `std` does not make (SPEC 05 §1.10).
 fcmd-platform = { workspace = true }

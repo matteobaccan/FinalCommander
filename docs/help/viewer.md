@@ -291,9 +291,14 @@ The same key answers for the files that are not programs:
   wrote, or all but the camera's EXIF and the copyright (the GPS position goes). The picture
   is not encoded again — its pixels are the same bytes — and `Ctrl+Alt+Z` puts the metadata
   back;
-- **an office document** — `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`: the title, the
-  author and who saved it last, when it was made and changed, how many revisions, pages, words
-  or slides, the company and the program that wrote it;
+- **an office document** — `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`, and the older
+  `.doc`, `.xls` and `.ppt`: the title, the author and who saved it last, when it was made and
+  changed, how many revisions, pages, words or slides, the company and the program that wrote
+  it; for the older ones also the streams the file is made of;
+- **a mail message** — `.eml` and Outlook's `.msg`: who sent it, to whom, the subject and the
+  date, and under them the tree of its parts, each with its type, encoding, size and name —
+  the same tree `structure.txt` shows when the message is opened as a folder (*Mail files*).
+  `Enter` on a part of an `.eml` goes to where it starts in the file;
 - **music** — MP3, FLAC, Ogg Vorbis, Opus: the title, the artist, the album, the year, the
   track, the genre, whether there is a cover, and for FLAC and Ogg the stream and its length.
 

@@ -735,6 +735,29 @@ message itself: `headers.txt` with who sent it, to whom and when, `message.txt` 
 `message.html` with the text, and each attachment under its own name, already decoded — `F3`
 reads it, `F5` saves it out. Nothing is changed in the mailbox.
 
+An Outlook message — a `.msg` — opens the same way and into the same files. Its text is taken
+from whichever form the message was saved with: the plain one, the HTML one, or the RTF
+Outlook always keeps, which is read as text when it is all there is (and as `message.html`
+when it wraps a web page, as it does for mail that arrived as HTML); a message written in RTF
+keeps it as `message.rtf` too. A message attached to the message is a folder inside it, with
+its own headers, text and attachments, as deep as they go.
+
+Beside those files is `structure.txt`: how the message is put together, as a tree. Each line
+is one part with its type, how it was encoded for the journey, its size once decoded and its
+name if it has one:
+
+```
+multipart/mixed
+├ multipart/alternative
+│ ├ text/plain  quoted-printable  1.2 KB
+│ └ text/html  quoted-printable  4.8 KB
+└ application/pdf  base64  230 KB  "invoice.pdf"
+```
+
+For a `.msg`, which has no parts of that kind, the tree is the forms its body is kept in and
+what is attached. The same tree is in the viewer: `F3` on the mail file, then `Shift+F11`,
+and `Enter` on a part of an `.eml` goes to where it starts.
+
 # Writing a text file again
 
 Text arrives from somewhere else: a zip off a Windows machine, a dump out of a database, a

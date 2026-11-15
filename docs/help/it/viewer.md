@@ -309,9 +309,14 @@ Lo stesso tasto risponde anche per i file che non sono programmi:
   quelli scritti dal modello, o tutti tranne l'EXIF della fotocamera e il copyright (la
   posizione GPS se ne va). L'immagine non viene ricodificata — i pixel restano gli stessi byte
   — e `Ctrl+Alt+Z` rimette i metadati;
-- **un documento d'ufficio** — `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`: titolo,
-  autore e chi l'ha salvato per ultimo, quando è stato creato e modificato, quante revisioni,
-  pagine, parole o diapositive, l'azienda e il programma che l'ha scritto;
+- **un documento d'ufficio** — `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`, e i più
+  vecchi `.doc`, `.xls` e `.ppt`: titolo, autore e chi l'ha salvato per ultimo, quando è stato
+  creato e modificato, quante revisioni, pagine, parole o diapositive, l'azienda e il
+  programma che l'ha scritto; per i più vecchi anche i flussi di cui è fatto il file;
+- **un messaggio di posta** — `.eml` e il `.msg` di Outlook: chi l'ha mandato, a chi,
+  l'oggetto e la data, e sotto l'albero delle sue parti, ognuna con tipo, codifica, dimensione
+  e nome — lo stesso albero che `structure.txt` mostra quando il messaggio è aperto come
+  cartella (*File di posta*). `Enter` su una parte di un `.eml` porta dove comincia nel file;
 - **la musica** — MP3, FLAC, Ogg Vorbis, Opus: titolo, artista, album, anno, traccia, genere,
   se c'è una copertina, e per FLAC e Ogg il flusso e la durata.
 

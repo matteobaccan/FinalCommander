@@ -51,7 +51,7 @@ inside the file. `scp` it to a server and it works there too.
    S3 and its clones, IMAP mailboxes, jump hosts, port tunnels, a speed limit per server.
    `F5` between two servers is just a copy.
 6. **Every container is a folder.** zip, 7z, tar in all its compressions, deb, rpm, cpio, iso
-   and rar through the 7z you have, SQLite databases, JSON files, mbox and eml mail: `Enter`
+   and rar through the 7z you have, SQLite databases, JSON files, mbox, eml and msg mail: `Enter`
    goes inside, `F3` reads, `F5` copies out.
 7. **A viewer and an editor that do not give up.** A 40 GB log opens at once and follows its
    own growth; hex, disassembly of x86, ARM, JVM and .NET; an editor with syntax colouring,
@@ -83,7 +83,7 @@ inside the file. `scp` it to a server and it works there too.
 | A calculator | `Alt+=`, in every base at once |
 | A chat window for your AI | `ai: question` on the command line, with the selected files attached after a dialog says what goes where; the answer opens in the viewer and is kept as Markdown |
 | A database browser | `Enter` on a SQLite file: every table is a CSV beside the schema, `sql: SELECT …` opens the rows as a table |
-| A mail reader | an `.mbox` or `.eml` is a folder of messages and attachments; `imaps://me@host/` is your mailbox, read only |
+| A mail reader | an `.mbox`, `.eml` or Outlook `.msg` is a folder of messages and attachments; `imaps://me@host/` is your mailbox, read only |
 | A git front end | `Ctrl+Alt+G`: what changed as a panel, the log and the blame in the viewer, the branches |
 | A duplicate finder | *Commands → Find duplicate files*: groups by content, every copy but the oldest selected for `F8` |
 

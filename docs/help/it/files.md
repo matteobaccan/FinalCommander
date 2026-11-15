@@ -772,6 +772,30 @@ file `.eml`, apre il messaggio: `headers.txt` con chi l'ha mandato, a chi e quan
 `message.txt` e `message.html` col testo, e ogni allegato col suo nome, già decodificato — `F3`
 lo legge, `F5` lo salva fuori. Nella casella non cambia niente.
 
+Un messaggio di Outlook — un `.msg` — si apre allo stesso modo e negli stessi file. Il testo
+è preso dalla forma con cui il messaggio è stato salvato: quella semplice, quella HTML, o
+l'RTF che Outlook conserva sempre, letto come testo quando non c'è altro (e come
+`message.html` quando racchiude una pagina web, come succede per la posta arrivata in HTML);
+un messaggio scritto in RTF lo tiene anche come `message.rtf`. Un messaggio allegato al
+messaggio è una cartella al suo interno, con le sue intestazioni, il suo testo e i suoi
+allegati, per quanti livelli ci sono.
+
+Accanto a quei file c'è `structure.txt`: com'è fatto il messaggio, ad albero. Ogni riga è
+una parte col suo tipo, come è stata codificata per il viaggio, quanto pesa una volta
+decodificata e il suo nome se ne ha uno:
+
+```
+multipart/mixed
+├ multipart/alternative
+│ ├ text/plain  quoted-printable  1.2 KB
+│ └ text/html  quoted-printable  4.8 KB
+└ application/pdf  base64  230 KB  "invoice.pdf"
+```
+
+Per un `.msg`, che parti di quel genere non ne ha, l'albero è fatto delle forme in cui è
+conservato il testo e di ciò che è allegato. Lo stesso albero è nel visualizzatore: `F3` sul
+file di posta, poi `Shift+F11`, e `Enter` su una parte di un `.eml` porta dove comincia.
+
 # Riscrivere un file di testo
 
 Il testo arriva da altrove: uno zip da una macchina Windows, un dump da un database, un file

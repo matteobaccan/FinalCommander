@@ -201,7 +201,8 @@ pub fn files(message: &[u8]) -> Vec<(String, Vec<u8>)> {
     }
     out.push(("headers.txt".into(), shown.into_bytes()));
     let mut parts = Vec::new();
-    walk_parts(&headers, body, &mut parts, 0);
+    let tree = walk_parts(&headers, body, Some(message), Some(0), &mut parts, 0);
+    out.push(("structure.txt".into(), tree_text(&tree).into_bytes()));
     let mut seen_text = false;
     let mut seen_html = false;
     let mut n = 0;
@@ -342,7 +343,25 @@ fn percent(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-fn walk_parts(headers: &[(String, String)], body: &[u8], out: &mut Vec<Part>, depth: usize) {
+/// Where `inner` starts in `outer`, when it is a piece of it: the parts of a message are
+/// slices of the file, and the place a part begins is where the viewer goes for it.
+fn offset_in(outer: &[u8], inner: &[u8]) -> Option<u64> {
+    let (o, i) = (outer.as_ptr() as usize, inner.as_ptr() as usize);
+    (i >= o && i + inner.len() <= o + outer.len()).then(|| (i - o) as u64)
+}
+
+/// Walk a part: its leaves are pushed on `out` in the order they come, which is what the
+/// folder is made of, and the shape they came in is returned, which is what `structure.txt`
+/// shows. `origin` is the file the part is a slice of, when it is one — a message attached
+/// in base64 is decoded bytes, and has no place in the file to point at.
+fn walk_parts(
+    headers: &[(String, String)],
+    body: &[u8],
+    origin: Option<&[u8]>,
+    at: Option<u64>,
+    out: &mut Vec<Part>,
+    depth: usize,
+) -> Node {
     let ctype = headers
         .iter()
         .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
@@ -356,17 +375,27 @@ fn walk_parts(headers: &[(String, String)], body: &[u8], out: &mut Vec<Part>, de
         .to_ascii_lowercase();
     if mime.starts_with("multipart/") && depth < 16 {
         if let Some(boundary) = param(&ctype, "boundary") {
+            let mut children = Vec::new();
             for piece in split_multipart(body, &boundary) {
                 let (h, b) = split_head(piece);
-                walk_parts(&h, b, out, depth + 1);
+                let at = origin.and_then(|o| offset_in(o, piece));
+                children.push(walk_parts(&h, b, origin, at, out, depth + 1));
             }
-            return;
+            return Node {
+                mime,
+                encoding: String::new(),
+                size: None,
+                name: None,
+                offset: at,
+                children,
+            };
         }
     }
     let encoding = header(headers, "content-transfer-encoding")
         .unwrap_or_default()
+        .trim()
         .to_ascii_lowercase();
-    let mut bytes = match encoding.trim() {
+    let mut bytes = match encoding.as_str() {
         "base64" => base64(body),
         "quoted-printable" => quoted_printable(body),
         _ => body.to_vec(),
@@ -378,11 +407,193 @@ fn walk_parts(headers: &[(String, String)], body: &[u8], out: &mut Vec<Part>, de
             bytes = to_utf8(&bytes, &cs).into_bytes();
         }
     }
+    // A message attached to a message has a shape of its own, shown under it. Its parts are
+    // not this folder's: the attachment is one file here, and a folder when it is opened.
+    let children = if mime == "message/rfc822" && depth < 16 {
+        let (h, b) = split_head(&bytes);
+        vec![walk_parts(&h, b, None, None, &mut Vec::new(), depth + 1)]
+    } else {
+        Vec::new()
+    };
+    let node = Node {
+        mime: mime.clone(),
+        encoding,
+        size: Some(bytes.len() as u64),
+        name: filename.clone(),
+        offset: at,
+        children,
+    };
     out.push(Part {
         mime,
         filename,
         bytes,
     });
+    node
+}
+
+// ---------------------------------------------------------------------------------------
+// The shape of a message
+
+/// One part of a message as its structure shows it: a `multipart/*` with the parts it
+/// holds, or a leaf with what it is, how it travelled, how large it is once decoded and
+/// what it is called.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Node {
+    pub mime: String,
+    /// The transfer encoding, or what stands for one in an Outlook message; empty for none.
+    pub encoding: String,
+    /// The decoded size of a leaf; a multipart has none of its own.
+    pub size: Option<u64>,
+    pub name: Option<String>,
+    /// Where the part begins in the file, when it is a stretch of it.
+    pub offset: Option<u64>,
+    pub children: Vec<Node>,
+}
+
+/// One line of the tree: the branches and the type, the rest of what is known, and where
+/// the part is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeRow {
+    pub label: String,
+    pub detail: String,
+    pub offset: Option<u64>,
+}
+
+/// The tree of an `.eml`, without unpacking it into files.
+pub fn structure(message: &[u8]) -> Node {
+    let (headers, body) = split_head(message);
+    walk_parts(&headers, body, Some(message), Some(0), &mut Vec::new(), 0)
+}
+
+/// `1.2 KB`, `230 KB`, `4.0 MB`: a size as a reader of a tree wants it, not to the byte.
+pub fn size_text(n: u64) -> String {
+    const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
+    if n < 1024 {
+        return format!("{n} B");
+    }
+    let mut v = n as f64 / 1024.0;
+    let mut unit = 0;
+    while v >= 1024.0 && unit + 1 < UNITS.len() {
+        v /= 1024.0;
+        unit += 1;
+    }
+    if v < 100.0 {
+        format!("{v:.1} {}", UNITS[unit])
+    } else {
+        format!("{v:.0} {}", UNITS[unit])
+    }
+}
+
+/// The tree as rows, one per part, drawn with the branches a directory tree is drawn with.
+pub fn tree_rows(root: &Node) -> Vec<TreeRow> {
+    fn rows(node: &Node, lead: &str, below: &str, depth: usize, out: &mut Vec<TreeRow>) {
+        let mut detail: Vec<String> = Vec::new();
+        if !node.encoding.is_empty() {
+            detail.push(node.encoding.clone());
+        }
+        if let Some(size) = node.size {
+            detail.push(size_text(size));
+        }
+        if let Some(name) = &node.name {
+            detail.push(format!("\"{name}\""));
+        }
+        out.push(TreeRow {
+            label: format!("{lead}{}", node.mime),
+            detail: detail.join("  "),
+            offset: node.offset,
+        });
+        if depth >= 64 {
+            return;
+        }
+        for (i, child) in node.children.iter().enumerate() {
+            let last = i + 1 == node.children.len();
+            rows(
+                child,
+                &format!("{below}{}", if last { "└ " } else { "├ " }),
+                &format!("{below}{}", if last { "  " } else { "│ " }),
+                depth + 1,
+                out,
+            );
+        }
+    }
+    let mut out = Vec::new();
+    rows(root, "", "", 0, &mut out);
+    out
+}
+
+/// The tree as the text of `structure.txt`.
+pub fn tree_text(root: &Node) -> String {
+    let mut out = String::new();
+    for row in tree_rows(root) {
+        out.push_str(&row.label);
+        if !row.detail.is_empty() {
+            out.push_str("  ");
+            out.push_str(&row.detail);
+        }
+        out.push('\n');
+    }
+    out
+}
+
+/// Who, to whom, about what and when: the lines a reader wants before the tree.
+pub fn headline(message: &[u8]) -> Vec<(&'static str, String)> {
+    let (headers, _) = split_head(message);
+    ["From", "To", "Cc", "Subject", "Date"]
+        .into_iter()
+        .filter_map(|name| Some((name, header(&headers, name)?)))
+        .filter(|(_, v)| !v.is_empty())
+        .collect()
+}
+
+/// Do these first bytes of a file read as a mail message? A message has no signature, so
+/// this is a judgement: every line up to the first empty one is a header or the
+/// continuation of one, and at least two of them are headers only mail has.
+pub fn looks_like_message(head: &[u8]) -> bool {
+    const KNOWN: [&str; 11] = [
+        "from",
+        "to",
+        "subject",
+        "date",
+        "received",
+        "mime-version",
+        "message-id",
+        "return-path",
+        "content-type",
+        "delivered-to",
+        "x-mozilla-status",
+    ];
+    let mut known = 0;
+    let mut first = true;
+    let mut lines = head.split(|&b| b == b'\n').peekable();
+    while let Some(line) = lines.next() {
+        // The last piece of the window may be half a line.
+        if lines.peek().is_none() && !first {
+            break;
+        }
+        let line = line.strip_suffix(b"\r").unwrap_or(line);
+        if line.is_empty() {
+            break;
+        }
+        if line.starts_with(b" ") || line.starts_with(b"\t") {
+            if first {
+                return false;
+            }
+            continue;
+        }
+        let Some(colon) = line.iter().position(|&b| b == b':') else {
+            return false;
+        };
+        let name = &line[..colon];
+        if name.is_empty() || !name.iter().all(|b| b.is_ascii_graphic()) {
+            return false;
+        }
+        let name = String::from_utf8_lossy(name).to_ascii_lowercase();
+        if KNOWN.contains(&name.as_str()) {
+            known += 1;
+        }
+        first = false;
+    }
+    known >= 2
 }
 
 fn split_multipart<'a>(body: &'a [u8], boundary: &str) -> Vec<&'a [u8]> {
@@ -568,7 +779,10 @@ aGVsbG8gd29ybGQ=\r\n\
     fn a_message_is_its_headers_its_text_and_its_attachments() {
         let files = files(MAIL.as_bytes());
         let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
-        assert_eq!(names, ["headers.txt", "message.txt", "notes.txt"]);
+        assert_eq!(
+            names,
+            ["headers.txt", "structure.txt", "message.txt", "notes.txt"]
+        );
         let headers = String::from_utf8(files[0].1.clone()).unwrap();
         assert!(
             headers.contains("From: Matteo <m@example.com>"),
@@ -576,10 +790,111 @@ aGVsbG8gd29ybGQ=\r\n\
         );
         assert!(headers.contains("Subject: Caffè e tè"), "{headers}");
         assert_eq!(
-            String::from_utf8(files[1].1.clone()).unwrap(),
+            String::from_utf8(files[2].1.clone()).unwrap(),
             "Ciao, un caffè per te."
         );
-        assert_eq!(files[2].1, b"hello world");
+        assert_eq!(files[3].1, b"hello world");
+    }
+
+    const NESTED: &str = "From: a@example.com\r\n\
+To: b@example.com\r\n\
+Subject: The invoice\r\n\
+MIME-Version: 1.0\r\n\
+Content-Type: multipart/mixed; boundary=\"OUT\"\r\n\
+\r\n\
+--OUT\r\n\
+Content-Type: multipart/alternative; boundary=\"IN\"\r\n\
+\r\n\
+--IN\r\n\
+Content-Type: text/plain; charset=utf-8\r\n\
+Content-Transfer-Encoding: quoted-printable\r\n\
+\r\n\
+Here it is.\r\n\
+--IN\r\n\
+Content-Type: text/html; charset=utf-8\r\n\
+\r\n\
+<p>Here it is.</p>\r\n\
+--IN--\r\n\
+--OUT\r\n\
+Content-Type: application/pdf; name=\"invoice.pdf\"\r\n\
+Content-Transfer-Encoding: base64\r\n\
+\r\n\
+JVBERi0xLjQK\r\n\
+--OUT\r\n\
+Content-Type: message/rfc822\r\n\
+\r\n\
+Subject: inner\r\n\
+Content-Type: text/plain\r\n\
+\r\n\
+forwarded\r\n\
+--OUT--\r\n";
+
+    #[test]
+    fn the_structure_is_the_tree_of_parts_and_not_the_list_of_them() {
+        let files = files(NESTED.as_bytes());
+        let (_, text) = files.iter().find(|(n, _)| n == "structure.txt").unwrap();
+        assert_eq!(
+            String::from_utf8(text.clone()).unwrap(),
+            "multipart/mixed\n\
+             ├ multipart/alternative\n\
+             │ ├ text/plain  quoted-printable  11 B\n\
+             │ └ text/html  18 B\n\
+             ├ application/pdf  base64  9 B  \"invoice.pdf\"\n\
+             └ message/rfc822  53 B\n\
+             \x20 └ text/plain  9 B\n"
+        );
+        // Each part of the file knows where it starts, and a part of a decoded attachment
+        // has no place in the file to know.
+        let tree = structure(NESTED.as_bytes());
+        assert_eq!(tree.offset, Some(0));
+        let pdf = &tree.children[1];
+        let at = pdf.offset.unwrap() as usize;
+        assert!(NESTED[at..].starts_with("Content-Type: application/pdf"));
+        assert_eq!(tree.children[2].children[0].offset, None);
+        // The folder is still the flat list it was, with the tree beside it.
+        let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "headers.txt",
+                "structure.txt",
+                "message.txt",
+                "message.html",
+                "invoice.pdf",
+                "part1.eml"
+            ]
+        );
+    }
+
+    #[test]
+    fn an_attachment_called_like_the_structure_keeps_both() {
+        let mail = "Content-Type: text/plain; name=\"structure.txt\"\r\n\r\nmine\r\n";
+        let files = files(mail.as_bytes());
+        let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, ["headers.txt", "structure.txt", "2 structure.txt"]);
+    }
+
+    #[test]
+    fn sizes_are_rounded_the_way_a_tree_wants_them() {
+        assert_eq!(size_text(0), "0 B");
+        assert_eq!(size_text(1023), "1023 B");
+        assert_eq!(size_text(1229), "1.2 KB");
+        assert_eq!(size_text(230 * 1024), "230 KB");
+        assert_eq!(size_text(4 << 20), "4.0 MB");
+    }
+
+    #[test]
+    fn a_message_is_recognised_by_its_headers_and_a_text_is_not() {
+        assert!(looks_like_message(NESTED.as_bytes()));
+        assert!(looks_like_message(MAIL.as_bytes()));
+        assert!(looks_like_message(
+            b"Received: from x\n\tby y\nFrom: a@b\nSub"
+        ));
+        assert!(!looks_like_message(b"From: only one header\n\nbody"));
+        assert!(!looks_like_message(b"# Notes\n\nSubject: x\nDate: y\n"));
+        assert!(!looks_like_message(b"key: value\nother: thing\n"));
+        assert!(!looks_like_message(b"From a@b Mon Jan 1\nFrom: a\nTo: b\n"));
+        assert!(!looks_like_message(b""));
     }
 
     #[test]

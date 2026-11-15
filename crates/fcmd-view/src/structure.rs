@@ -341,9 +341,18 @@ pub fn read(src: &mut dyn Bytes) -> Option<Structure> {
     if let Some(s) = crate::office::read(src, &head, len) {
         return Some(s);
     }
+    // The older ones, and an Outlook message, are OLE compound files.
+    if let Some(s) = crate::ole::read(src, &head, len) {
+        return Some(s);
+    }
     // And the files whose structure is a few tags in front of a picture or a sound: what the
     // camera, the encoder or whoever tagged the album wrote down.
     if let Some(s) = crate::tags::read(src, &head, len) {
+        return Some(s);
+    }
+    // Last, because it is the one with no signature to go by: a mail message is text whose
+    // first lines are headers, and everything above has had its chance to say otherwise.
+    if let Some(s) = crate::mime::read(src, &head, len) {
         return Some(s);
     }
     None

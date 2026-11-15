@@ -47,11 +47,14 @@ pub enum Format {
     Eml,
     /// A mailbox: its messages as `.eml` entries (`mail.rs`). Read only.
     Mbox,
+    /// One Outlook message: the same folder an `.eml` is, read out of the compound file a
+    /// `.msg` is (`msg.rs`, on `cfb.rs`). Read only.
+    Msg,
 }
 
 impl Format {
     /// Every format this crate knows, read or write.
-    pub const ALL: [Format; 19] = [
+    pub const ALL: [Format; 20] = [
         Format::Zip,
         Format::SevenZ,
         Format::Tar,
@@ -71,6 +74,7 @@ impl Format {
         Format::Json,
         Format::Eml,
         Format::Mbox,
+        Format::Msg,
     ];
 
     /// The ones a dialog may offer to *create*.
@@ -105,6 +109,7 @@ impl Format {
                 | Format::Json
                 | Format::Eml
                 | Format::Mbox
+                | Format::Msg
         )
     }
 
@@ -156,6 +161,7 @@ impl Format {
             Format::Json => "json",
             Format::Eml => "eml",
             Format::Mbox => "mbox",
+            Format::Msg => "msg",
         }
     }
 
@@ -181,6 +187,7 @@ impl Format {
             Format::Json => "json",
             Format::Eml => "eml",
             Format::Mbox => "mbox",
+            Format::Msg => "msg",
         }
     }
 
@@ -244,7 +251,7 @@ impl Format {
 }
 
 /// The name endings, in the order [`Format::of_name`] tries them.
-const BY_SUFFIX: [(&str, Format); 45] = [
+const BY_SUFFIX: [(&str, Format); 46] = [
     (".tar.gz", Format::TarGz),
     (".tgz", Format::TarGz),
     (".tar.bz2", Format::TarBz2),
@@ -289,6 +296,9 @@ const BY_SUFFIX: [(&str, Format); 45] = [
     (".eml", Format::Eml),
     (".mbox", Format::Mbox),
     (".mbx", Format::Mbox),
+    // An Outlook message. The compound file it is written in is also what a `.doc` and an
+    // `.msi` are, so the name is what offers it; what is inside decides whether it opens.
+    (".msg", Format::Msg),
     // One compressed file, no tar. Last, so every `.tar.*` and `.t?z` above wins:
     // the list is searched in order and `.tar.gz` ends with `.gz` as well.
     (".gz", Format::Gz),
