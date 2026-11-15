@@ -282,6 +282,12 @@ them all back.
 
 # The case of a block
 
+`Alt+Shift+B` encodes or decodes the marked block — or, with nothing marked, the run of
+characters under the cursor — from a list: base64, base32, UUencode, XXencode, yEnc,
+quoted-printable, hex, percent-encoding, HTML entities and ROT13, a row to encode and a row to
+decode for each. It is one `Ctrl+Z`. What a decode gives that is not text — a picture written
+down in base64 — is not put in: the status line says so and the text stays as it was.
+
 `Alt+C` changes the case of the marked block, from a list of four:
 
 | Row | `Hello wORLD` becomes |

@@ -294,6 +294,13 @@ rimette tutte.
 
 # Maiuscole e minuscole di un blocco
 
+`Alt+Shift+B` codifica o decodifica il blocco marcato — o, senza nulla di marcato, la sequenza
+di caratteri sotto il cursore — da un elenco: base64, base32, UUencode, XXencode, yEnc,
+quoted-printable, esadecimale, percent-encoding, entità HTML e ROT13, una riga per codificare e
+una per decodificare per ciascuno. È un solo `Ctrl+Z`. Quello che una decodifica dà e non è
+testo — un'immagine scritta in base64 — non viene inserito: la riga di stato lo dice e il testo
+resta com'era.
+
 `Alt+C` cambia maiuscole e minuscole del blocco marcato, da un elenco di quattro:
 
 | Riga | `Hello wORLD` diventa |

@@ -6,7 +6,6 @@
 
 mod aigen;
 pub mod asm;
-pub mod base64;
 pub mod bindiff;
 pub mod decode;
 pub mod dfm;
@@ -44,4 +43,6 @@ pub use disasm::{
 pub use search::{compile, Match, Pattern, SearchError, SearchMode};
 pub use source::{BytesSource, FileSource, Source};
 pub use table::Table;
-pub use view::{film_in, FilmState, Mode, Row, RowKind, Started, Status, Viewer, Wrap};
+pub use view::{
+    film_in, DecodedView, FilmState, Mode, Row, RowKind, Started, Status, Viewer, Wrap,
+};

@@ -132,10 +132,15 @@ che cos'è il file, apre il file come i suoi byte come ha sempre fatto, e `Shift
 il contenitore; `Alt+F1` → *Programmi esterni* elenca `ffmpeg`, e lì `F4` lo installa. Un file
 che contiene solo suono — un `.m4a`, un `.mka` — non è un film e non gli viene passato.
 
-# Base64
+# Decodifica
 
-`Alt+B` decodifica un file che è base64 e mostra quello che ne esce, tenendo nel titolo il nome
-del file. Un certificato, una chiave, un allegato tirato fuori da una mail, un `data:` URI
+`Alt+B` decodifica un file che è byte di qualcuno scritti come testo — base64, base32, UUencode,
+XXencode, yEnc, quoted-printable, esadecimale, percent-encoding, capito dal file — e mostra
+quello che ne esce, tenendo nel titolo il nome del file. Un file che ne contiene più d'uno
+mostra il primo e dice quanti sono. `Shift+F2` salva quello che è uscito, con il nome che il
+file porta, chiedendolo prima; un file che c'è già non viene sovrascritto.
+
+Per il base64: Un certificato, una chiave, un allegato tirato fuori da una mail, un `data:` URI
 incollato in un file: sono tutti byte scritti con sessantaquattro caratteri stampabili, e sono
 tutti illeggibili finché qualcosa non lo disfa.
 

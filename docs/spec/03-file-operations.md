@@ -513,6 +513,27 @@ past 999 — and beside them `name.crc`, three `key=value` lines, `filename=`, `
 Still to come: the self-joining script, and reading
 other series (`.part1.rar`, `.zNN`), which are archives' own and opened as archives.
 
+### 9a. Encode and decode (`file.encode`, `file.decode`, 0.43)
+
+*Files → Encode* writes each marked file — or the one under the cursor — as text beside
+itself: base64 (`.b64`), base32 (`.b32`), UUencode (`.uue`), XXencode (`.xxe`), yEnc
+(`.yenc`), quoted-printable (`.qp`), hex (`.hex`) or percent-encoding (`.urlenc`, not `.url`,
+which is an Internet shortcut). The dialog asks the format, the line length (each format's
+own by default, 0 for one line where the format allows it) and an optional size to split the
+output into parts at: UUencode and XXencode as `begin` sections in numbered files, yEnc with
+its own `=ypart` headers and a CRC-32 for each part and for the whole.
+
+*Files → Decode* reads the format from the file itself — `begin 644 name`, `=ybegin`, PEM
+armour, a `data:` URI, bare base64, base32, hex, quoted-printable — and writes the original
+back under the name the file carries, beside it; a name already there is never written over —
+that file is refused by name and the rest go on. The parts of a split file are found and joined: several `begin` sections, the
+`part1`/`part2` names, yEnc's `=ypart`, with yEnc's checksums verified and a part that fails
+reported by name. Both are jobs like the checksums: progress on the status line, `Esc` stops
+them, and every file written goes into the undo journal (§14), so `Ctrl+Alt+Z` takes them
+back. Local files only: the bytes are read and written here. One codec module in
+`fcmd-core` (`codec`) serves this, the editor (SPEC 05 §2.11) and the viewer (SPEC 05 §1.13),
+with a round trip tested for every format.
+
 ## 10. Compare and synchronise
 
 Three ways in, one engine: `tool.compare.dirs` compares the two listings by name, size and

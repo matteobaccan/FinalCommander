@@ -9,6 +9,9 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+# CRC32 for yEnc, which says what a decoded file should come out as (SPEC 03 §9a). Already
+# in the tree under `fcmd-jobs`, `zip` and `tar`, so this adds an edge and not a crate.
+crc32fast = "1"
 regex = "1"
 serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2"

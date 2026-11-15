@@ -770,14 +770,17 @@ keys = ["Shift+F3"]
 scope = "viewer"
 cmd = "viewer.table"
 
-# `Alt+B` for base64, the one thing in this program that reads a file by undoing what was
-# done to it. `Alt+<letter>` is the quick search's in the *panels* and nowhere else — there is
-# no quick search in the viewer, and the editor already uses these letters for the same
-# reason.
+# `Alt+B` — B for base64, which is where it started — decodes a file that is somebody's bytes
+# written down as text: base64, base32, UUencode, XXencode, yEnc, quoted-printable, hex,
+# percent-encoding. `Alt+<letter>` is the quick search's in the *panels* and nowhere else —
+# there is no quick search in the viewer, and the editor already uses these letters for the
+# same reason. `Shift+F2` then saves what came out: it is not bound to that here, because on
+# every other file it is Markdown's key, and the viewer sends it on when what is on screen
+# was decoded.
 [[bind]]
 keys = ["Alt+B"]
 scope = "viewer"
-cmd = "viewer.base64"
+cmd = "viewer.decode"
 
 # Sorting and filtering the table that is on screen (SPEC 05 §1.11). `Ctrl+F3` because that
 # is the key that sorts in the panels, and `Ctrl+F7` because `F7` is the key that looks for
@@ -1296,6 +1299,14 @@ cmd = "editor.block.write"
 keys = ["Alt+C"]
 scope = "editor"
 cmd = "editor.case"
+
+# The block, or the run of characters under the cursor, into or out of base64, hex, a URL's
+# escapes, HTML entities and the rest: a list, like the case. The viewer's `Alt+B` with a
+# `Shift`, because `Alt+B` alone is the matching bracket here.
+[[bind]]
+keys = ["Alt+Shift+B"]
+scope = "editor"
+cmd = "editor.codec"
 
 # The paragraph laid out again to a width that is asked: mcedit's key for *format paragraph*.
 [[bind]]

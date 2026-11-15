@@ -1717,6 +1717,19 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || run_combine(id, &any, &out_dir, cancel, tx));
                 }
+                Request::Encode {
+                    id,
+                    files,
+                    options,
+                    cancel,
+                } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || run_encode(id, &files, options, cancel, tx));
+                }
+                Request::Decode { id, files, cancel } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || run_decode(id, &files, cancel, tx));
+                }
                 // The only request the loop answers itself: the terminal is here, and asking
                 // it for a font is one write and no waiting.
                 Request::Font { by } => {
@@ -3781,6 +3794,43 @@ fn run_split(
         id,
         result,
         cancelled,
+    });
+}
+
+/// Progress for an encode or a decode: a frame every few megabytes, and one at the end.
+fn codec_reporter(id: u64, tx: &mpsc::Sender<Event>) -> impl FnMut(u64, u64) + '_ {
+    let mut said = 0u64;
+    move |done, total| {
+        if done - said >= 4 << 20 || done == total {
+            said = done;
+            let _ = tx.send(Event::CodecProgress { id, done, total });
+        }
+    }
+}
+
+fn run_encode(
+    id: u64,
+    files: &[std::path::PathBuf],
+    options: fcmd_core::codec::EncodeOptions,
+    cancel: CancelToken,
+    tx: mpsc::Sender<Event>,
+) {
+    let outcome = fcmd_jobs::codec::encode(files, &options, &cancel, &mut codec_reporter(id, &tx));
+    let _ = tx.send(Event::CodecDone {
+        id,
+        format: Some(options.format),
+        files: files.len(),
+        outcome,
+    });
+}
+
+fn run_decode(id: u64, files: &[std::path::PathBuf], cancel: CancelToken, tx: mpsc::Sender<Event>) {
+    let outcome = fcmd_jobs::codec::decode(files, &cancel, &mut codec_reporter(id, &tx));
+    let _ = tx.send(Event::CodecDone {
+        id,
+        format: None,
+        files: files.len(),
+        outcome,
     });
 }
 
@@ -7416,6 +7466,27 @@ dir_attr = "D"
                 } => {
                     let (tx, rx) = mpsc::channel();
                     run_combine(id, &any, &out_dir, cancel, tx);
+                    while let Ok(event) = rx.try_recv() {
+                        app.handle_event(event);
+                    }
+                }
+                // Encoding and decoding are files on disk and nothing else, so the tests run
+                // them for real, as they do the split.
+                Request::Encode {
+                    id,
+                    files,
+                    options,
+                    cancel,
+                } => {
+                    let (tx, rx) = mpsc::channel();
+                    run_encode(id, &files, options, cancel, tx);
+                    while let Ok(event) = rx.try_recv() {
+                        app.handle_event(event);
+                    }
+                }
+                Request::Decode { id, files, cancel } => {
+                    let (tx, rx) = mpsc::channel();
+                    run_decode(id, &files, cancel, tx);
                     while let Ok(event) = rx.try_recv() {
                         app.handle_event(event);
                     }

@@ -269,6 +269,20 @@ pub enum Request {
         out_dir: std::path::PathBuf,
         cancel: CancelToken,
     },
+    /// Write each of `files` as text beside itself (SPEC 03 §9a).
+    Encode {
+        id: u64,
+        files: Vec<std::path::PathBuf>,
+        options: fcmd_core::codec::EncodeOptions,
+        cancel: CancelToken,
+    },
+    /// Read each of `files` back into what it is the encoding of, beside itself, the parts
+    /// of a split one together.
+    Decode {
+        id: u64,
+        files: Vec<std::path::PathBuf>,
+        cancel: CancelToken,
+    },
     /// Ask the terminal for a font a step larger, a step smaller, or the one it started with.
     /// Only the loop that owns the terminal can send it, so it travels as a request.
     Font {
@@ -1270,6 +1284,21 @@ pub enum Event {
         result: Result<PiecesMade, String>,
         cancelled: bool,
     },
+    /// How far an encode or a decode has got, in bytes read.
+    CodecProgress {
+        id: u64,
+        done: u64,
+        total: u64,
+    },
+    /// An encode or a decode ended. `format` is what the files were written as; a decode
+    /// has none, because each file says its own.
+    CodecDone {
+        id: u64,
+        format: Option<fcmd_core::codec::Format>,
+        /// How many files were asked for.
+        files: usize,
+        outcome: fcmd_jobs::codec::Outcome,
+    },
     VerifyDone {
         id: u64,
         verdicts: Vec<fcmd_jobs::sum::Verdict>,
@@ -1836,6 +1865,8 @@ pub enum PromptKind {
     HexWrite,
     /// `Shift+F2` on the diff: the name of the file the comparison is saved to as a patch.
     DiffSave,
+    /// `Shift+F2` on what the viewer decoded: the name of the file it is saved as.
+    ViewerSaveDecoded,
     /// A file to read into the buffer at the cursor.
     HexRead,
     /// How many bytes to insert at the cursor.
@@ -3285,6 +3316,15 @@ pub struct App {
     last_split_size: String,
     /// What the *Pieces* row of the split dialog said last time: empty is "by size".
     last_split_count: String,
+    /// The encode or the decode we are waiting for, and the token `Esc` stops it with. Kept
+    /// until the worker answers, stopped or not: what it finished before the stop is on the
+    /// disk, and its answer is what puts that in the undo list.
+    codec: Option<(u64, CancelToken)>,
+    /// The files the encode dialog is about.
+    encode_sources: Vec<std::path::PathBuf>,
+    /// What the encode dialog was last answered with: the format, the line length and the
+    /// part size, the last two as they were typed.
+    last_encode: (String, String, String),
     /// The help page a search was started from, to go back to when it is dismissed, and the
     /// last thing looked for, which the next search offers again.
     help_back: Option<(crate::help::Chapter, usize, usize)>,
@@ -3801,6 +3841,9 @@ impl App {
             split_source: None,
             last_split_size: "100M".to_string(),
             last_split_count: String::new(),
+            codec: None,
+            encode_sources: Vec::new(),
+            last_encode: ("base64".to_string(), String::new(), String::new()),
             help_back: None,
             help_query: String::new(),
             pack_delete: None,
@@ -4976,6 +5019,31 @@ impl App {
                 }
                 self.sum = None;
                 self.pieces_done(result, cancelled);
+            }
+            Event::CodecProgress { id, done, total } => {
+                if self.codec.as_ref().map(|(running, _)| *running) != Some(id) {
+                    return;
+                }
+                let msg = self.i18n.t_args(
+                    "codec-working",
+                    &[
+                        ("done", fcmd_core::format_size(done).into()),
+                        ("total", fcmd_core::format_size(total).into()),
+                    ],
+                );
+                self.set_status(msg);
+            }
+            Event::CodecDone {
+                id,
+                format,
+                files,
+                outcome,
+            } => {
+                if self.codec.as_ref().map(|(running, _)| *running) != Some(id) {
+                    return;
+                }
+                self.codec = None;
+                self.codec_done(format, files, outcome);
             }
             Event::VerifyDone {
                 id,
@@ -8037,6 +8105,11 @@ impl App {
                 self.restore_diff();
                 self.save_diff_patch(&name);
             }
+            PromptKind::ViewerSaveDecoded => {
+                let name = prompt.text.trim().to_string();
+                self.restore_viewer();
+                self.save_decoded(&name);
+            }
             PromptKind::HexFill
             | PromptKind::HexXor
             | PromptKind::HexWrite
@@ -10578,6 +10651,180 @@ impl App {
                     .t_args("pieces-failed", &[("error", error.into())]);
                 self.set_error(msg);
             }
+        }
+        self.read_panel(0);
+        self.read_panel(1);
+    }
+
+    /// The files an encode or a decode is about: what is selected, or what the cursor is
+    /// on, and never a directory. `None` when one of them is not on this machine — the
+    /// bytes are read and written here, as they are for a checksum.
+    fn codec_sources(&mut self) -> Option<Vec<std::path::PathBuf>> {
+        let sources = self.sum_sources();
+        if sources.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return None;
+        }
+        if sources.iter().any(|p| !p.is_local() || p.in_container()) {
+            let m = self.i18n.t("codec-local-only");
+            self.set_error(m);
+            return None;
+        }
+        Some(
+            sources
+                .iter()
+                .map(|path| path.as_path().to_path_buf())
+                .collect(),
+        )
+    }
+
+    /// `Files → Encode`: the dialog, for what is selected or under the cursor (SPEC 03
+    /// §9a). It opens on what it was last answered with.
+    fn open_encode_form(&mut self) {
+        let Some(files) = self.codec_sources() else {
+            return;
+        };
+        let what = self.sources_label(&self.sum_sources());
+        let (format, line, part) = self.last_encode.clone();
+        self.encode_sources = files;
+        self.mode = Mode::Form(Box::new(Form::encode(
+            what, &format, line, part, &self.i18n,
+        )));
+    }
+
+    fn apply_encode_form(&mut self, form: &Form) {
+        let files = std::mem::take(&mut self.encode_sources);
+        if files.is_empty() {
+            return;
+        }
+        let Some(format) = fcmd_core::codec::Format::parse(&form.text_value("encode.format"))
+        else {
+            return;
+        };
+        // Empty is "what the format usually has"; a nought is "no line breaks at all".
+        let typed_line = form.text_value("encode.line");
+        let line = if typed_line.is_empty() {
+            None
+        } else {
+            match typed_line.parse::<usize>() {
+                Ok(n) if n <= 997 => Some(n),
+                _ => {
+                    let msg = self
+                        .i18n
+                        .t_args("encode-bad-line", &[("line", typed_line.into())]);
+                    self.set_error(msg);
+                    return;
+                }
+            }
+        };
+        let typed_part = form.text_value("encode.part");
+        let part_size = if typed_part.is_empty() {
+            None
+        } else {
+            match fcmd_core::filter::parse_size(&typed_part) {
+                Ok(size) if size > 0 => Some(size),
+                _ => {
+                    let msg = self
+                        .i18n
+                        .t_args("encode-bad-part", &[("size", typed_part.into())]);
+                    self.set_error(msg);
+                    return;
+                }
+            }
+        };
+        self.last_encode = (format.id().to_string(), typed_line, typed_part);
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        let cancel = CancelToken::new();
+        self.codec = Some((id, cancel.clone()));
+        self.requests.push(Request::Encode {
+            id,
+            files,
+            options: fcmd_core::codec::EncodeOptions {
+                format,
+                line,
+                part_size,
+            },
+            cancel,
+        });
+    }
+
+    /// `Files → Decode`: no dialog, because there is nothing to ask — each file says what
+    /// it is encoded as and what it is called, and a file that says neither is named in
+    /// the answer.
+    fn start_decode(&mut self) {
+        let Some(files) = self.codec_sources() else {
+            return;
+        };
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        let cancel = CancelToken::new();
+        self.codec = Some((id, cancel.clone()));
+        self.requests.push(Request::Decode { id, files, cancel });
+    }
+
+    /// An encode or a decode came back: say what it made, list what it could not, and keep
+    /// what it wrote for `Ctrl+Alt+Z` — which sends those files to the wastebasket, as it
+    /// does the copies a copy made.
+    fn codec_done(
+        &mut self,
+        format: Option<fcmd_core::codec::Format>,
+        files: usize,
+        outcome: fcmd_jobs::codec::Outcome,
+    ) {
+        if !outcome.written.is_empty() {
+            self.undo_stack.push(crate::undo::Undo::Copy {
+                made: outcome.written.clone(),
+            });
+            if self.undo_stack.len() > crate::undo::KEEP {
+                self.undo_stack.remove(0);
+            }
+        }
+        let written = outcome.written.len() as i64;
+        let failed = outcome.errors.len() as i64;
+        let msg = if outcome.cancelled {
+            self.i18n
+                .t_args("codec-stopped", &[("written", written.into())])
+        } else {
+            match format {
+                Some(format) => self.i18n.t_args(
+                    "encode-done",
+                    &[
+                        ("format", format.name().into()),
+                        ("files", (files as i64).into()),
+                        ("written", written.into()),
+                        ("failed", failed.into()),
+                    ],
+                ),
+                None => self.i18n.t_args(
+                    "decode-done",
+                    &[
+                        ("written", written.into()),
+                        ("joined", (outcome.joined as i64).into()),
+                        ("checked", (outcome.checked as i64).into()),
+                        ("failed", failed.into()),
+                    ],
+                ),
+            }
+        };
+        if outcome.errors.is_empty() {
+            self.set_status(msg);
+        } else {
+            // The first reason in the line and all of them where `Ctrl+O` finds them, as
+            // the recode does: twenty files that failed for twenty reasons is a list.
+            let lines: Vec<String> = outcome
+                .errors
+                .iter()
+                .map(|(path, why)| format!("{}: {why}", path.display()))
+                .collect();
+            self.set_error(format!("{msg} — {}", lines[0]));
+            let title = self.i18n.t(if format.is_some() {
+                "menu-encode"
+            } else {
+                "menu-decode"
+            });
+            self.push_user_screen(&title, &lines.join("\n"));
         }
         self.read_panel(0);
         self.read_panel(1);
@@ -13257,6 +13504,8 @@ impl App {
             Command::FileSplit => self.open_split_form(),
             Command::FileDupes => self.open_dupes_form(),
             Command::FileCombine => self.start_combine(),
+            Command::FileEncode => self.open_encode_form(),
+            Command::FileDecode => self.start_decode(),
             Command::FileDelete | Command::FileDeleteCurrent | Command::FileDeleteForce => {
                 // On the stored connections there is no file to delete: `F8` forgets the
                 // session under the cursor, which is what the row is.
@@ -14253,6 +14502,16 @@ impl App {
             // wrong one: nothing more is shown of it, and no answer file is written.
             KeyCode::Esc if self.ai_busy.is_some() => {
                 self.stop_ai();
+                true
+            }
+            // And out of an encode or a decode. The token is kept: the worker still has
+            // to say what it finished before it was stopped.
+            KeyCode::Esc if self.codec.is_some() => {
+                if let Some((_, cancel)) = &self.codec {
+                    cancel.cancel();
+                }
+                let m = self.i18n.t("sum-stopped");
+                self.set_status(m);
                 true
             }
             // And out of a checksum run, which reads just as many bytes.
@@ -23287,6 +23546,10 @@ impl App {
             self.apply_split_form(&form);
             return;
         }
+        if form.kind == FormKind::Encode {
+            self.apply_encode_form(&form);
+            return;
+        }
         if form.kind == FormKind::Dupes {
             self.apply_dupes_form(&form);
             return;
@@ -27682,6 +27945,10 @@ impl App {
                 self.open_editor_case();
                 return;
             }
+            Command::EditorCodec => {
+                self.open_editor_codec();
+                return;
+            }
             Command::EditorCaseUpper => {
                 self.editor_change_case(fcmd_edit::Case::Upper);
                 return;
@@ -27977,6 +28244,7 @@ impl App {
                 (Command::EditorPipe, "editor-tool-pipe"),
                 (Command::EditorWriteBlock, "editor-tool-write-block"),
                 (Command::EditorCase, "editor-tool-case"),
+                (Command::EditorCodec, "editor-tool-codec"),
                 (Command::EditorReflow, "editor-tool-reflow"),
             ],
             &[
@@ -28258,6 +28526,15 @@ impl App {
                     self.editor_change_case(case);
                 }
             }
+            // `codec:encode:<format>` and `codec:decode:<format>`.
+            "codec" => {
+                let Some((way, format)) = value.split_once(':') else {
+                    return;
+                };
+                if let Some(format) = fcmd_core::codec::Format::parse(format) {
+                    self.editor_recode(format, way == "decode");
+                }
+            }
             // A row of `Alt+F9`: the command it names, as its key would run it.
             "run" => {
                 if let Some(cmd) = Command::parse(value) {
@@ -28314,6 +28591,64 @@ impl App {
                 .t_args("editor-syntax-off", &[("name", file.into())]),
         };
         self.set_status(m);
+    }
+
+    /// `Alt+Shift+B`: the block, or the run of characters under the cursor, into or out of
+    /// each of the text encodings (SPEC 05 §2.11) — a list, because eighteen keys for
+    /// something done now and then would be eighteen keys nobody remembers.
+    fn open_editor_codec(&mut self) {
+        if self.mode.editor().is_none() {
+            return;
+        }
+        let mut rows = Vec::new();
+        for format in fcmd_core::codec::Format::TEXT {
+            let name: fcmd_i18n::Value = format.name().into();
+            rows.push(PickRow::plain(
+                self.i18n
+                    .t_args("editor-codec-encode", &[("format", name.clone())]),
+                format!("codec:encode:{}", format.id()),
+                false,
+            ));
+            // ROT13 is its own way back, so it is one row and not two.
+            if format != fcmd_core::codec::Format::Rot13 {
+                rows.push(PickRow::plain(
+                    self.i18n.t_args("editor-codec-decode", &[("format", name)]),
+                    format!("codec:decode:{}", format.id()),
+                    false,
+                ));
+            }
+        }
+        self.park_editor();
+        let title = self.i18n.t("editor-codec-heading");
+        let pick = Pick::new(PickKind::EditorChoice, title, rows, self.active);
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
+    /// Put the block, or the run under the cursor, into `format` or take it out of it. One
+    /// undo step; and what does not decode to text is said to be so, with nothing changed.
+    fn editor_recode(&mut self, format: fcmd_core::codec::Format, decode: bool) {
+        let (width, height) = self.editor_size;
+        let Some(editor) = self.mode.editor_mut() else {
+            return;
+        };
+        let name = editor.name();
+        let outcome = editor.recode(format, decode);
+        editor.scroll_into_view(height as usize, width as usize);
+        let error = match outcome {
+            Ok(fcmd_edit::Recoded::Done) => return,
+            Ok(fcmd_edit::Recoded::Nothing) => self.i18n.t("editor-no-word"),
+            Ok(fcmd_edit::Recoded::NotText) => self
+                .i18n
+                .t_args("editor-codec-not-text", &[("format", format.name().into())]),
+            Ok(fcmd_edit::Recoded::Refused(why)) => self
+                .i18n
+                .t_args("editor-codec-refused", &[("why", why.into())]),
+            Err(e) => self.i18n.t_args(
+                "editor-failed",
+                &[("name", name.into()), ("error", e.to_string().into())],
+            ),
+        };
+        self.set_error(error);
     }
 
     /// Change the case of the block, or of the word under the cursor with nothing marked.
@@ -28960,6 +29295,76 @@ impl App {
         self.mode = Mode::Form(Box::new(form));
     }
 
+    /// `Shift+F2` on what `Alt+B` decoded: ask what the file is to be called.
+    ///
+    /// The name offered is the one the encoded file carried — the `begin` line's, yEnc's
+    /// `name=` — or its own without the extension, and a name with no folder in front of
+    /// it lands in the active panel's folder, as every other name typed into this program
+    /// does.
+    fn ask_decoded_name(&mut self) {
+        let offered = self
+            .mode
+            .viewer()
+            .and_then(|viewer| viewer.decoded_name())
+            .map(str::to_string);
+        let Some(offered) = offered else {
+            let m = self.i18n.t("viewer-decoded-none");
+            self.set_error(m);
+            return;
+        };
+        let title = self.i18n.t("viewer-decoded-save");
+        self.mode_prompt_over_viewer(PromptKind::ViewerSaveDecoded, title, offered);
+    }
+
+    /// Write what the viewer decoded under `name`. On this disk only, and never over a
+    /// file that is there: the name was offered, not chosen, and the file it names may be
+    /// the very one the encoded copy was made from.
+    fn save_decoded(&mut self, name: &str) {
+        if name.is_empty() {
+            return;
+        }
+        let Some((_, bytes)) = self.mode.viewer_mut().and_then(|viewer| viewer.decoded()) else {
+            let m = self.i18n.t("viewer-decoded-none");
+            self.set_error(m);
+            return;
+        };
+        let path = self.resolve_path(name);
+        if !path.is_local() || path.in_container() {
+            let m = self
+                .i18n
+                .t_args("diff-not-here", &[("name", path.to_string().into())]);
+            self.set_error(m);
+            return;
+        }
+        let written = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path.as_path())
+            .and_then(|mut file| std::io::Write::write_all(&mut file, &bytes));
+        match written {
+            Ok(()) => {
+                let m = self.i18n.t_args(
+                    "viewer-decoded-saved",
+                    &[
+                        ("name", path.display_name().into()),
+                        ("bytes", fcmd_core::format_size(bytes.len() as u64).into()),
+                    ],
+                );
+                self.set_status(m);
+                self.read_panel(0);
+                self.read_panel(1);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                let m = self.i18n.t_args(
+                    "viewer-decoded-exists",
+                    &[("name", path.display_name().into())],
+                );
+                self.set_error(m);
+            }
+            Err(e) => self.set_error(format!("{path}: {e}")),
+        }
+    }
+
     /// Put the viewer back when its prompt closes.
     fn restore_viewer(&mut self) {
         if let Some(viewer) = self.viewer_under_prompt.take() {
@@ -28980,16 +29385,24 @@ impl App {
             self.print_viewer();
             return;
         }
+        // `Shift+F2` is Markdown's key, and "save as" wherever this program saves. On what
+        // `Alt+B` decoded it is the second: decoded bytes are not a Markdown file's source,
+        // and the one thing left to do with them is keep them.
+        let decoded_here = self.live_viewer().is_some_and(|v| v.shows_decoded());
+        if cmd == Command::ViewerDecodeSave || (cmd == Command::ViewerMarkdown && decoded_here) {
+            self.ask_decoded_name();
+            return;
+        }
         // On a film the keys that turn pages step through it instead (SPEC 05 §1.15).
         if self.film_key(cmd) {
             return;
         }
         let mut message: Option<String> = None;
         let mut error: Option<String> = None;
-        // Base64's two answers: how many bytes came out, and why nothing did. Both say
-        // something the reader wants — the size is how one knows the decode was the right
-        // one — so neither is folded into the generic "that key does not apply here".
-        let mut decoded: Option<usize> = None;
+        // The decoder's two answers: what came out, and why nothing did. Both say something
+        // the reader wants — the format and the size are how one knows the decode was the
+        // right one — so neither is folded into the generic "that key does not apply here".
+        let mut decoded: Option<fcmd_view::DecodedView> = None;
         let mut error_text: Option<String> = None;
         if let Some(viewer) = self.live_viewer_mut() {
             match cmd {
@@ -29077,13 +29490,14 @@ impl App {
                         error = Some("viewer-not-table".into());
                     }
                 }
-                // Base64 is the one view that *replaces* the file rather than drawing it
+                // Decoding is the one view that *replaces* the file rather than drawing it
                 // another way, so there is no going back by pressing the key again: the
-                // decoded bytes are what the viewer now has. `Esc` and opening the file
-                // again are the way back, as they are from a disassembly.
-                Command::ViewerBase64 => match viewer.as_base64() {
-                    Ok(bytes) => {
-                        decoded = Some(bytes);
+                // decoded bytes are what the viewer now has — and pressing it again decodes
+                // *those*, which is what a base64 inside a UU wants. `Esc` and opening the
+                // file again are the way back, as they are from a disassembly.
+                Command::ViewerDecode => match viewer.as_decoded() {
+                    Ok(shown) => {
+                        decoded = Some(shown);
                     }
                     Err(why) => error_text = Some(why.to_string()),
                 },
@@ -29138,17 +29552,36 @@ impl App {
             let m = self.i18n.t(&key);
             self.set_error(m);
         }
-        if let Some(bytes) = decoded {
-            let m = self.i18n.t_args(
-                "viewer-base64-done",
-                &[("bytes", fcmd_core::format_size(bytes as u64).into())],
-            );
+        if let Some(shown) = decoded {
+            let format = shown.format.name();
+            let bytes = fcmd_core::format_size(shown.bytes as u64);
+            // A file that holds several shows its first, and says how many there are.
+            let m = if shown.others == 0 {
+                self.i18n.t_args(
+                    "viewer-decoded",
+                    &[
+                        ("format", format.into()),
+                        ("name", shown.name.clone().into()),
+                        ("bytes", bytes.into()),
+                    ],
+                )
+            } else {
+                self.i18n.t_args(
+                    "viewer-decoded-more",
+                    &[
+                        ("format", format.into()),
+                        ("name", shown.name.clone().into()),
+                        ("bytes", bytes.into()),
+                        ("count", ((shown.others + 1) as i64).into()),
+                    ],
+                )
+            };
             self.set_status(m);
         }
         if let Some(why) = error_text {
             let m = self
                 .i18n
-                .t_args("viewer-not-base64", &[("why", why.into())]);
+                .t_args("viewer-not-encoded", &[("why", why.into())]);
             self.set_error(m);
         }
         if let Some(tag) = message {
@@ -32597,7 +33030,8 @@ fn is_viewer_movement(cmd: Command) -> bool {
             | Command::ViewerHex
             | Command::ViewerMarkdown
             | Command::ViewerTable
-            | Command::ViewerBase64
+            | Command::ViewerDecode
+            | Command::ViewerDecodeSave
             | Command::ViewerFollowBranch
             | Command::ViewerBack
             | Command::ViewerStructure
@@ -46388,7 +46822,7 @@ abcdefghij
         };
         assert_eq!(pick.kind, PickKind::EditorChoice);
         let rows: Vec<&PickRow> = pick.rows.iter().filter(|r| !r.separator).collect();
-        assert_eq!(rows.len(), 14);
+        assert_eq!(rows.len(), 15);
         for row in &rows {
             let id = row.value.strip_prefix("run:").expect("a command");
             let cmd = Command::parse(id).unwrap_or_else(|| panic!("{id} is no command"));
@@ -46428,6 +46862,45 @@ abcdefghij
         press(&mut app, "Alt+F9");
         press(&mut app, "Esc");
         assert!(matches!(app.mode, Mode::Editor(_)), "{:?}", app.mode);
+    }
+
+    /// `Alt+Shift+B` lists a row to encode and a row to decode for each format over the
+    /// editor; encoding the block as base64 and decoding it again is two undo steps, and a
+    /// decode that would give bytes that are not text inserts nothing.
+    #[test]
+    fn alt_shift_b_encodes_and_decodes_the_block() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = editor_with_block(dir.path(), "hello\nrest\n", 0, 1);
+        press(&mut app, "Alt+Shift+B");
+        let Mode::Pick(pick) = &mut app.mode else {
+            panic!("the list: {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::EditorChoice);
+        pick.cursor = pick
+            .rows
+            .iter()
+            .position(|r| r.value == "codec:encode:base64")
+            .expect("base64 is offered");
+        press(&mut app, "Enter");
+        let text = editor_text(&app);
+        assert!(text.starts_with("aGVsbG8K"), "{text} / {}", app.status);
+        assert!(text.ends_with("rest\n"), "{text}");
+        press(&mut app, "Ctrl+Z");
+        assert_eq!(editor_text(&app), "hello\nrest\n", "one step");
+    }
+
+    /// `Alt+B` in the viewer reads a file that is not base64 too: a UUencoded one is decoded
+    /// and the status line names the format and the file it carries.
+    #[test]
+    fn alt_b_in_the_viewer_decodes_a_uuencoded_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("note.uue");
+        std::fs::write(&file, "begin 644 note.txt\n&:&5L;&\\*\n`\nend\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.open_viewer_on(&file, VPath::local(&file));
+        press(&mut app, "Alt+B");
+        assert!(!app.status_error, "{}", app.status);
+        assert!(app.status.contains("note.txt"), "{}", app.status);
     }
 
     /// `Alt+C` lists the four cases over the editor and `Enter` applies the one under the

@@ -46,6 +46,9 @@ pub enum FormKind {
     Checksum,
     /// How big the pieces of a split are, and where they go (SPEC 03 §9).
     Split,
+    /// Which text encoding the selected files are written as, how long its lines are and
+    /// whether the result is cut into parts (SPEC 03 §9a).
+    Encode,
     /// Where to look for files with the same content (SPEC 06 §13).
     Dupes,
     /// One AI service: name, protocol, address, model, where its key is.
@@ -483,6 +486,8 @@ pub fn menus() -> Vec<Menu> {
                 ),
                 item("menu-split", "", Action::Run(Command::FileSplit)),
                 item("menu-combine", "", Action::Run(Command::FileCombine)),
+                item("menu-encode", "", Action::Run(Command::FileEncode)),
+                item("menu-decode", "", Action::Run(Command::FileDecode)),
                 Entry::Separator,
                 item(
                     "menu-attributes",

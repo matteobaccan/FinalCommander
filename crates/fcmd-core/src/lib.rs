@@ -5,6 +5,7 @@
 
 pub mod calc;
 pub mod cancel;
+pub mod codec;
 pub mod columns;
 pub mod compare;
 pub mod descriptions;

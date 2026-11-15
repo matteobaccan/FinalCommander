@@ -826,6 +826,7 @@ dependencies = [
 name = "fcmd-core"
 version = "0.42.2"
 dependencies = [
+ "crc32fast",
  "regex",
  "serde",
  "tempfile",

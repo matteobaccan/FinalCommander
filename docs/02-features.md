@@ -448,7 +448,7 @@ work it is and whether the house rules allow it.
 | 12.13 | A tree with the files in it, folded and unfolded where it stands | BROOT/VIFM | ~ the tree panel (1.9) holds folders, the branch view (1.17) is flat |
 | 12.14 | A standing list of names never shown | TC/DC/LF | ~ hidden files and the named filters (1.15), which are put on and taken off |
 | 12.15 | Renaming many files by editing their names as lines in the editor | RANGER/VIFM/NNN/YAZI/TC | ✗ the multi-rename tool (3.11) is the other way to the same end |
-| 12.16 | Encoding and decoding UUE, XXE and MIME | TC | ~ Base64 is decoded in the viewer (5.21) |
+| 12.16 | Encoding and decoding UUE, XXE and MIME | TC | ✓ *Files → Encode / Decode* for base64, base32, UUencode, XXencode, yEnc, quoted-printable, hex and percent-encoding, with parts split and joined and yEnc's checksums verified (SPEC 03 §9a); the same in the editor on a block, with HTML entities and ROT13 (`Alt+Shift+B`, SPEC 05 §2.11), and in the viewer (`Alt+B`, `Shift+F2` saves) |
 | 12.17 | More digests: SHA-512, SHA-3, BLAKE | KRU/DC/TC/MU | ~ CRC32, MD5, SHA-1 and SHA-256 (3.12) |
 | 12.18 | Changing where a symbolic link points | MC/RANGER | ✗ |
 | 12.19 | Extended file flags (`chattr`) and access-control lists | MC/TC | ✗ |

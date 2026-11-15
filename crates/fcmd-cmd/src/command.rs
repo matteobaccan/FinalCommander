@@ -320,6 +320,12 @@ pub enum Command {
     FileDupes,
     /// Join the pieces a split left, checked against their `.crc`.
     FileCombine,
+    /// Write the selected files as text — base64, UUencode, yEnc and the rest — beside
+    /// themselves (SPEC 03 §9a).
+    FileEncode,
+    /// Read such files back into what they are the encoding of, joining the parts of one
+    /// that was split.
+    FileDecode,
     /// `Ctrl+G`: run a command line once per selected file (SPEC 06 §5).
     FileApply,
     /// `Alt+F6`: a hard link or a symbolic link.
@@ -455,8 +461,11 @@ pub enum Command {
     ViewerMarkdown,
     /// A tabular file as a table, and back to its source (SPEC 05 §1.11).
     ViewerTable,
-    /// A base64 file decoded, and back to the characters it is written in (SPEC 05 §1.13).
-    ViewerBase64,
+    /// An encoded file decoded — base64, UUencode, yEnc and every other format
+    /// `file.decode` reads — and shown as what came out (SPEC 05 §1.13).
+    ViewerDecode,
+    /// What `viewer.decode` decoded, written to a file under a name that is asked.
+    ViewerDecodeSave,
     /// Sort the table by the column the cursor is in: ascending, descending, then the order
     /// the records are in the file.
     ViewerTableSort,
@@ -628,6 +637,9 @@ pub enum Command {
     EditorSyntax,
     /// `Alt+C`: the case of the block, or of the word under the cursor, from a list of four.
     EditorCase,
+    /// `Alt+Shift+B`: the block, or the run of characters under the cursor, into or out of
+    /// base64, hex, a URL's escapes and the rest, from a list (SPEC 05 §2.11).
+    EditorCodec,
     /// The block, or the word under the cursor, in capitals.
     EditorCaseUpper,
     /// The block, or the word under the cursor, in small letters.
@@ -768,6 +780,8 @@ impl Command {
             Command::FileSplit,
             Command::FileDupes,
             Command::FileCombine,
+            Command::FileEncode,
+            Command::FileDecode,
             Command::FileApply,
             Command::FileLink,
             Command::FileWipe,
@@ -869,7 +883,8 @@ impl Command {
             Command::ViewerHex,
             Command::ViewerMarkdown,
             Command::ViewerTable,
-            Command::ViewerBase64,
+            Command::ViewerDecode,
+            Command::ViewerDecodeSave,
             Command::ViewerTableSort,
             Command::ViewerTableFilter,
             Command::ViewerTableMark,
@@ -974,6 +989,7 @@ impl Command {
             Command::EditorCaseLower,
             Command::EditorCaseUpper,
             Command::EditorCase,
+            Command::EditorCodec,
             Command::EditorSyntax,
             Command::EditorWriteBlock,
             Command::EditorInsertFile,
@@ -1121,6 +1137,8 @@ impl Command {
             Command::FileSplit => "file.split".into(),
             Command::FileDupes => "file.dupes".into(),
             Command::FileCombine => "file.combine".into(),
+            Command::FileEncode => "file.encode".into(),
+            Command::FileDecode => "file.decode".into(),
             Command::FileApply => "file.apply".into(),
             Command::FileLink => "file.link".into(),
             Command::FileWipe => "file.wipe".into(),
@@ -1211,7 +1229,8 @@ impl Command {
             Command::ViewerHex => "viewer.hex".into(),
             Command::ViewerMarkdown => "viewer.markdown".into(),
             Command::ViewerTable => "viewer.table".into(),
-            Command::ViewerBase64 => "viewer.base64".into(),
+            Command::ViewerDecode => "viewer.decode".into(),
+            Command::ViewerDecodeSave => "viewer.decode.save".into(),
             Command::ViewerTableSort => "viewer.table.sort".into(),
             Command::ViewerTableMark => "viewer.table.mark".into(),
             Command::ViewerTableMarkUp => "viewer.table.mark.up".into(),
@@ -1316,6 +1335,7 @@ impl Command {
             Command::EditorCaseLower => "editor.case.lower".into(),
             Command::EditorCaseUpper => "editor.case.upper".into(),
             Command::EditorCase => "editor.case".into(),
+            Command::EditorCodec => "editor.codec".into(),
             Command::EditorSyntax => "editor.syntax".into(),
             Command::EditorWriteBlock => "editor.block.write".into(),
             Command::EditorInsertFile => "editor.insert.file".into(),
@@ -1441,6 +1461,8 @@ impl Command {
             ("file.split", _) => Command::FileSplit,
             ("file.dupes", _) => Command::FileDupes,
             ("file.combine", _) => Command::FileCombine,
+            ("file.encode", _) => Command::FileEncode,
+            ("file.decode", _) => Command::FileDecode,
             ("file.apply", _) => Command::FileApply,
             ("file.link", _) => Command::FileLink,
             ("file.wipe", _) => Command::FileWipe,
@@ -1530,7 +1552,10 @@ impl Command {
             ("viewer.hex", _) => Command::ViewerHex,
             ("viewer.markdown", _) => Command::ViewerMarkdown,
             ("viewer.table", _) => Command::ViewerTable,
-            ("viewer.base64", _) => Command::ViewerBase64,
+            // `viewer.base64` is what it was called while base64 was all it read; a keymap
+            // written then still means the same key.
+            ("viewer.decode" | "viewer.base64", _) => Command::ViewerDecode,
+            ("viewer.decode.save", _) => Command::ViewerDecodeSave,
             ("viewer.table.sort", _) => Command::ViewerTableSort,
             ("viewer.table.mark", _) => Command::ViewerTableMark,
             ("viewer.table.mark.up", _) => Command::ViewerTableMarkUp,
@@ -1635,6 +1660,7 @@ impl Command {
             ("editor.case.lower", _) => Command::EditorCaseLower,
             ("editor.case.upper", _) => Command::EditorCaseUpper,
             ("editor.case", _) => Command::EditorCase,
+            ("editor.codec", _) => Command::EditorCodec,
             ("editor.syntax", _) => Command::EditorSyntax,
             ("editor.block.write", _) => Command::EditorWriteBlock,
             ("editor.insert.file", _) => Command::EditorInsertFile,
@@ -1719,10 +1745,17 @@ mod tests {
             Command::EditorPaste,
             Command::EditorToggleReadOnly,
             Command::EditorConvert,
+            Command::FileEncode,
+            Command::FileDecode,
+            Command::ViewerDecode,
+            Command::ViewerDecodeSave,
+            Command::EditorCodec,
         ];
         for c in all {
             assert_eq!(Command::parse(&c.id()), Some(c), "{}", c.id());
         }
+        // The name the viewer's decoder had while base64 was all it read.
+        assert_eq!(Command::parse("viewer.base64"), Some(Command::ViewerDecode));
     }
 
     #[test]

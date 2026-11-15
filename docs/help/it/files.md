@@ -248,6 +248,23 @@ con cui controllarli.
 In nessuno dei due casi viene sovrascritto qualcosa. `Esc` ferma una divisione o un'unione e
 toglie quello che aveva già scritto.
 
+## Codificare e decodificare
+
+*File → Codifica* scrive i file marcati, o quello sotto il cursore, come testo accanto a sé:
+base64 (`.b64`), base32 (`.b32`), UUencode (`.uue`), XXencode (`.xxe`), yEnc (`.yenc`),
+quoted-printable (`.qp`), esadecimale (`.hex`) o percent-encoding (`.urlenc`). Il dialogo
+chiede il formato, la lunghezza della riga — quella di ciascun formato se non la cambi — e, se
+la vuoi, una dimensione a cui dividere in parti, per una mail o un newsgroup che non accetta un
+file grande.
+
+*File → Decodifica* capisce il formato dal file stesso — `begin 644 nome`, `=ybegin`, un blocco
+`-----BEGIN`, un `data:` URI, base64 semplice — e riscrive l'originale accanto, con il nome che
+il file porta. Le parti di un file diviso vengono trovate e rimesse insieme, e i checksum di
+yEnc vengono controllati: una parte che non torna viene nominata. Un file che c'è già non
+viene mai sovrascritto. Tutti e due girano in sottofondo con l'avanzamento sulla riga di stato,
+`Esc` li ferma, e `Ctrl+Alt+Z` toglie quello che hanno scritto. Lavorano sui file di questo
+disco.
+
 # Cancellare, e il cestino
 
 `F8` consegna quello che hai scelto al cestino del sistema — lo stesso che mostra il file

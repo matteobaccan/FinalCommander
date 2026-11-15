@@ -1,4 +1,4 @@
-//! Base64, for a file that is one (SPEC 05 §1.13).
+//! Base64, for a file that is one (SPEC 05 §1.13) and for writing one (SPEC 03 §9a).
 //!
 //! A certificate, a key, an attachment pulled out of a mail, a `data:` URI pasted into a
 //! file: all of them are bytes somebody wrote down in sixty-four printable characters, and
@@ -52,31 +52,30 @@ impl std::fmt::Display for Error {
 /// needs; everything else has to be the payload. A file that is *mostly* base64 is not
 /// decoded half way — the answer would be bytes that are not what anybody wrote.
 pub fn decode(input: &[u8]) -> Result<Vec<u8>, Error> {
-    let payload = payload_of(input);
-    if payload.is_empty() {
-        return Err(Error::Empty);
-    }
     // Which alphabet, decided once by what the payload actually holds: a file with both
     // `+` and `-` in it is not base64 in either, and falls out of the loop below as the
     // character that is in neither.
-    let alphabet = if payload
-        .iter()
-        .any(|(_, b)| *b == URL_SAFE.0 || *b == URL_SAFE.1)
-    {
-        URL_SAFE
-    } else {
-        STANDARD
-    };
+    let mut count = 0usize;
+    let mut url_safe = false;
+    payload_of(input, &mut |_, byte| {
+        count += 1;
+        url_safe |= byte == URL_SAFE.0 || byte == URL_SAFE.1;
+        Ok(())
+    })?;
+    if count == 0 {
+        return Err(Error::Empty);
+    }
+    let alphabet = if url_safe { URL_SAFE } else { STANDARD };
 
-    let mut out = Vec::with_capacity(payload.len() / 4 * 3);
+    let mut out = Vec::with_capacity(count / 4 * 3);
     let mut group: u32 = 0;
     let mut have = 0u32;
     let mut padded = false;
-    for (at, byte) in payload {
+    payload_of(input, &mut |at, byte| {
         if byte == b'=' {
             // Padding only ever closes a group, and nothing follows it but more padding.
             padded = true;
-            continue;
+            return Ok(());
         }
         if padded {
             return Err(Error::NotBase64 { at, byte });
@@ -92,7 +91,8 @@ pub fn decode(input: &[u8]) -> Result<Vec<u8>, Error> {
             group = 0;
             have = 0;
         }
-    }
+        Ok(())
+    })?;
     // What is left of an unclosed group: 18 bits are two bytes, 12 bits are one, and 6 bits
     // are a single character that encodes nothing at all.
     match have {
@@ -107,28 +107,68 @@ pub fn decode(input: &[u8]) -> Result<Vec<u8>, Error> {
     Ok(out)
 }
 
-/// Would [`decode`] read this file? The same walk, without the bytes it would produce.
+/// Would [`decode`] read this file? The same walk, without keeping the bytes.
 ///
 /// `min` is how much payload is worth calling base64: three characters that happen to be
 /// letters are not a file somebody encoded, and offering to decode every short text file
 /// would make the key look broken.
 pub fn reads(input: &[u8], min: usize) -> bool {
-    let payload = payload_of(input);
-    if payload.len() < min {
+    let mut count = 0usize;
+    let _ = payload_of(input, &mut |_, _| {
+        count += 1;
+        Ok(())
+    });
+    if count < min {
         return false;
     }
     decode(input).is_ok()
 }
 
-/// The characters to decode: the armour and the `data:` label taken off, whitespace dropped,
-/// each one with the offset it had in the file so an error can point at it.
-fn payload_of(input: &[u8]) -> Vec<(usize, u8)> {
-    let mut out = Vec::with_capacity(input.len());
+/// Write `data` down in the standard alphabet, padded, with a line break after every `line`
+/// characters — and after the last one, so the file ends as a text file does. A `line` of
+/// nothing is one unbroken run with no line break at all, which is what a token pasted into
+/// a text wants.
+pub fn encode(data: &[u8], line: usize) -> Vec<u8> {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = Vec::with_capacity(data.len().div_ceil(3) * 4 + data.len() / 48 + 2);
+    let mut col = 0usize;
+    for chunk in data.chunks(3) {
+        let mut group = 0u32;
+        for (i, byte) in chunk.iter().enumerate() {
+            group |= u32::from(*byte) << (16 - 8 * i);
+        }
+        for i in 0..4 {
+            if i <= chunk.len() {
+                out.push(ALPHABET[((group >> (18 - 6 * i)) & 0x3f) as usize]);
+            } else {
+                out.push(b'=');
+            }
+        }
+        col += 4;
+        if line > 0 && col >= line {
+            out.push(b'\n');
+            col = 0;
+        }
+    }
+    if line > 0 && col > 0 {
+        out.push(b'\n');
+    }
+    out
+}
+
+/// The characters to decode, handed one at a time to `each`: the armour and the `data:`
+/// label taken off, whitespace dropped, each one with the offset it had in the file so an
+/// error can point at it. Walked rather than collected, because a file of many megabytes
+/// would otherwise be held several times over.
+fn payload_of(
+    input: &[u8],
+    each: &mut dyn FnMut(usize, u8) -> Result<(), Error>,
+) -> Result<(), Error> {
     let mut start = 0;
     // A `data:` URI is a label and then the payload. Only the first line can carry one, and
     // only up to `;base64,`.
     if input.starts_with(b"data:") {
-        if let Some(at) = find(input, b";base64,") {
+        if let Some(at) = find(&input[..input.len().min(1024)], b";base64,") {
             start = at + b";base64,".len();
         }
     }
@@ -143,11 +183,11 @@ fn payload_of(input: &[u8]) -> Vec<(usize, u8)> {
         }
         for (i, byte) in line.iter().enumerate() {
             if !byte.is_ascii_whitespace() {
-                out.push((line_start + i, *byte));
+                each(line_start + i, *byte)?;
             }
         }
     }
-    out
+    Ok(())
 }
 
 fn split_lines(input: &[u8]) -> impl Iterator<Item = &[u8]> {
@@ -258,5 +298,26 @@ mod tests {
             }
         }
         assert_eq!(decode(text.as_bytes()).unwrap(), bytes);
+    }
+
+    #[test]
+    fn what_is_written_is_what_is_read_whatever_the_line() {
+        let bytes: Vec<u8> = (0..=255u8).cycle().take(1000).collect();
+        for line in [0, 4, 76, 1000] {
+            for len in [0, 1, 2, 3, 57, 58, 1000] {
+                let text = encode(&bytes[..len], line);
+                if len > 0 {
+                    assert_eq!(decode(&text).unwrap(), &bytes[..len], "{len} at {line}");
+                }
+                if line > 0 {
+                    assert!(text.split(|b| *b == b'\n').all(|l| l.len() <= line));
+                    assert_eq!(text.is_empty(), len == 0);
+                    assert!(len == 0 || text.ends_with(b"\n"));
+                } else {
+                    assert!(!text.contains(&b'\n'));
+                }
+            }
+        }
+        assert_eq!(encode(b"hello", 0), b"aGVsbG8=");
     }
 }

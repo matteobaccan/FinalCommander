@@ -13,6 +13,7 @@
 pub mod arcfs;
 pub mod attrs;
 pub mod branch;
+pub mod codec;
 pub mod dupes;
 pub mod fs;
 pub mod journal;

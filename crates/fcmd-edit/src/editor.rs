@@ -155,6 +155,19 @@ enum Burst {
     Delete,
 }
 
+/// What [`Editor::recode`] did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Recoded {
+    /// The block, or the run under the cursor, was converted.
+    Done,
+    /// There was neither a block nor anything under the cursor.
+    Nothing,
+    /// It decoded, and what came out is not text: nothing was inserted.
+    NotText,
+    /// It is not the format that was asked for, with why. Nothing was changed.
+    Refused(String),
+}
+
 /// The editor: a buffer, a cursor, a block, and the state the UI needs to draw and drive it.
 pub struct Editor {
     pub buffer: Buffer,
@@ -1397,6 +1410,153 @@ impl Editor {
         }
     }
 
+    /// The run of characters that are not blanks which the cursor is in, or stands right
+    /// after, as the columns it runs between. Wider than [`Editor::word_at_cursor`] on
+    /// purpose: a base64 token ends in `=`, a URL is full of `%` and `/`, and neither is a
+    /// word by the search's rules.
+    pub fn token_at_cursor(&self) -> Option<(usize, usize)> {
+        let solid = |c: char| !c.is_whitespace();
+        let chars: Vec<char> = self.buffer.line(self.cursor.line).chars().collect();
+        let col = self.cursor.col.min(chars.len());
+        let on = chars.get(col).copied().is_some_and(solid);
+        if !on && !(col > 0 && solid(chars[col - 1])) {
+            return None;
+        }
+        let mut start = col;
+        while start > 0 && solid(chars[start - 1]) {
+            start -= 1;
+        }
+        let mut end = col;
+        while end < chars.len() && solid(chars[end]) {
+            end += 1;
+        }
+        Some((start, end))
+    }
+
+    /// Put the marked block — every line's piece of a column block — or, with nothing
+    /// marked, the run of characters under the cursor, through `convert`, as **one** undo
+    /// step.
+    ///
+    /// `None` when there is nothing to act on. `Some(Err(_))` when `convert` refused any
+    /// piece of it: nothing has been changed then, not even the pieces it would have
+    /// taken, because a block half converted is worse than one left alone.
+    pub fn convert_with<E>(
+        &mut self,
+        convert: impl Fn(&str) -> Result<String, E>,
+    ) -> Result<Option<Result<(), E>>, EditorError> {
+        let was = self.cursor;
+        match self.block {
+            Some(block) if block.kind == BlockKind::Stream && !block.range().is_empty() => {
+                let before = self.buffer.text_in(block.range());
+                match convert(&before) {
+                    Ok(after) => {
+                        if after != before {
+                            self.replace_block(&after)?;
+                        }
+                        Ok(Some(Ok(())))
+                    }
+                    Err(e) => Ok(Some(Err(e))),
+                }
+            }
+            Some(block) if block.kind == BlockKind::Column => {
+                let (top, bottom, left, right) = block.columns();
+                let mut pieces: Vec<(Range, String)> = Vec::new();
+                for line in top..=bottom.min(self.buffer.len() - 1) {
+                    let len = self.buffer.line_chars(line);
+                    if left >= len || right <= left {
+                        continue;
+                    }
+                    let range = Range::new(
+                        Position::new(line, left),
+                        Position::new(line, right.min(len)),
+                    );
+                    let before = self.buffer.text_in(range);
+                    match convert(&before) {
+                        Ok(after) if after != before => pieces.push((range, after)),
+                        Ok(_) => {}
+                        Err(e) => return Ok(Some(Err(e))),
+                    }
+                }
+                self.buffer.begin_group(was);
+                let mut done = Ok(());
+                // From the bottom up: what goes in may be longer than what comes out, or
+                // have line breaks in it, and the pieces above must still be where they
+                // were found.
+                for (range, after) in pieces.iter().rev() {
+                    done = self
+                        .buffer
+                        .delete(*range)
+                        .and_then(|_| self.buffer.insert(range.start, after))
+                        .map(|_| ());
+                    if done.is_err() {
+                        break;
+                    }
+                }
+                self.buffer.end_group(was);
+                // The columns no longer mean what they did.
+                self.block = None;
+                self.cursor = self.clamp(was);
+                done.map(|()| Some(Ok(()))).map_err(Into::into)
+            }
+            _ => {
+                let Some((start, end)) = self.token_at_cursor() else {
+                    return Ok(None);
+                };
+                let range =
+                    Range::new(Position::new(was.line, start), Position::new(was.line, end));
+                let before = self.buffer.text_in(range);
+                let after = match convert(&before) {
+                    Ok(after) => after,
+                    Err(e) => return Ok(Some(Err(e))),
+                };
+                if after != before {
+                    self.buffer.begin_group(was);
+                    let done = self
+                        .buffer
+                        .delete(range)
+                        .and_then(|_| self.buffer.insert(range.start, &after));
+                    self.buffer.end_group(was);
+                    // After what was put there, as after anything typed.
+                    self.cursor = done?;
+                }
+                Ok(Some(Ok(())))
+            }
+        }
+    }
+
+    /// Write the block, or the run of characters under the cursor, as `format` — or read
+    /// it back out of it (SPEC 05 §2.11). One undo step either way.
+    ///
+    /// Reading back only ever puts *text* in the buffer: what decodes to a picture, a key
+    /// or anything else that is not text is said to be so and nothing is inserted, because
+    /// there is nothing a text editor could do with it but damage it.
+    pub fn recode(
+        &mut self,
+        format: fcmd_core::codec::Format,
+        decode: bool,
+    ) -> Result<Recoded, EditorError> {
+        use fcmd_core::codec;
+        /// Why a piece was not converted.
+        enum Refusal {
+            NotText,
+            Format(codec::Error),
+        }
+        let outcome = self.convert_with(|text| {
+            if decode {
+                let bytes = codec::decode_text(format, text).map_err(Refusal::Format)?;
+                codec::as_text(bytes).ok_or(Refusal::NotText)
+            } else {
+                codec::encode_text(format, text).map_err(Refusal::Format)
+            }
+        })?;
+        Ok(match outcome {
+            None => Recoded::Nothing,
+            Some(Ok(())) => Recoded::Done,
+            Some(Err(Refusal::NotText)) => Recoded::NotText,
+            Some(Err(Refusal::Format(e))) => Recoded::Refused(e.to_string()),
+        })
+    }
+
     /// Read the file as another language, or as none: the choice made by hand in
     /// `Alt+Shift+Y`, for the file whose name says nothing or says the wrong thing. The
     /// colours and the block guides are both worked out again from the first line.
@@ -2361,6 +2521,101 @@ mod tests {
         assert_eq!(e.word_at_cursor(), None);
         assert!(!e.change_case(Case::Upper).unwrap(), "between two blanks");
         assert_eq!(e.buffer.to_text(), "a  b");
+    }
+
+    /// The block, or the run of characters under the cursor, into a format and out of it
+    /// again (SPEC 05 §2.11): one undo step each way, and the block stays the block.
+    #[test]
+    fn a_block_or_the_run_under_the_cursor_goes_into_every_format_and_back() {
+        use fcmd_core::codec::Format;
+        let text = "say <Città & co.> twice\nand a second line";
+        for format in Format::TEXT {
+            let mut e = editor(text);
+            e.move_to(Position::new(0, 4), false, BlockKind::Stream);
+            e.move_to(Position::new(1, 5), true, BlockKind::Stream);
+            let marked = e.block_text().unwrap();
+            assert_eq!(e.recode(format, false).unwrap(), Recoded::Done);
+            assert_ne!(e.buffer.to_text(), text, "{format:?} changed nothing");
+            assert_ne!(e.block_text().as_deref(), Some(marked.as_str()));
+            // What was put there is what is marked, so the way back needs no marking.
+            assert_eq!(e.recode(format, true).unwrap(), Recoded::Done, "{format:?}");
+            assert_eq!(e.buffer.to_text(), text, "{format:?}");
+            assert_eq!(e.block_text().as_deref(), Some(marked.as_str()));
+            assert!(e.undo() && e.undo());
+            assert_eq!(e.buffer.to_text(), text, "a step each");
+            assert!(!e.undo(), "and no more than that");
+        }
+
+        // Nothing marked: the run the cursor is in, which is more than a word — the `=`
+        // that ends a base64 token belongs to it.
+        let mut e = editor("token aGVsbG8= here");
+        e.cursor = Position::new(0, 9);
+        assert_eq!(e.token_at_cursor(), Some((6, 14)));
+        assert_eq!(e.word_at_cursor(), Some((6, 13)));
+        assert_eq!(e.recode(Format::Base64, true).unwrap(), Recoded::Done);
+        assert_eq!(e.buffer.to_text(), "token hello here");
+        assert_eq!(e.cursor, Position::new(0, 11), "after what was put there");
+        assert!(e.undo());
+        assert_eq!(e.buffer.to_text(), "token aGVsbG8= here");
+        let mut e = editor("a%20b  c");
+        e.cursor = Position::new(0, 5);
+        assert_eq!(
+            e.recode(Format::Url, true).unwrap(),
+            Recoded::Done,
+            "right after it"
+        );
+        assert_eq!(e.buffer.to_text(), "a b  c");
+        e.cursor = Position::new(0, 4);
+        assert_eq!(e.token_at_cursor(), None);
+        assert_eq!(e.recode(Format::Url, true).unwrap(), Recoded::Nothing);
+
+        // A column: each line's piece on its own, and all of them one step.
+        let mut e = editor("id a b\nid\nid c d");
+        e.move_to(Position::new(0, 3), false, BlockKind::Column);
+        e.move_to(Position::new(2, 6), true, BlockKind::Column);
+        assert_eq!(e.recode(Format::Url, false).unwrap(), Recoded::Done);
+        assert_eq!(e.buffer.to_text(), "id a%20b\nid\nid c%20d");
+        assert!(e.undo());
+        assert_eq!(e.buffer.to_text(), "id a b\nid\nid c d");
+    }
+
+    /// What decodes to something that is not text is said to be so, and what is not the
+    /// format is refused with the reason: in neither case is one character changed, and
+    /// there is nothing for `Ctrl+Z` to take back.
+    #[test]
+    fn a_block_that_does_not_decode_to_text_is_left_exactly_as_it_was() {
+        use fcmd_core::codec::Format;
+        // The first bytes of a PNG.
+        let mut e = editor("icon: iVBORw0KGgo= end");
+        e.move_to(Position::new(0, 6), false, BlockKind::Stream);
+        e.move_to(Position::new(0, 18), true, BlockKind::Stream);
+        assert_eq!(e.recode(Format::Base64, true).unwrap(), Recoded::NotText);
+        assert_eq!(e.buffer.to_text(), "icon: iVBORw0KGgo= end");
+        assert_eq!(e.block_text().as_deref(), Some("iVBORw0KGgo="));
+        assert!(!e.undo(), "nothing was done, so nothing is undone");
+
+        // Not hex at all.
+        let refused = e.recode(Format::Hex, true).unwrap();
+        assert!(matches!(&refused, Recoded::Refused(why) if why.contains("not a hex digit")));
+        assert_eq!(e.buffer.to_text(), "icon: iVBORw0KGgo= end");
+
+        // A column with one line that does not decode: none of the lines is touched.
+        let mut e = editor("6869\nzz\n6869");
+        e.move_to(Position::new(0, 0), false, BlockKind::Column);
+        e.move_to(Position::new(2, 4), true, BlockKind::Column);
+        assert!(matches!(
+            e.recode(Format::Hex, true).unwrap(),
+            Recoded::Refused(_)
+        ));
+        assert_eq!(e.buffer.to_text(), "6869\nzz\n6869");
+        assert!(!e.undo());
+
+        // yEnc is not offered for text, and asking for it anyway is a refusal.
+        let mut e = editor("word");
+        assert!(matches!(
+            e.recode(Format::Yenc, false).unwrap(),
+            Recoded::Refused(_)
+        ));
     }
 
     /// A syntax chosen by hand colours a file whose name says nothing, and taking it away

@@ -277,6 +277,7 @@ impl Form {
             | FormKind::Copy
             | FormKind::Checksum
             | FormKind::Split
+            | FormKind::Encode
             | FormKind::Dupes
             | FormKind::AiService
             | FormKind::Recode
@@ -659,6 +660,7 @@ impl Form {
             FormKind::Copy => "copy-title",
             FormKind::Checksum => "sum-title",
             FormKind::Split => "split-title",
+            FormKind::Encode => "encode-title",
             FormKind::Dupes => "dupes-title",
             FormKind::AiService => "ai-service-title",
             FormKind::Recode => "recode-title",
@@ -1440,6 +1442,42 @@ impl Form {
                 i18n.t("sync-saved-button"),
                 i18n.t("btn-cancel"),
             ],
+        }
+    }
+
+    /// `Files → Encode`: which encoding, how long a line, and whether the result is cut
+    /// into parts (SPEC 03 §9a).
+    ///
+    /// Three rows, and only the first has to be looked at. The line length and the part
+    /// size are empty for "what the format usually has" and "one file", because those are
+    /// what one wants nine times in ten and a number already in the field would have to be
+    /// read and agreed with every time.
+    pub fn encode(what: String, format: &str, line: String, part: String, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        // The names of the formats are names: the same in every language.
+        let formats: Vec<(&str, String)> = fcmd_core::codec::Format::FILES
+            .iter()
+            .map(|format| (format.id(), format.name().to_string()))
+            .collect();
+        let fields = vec![
+            Field::Note(what),
+            choice("encode.format", t("encode-format"), &formats, format),
+            Field::Separator,
+            Field::text("encode.line", t("encode-line"), line),
+            Field::Note(t("encode-line-hint")),
+            Field::text("encode.part", t("encode-part"), part),
+            Field::Note(t("encode-part-hint")),
+        ];
+        Form {
+            pages: Vec::new(),
+            page: 0,
+            kind: FormKind::Encode,
+            title: t("encode-title"),
+            fields,
+            cursor: 1,
+            site: None,
+            button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
         }
     }
 

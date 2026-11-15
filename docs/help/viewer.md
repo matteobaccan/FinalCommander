@@ -121,10 +121,15 @@ the file is, opens the file as its bytes as it always did, and `Shift+F11` still
 container; `Alt+F1` → *External programs* lists `ffmpeg`, and `F4` there installs it. A file
 that holds only sound — an `.m4a`, a `.mka` — is not a film and is not handed to it.
 
-# Base64
+# Decoding
 
-`Alt+B` decodes a file that is base64 and shows what came out, keeping the file's own name in
-the title. A certificate, a key, an attachment pulled out of a mail, a `data:` URI pasted into
+`Alt+B` decodes a file that is somebody's bytes written down as text — base64, base32,
+UUencode, XXencode, yEnc, quoted-printable, hex, percent-encoding, worked out from the file —
+and shows what came out, keeping the file's own name in the title. A file that holds several
+shows the first and says how many there are. `Shift+F2` saves what came out, under the name the
+file carries, asked first; a file that is already there is not written over.
+
+For base64: A certificate, a key, an attachment pulled out of a mail, a `data:` URI pasted into
 a file: all of them are bytes written down in sixty-four printable characters, and all of them
 are unreadable until something undoes that.
 

@@ -379,7 +379,7 @@ leaving the system's own "Access is denied" to be puzzled over. The `unsafe` is 
 `fcmd-platform` with everything else that needs it, which is the rule the workspace is built
 on.
 
-### 1.13 Base64 (`Alt+B`)
+### 1.13 Decoding (`Alt+B`)
 
 A certificate, a private key, an attachment pulled out of a mail, a `data:` URI pasted into a
 file: all of them are bytes somebody wrote down in sixty-four printable characters, and all of
@@ -392,7 +392,13 @@ is the common case — what people write down in base64 is usually something tha
 text. The status line says how many bytes came out, because that figure is how one knows the
 decode was the right one.
 
-Three shapes are read, because all three turn up: the bare payload, with or without padding
+Since 0.43 it reads every format *Files → Decode* reads (SPEC 03 §9a) — base64, base32,
+UUencode, XXencode, yEnc, quoted-printable, hex, percent-encoding — found from the file
+itself; a file that holds several decoded files shows the first and says how many there are.
+`Shift+F2` saves what came out under the name the file carries, asked for first, and never
+over a file that is there.
+
+For base64, three shapes are read, because all three turn up: the bare payload, with or without padding
 and with or without line breaks; **PEM armour**, where `-----BEGIN …-----` and `-----END …-----`
 are skipped and the payload between them is decoded; and a **`data:` URI**, where everything up
 to and including `;base64,` is a label rather than data. Both alphabets are accepted — the
@@ -1376,6 +1382,16 @@ thing everywhere in the program.
 Also fixed here: a screen opened over a parked editor — this diff, the comparison with the
 disk of §2.2j, the preview of §14.2 — is now what is drawn; before, the editor was painted
 and the screen over it answered keys unseen.
+
+### 2.11 Encode and decode a block (`Alt+Shift+B`)
+
+The block — or, with none, the run of characters under the cursor — into or out of base64,
+base32, UUencode, XXencode, yEnc, quoted-printable, hex, percent-encoding, HTML entities and
+ROT13, chosen from a list like the case's (`Alt+C`): a row to encode and a row to decode for
+each, one for ROT13, which is its own way back. The change is one `Ctrl+Z`. What a decode
+gives that is not text — a picture written down in base64 — is not inserted: the status line
+says so and the buffer is left as it was. The same codec module as the files and the viewer
+(SPEC 03 §9a).
 
 ## 3. Diff: two files side by side (`Ctrl+Shift+D`)
 

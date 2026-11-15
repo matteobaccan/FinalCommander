@@ -192,21 +192,30 @@ pub const TABLE_LIMIT: u64 = 16 * 1024 * 1024;
 /// A quarter of a gigabyte is a photograph with room to spare and a RAW scan without.
 pub const PICTURE_LIMIT: u64 = 256 * 1024 * 1024;
 
-/// How much base64 is decoded in one go (SPEC 05 §1.13).
+/// How much of an encoded file is decoded in one go (SPEC 05 §1.13).
 ///
-/// The whole file at once, because base64 is only meaningful whole: a window into the middle
-/// of it would decode to bytes offset by whatever the window cut through. Thirty-two
-/// mebibytes of payload is twenty-four of bytes, which is a certificate, a key, an attachment
-/// or a `data:` URI with room to spare, and a file larger than that is not one somebody is
-/// reading by eye.
+/// The whole file at once, because base64 and its kin are only meaningful whole: a window
+/// into the middle of one would decode to bytes offset by whatever the window cut through.
+/// Thirty-two mebibytes of payload is twenty-four of bytes, which is a certificate, a key, an
+/// attachment or a `data:` URI with room to spare, and a file larger than that is not one
+/// somebody is reading by eye — `Files → Decode` is the way to those.
 pub const BASE64_LIMIT: u64 = 32 * 1024 * 1024;
 /// The largest binary form turned into text; a form is a few hundred kilobytes at most.
 const DFM_LIMIT: u64 = 16 * 1024 * 1024;
 
-/// Under this much payload a file is not called base64: a handful of letters is not something
-/// somebody encoded, and offering to decode every short text file would make the key look
-/// broken.
-const BASE64_MIN: usize = 16;
+/// What `Alt+B` made of a file, for the status line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecodedView {
+    pub format: fcmd_core::codec::Format,
+    /// How many bytes came out.
+    pub bytes: usize,
+    /// The name they go by: the one the file carried, or its own without the extension.
+    pub name: String,
+    /// How many more files the same one holds, which the viewer does not show.
+    pub others: usize,
+    /// Whether the format carried a checksum, which then matched.
+    pub checked: bool,
+}
 
 /// How far above the window the viewer reads to know what the first row starts inside: a
 /// block comment opened up there still colours the rows on screen. A megabyte covers the
@@ -351,6 +360,9 @@ pub struct Viewer {
     pub struct_focus: bool,
     /// Name of the producer when the content is generated (`javap`, `IL`, `wasm2wat`, …).
     pub derived: Option<String>,
+    /// When what is shown was decoded out of the file (`Alt+B`): the name the decoded bytes
+    /// go by, which is what `Shift+F2` offers to save them as.
+    decoded: Option<String>,
     /// Where the last colouring scan stopped and what it was inside there: the offset of the
     /// first row then on screen, the syntax and the code page it was read with. Scrolling
     /// down a line carries on from here instead of reading the whole stretch above again.
@@ -453,6 +465,7 @@ impl Viewer {
             struct_top: 0,
             struct_focus: false,
             derived: None,
+            decoded: None,
             syntax_memo: None,
             raw_disasm: None,
             disasm_trail: Vec::new(),
@@ -873,6 +886,7 @@ impl Viewer {
     pub fn show_derived_bytes(&mut self, producer: &str, bytes: Vec<u8>) {
         self.source = Box::new(crate::source::BytesSource::new(bytes));
         self.derived = Some(producer.to_string());
+        self.decoded = None;
         self.codepage = Codepage::Utf8;
         self.mode = Mode::Text;
         self.base_mode = Mode::Text;
@@ -1926,43 +1940,110 @@ impl Viewer {
         Some(out)
     }
 
-    /// Is this a file the base64 decoder can read whole (SPEC 05 §1.13)?
+    /// Is this a file `Alt+B` can decode, and as what (SPEC 05 §1.13)?
     ///
     /// Small enough to decode in one go, not already a derived view of something else, and
-    /// base64 all the way through — whitespace, PEM armour and a `data:` label aside. A file
-    /// that is *mostly* base64 is not one: decoding half of it would be bytes nobody wrote.
-    pub fn reads_base64(&mut self) -> bool {
+    /// one of the formats the file command reads — told by what is in it, as there. A file
+    /// that is only *mostly* an encoding is not one: decoding half of it would be bytes
+    /// nobody wrote.
+    pub fn reads_encoded(&mut self) -> Option<fcmd_core::codec::Format> {
         if self.derived.is_some() || self.source.len() > BASE64_LIMIT {
-            return false;
+            return None;
         }
         let len = self.source.len() as usize;
-        let Ok(bytes) = self.source.read_vec(0, len) else {
-            return false;
-        };
-        crate::base64::reads(&bytes, BASE64_MIN)
+        let bytes = self.source.read_vec(0, len).ok()?;
+        fcmd_core::codec::detect(Some(&self.encoded_name()), &bytes)
+    }
+
+    /// The name of what is on screen, as the decoder is to take it: the file's own, or —
+    /// when it is itself something decoded, a base64 inside a UU — the name that came out.
+    fn encoded_name(&self) -> String {
+        match &self.decoded {
+            Some(name) => name.clone(),
+            None => self
+                .path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+        }
     }
 
     /// Decode the file and show what came out, keeping the original path in the title.
     ///
+    /// Every format `Files → Decode` reads, found the same way: by what is in the file. One
+    /// that nothing recognises is tried as base64 all the same, so that the refusal can say
+    /// where it stops being base64 — which is what one wants to know about a token with a
+    /// stray character in it.
+    ///
     /// The bytes decide how they are shown: text when they read as text, the hex pane when
-    /// they do not — which is the common case, because what people write down in base64 is
+    /// they do not — which is the common case, because what people write down like this is
     /// usually something that is not text in the first place. `F4` and the mode wheel go
-    /// back to the file as it is written.
-    pub fn as_base64(&mut self) -> Result<usize, crate::base64::Error> {
+    /// back to the file as it is written, and `Shift+F2` saves what came out.
+    pub fn as_decoded(&mut self) -> Result<DecodedView, fcmd_core::codec::Error> {
+        use fcmd_core::codec::{self, Format, Input};
+        if self.source.len() > BASE64_LIMIT {
+            return Err(codec::Error::Malformed {
+                format: Format::Base64,
+                why: "the file is too large to decode here; Files → Decode writes it out".into(),
+            });
+        }
         let len = self.source.len() as usize;
         let bytes = self
             .source
             .read_vec(0, len)
-            .map_err(|_| crate::base64::Error::Empty)?;
-        let decoded = crate::base64::decode(&bytes)?;
-        let n = decoded.len();
-        let binary = crate::decode::looks_binary(&decoded[..decoded.len().min(8 * 1024)]);
-        self.show_derived_bytes("base64", decoded);
+            .map_err(|_| codec::Error::Base64(codec::base64::Error::Empty))?;
+        let name = self.encoded_name();
+        let mut files = match codec::detect(Some(&name), &bytes) {
+            Some(_) => codec::decode_files(&[Input {
+                name: &name,
+                bytes: &bytes,
+            }])?,
+            None => vec![codec::Decoded {
+                name: codec::carried_name(&name),
+                bytes: codec::base64::decode(&bytes)?,
+                format: Format::Base64,
+                parts: 1,
+                checked: false,
+            }],
+        };
+        // A file that holds several shows the first: the viewer is one file at a time, and
+        // the file command is the one that writes them all out.
+        let others = files.len() - 1;
+        let first = files.remove(0);
+        let shown = DecodedView {
+            format: first.format,
+            bytes: first.bytes.len(),
+            name: first.name.clone(),
+            others,
+            checked: first.checked,
+        };
+        let binary = crate::decode::looks_binary(&first.bytes[..first.bytes.len().min(8 * 1024)]);
+        self.show_derived_bytes(first.format.id(), first.bytes);
+        self.decoded = Some(first.name);
         if binary {
             self.set_mode(Mode::Hex);
             self.base_mode = Mode::Dump;
         }
-        Ok(n)
+        Ok(shown)
+    }
+
+    /// What `Alt+B` decoded, when that is what is on screen: the name it goes by and its
+    /// bytes, for `Shift+F2` to write.
+    pub fn decoded(&mut self) -> Option<(String, Vec<u8>)> {
+        let name = self.decoded.clone()?;
+        let len = self.source.len() as usize;
+        let bytes = self.source.read_vec(0, len).ok()?;
+        Some((name, bytes))
+    }
+
+    /// Is what is on screen something `Alt+B` decoded?
+    pub fn shows_decoded(&self) -> bool {
+        self.decoded.is_some()
+    }
+
+    /// The name what was decoded goes by, when that is what is on screen.
+    pub fn decoded_name(&self) -> Option<&str> {
+        self.decoded.as_deref()
     }
 
     /// Show the file rendered, if it is one we can render. `false` when it is not, so the
@@ -3076,9 +3157,10 @@ mod tests {
 
     #[test]
     fn a_base64_file_is_decoded_and_shown_as_what_came_out() {
+        use fcmd_core::codec::Format;
         let mut v = table_viewer("token.txt", "aGVsbG8sIHdvcmxkCg==\n");
-        assert!(v.reads_base64());
-        assert_eq!(v.as_base64(), Ok(13));
+        assert_eq!(v.reads_encoded(), Some(Format::Base64));
+        assert_eq!(v.as_decoded().map(|d| d.bytes), Ok(13));
         assert_eq!(v.derived.as_deref(), Some("base64"));
         assert_eq!(v.mode, Mode::Text);
         assert_eq!(texts(&mut v, 40, 2)[0].trim_end(), "hello, world");
@@ -3086,20 +3168,88 @@ mod tests {
         // Bytes that are not text open in the hex pane, which is what one came to look at.
         // `AAECA/8=` is 00 01 02 03 ff.
         let mut v = table_viewer("blob.b64", "AAECA/8=\n");
-        assert_eq!(v.as_base64(), Ok(5));
+        assert_eq!(v.as_decoded().map(|d| d.bytes), Ok(5));
         assert_eq!(v.mode, Mode::Hex);
 
         // A file that is not base64 says where it stops being base64 and changes nothing.
         let mut v = table_viewer("prose.txt", "This is a sentence, not a payload.\n");
-        assert!(!v.reads_base64());
-        assert!(v.as_base64().is_err());
+        assert_eq!(v.reads_encoded(), None);
+        assert_eq!(
+            v.as_decoded().unwrap_err().to_string(),
+            "byte 18 is 0x2c, which is not base64"
+        );
         assert_eq!(v.mode, Mode::Text);
         assert_eq!(v.derived, None, "the file is still the file");
+        assert!(!v.shows_decoded());
 
-        // And a derived view is not decoded again: there is one undoing per file.
+        // And a derived view is not offered again: there is one undoing per file.
         let mut v = table_viewer("token.txt", "aGVsbG8sIHdvcmxkCg==\n");
-        assert_eq!(v.as_base64(), Ok(13));
-        assert!(!v.reads_base64());
+        assert_eq!(v.as_decoded().map(|d| d.bytes), Ok(13));
+        assert_eq!(v.reads_encoded(), None);
+    }
+
+    /// `Alt+B` reads every format the file command reads (SPEC 05 §1.13), and what came out
+    /// is there for `Shift+F2` under the name the file carried.
+    #[test]
+    fn every_encoding_the_file_command_reads_is_decoded_in_the_viewer() {
+        use fcmd_core::codec::{encode_file, EncodeOptions, Format};
+        let plain = "hello, world — and a second line\n".repeat(4);
+        for format in Format::FILES {
+            let options = EncodeOptions {
+                format,
+                line: None,
+                part_size: None,
+            };
+            let written = encode_file("note.txt", plain.as_bytes(), &options).unwrap();
+            let coded: String = written[0].bytes.iter().map(|b| *b as char).collect();
+            let mut v = Viewer::new(
+                Box::new(crate::source::BytesSource::new(written[0].bytes.clone())),
+                VPath::local(std::env::temp_dir().join(&written[0].name)),
+            );
+            assert_eq!(v.reads_encoded(), Some(format), "{coded}");
+            let shown = v.as_decoded().unwrap();
+            assert_eq!(shown.format, format);
+            assert_eq!(shown.bytes, plain.len());
+            assert_eq!(shown.name, "note.txt");
+            assert_eq!(shown.others, 0);
+            assert_eq!(shown.checked, format == Format::Yenc);
+            assert_eq!(v.derived.as_deref(), Some(format.id()));
+            assert_eq!(v.mode, Mode::Text);
+            assert_eq!(
+                v.decoded(),
+                Some(("note.txt".to_string(), plain.clone().into_bytes()))
+            );
+        }
+
+        // A UU file with a base64 inside it: the key again decodes what the key decoded.
+        let inner = "aGVsbG8sIHdvcmxkCg==\n";
+        let options = EncodeOptions {
+            format: Format::Uu,
+            line: None,
+            part_size: None,
+        };
+        let outer = encode_file("token.b64", inner.as_bytes(), &options).unwrap();
+        let mut v = Viewer::new(
+            Box::new(crate::source::BytesSource::new(outer[0].bytes.clone())),
+            VPath::local(std::env::temp_dir().join("token.b64.uue")),
+        );
+        assert_eq!(v.as_decoded().map(|d| d.name), Ok("token.b64".to_string()));
+        let again = v.as_decoded().unwrap();
+        assert_eq!(
+            (again.format, again.name.as_str()),
+            (Format::Base64, "token")
+        );
+        assert_eq!(texts(&mut v, 40, 2)[0].trim_end(), "hello, world");
+
+        // A damaged yEnc file says so and shows nothing of it.
+        let damaged =
+            b"=ybegin line=128 size=3 name=a\n\x8b\x8c\x8d\n=yend size=3 crc32=00000000\n";
+        let mut v = Viewer::new(
+            Box::new(crate::source::BytesSource::new(damaged.to_vec())),
+            VPath::local(std::env::temp_dir().join("a.yenc")),
+        );
+        assert!(v.as_decoded().unwrap_err().to_string().contains("CRC32"));
+        assert!(!v.shows_decoded());
     }
 
     #[test]

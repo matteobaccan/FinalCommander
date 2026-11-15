@@ -241,6 +241,21 @@ against.
 Nothing is written over, either way. `Esc` stops a split or a join and takes back what it had
 written.
 
+## Encoding and decoding
+
+*Files → Encode* writes the marked files, or the one under the cursor, as text beside
+themselves: base64 (`.b64`), base32 (`.b32`), UUencode (`.uue`), XXencode (`.xxe`), yEnc
+(`.yenc`), quoted-printable (`.qp`), hex (`.hex`) or percent-encoding (`.urlenc`). The dialog
+asks the format, the line length — each format's own unless you change it — and, if you want
+one, a size to split into parts at, for a mail or a newsgroup that will not take one big file.
+
+*Files → Decode* works out the format from the file itself — `begin 644 name`, `=ybegin`, a
+`-----BEGIN` block, a `data:` URI, plain base64 — and writes the original back beside it,
+under the name the file carries. The parts of a split file are found and put together, and
+yEnc's checksums are checked: a part that fails is named. A file that is already there is
+never written over. Both run in the background with their progress on the status line, `Esc`
+stops them, and `Ctrl+Alt+Z` takes back what they wrote. They work on files on this disk.
+
 # Deleting, and the wastebasket
 
 `F8` hands what you chose to the system's own wastebasket — the same one your desktop's file
