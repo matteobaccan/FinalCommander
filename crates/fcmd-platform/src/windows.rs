@@ -692,6 +692,7 @@ pub fn services() -> Vec<super::Service> {
             unsafe { from_wide(row.lpDisplayName) }
         };
         let status = row.ServiceStatusProcess;
+        let start = service_start(scm, &name);
         out.push(super::Service {
             id: name,
             display,
@@ -702,11 +703,116 @@ pub fn services() -> Vec<super::Service> {
             },
             description: String::new(),
             pid: Some(status.dwProcessId).filter(|p| *p != 0),
+            start,
         });
     }
     // SAFETY: the handle came from `OpenSCManagerW` and is closed exactly once.
     unsafe { CloseServiceHandle(scm) };
     out
+}
+
+/// When one service starts, from its configuration. The list call does not carry it, so each
+/// service is opened for reading its configuration, which every user may do.
+#[cfg(windows)]
+fn service_start(
+    scm: windows_sys::Win32::System::Services::SC_HANDLE,
+    name: &str,
+) -> super::ServiceStart {
+    use windows_sys::Win32::System::Services::{
+        CloseServiceHandle, OpenServiceW, QueryServiceConfigW, QUERY_SERVICE_CONFIGW,
+        SERVICE_AUTO_START, SERVICE_BOOT_START, SERVICE_DEMAND_START, SERVICE_DISABLED,
+        SERVICE_QUERY_CONFIG, SERVICE_SYSTEM_START,
+    };
+
+    let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: the manager handle is open and the name is a NUL-terminated string of ours.
+    let service = unsafe { OpenServiceW(scm, wide.as_ptr(), SERVICE_QUERY_CONFIG) };
+    if service.is_null() {
+        return super::ServiceStart::Unknown;
+    }
+    let mut needed = 0u32;
+    // SAFETY: a null buffer of length zero is how the call is asked how much room it wants.
+    unsafe { QueryServiceConfigW(service, std::ptr::null_mut(), 0, &mut needed) };
+    let mut start = super::ServiceStart::Unknown;
+    if needed as usize >= std::mem::size_of::<QUERY_SERVICE_CONFIGW>() {
+        // A buffer of `u64`s, so that it is aligned for the structure the call writes at its
+        // start; the strings it points to follow it in the same buffer.
+        let mut buffer = vec![0u64; (needed as usize).div_ceil(8)];
+        let config = buffer.as_mut_ptr().cast::<QUERY_SERVICE_CONFIGW>();
+        // SAFETY: the buffer is at least `needed` bytes and aligned for the structure.
+        if unsafe { QueryServiceConfigW(service, config, needed, &mut needed) } != 0 {
+            // SAFETY: the call succeeded, so the structure at the start is filled in.
+            start = match unsafe { (*config).dwStartType } {
+                SERVICE_AUTO_START | SERVICE_BOOT_START | SERVICE_SYSTEM_START => {
+                    super::ServiceStart::Automatic
+                }
+                SERVICE_DEMAND_START => super::ServiceStart::Manual,
+                SERVICE_DISABLED => super::ServiceStart::Disabled,
+                _ => super::ServiceStart::Unknown,
+            };
+        }
+    }
+    // SAFETY: the handle came from `OpenServiceW` and is closed exactly once.
+    unsafe { CloseServiceHandle(service) };
+    start
+}
+
+/// Change when one service starts, leaving everything else about it as it is.
+#[cfg(windows)]
+pub fn set_service_start(id: &str, start: super::ServiceStart) -> Result<(), super::ServiceError> {
+    use windows_sys::Win32::System::Services::{
+        ChangeServiceConfigW, CloseServiceHandle, OpenSCManagerW, OpenServiceW, SC_MANAGER_CONNECT,
+        SERVICE_AUTO_START, SERVICE_CHANGE_CONFIG, SERVICE_DEMAND_START, SERVICE_DISABLED,
+        SERVICE_NO_CHANGE,
+    };
+
+    let kind = match start {
+        super::ServiceStart::Automatic => SERVICE_AUTO_START,
+        super::ServiceStart::Manual => SERVICE_DEMAND_START,
+        super::ServiceStart::Disabled => SERVICE_DISABLED,
+        super::ServiceStart::Unknown => return Err(super::ServiceError::Unsupported),
+    };
+    let wide: Vec<u16> = id.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: both names are null, as in `services`; the result is a handle or null.
+    let scm = unsafe { OpenSCManagerW(std::ptr::null(), std::ptr::null(), SC_MANAGER_CONNECT) };
+    if scm.is_null() {
+        return Err(last_error_as_service_error());
+    }
+    // SAFETY: the handle is open and the name is a NUL-terminated string of ours.
+    let service = unsafe { OpenServiceW(scm, wide.as_ptr(), SERVICE_CHANGE_CONFIG) };
+    if service.is_null() {
+        let problem = last_error_as_service_error();
+        // SAFETY: the manager handle came from `OpenSCManagerW` and is closed exactly once.
+        unsafe { CloseServiceHandle(scm) };
+        return Err(problem);
+    }
+    // SAFETY: the handle is open; every other field is "no change" or a null pointer, which
+    // is the documented way of leaving it as it is.
+    let ok = unsafe {
+        ChangeServiceConfigW(
+            service,
+            SERVICE_NO_CHANGE,
+            kind,
+            SERVICE_NO_CHANGE,
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+        )
+    } != 0;
+    let problem = (!ok).then(last_error_as_service_error);
+    // SAFETY: both handles came from the calls above and are closed exactly once each.
+    unsafe {
+        CloseServiceHandle(service);
+        CloseServiceHandle(scm);
+    }
+    match problem {
+        Some(problem) => Err(problem),
+        None => Ok(()),
+    }
 }
 
 /// Start, stop or restart one service. A restart is a stop, a wait for it to be down, and a
@@ -719,6 +825,9 @@ pub fn control_service(id: &str, action: super::ServiceAction) -> Result<(), sup
         SERVICE_START, SERVICE_STATUS, SERVICE_STOP, SERVICE_STOPPED,
     };
 
+    if let super::ServiceAction::SetStart(start) = action {
+        return set_service_start(id, start);
+    }
     let wide: Vec<u16> = id.encode_utf16().chain(std::iter::once(0)).collect();
     // SAFETY: both names are null, as above; the result is a handle or null.
     let scm = unsafe { OpenSCManagerW(std::ptr::null(), std::ptr::null(), SC_MANAGER_CONNECT) };
@@ -750,6 +859,7 @@ pub fn control_service(id: &str, action: super::ServiceAction) -> Result<(), sup
         // way of starting a service with the arguments it was configured with.
         super::ServiceAction::Start => unsafe { StartServiceW(service, 0, std::ptr::null()) != 0 },
         super::ServiceAction::Stop => stop(&mut status),
+        super::ServiceAction::SetStart(_) => unreachable!("handled above"),
         super::ServiceAction::Restart => {
             // SAFETY: the handle is open and `status` is a whole structure of ours.
             let asked = unsafe { QueryServiceStatus(service, &mut status) } != 0;

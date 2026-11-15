@@ -31,7 +31,9 @@ pub use device::{geometry, is_device_path, Geometry};
 pub use mount::{max_file_size, mount_of, Mount};
 pub use process::{details, kill, processes, Details, Process};
 pub use programs::{programs, Program};
-pub use service::{control, services, Service, ServiceAction, ServiceError, ServiceState};
+pub use service::{
+    control, services, Service, ServiceAction, ServiceError, ServiceStart, ServiceState,
+};
 pub use socket::{sockets, Socket};
 pub use volume::{drive_kind, volume, Volume, VolumeKind};
 

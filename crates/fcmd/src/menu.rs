@@ -133,6 +133,8 @@ pub enum PickKind {
     /// How to take a picture's metadata out (`file.strip_metadata`): all of it, only an image
     /// model's, or all but the camera's.
     StripMeta,
+    /// When a service starts (`F4` on the service list): automatic, manual or disabled.
+    ServiceStart,
     /// Options → Plugins configuration: every plugin found, on, off or broken.
     PluginsConfig,
     /// The editor's replacements (`Alt+Shift+F7`): the named ones, then the recent pairs.

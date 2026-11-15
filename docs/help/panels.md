@@ -46,8 +46,10 @@ Under a rule, on `Ctrl+1` to `Ctrl+9`, are the things that are not filesystems:
   has loaded. On Windows the list and the card are read from the kernel's own table, so the
   system's processes have their memory too. `F8` or `Del` ends the process under the cursor,
   after asking, with the cancel button lit;
-* the **services** the machine runs in the background, with the state of each: `F3` is its
-  card, `F5` starts it, `F6` restarts it and `F8` stops it — the last two ask first. An
+* the **services** the machine runs in the background, with the state of each and when it
+  starts (automatic, manual, disabled): `F3` is its card, `F4` changes when it starts, `F5`
+  starts it, `F6` restarts it and `F8` stops it — the last two ask first. Changing when it
+  starts starts and stops nothing; macOS has no *manual*, only enabled and disabled. An
   action the system refuses is reported as needing root; this program will not ask for root
   on your behalf;
 * the **sockets**, listening or connected, with the address at each end and the process

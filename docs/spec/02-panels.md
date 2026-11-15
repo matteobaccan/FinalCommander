@@ -1040,8 +1040,10 @@ could end a process from a listing with the key that deletes a file is one that 
 by accident, and ending one wants a confirmation of its own.
 
 **Service list (§7d).** What the machine runs in the background, as a panel: the name, the
-state in one word, and what the service says about itself. `F3` is its card, and the three
-keys that matter are on the bar — `F5` starts, `F6` restarts, `F8` stops — because a file
+state in one word, when it starts — *automatic*, *manual* or *disabled* — and what the service
+says about itself. `F3` is its card, `F4` is a choice of when it starts with the one in force
+marked, and the three keys that matter are on the bar — `F5` starts, `F6` restarts, `F8`
+stops — because a file
 manager is where one already is when a service has to be looked at, with its log in one panel
 and its configuration file in the other. Stopping and restarting ask first; starting does not,
 because nothing is taken away by it.
@@ -1054,6 +1056,16 @@ is an API and is called as one — `EnumServicesStatusExW` for the list, `StartS
 `ControlService` for the actions, and a restart is a stop, a wait for it to be down and a
 start, because the manager has no single call for it. macOS has `launchctl`, whose `list` is
 three columns and whose `kickstart -k` is a restart.
+
+When a service starts is read and set the same way. systemd's unit files say *enabled*
+(automatic), *disabled* (manual) and *masked* (disabled), read from `systemctl list-unit-files`
+— an instance such as `getty@tty1.service` takes its template's — and set with `enable`,
+`disable` and `mask`, the first two unmasking first; *static* and its family are shown as a
+dash, since nothing can set them. Windows reads each service's `QueryServiceConfigW` and sets
+`ChangeServiceConfigW` with every other field left as it is. macOS has a disabled list
+(`launchctl print-disabled system`) and nothing else: a job off it is automatic, and
+`launchctl enable|disable` moves it; there is no *manual* to offer. Changing when a service
+starts is not asked about: it starts and stops nothing, and the same key puts it back.
 
 **Nothing here runs as anybody else.** Stopping a system service wants root, and this program
 does not reach for `sudo`, `pkexec` or any other way of asking: it runs as the user running it

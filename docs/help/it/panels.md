@@ -48,8 +48,10 @@ Sotto una riga di separazione, su `Ctrl+1`…`Ctrl+9`, stanno le cose che non so
   libreria che ha caricato. Su Windows lista e scheda si leggono dalla tabella del kernel, così
   anche i processi di sistema hanno la loro memoria. `F8` o `Canc` termina il processo sotto il
   cursore, dopo aver chiesto, con il pulsante Annulla acceso;
-* i **servizi** che la macchina esegue in sottofondo, con lo stato di ciascuno: `F3` è la sua
-  scheda, `F5` lo avvia, `F6` lo riavvia e `F8` lo ferma — gli ultimi due chiedono prima.
+* i **servizi** che la macchina esegue in sottofondo, con lo stato di ciascuno e quando parte
+  (automatico, manuale, disattivato): `F3` è la sua scheda, `F4` cambia quando parte, `F5`
+  lo avvia, `F6` lo riavvia e `F8` lo ferma — gli ultimi due chiedono prima. Cambiare quando
+  parte non avvia né ferma nulla; macOS non ha *manuale*, solo attivato e disattivato.
   Un'azione che il sistema rifiuta viene riferita come «serve root»; questo programma non
   chiederà root al posto tuo;
 * i **socket**, in ascolto o connessi, con l'indirizzo a ciascun capo e il processo che li

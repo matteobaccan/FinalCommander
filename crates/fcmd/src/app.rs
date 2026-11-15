@@ -2086,6 +2086,21 @@ pub fn trash_answer(side: usize, ask: TrashAsk, basket: &dyn Wastebasket) -> Eve
 }
 
 /// The message id for a service's state, so the panel and the card say the same word.
+fn start_id(start: fcmd_platform::ServiceStart) -> &'static str {
+    match start {
+        fcmd_platform::ServiceStart::Automatic => "svc-start-automatic",
+        fcmd_platform::ServiceStart::Manual => "svc-start-manual",
+        fcmd_platform::ServiceStart::Disabled => "svc-start-disabled",
+        fcmd_platform::ServiceStart::Unknown => "svc-start-unknown",
+    }
+}
+
+/// `text` followed by spaces to `width` columns, counting columns rather than characters.
+fn pad_to(text: &str, width: usize) -> String {
+    let have = unicode_width::UnicodeWidthStr::width(text);
+    format!("{text}{}", " ".repeat(width.saturating_sub(have)))
+}
+
 fn state_id(state: fcmd_platform::ServiceState) -> &'static str {
     match state {
         fcmd_platform::ServiceState::Running => "svc-state-running",
@@ -5371,8 +5386,17 @@ impl App {
                             fcmd_platform::ServiceAction::Start => "svc-started",
                             fcmd_platform::ServiceAction::Stop => "svc-stopped",
                             fcmd_platform::ServiceAction::Restart => "svc-restarted",
+                            fcmd_platform::ServiceAction::SetStart(_) => "svc-start-set",
                         };
-                        let msg = self.i18n.t_args(done, &[("name", id.into())]);
+                        let start = match action {
+                            fcmd_platform::ServiceAction::SetStart(start) => {
+                                self.i18n.t(start_id(start))
+                            }
+                            _ => String::new(),
+                        };
+                        let msg = self
+                            .i18n
+                            .t_args(done, &[("name", id.into()), ("start", start.into())]);
                         self.set_status(msg);
                         // The list is a snapshot and this is exactly what changed it, so the
                         // panel is built again rather than left saying the old state.
@@ -20919,14 +20943,19 @@ impl App {
     /// things one opens such a panel to do. Nothing here runs as anybody else: an action the
     /// system refuses is reported as needing root rather than quietly escalated.
     fn open_services_panel(&mut self, side: usize) {
-        use fcmd_core::{Entry, EntryId, EntryKind};
-
         let services = fcmd_platform::services();
         if services.is_empty() {
             let m = self.i18n.t("svc-none");
             self.set_error(m);
             return;
         }
+        self.show_services(side, services);
+    }
+
+    /// The panel on `side` becomes this list of services.
+    fn show_services(&mut self, side: usize, services: Vec<fcmd_platform::Service>) {
+        use fcmd_core::{Entry, EntryId, EntryKind};
+
         // Each column as wide as its widest value, so the rows line up under each other —
         // the same shape the socket list uses.
         let id_w = services
@@ -20935,17 +20964,43 @@ impl App {
             .max()
             .unwrap_or(0)
             .min(48);
+        // The state and the start are words of the language in use, so their columns are as
+        // wide as the longest of those words rather than a number that fits English.
+        let widest = |ids: &[&str]| {
+            ids.iter()
+                .map(|id| unicode_width::UnicodeWidthStr::width(self.i18n.t(id).as_str()))
+                .max()
+                .unwrap_or(0)
+        };
+        let state_w = widest(&[
+            "svc-state-running",
+            "svc-state-stopped",
+            "svc-state-failed",
+            "svc-state-other",
+        ]);
+        let start_w = widest(&[
+            "svc-start-automatic",
+            "svc-start-manual",
+            "svc-start-disabled",
+            "svc-start-unknown",
+        ]);
         let items: Vec<(VPath, Entry)> = services
             .iter()
             .enumerate()
             .map(|(i, service)| {
                 let state = self.i18n.t(state_id(service.state));
+                let start = self.i18n.t(start_id(service.start));
                 let said = if service.description.is_empty() {
                     service.display.clone()
                 } else {
                     service.description.clone()
                 };
-                let label = format!("{:<id_w$}  {:<9}  {said}", service.id, state);
+                let label = format!(
+                    "{:<id_w$}  {}  {}  {said}",
+                    service.id,
+                    pad_to(&state, state_w),
+                    pad_to(&start, start_w)
+                );
                 let entry = Entry {
                     name: label.trim_end().into(),
                     kind: EntryKind::File,
@@ -21387,6 +21442,10 @@ impl App {
                 self.i18n.t("svc-card-state"),
                 self.i18n.t(state_id(service.state)),
             ),
+            (
+                self.i18n.t("svc-card-start"),
+                self.i18n.t(start_id(service.start)),
+            ),
         ];
         if !service.display.is_empty() {
             rows.insert(1, (self.i18n.t("svc-card-name"), service.display.clone()));
@@ -21442,6 +21501,61 @@ impl App {
             },
             button: 0,
         });
+    }
+
+    /// `F4` on a service list: when the service under the cursor starts, as a choice of the
+    /// three, with the one in force marked. macOS has no *manual*: a launchd job is loaded or
+    /// it is disabled, so the list there has two rows.
+    fn open_service_start(&mut self) {
+        let Some(service) = self.service_at_cursor().cloned() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        let mut choices = vec![
+            fcmd_platform::ServiceStart::Automatic,
+            fcmd_platform::ServiceStart::Manual,
+            fcmd_platform::ServiceStart::Disabled,
+        ];
+        if cfg!(target_os = "macos") {
+            choices.retain(|c| *c != fcmd_platform::ServiceStart::Manual);
+        }
+        let rows = choices
+            .into_iter()
+            .map(|start| {
+                PickRow::plain(
+                    self.i18n.t(start_id(start)),
+                    start.as_str(),
+                    start == service.start,
+                )
+            })
+            .collect();
+        let title = self
+            .i18n
+            .t_args("svc-start-title", &[("name", service.id.clone().into())]);
+        let mut pick = Pick::new(PickKind::ServiceStart, title, rows, self.active);
+        if let Some(at) = pick.rows.iter().position(|r| r.current) {
+            pick.cursor = at;
+        }
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
+    /// The start chosen: handed to a worker like the other three actions. Nothing is asked
+    /// first — it starts and stops nothing, and the same key puts it back.
+    fn set_service_start(&mut self, value: &str) {
+        let start = match value {
+            "automatic" => fcmd_platform::ServiceStart::Automatic,
+            "manual" => fcmd_platform::ServiceStart::Manual,
+            "disabled" => fcmd_platform::ServiceStart::Disabled,
+            _ => return,
+        };
+        let Some(service) = self.service_at_cursor().cloned() else {
+            return;
+        };
+        if service.start == start {
+            return;
+        }
+        self.start_service_action(service.id, fcmd_platform::ServiceAction::SetStart(start));
     }
 
     /// Hand the action to a worker: a service manager takes its time, and the panels must
@@ -24837,6 +24951,8 @@ impl App {
             PickKind::SavedSearches => return,
             PickKind::AiServices => return,
             PickKind::AiContext | PickKind::AiThreads | PickKind::StripMeta => return,
+            // And `open_service_start`, which knows the service under the cursor.
+            PickKind::ServiceStart => return,
             PickKind::PluginsConfig => return,
             // And `open_settings`, which knows which row the list was left on.
             PickKind::Settings => return,
@@ -26092,6 +26208,10 @@ impl App {
                 let value = row.value.clone();
                 self.strip_meta(&value);
             }
+            PickKind::ServiceStart => {
+                let value = row.value.clone();
+                self.set_service_start(&value);
+            }
             PickKind::AiThreads => {
                 let value = row.value.clone();
                 self.ai_thread_resume(&value);
@@ -26551,6 +26671,11 @@ impl App {
         // On the programs from elsewhere it installs the one under the cursor, after asking.
         if self.panel().temp_origin() == Some(":tools") {
             self.install_tool_at_cursor();
+            return;
+        }
+        // On the service list it is when the service starts: automatic, manual or disabled.
+        if self.panel().temp_origin() == Some(":services") {
+            self.open_service_start();
             return;
         }
         if matches!(
@@ -29787,6 +29912,11 @@ impl App {
                         self.i18n.t("svc-card-state"),
                         self.i18n.t(state_id(service.state))
                     ),
+                    format!(
+                        "{}  {}",
+                        self.i18n.t("svc-card-start"),
+                        self.i18n.t(start_id(service.start))
+                    ),
                 ];
                 if !service.description.is_empty() {
                     lines.push(format!(
@@ -31500,7 +31630,7 @@ impl App {
                 (1u8, "key-help"),
                 (2, "key-menu"),
                 (3, "key-view"),
-                (4, ""),
+                (4, "key-service-start-type"),
                 (5, "key-service-start"),
                 (6, "key-service-restart"),
                 (7, ""),
@@ -50935,6 +51065,87 @@ abcdefghij
             matches!(&app.mode, Mode::Help { .. }),
             "F1 did not open the help: {:?}",
             app.mode
+        );
+    }
+
+    /// `F4` on a service is when it starts: the three choices with the one in force under
+    /// the cursor, the row saying it in its own column, and the change handed to a worker
+    /// without asking — it starts and stops nothing. Choosing what is already set does
+    /// nothing at all.
+    #[test]
+    fn f4_on_a_service_changes_when_it_starts() {
+        let mut app = app();
+        let service = |id: &str, start| fcmd_platform::Service {
+            id: id.into(),
+            state: fcmd_platform::ServiceState::Running,
+            start,
+            ..Default::default()
+        };
+        app.show_services(
+            0,
+            vec![
+                service("cron.service", fcmd_platform::ServiceStart::Manual),
+                service("ssh.service", fcmd_platform::ServiceStart::Automatic),
+            ],
+        );
+        app.active = 0;
+        for i in 0..4 {
+            app.panels[0].cursor_to(i);
+            if app.panels[0]
+                .current()
+                .is_some_and(|e| e.name_str().starts_with("cron.service"))
+            {
+                break;
+            }
+        }
+        let name = app.panels[0]
+            .current()
+            .expect("a row")
+            .name_str()
+            .to_string();
+        assert!(name.starts_with("cron.service"), "{name}");
+        assert!(name.contains(&app.i18n.t("svc-start-manual")), "{name}");
+        let bar = app.keybar();
+        assert!(bar
+            .iter()
+            .any(|(k, l)| *k == 4 && *l == app.i18n.t("key-service-start-type")));
+
+        press(&mut app, "F4");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no choice: {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::ServiceStart);
+        assert_eq!(pick.rows[pick.cursor].value, "manual");
+        assert!(pick.rows[pick.cursor].current);
+
+        // What is already set: nothing goes to the system.
+        press(&mut app, "Enter");
+        assert!(app.take_requests().is_empty());
+
+        press(&mut app, "F4");
+        let Mode::Pick(pick) = &mut app.mode else {
+            panic!("no choice: {:?}", app.mode)
+        };
+        pick.cursor = pick
+            .rows
+            .iter()
+            .position(|r| r.value == "disabled")
+            .expect("disabled is offered");
+        press(&mut app, "Enter");
+        assert!(app.mode.is_normal(), "it asked: {:?}", app.mode);
+        let requests = app.take_requests();
+        assert!(
+            requests.iter().any(|r| matches!(
+                r,
+                Request::ServiceControl {
+                    id,
+                    action: fcmd_platform::ServiceAction::SetStart(
+                        fcmd_platform::ServiceStart::Disabled
+                    ),
+                    ..
+                } if id == "cron.service"
+            )),
+            "{requests:?}"
         );
     }
 
