@@ -6,6 +6,48 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.43.0] — 2026-11-15
+
+### Added
+
+- **What starts at login, as a panel**: `Alt+F1`/`Alt+F2` → *Startup* lists it from every place
+  the system keeps it — on Windows the `Run` and `RunOnce` keys of the user and of the machine,
+  the two *Startup* folders and the scheduled tasks that run at logon; on a Linux desktop the
+  XDG `autostart` folders and the user's `systemd --user` units; on macOS `LaunchAgents` and
+  `LaunchDaemons`. `F8` switches an entry off or on the way the system's own tools do it —
+  Task Manager's `StartupApproved` switch, a `Hidden=true` copy in the user's own folder,
+  `systemctl --user disable`, `launchctl disable` — so nothing is deleted and they show the
+  same state; `Shift+F8` removes an entry after asking, `F3` is its card, `F4` its file.
+- **Services: when each starts.** The service list has a *Start* column — automatic, manual,
+  disabled — and `F4` changes it: `systemctl enable`/`disable`/`mask`, the start type through
+  the Service Control Manager on Windows, `launchctl enable`/`disable` on macOS.
+- **What `Enter` opens is visible in the list.** `<arc>` is now computed from what the program
+  reads — the zip family with the packages that are zips under another name (`.whl`, `.apk`,
+  `.nupkg`…), tar, `.7z`, `.cab`, `.deb`, `.rpm`, the single compressed files, mail, SQLite,
+  JSON — and from the external archivers found on the `PATH`, so the archive colour means
+  "`Enter` goes into it"; a `.rar` is coloured only where 7-Zip is there to read it. A `▸`
+  after the name marks the same files (`panel.mark_openable`, on by default) and the panel's
+  status line says what `Enter` will do: `Enter: open as an archive (zip)`.
+- **Outlook `.msg` read like an `.eml`**: `Enter` on one is a folder of `headers.txt`, the
+  bodies and the attachments, an attached message a folder in turn. Our own read-only reader of
+  the OLE compound file, the message's MAPI properties and its compressed RTF body, turned to
+  text when there is no plain one — no new dependency. The same reader shows the properties of
+  old `.doc`, `.xls` and `.ppt` files in the structure pane.
+- **The MIME structure of a message**: `structure.txt` inside an opened `.eml` or `.msg` is the
+  tree of its parts — type, encoding, size and name — and the viewer's structure pane shows the
+  same tree on a mail file.
+- **Encode and decode** — base64, base32, UUencode, XXencode, yEnc, quoted-printable, hex,
+  percent-encoding — in three places. *Files → Encode / Decode* writes beside the file, splits
+  into parts and joins them back with yEnc's checksums verified, as a job with progress, `Esc`
+  and undo; the format of a file to decode is read from the file itself. `Alt+Shift+B` in the
+  editor converts the block or the run under the cursor, with HTML entities and ROT13 too, as
+  one `Ctrl+Z`. `Alt+B` in the viewer reads every one of them now, not only base64, and
+  `Shift+F2` saves what came out.
+
+### Changed
+
+- nix 0.32.
+
 ## [0.42.2] — 2026-11-14
 
 ### Added

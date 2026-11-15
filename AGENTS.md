@@ -191,13 +191,17 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.42.2 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.43.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.43.0** — started early on the author's word: what starts at login as a panel, switched
+  off the system's own way; a service's start type; what `Enter` opens made visible (computed
+  `<arc>`, the `▸` mark, the status line); Outlook `.msg` read with our own OLE reader, and the
+  MIME tree of a message; encode and decode on files, in the editor and in the viewer.
 - **0.42.2** — the two requests left open by issues 43 and 45: PowerShell kept behind the
   command line, with a way out when its marks do not arrive, and `Ctrl+Clear`/`Ctrl+Alt+Clear`
   read from the Windows console.
