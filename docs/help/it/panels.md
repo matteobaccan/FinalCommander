@@ -17,8 +17,8 @@ cui appartiene: una tabella di tutto quello che è montato — che cosa è ciasc
 rimovibile, ottico, di rete, in memoria), come si chiama, con che filesystem è formattato,
 quanto è grande e quanto ne resta. Quali di queste colonne vengano disegnate lo scegli tu, con
 `F9` dentro il dialogo — e anche quali pannelli che non sono dischi la lista propone: una
-casella per ciascuno (NetBox, processi, socket, programmi installati, servizi, programmi
-esterni, pannello temporaneo, cestino), così la lista tiene solo quello che usi.
+casella per ciascuno (NetBox, processi, socket, programmi installati, servizi, avvio
+automatico, programmi esterni, pannello temporaneo, cestino), così la lista tiene solo quello che usi.
 
 Tutti i dischi vengono interrogati insieme e il dialogo li aspetta al massimo un secondo e
 mezzo. Un disco di rete il cui server non c'è può metterci molti secondi a dirlo: compare con
@@ -54,6 +54,18 @@ Sotto una riga di separazione, su `Ctrl+1`…`Ctrl+9`, stanno le cose che non so
   parte non avvia né ferma nulla; macOS non ha *manuale*, solo attivato e disattivato.
   Un'azione che il sistema rifiuta viene riferita come «serve root»; questo programma non
   chiederà root al posto tuo;
+* ciò che **parte all'accesso** (*Avvio automatico*), da ogni posto in cui il sistema lo tiene
+  — su Windows le chiavi `Run` e `RunOnce` dell'utente e della macchina, le due cartelle
+  *Esecuzione automatica* e le operazioni pianificate che partono all'accesso; su un desktop
+  Linux le cartelle `autostart` e le unità `systemd --user` dell'utente; su macOS le cartelle
+  `LaunchAgents` e `LaunchDaemons`. Ogni riga dice se è attivo, da dove viene e cosa esegue;
+  ciò che è disattivo è disegnato attenuato. `F3` è la sua scheda, `F4` apre il file che lo
+  definisce, `F8` lo disattiva o lo riattiva e `Shift+F8` lo rimuove dopo aver chiesto.
+  Disattivare non cancella niente: si fa come fanno gli strumenti del sistema (l'interruttore
+  di Gestione attività, una copia con `Hidden=true` nella tua cartella `autostart`,
+  `systemctl --user disable`, `launchctl disable`), così mostrano lo stesso stato. Ciò che
+  appartiene alla macchina può richiedere amministratore o root per essere cambiato, e viene
+  riferito come tale invece di chiederlo;
 * i **socket**, in ascolto o connessi, con l'indirizzo a ciascun capo e il processo che li
   tiene, dove `F3` è la scheda di quel processo;
 * i **programmi installati** sulla macchina, con versione ed editore: `F3` è la scheda, e

@@ -437,7 +437,7 @@ fn start_of_unit(starts: &std::collections::HashMap<String, StartType>, unit: &s
 /// `launchctl print-disabled system`: the labels marked disabled, one a line, as
 /// `"label" => disabled` (or `=> true` on older systems).
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn launchd_disabled(text: &str) -> std::collections::HashSet<String> {
+pub(crate) fn launchd_disabled(text: &str) -> std::collections::HashSet<String> {
     text.lines()
         .filter_map(|line| {
             let (label, state) = line.split_once("=>")?;

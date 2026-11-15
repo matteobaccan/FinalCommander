@@ -16,7 +16,7 @@ table of everything mounted — what each one is (disk, removable, optical, netw
 what it is called, what it is formatted as, how big it is and how much is left. Which of
 those columns are drawn is yours to choose, with `F9` inside the dialog — and so is which of
 the panels that are not disks the list offers: a box for each (NetBox, processes, sockets,
-installed programs, services, external programs, the temporary panel, the wastebasket), so
+installed programs, services, startup, external programs, the temporary panel, the wastebasket), so
 the list holds only what you use.
 
 Every drive is asked at once and the dialog waits for them a second and a half at most. A
@@ -52,6 +52,17 @@ Under a rule, on `Ctrl+1` to `Ctrl+9`, are the things that are not filesystems:
   starts starts and stops nothing; macOS has no *manual*, only enabled and disabled. An
   action the system refuses is reported as needing root; this program will not ask for root
   on your behalf;
+* what **starts at login** (*Startup*), from every place the system keeps it — on Windows the
+  `Run` and `RunOnce` keys of the user and of the machine, the two *Startup* folders and the
+  scheduled tasks that run at logon; on a Linux desktop the `autostart` folders and the user's
+  `systemd --user` units; on macOS the `LaunchAgents` and `LaunchDaemons` folders. Each row
+  says whether it is on, where it comes from and what it runs; what is off is drawn dim.
+  `F3` is its card, `F4` opens the file that defines it, `F8` switches it off or on again and
+  `Shift+F8` removes it after asking. Switching off deletes nothing: it is done the way the
+  system's own tools do it (Task Manager's switch, a `Hidden=true` copy in your own
+  `autostart` folder, `systemctl --user disable`, `launchctl disable`), so they show the same
+  state. What belongs to the machine may need administrator or root to change, and is
+  reported as such rather than asked for;
 * the **sockets**, listening or connected, with the address at each end and the process
   holding it, where `F3` is that process's card;
 * the **programs installed** on the machine, with their version and publisher: `F3` is the

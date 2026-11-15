@@ -1483,6 +1483,21 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                     let result = fcmd_platform::kill(pid);
                     let _ = tx.send(Event::ProcessKilled { side, name, result });
                 }
+                Request::StartupChange { side, item, on } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let result = match on {
+                            Some(on) => fcmd_platform::set_startup(&item, on),
+                            None => fcmd_platform::remove_startup(&item),
+                        };
+                        let _ = tx.send(Event::StartupChanged {
+                            side,
+                            name: item.name.clone(),
+                            on,
+                            result,
+                        });
+                    });
+                }
                 Request::ServiceControl { side, id, action } => {
                     let tx = tx.clone();
                     // Off the loop: a service manager takes seconds over a restart, and the
@@ -7568,6 +7583,20 @@ dir_attr = "D"
                         side,
                         name,
                         result: Ok(()),
+                    });
+                }
+                // The tests build their entries in a directory of their own, so the change is
+                // made for real: it is a file in a temporary folder.
+                Request::StartupChange { side, item, on } => {
+                    let result = match on {
+                        Some(on) => fcmd_platform::set_startup(&item, on),
+                        None => fcmd_platform::remove_startup(&item),
+                    };
+                    app.handle_event(Event::StartupChanged {
+                        side,
+                        name: item.name.clone(),
+                        on,
+                        result,
                     });
                 }
                 Request::ServiceControl { side, id, action } => {

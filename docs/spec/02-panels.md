@@ -1050,6 +1050,29 @@ left out there rather than paid for with a page of `unsafe` a service pack can i
 could end a process from a listing with the key that deletes a file is one that ends a process
 by accident, and ending one wants a confirmation of its own.
 
+**Startup list (§7e).** What starts when this user logs in, read from every place the system
+keeps it into one list with the same four facts a row: the name, on or off, where it comes
+from, and what it runs (`fcmd_platform::startup`). Windows: the `Run` and `RunOnce` values of
+`HKCU` and `HKLM` (and `HKLM`'s 32-bit view), the user's and the shared *Startup* folders, and
+the scheduled tasks under `System32\Tasks` whose XML has a `LogonTrigger`. Linux: the XDG
+`autostart` folders — the user's file overriding the machine's of the same name, as the spec
+says — and the user's `systemd --user` units that are enabled or disabled. macOS: the
+property lists in `~/Library/LaunchAgents`, `/Library/LaunchAgents` and
+`/Library/LaunchDaemons`, with launchd's disabled lists.
+
+`F8` switches an entry off for the next login, or on again, and is not asked about because
+nothing is deleted: Windows writes the twelve-byte `StartupApproved` value Task Manager writes
+(an odd first byte is off), so both show the same state, and `schtasks /Change` for a task; a
+Linux desktop entry is rewritten, or — for one only the machine has — copied into the user's
+folder with `Hidden=true`, which is what GNOME and KDE do; `systemctl --user enable|disable`;
+`launchctl enable|disable` on `gui/<uid>` or `system`. `RunOnce` has no switch and says so.
+`Shift+F8` removes, after a question whose default is to keep it: the registry value with
+its approval, the file, the task. A machine's desktop entry is not removed — switching it off
+is the user's own copy of it — and a systemd unit is disabled rather than deleted. `F3` is
+the card, `F4` the file that defines the entry (a registry value has none, and the line says
+where it lives). What belongs to the machine is changed only where this user may: a refusal
+is reported as needing administrator or root, as for the services.
+
 **Service list (§7d).** What the machine runs in the background, as a panel: the name, the
 state in one word, when it starts — *automatic*, *manual* or *disabled* — and what the service
 says about itself. `F3` is its card, `F4` is a choice of when it starts with the one in force

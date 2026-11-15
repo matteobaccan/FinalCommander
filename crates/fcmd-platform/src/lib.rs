@@ -19,6 +19,7 @@ mod programs;
 pub mod pty;
 pub mod service;
 mod socket;
+pub mod startup;
 #[cfg(unix)]
 mod unix;
 mod volume;
@@ -35,6 +36,7 @@ pub use service::{
     control, services, Service, ServiceAction, ServiceError, ServiceStart, ServiceState,
 };
 pub use socket::{sockets, Socket};
+pub use startup::{remove_startup, set_startup, startup, Startup, StartupError, StartupWhere};
 pub use volume::{drive_kind, volume, Volume, VolumeKind};
 
 use std::path::Path;

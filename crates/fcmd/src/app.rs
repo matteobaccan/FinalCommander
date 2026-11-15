@@ -196,6 +196,13 @@ pub enum Request {
         id: String,
         action: fcmd_platform::ServiceAction,
     },
+    /// Switch one entry of the startup panel on or off, or remove it (`None`). A worker's
+    /// job too: `systemctl` and `schtasks` take their time.
+    StartupChange {
+        side: usize,
+        item: Box<fcmd_platform::Startup>,
+        on: Option<bool>,
+    },
     /// End a process of the process list, which has been asked about.
     KillProcess {
         side: usize,
@@ -1121,6 +1128,13 @@ pub enum Event {
         id: String,
         action: fcmd_platform::ServiceAction,
         result: Result<(), fcmd_platform::ServiceError>,
+    },
+    /// An entry of the startup panel was switched or removed — or the system refused.
+    StartupChanged {
+        side: usize,
+        name: String,
+        on: Option<bool>,
+        result: Result<(), fcmd_platform::StartupError>,
     },
     /// A process was ended — or the system said why not.
     ProcessKilled {
@@ -2213,6 +2227,11 @@ pub enum ConfirmAction {
         id: String,
         action: fcmd_platform::ServiceAction,
     },
+    /// Take an entry out of what starts at login (`Shift+F8` in the startup panel).
+    RemoveStartup {
+        side: usize,
+        item: Box<fcmd_platform::Startup>,
+    },
     /// Delete these items of the wastebasket for good (`F8` in its panel).
     TrashPurge { side: usize, items: Vec<Trashed> },
     /// Delete everything in the wastebasket for good.
@@ -2270,6 +2289,7 @@ impl ConfirmAction {
             ConfirmAction::ArcRebuild { .. } => "btn-delete",
             ConfirmAction::ClearHistory { .. } => "btn-delete",
             ConfirmAction::TrashPurge { .. } => "btn-delete",
+            ConfirmAction::RemoveStartup { .. } => "btn-delete",
             ConfirmAction::TrashEmpty { .. } => "btn-empty",
             ConfirmAction::TrashClash { .. } => "btn-overwrite",
             ConfirmAction::DiscardEdits | ConfirmAction::DiscardHex => "btn-discard",
@@ -3225,6 +3245,9 @@ pub struct App {
     /// The service list the `:services` panel was built from, so a row can be turned back
     /// into the service it stands for.
     services: Vec<fcmd_platform::Service>,
+    /// What starts at login, as the startup panel was last built from (`:startup`). A row's
+    /// path is its index here.
+    startups: Vec<fcmd_platform::Startup>,
     /// What each side's `:trash` panel was built from, so a row can be turned back into
     /// the item it stands for. One list per side: two panels on the wastebasket are read at
     /// different moments, and a row must never name an item of the other's list.
@@ -3763,6 +3786,7 @@ impl App {
             editor_diff: false,
             attr_seed_mode: None,
             services: Vec::new(),
+            startups: Vec::new(),
             trash: [Vec::new(), Vec::new()],
             attr_times: Default::default(),
             times_clip: None,
@@ -5374,6 +5398,46 @@ impl App {
                     self.set_error(msg);
                 }
             },
+            Event::StartupChanged {
+                side,
+                name,
+                on,
+                result,
+            } => match result {
+                Ok(()) => {
+                    let id = match on {
+                        Some(true) => "startup-enabled",
+                        Some(false) => "startup-disabled",
+                        None => "startup-removed",
+                    };
+                    let msg = self.i18n.t_args(id, &[("name", name.into())]);
+                    self.set_status(msg);
+                    if self.panels[side].temp_origin() == Some(":startup") {
+                        let was = self.panels[side].cursor;
+                        let active = self.active;
+                        self.open_startup_panel(side);
+                        self.panels[side].cursor_to(was);
+                        self.active = active;
+                    }
+                }
+                Err(fcmd_platform::StartupError::NeedsRoot) => {
+                    let msg = self
+                        .i18n
+                        .t_args("startup-needs-root", &[("name", name.into())]);
+                    self.set_error(msg);
+                }
+                Err(fcmd_platform::StartupError::Unsupported) => {
+                    let msg = self.i18n.t_args("startup-cannot", &[("name", name.into())]);
+                    self.set_error(msg);
+                }
+                Err(fcmd_platform::StartupError::Failed(why)) => {
+                    let msg = self.i18n.t_args(
+                        "startup-failed",
+                        &[("name", name.into()), ("error", why.into())],
+                    );
+                    self.set_error(msg);
+                }
+            },
             Event::ServiceControlled {
                 side,
                 id,
@@ -6186,6 +6250,13 @@ impl App {
                     ConfirmAction::PlayMacro(which) => self.run_macro(&which),
                     ConfirmAction::RunPlugin(which) => self.start_plugin_command(which),
                     ConfirmAction::Service { id, action } => self.start_service_action(id, action),
+                    ConfirmAction::RemoveStartup { side, item } => {
+                        self.requests.push(Request::StartupChange {
+                            side,
+                            item,
+                            on: None,
+                        });
+                    }
                     ConfirmAction::TrashPurge { side, items } => {
                         self.requests.push(Request::Trash {
                             side,
@@ -11316,6 +11387,7 @@ impl App {
                 ("drive-sockets", ":sockets"),
                 ("drive-programs", ":programs"),
                 ("drive-services", ":services"),
+                ("drive-startup", ":startup"),
                 ("drive-tools", ":tools"),
                 ("drive-ai", ":ai"),
                 ("drive-temp", ":temp"),
@@ -13045,7 +13117,7 @@ impl App {
                 }
                 if matches!(
                     self.panel().temp_origin(),
-                    Some(":gitlog") | Some(":gitbranches")
+                    Some(":gitlog") | Some(":gitbranches") | Some(":startup")
                 ) {
                     let m = self.i18n.t("temp-not-a-file");
                     self.set_error(m);
@@ -13212,6 +13284,16 @@ impl App {
                     self.ai_forget_at_cursor();
                     return;
                 }
+                // On what starts at login `F8` switches the entry under the cursor off or on
+                // again — nothing is deleted — and `Shift+F8` removes it, having asked.
+                if self.panel().temp_origin() == Some(":startup") {
+                    if cmd == Command::FileDeleteCurrent {
+                        self.ask_remove_startup();
+                    } else {
+                        self.toggle_startup();
+                    }
+                    return;
+                }
                 // And on the service list `F8` stops the service under the cursor, having
                 // asked: it takes the thing away from whatever was using it.
                 if self.panel().temp_origin() == Some(":services") {
@@ -13321,6 +13403,17 @@ impl App {
         // On the service list it is that service's card, for the same reason.
         if self.panel().temp_origin() == Some(":services") {
             self.open_service_card();
+            return;
+        }
+        // And on what starts at login, that entry's.
+        if self.panel().temp_origin() == Some(":startup") {
+            if let Some(item) = self.startup_at_cursor() {
+                let lines = self.startup_card(&item);
+                self.mode = Mode::Message {
+                    title: self.i18n.t("startup-card"),
+                    lines,
+                };
+            }
             return;
         }
         let Some(entry) = self.panel().current().cloned() else {
@@ -21051,6 +21144,185 @@ impl App {
         self.active = side;
     }
 
+    // ── what starts at login (SPEC 02 §14) ─────────────────────────────────────────────────
+
+    /// `Alt+F1` → Startup: what starts when this user logs in, from every place the system
+    /// keeps it. The row is the entry — its name, on or off, where it comes from and what it
+    /// runs. `F3` is its card, `F4` the file that defines it, `F8` switches it off or on and
+    /// `Shift+F8` removes it after asking.
+    fn open_startup_panel(&mut self, side: usize) {
+        let items = fcmd_platform::startup();
+        if items.is_empty() {
+            let m = self.i18n.t("startup-none");
+            self.set_error(m);
+            return;
+        }
+        self.show_startup(side, items);
+    }
+
+    /// The panel on `side` becomes this list of what starts at login.
+    fn show_startup(&mut self, side: usize, items: Vec<fcmd_platform::Startup>) {
+        use fcmd_core::{Entry, EntryId, EntryKind};
+
+        let width = |text: &str| unicode_width::UnicodeWidthStr::width(text);
+        let name_w = items
+            .iter()
+            .map(|s| width(&s.name))
+            .max()
+            .unwrap_or(0)
+            .min(40);
+        let on = self.i18n.t("startup-on");
+        let off = self.i18n.t("startup-off");
+        let state_w = width(&on).max(width(&off));
+        let rows: Vec<(VPath, Entry)> = items
+            .iter()
+            .enumerate()
+            .map(|(i, item)| {
+                let state = if item.enabled { &on } else { &off };
+                let label = format!(
+                    "{}  {}  {}  {}",
+                    pad_to(&item.name, name_w),
+                    pad_to(state, state_w),
+                    item.source,
+                    item.command
+                );
+                let mut flags = fcmd_core::EntryFlags::empty();
+                // What is off is drawn as a hidden file is, so the eye finds what is on.
+                if !item.enabled {
+                    flags.insert(fcmd_core::EntryFlags::HIDDEN);
+                }
+                let entry = Entry {
+                    name: label.trim_end().into(),
+                    kind: EntryKind::File,
+                    size: 0,
+                    mtime: None,
+                    btime: None,
+                    atime: None,
+                    flags,
+                    id: EntryId::Name(i as u64),
+                    link_target: None,
+                };
+                (VPath::local(i.to_string()), entry)
+            })
+            .collect();
+        let title = self.plain("drive-startup");
+        let generation = self.panels[side].generation + 1;
+        self.panels[side].generation = generation;
+        self.panels[side].set_temp(title, rows, generation);
+        self.panels[side].set_temp_origin(":startup");
+        self.startups = items;
+        self.active = side;
+    }
+
+    /// The entry under the cursor, where the panel is the startup list.
+    fn startup_at_cursor(&self) -> Option<fcmd_platform::Startup> {
+        if self.panel().temp_origin() != Some(":startup") {
+            return None;
+        }
+        let at = self.panel().path_of(self.panel().current()?).display_name();
+        self.startups.get(at.parse::<usize>().ok()?).cloned()
+    }
+
+    /// Everything the panel knows about one entry, a line a fact.
+    fn startup_card(&self, item: &fcmd_platform::Startup) -> Vec<String> {
+        let mut rows: Vec<(String, String)> = vec![
+            (self.i18n.t("startup-card-name"), item.name.clone()),
+            (
+                self.i18n.t("startup-card-state"),
+                self.i18n.t(if item.enabled {
+                    "startup-on"
+                } else {
+                    "startup-off"
+                }),
+            ),
+            (self.i18n.t("startup-card-command"), item.command.clone()),
+            (self.i18n.t("startup-card-source"), item.source.clone()),
+        ];
+        if let Some(file) = item.file() {
+            rows.push((self.i18n.t("startup-card-file"), file.display().to_string()));
+        }
+        if let Some(publisher) = &item.publisher {
+            rows.push((self.i18n.t("startup-card-publisher"), publisher.clone()));
+        }
+        if item.machine {
+            rows.push((
+                self.i18n.t("startup-card-owner"),
+                self.i18n.t("startup-card-machine"),
+            ));
+        }
+        let width = rows
+            .iter()
+            .map(|(label, _)| unicode_width::UnicodeWidthStr::width(label.as_str()))
+            .max()
+            .unwrap_or(0);
+        rows.iter()
+            .map(|(label, value)| format!("{}  {value}", pad_to(label, width)))
+            .collect()
+    }
+
+    /// `F8`: off if it is on, on if it is off. Nothing is asked: nothing is deleted, and the
+    /// same key puts it back.
+    fn toggle_startup(&mut self) {
+        let Some(item) = self.startup_at_cursor() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        let on = !item.enabled;
+        let msg = self
+            .i18n
+            .t_args("svc-working", &[("name", item.name.clone().into())]);
+        self.set_status(msg);
+        self.requests.push(Request::StartupChange {
+            side: self.active,
+            item: Box::new(item),
+            on: Some(on),
+        });
+    }
+
+    /// `Shift+F8`: remove the entry under the cursor, having said what that does.
+    fn ask_remove_startup(&mut self) {
+        let Some(item) = self.startup_at_cursor() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        self.mode = Mode::Confirm(Confirm {
+            title: self.i18n.t("startup-card"),
+            lines: vec![
+                self.i18n
+                    .t_args("startup-ask-remove", &[("name", item.name.clone().into())]),
+                self.i18n.t("startup-remove-note"),
+            ],
+            action: ConfirmAction::RemoveStartup {
+                side: self.active,
+                item: Box::new(item),
+            },
+            button: 1,
+        });
+    }
+
+    /// `F4`: the file that defines the entry, in the editor.
+    fn edit_startup_file(&mut self) {
+        let Some(item) = self.startup_at_cursor() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        match item.file() {
+            Some(file) => {
+                let path = VPath::local(file.to_path_buf());
+                self.open_editor_on(&path);
+            }
+            None => {
+                let msg = self
+                    .i18n
+                    .t_args("startup-no-file", &[("where", item.source.clone().into())]);
+                self.set_error(msg);
+            }
+        }
+    }
+
     // ── the wastebasket as a panel (SPEC 03 §4a) ────────────────────────────────────────────
 
     /// `Alt+F1` → Wastebasket: what the system holds of what was thrown away.
@@ -22993,6 +23265,7 @@ impl App {
                     sockets: on("drives.panels.sockets"),
                     programs: on("drives.panels.programs"),
                     services: on("drives.panels.services"),
+                    startup: on("drives.panels.startup"),
                     tools: on("drives.panels.tools"),
                     temp: on("drives.panels.temp"),
                     trash: on("drives.panels.trash"),
@@ -26192,6 +26465,7 @@ impl App {
                     ":sockets" => self.open_socket_panel(pick.side),
                     ":programs" => self.open_programs_panel(pick.side),
                     ":services" => self.open_services_panel(pick.side),
+                    ":startup" => self.open_startup_panel(pick.side),
                     ":trash" => self.open_trash_panel(pick.side),
                     ":tools" => self.open_tools_panel(pick.side),
                     ":ai" => self.open_ai_panel(pick.side),
@@ -26706,6 +26980,12 @@ impl App {
         // On the service list it is when the service starts: automatic, manual or disabled.
         if self.panel().temp_origin() == Some(":services") {
             self.open_service_start();
+            return;
+        }
+        // On what starts at login it is the file that defines the entry under the cursor;
+        // a registry value has none, and the line says where it lives instead.
+        if self.panel().temp_origin() == Some(":startup") {
+            self.edit_startup_file();
             return;
         }
         if matches!(
@@ -29933,6 +30213,10 @@ impl App {
                 let item = self.trash[panel].get(at.parse::<usize>().ok()?)?;
                 Some(self.trash_card(item).join("\n"))
             }
+            ":startup" => {
+                let item = self.startups.get(at.parse::<usize>().ok()?)?.clone();
+                Some(self.startup_card(&item).join("\n"))
+            }
             ":services" => {
                 let service = self.services.iter().find(|s| s.id == at)?;
                 let mut lines = vec![
@@ -31665,6 +31949,20 @@ impl App {
                 (6, "key-service-restart"),
                 (7, ""),
                 (8, "key-service-stop"),
+                (9, "key-pulldown"),
+                (10, "key-quit"),
+                (11, ""),
+                (12, "key-screens"),
+            ]),
+            Some(":startup") => Some([
+                (1u8, "key-help"),
+                (2, "key-menu"),
+                (3, "key-view"),
+                (4, "key-edit"),
+                (5, ""),
+                (6, ""),
+                (7, ""),
+                (8, "key-startup-toggle"),
                 (9, "key-pulldown"),
                 (10, "key-quit"),
                 (11, ""),
@@ -51096,6 +51394,115 @@ abcdefghij
             "F1 did not open the help: {:?}",
             app.mode
         );
+    }
+
+    /// The startup panel: one row an entry, what is off drawn dim, its card on `F3`, its file
+    /// on `F4`, `F8` switching it without asking and `Shift+F8` removing it only after a
+    /// question whose default is to keep it.
+    #[test]
+    fn the_startup_panel_switches_an_entry_and_removes_one_only_when_asked() {
+        let mut app = app();
+        let dir = std::env::temp_dir().join(format!(
+            "fcmd-startup-panel-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("sync.desktop");
+        std::fs::write(
+            &file,
+            "[Desktop Entry]\nName=Sync\nExec=/usr/bin/sync-tray\n",
+        )
+        .unwrap();
+        let item = fcmd_platform::Startup {
+            name: "Sync".into(),
+            command: "/usr/bin/sync-tray".into(),
+            source: dir.display().to_string(),
+            enabled: true,
+            machine: false,
+            publisher: None,
+            place: fcmd_platform::StartupWhere::Desktop {
+                user: file.clone(),
+                system: None,
+            },
+        };
+        let off = fcmd_platform::Startup {
+            name: "Old".into(),
+            enabled: false,
+            machine: true,
+            place: fcmd_platform::StartupWhere::Desktop {
+                user: dir.join("old.desktop"),
+                system: None,
+            },
+            ..item.clone()
+        };
+        app.show_startup(0, vec![item.clone(), off]);
+        app.active = 0;
+        for i in 0..4 {
+            app.panels[0].cursor_to(i);
+            if app.panels[0]
+                .current()
+                .is_some_and(|e| e.name_str().starts_with("Sync"))
+            {
+                break;
+            }
+        }
+        let bar = app.keybar();
+        assert!(bar
+            .iter()
+            .any(|(k, l)| *k == 8 && *l == app.i18n.t("key-startup-toggle")));
+
+        press(&mut app, "F3");
+        let Mode::Message { lines, .. } = &app.mode else {
+            panic!("no card: {:?}", app.mode)
+        };
+        assert!(
+            lines.iter().any(|l| l.contains("/usr/bin/sync-tray")),
+            "{lines:?}"
+        );
+        assert!(lines
+            .iter()
+            .any(|l| l.contains(&file.display().to_string())));
+        press(&mut app, "Esc");
+
+        // `F8` asks nothing and sends the change to a worker.
+        press(&mut app, "F8");
+        assert!(app.mode.is_normal(), "{:?}", app.mode);
+        let requests = app.take_requests();
+        assert!(
+            requests.iter().any(|r| matches!(
+                r,
+                Request::StartupChange { item, on: Some(false), .. } if item.name == "Sync"
+            )),
+            "{requests:?}"
+        );
+
+        // `Shift+F8` asks, and `Esc` keeps it.
+        press(&mut app, "Shift+F8");
+        assert!(matches!(&app.mode, Mode::Confirm(c)
+            if matches!(c.action, ConfirmAction::RemoveStartup { .. }) && c.button == 1));
+        press(&mut app, "Esc");
+        assert!(app.take_requests().is_empty(), "removed without asking");
+
+        // When the answer comes back, the panel is read again and says so.
+        app.handle_event(Event::StartupChanged {
+            side: 0,
+            name: "Sync".into(),
+            on: Some(false),
+            result: Ok(()),
+        });
+        assert!(app.status.contains("Sync"), "{}", app.status);
+        app.handle_event(Event::StartupChanged {
+            side: 0,
+            name: "Old".into(),
+            on: Some(true),
+            result: Err(fcmd_platform::StartupError::NeedsRoot),
+        });
+        assert!(app.status_error);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     /// What `Enter` opens is said three ways, from one answer: the archive colour, the `▸`

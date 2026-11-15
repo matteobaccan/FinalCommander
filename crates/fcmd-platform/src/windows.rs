@@ -1790,3 +1790,464 @@ pub fn console_key(wait: std::time::Duration) -> super::ConsoleKey {
         })
     }
 }
+
+// ── what starts at login (SPEC 02 §14) ──────────────────────────────────────────────────
+
+#[cfg(windows)]
+const RUN: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
+#[cfg(windows)]
+const RUN_ONCE: &str = r"Software\Microsoft\Windows\CurrentVersion\RunOnce";
+#[cfg(windows)]
+const RUN_WOW: &str = r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run";
+#[cfg(windows)]
+const RUN_ONCE_WOW: &str = r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\RunOnce";
+#[cfg(windows)]
+const APPROVED: &str = r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved";
+
+/// Everything that starts at login, from the places Task Manager's *Startup* page reads: the
+/// `Run` and `RunOnce` keys of the user and of the machine (and its 32-bit view), the two
+/// *Startup* folders, and the scheduled tasks with a logon trigger.
+#[cfg(windows)]
+pub fn startup() -> Vec<super::startup::Startup> {
+    use super::startup::{approved, parse_task, Startup, StartupWhere};
+    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
+
+    let mut out = Vec::new();
+    for (machine, once, wow, path) in [
+        (false, false, false, RUN),
+        (false, true, false, RUN_ONCE),
+        (true, false, false, RUN),
+        (true, true, false, RUN_ONCE),
+        (true, false, true, RUN_WOW),
+        (true, true, true, RUN_ONCE_WOW),
+    ] {
+        let root = if machine {
+            HKEY_LOCAL_MACHINE
+        } else {
+            HKEY_CURRENT_USER
+        };
+        for (value, command) in reg_strings(root, path) {
+            let place = StartupWhere::Run {
+                machine,
+                once,
+                wow,
+                value: value.clone(),
+            };
+            let enabled = once || {
+                let (aroot, akey) = approval_of(&place);
+                approved(reg_binary(aroot, &akey, &value).as_deref())
+            };
+            out.push(Startup {
+                name: value,
+                command,
+                source: format!("{}\\{path}", if machine { "HKLM" } else { "HKCU" }),
+                enabled,
+                machine,
+                publisher: None,
+                place,
+            });
+        }
+    }
+    let folders = [
+        (
+            false,
+            std::env::var_os("APPDATA").map(|d| {
+                std::path::PathBuf::from(d).join(r"Microsoft\Windows\Start Menu\Programs\Startup")
+            }),
+        ),
+        (
+            true,
+            std::env::var_os("ProgramData").map(|d| {
+                std::path::PathBuf::from(d).join(r"Microsoft\Windows\Start Menu\Programs\StartUp")
+            }),
+        ),
+    ];
+    for (machine, dir) in folders {
+        let Some(dir) = dir else { continue };
+        let Ok(read) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for item in read.flatten() {
+            let file = item.path();
+            let Some(name) = file.file_name().map(|n| n.to_string_lossy().into_owned()) else {
+                continue;
+            };
+            if name.eq_ignore_ascii_case("desktop.ini") || !file.is_file() {
+                continue;
+            }
+            let place = StartupWhere::Folder {
+                machine,
+                file: file.clone(),
+            };
+            let (aroot, akey) = approval_of(&place);
+            out.push(Startup {
+                name: file
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or(name.clone()),
+                command: file.display().to_string(),
+                source: dir.display().to_string(),
+                enabled: approved(reg_binary(aroot, &akey, &name).as_deref()),
+                machine,
+                publisher: None,
+                place,
+            });
+        }
+    }
+    // The scheduler keeps each task as an XML file under `System32\Tasks`; the ones this
+    // user may read are the ones listed, which is what `schtasks` would show them too.
+    if let Some(root) = std::env::var_os("SystemRoot") {
+        let tasks = std::path::PathBuf::from(root).join(r"System32\Tasks");
+        let mut stack = vec![(tasks.clone(), 0usize)];
+        let mut seen = 0usize;
+        while let Some((dir, depth)) = stack.pop() {
+            let Ok(read) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for item in read.flatten() {
+                let path = item.path();
+                if path.is_dir() {
+                    if depth < 8 {
+                        stack.push((path, depth + 1));
+                    }
+                    continue;
+                }
+                seen += 1;
+                if seen > 5000 {
+                    break;
+                }
+                let Ok(bytes) = std::fs::read(&path) else {
+                    continue;
+                };
+                let task = parse_task(&bytes);
+                if !task.at_logon {
+                    continue;
+                }
+                let Ok(rel) = path.strip_prefix(&tasks) else {
+                    continue;
+                };
+                let name = format!("\\{}", rel.display());
+                out.push(Startup {
+                    name: name.clone(),
+                    command: task.command,
+                    source: "Task Scheduler".into(),
+                    enabled: task.enabled,
+                    machine: true,
+                    publisher: task.author,
+                    place: StartupWhere::Task { name, file: path },
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Where Task Manager keeps its verdict on one entry: the root, and the key under it.
+#[cfg(windows)]
+fn approval_of(
+    place: &super::startup::StartupWhere,
+) -> (windows_sys::Win32::System::Registry::HKEY, String) {
+    use super::startup::StartupWhere;
+    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
+
+    let (machine, leaf) = match place {
+        StartupWhere::Run { machine, wow, .. } => (*machine, if *wow { "Run32" } else { "Run" }),
+        StartupWhere::Folder { machine, .. } => (*machine, "StartupFolder"),
+        _ => (false, "Run"),
+    };
+    let root = if machine {
+        HKEY_LOCAL_MACHINE
+    } else {
+        HKEY_CURRENT_USER
+    };
+    (root, format!("{APPROVED}\\{leaf}"))
+}
+
+/// On or off for the next login, the way Task Manager does it: its `StartupApproved` value
+/// for a registry entry or a file in a folder, `schtasks /Change` for a task. `RunOnce` has
+/// no such switch — it runs once and is gone — and is refused.
+#[cfg(windows)]
+pub fn set_startup(
+    item: &super::startup::Startup,
+    on: bool,
+) -> Result<(), super::startup::StartupError> {
+    use super::startup::{approval_bytes, StartupError, StartupWhere};
+
+    match &item.place {
+        StartupWhere::Run { once: true, .. } => Err(StartupError::Unsupported),
+        StartupWhere::Run { value, .. } => {
+            let (root, key) = approval_of(&item.place);
+            reg_set_binary(root, &key, value, &approval_bytes(on, filetime_now()))
+        }
+        StartupWhere::Folder { file, .. } => {
+            let (root, key) = approval_of(&item.place);
+            let name = file
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            reg_set_binary(root, &key, &name, &approval_bytes(on, filetime_now()))
+        }
+        StartupWhere::Task { name, .. } => schtasks(&[
+            "/Change",
+            "/TN",
+            name,
+            if on { "/ENABLE" } else { "/DISABLE" },
+        ]),
+        _ => Err(StartupError::Unsupported),
+    }
+}
+
+/// Take one away: the `Run` value and Task Manager's verdict on it, or the task.
+#[cfg(windows)]
+pub fn remove_startup(item: &super::startup::Startup) -> Result<(), super::startup::StartupError> {
+    use super::startup::{StartupError, StartupWhere};
+    use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_SUCCESS};
+    use windows_sys::Win32::System::Registry::{
+        RegDeleteKeyValueW, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE,
+    };
+
+    match &item.place {
+        StartupWhere::Run {
+            machine,
+            once,
+            wow,
+            value,
+        } => {
+            let root = if *machine {
+                HKEY_LOCAL_MACHINE
+            } else {
+                HKEY_CURRENT_USER
+            };
+            let path = match (*once, *wow) {
+                (false, false) => RUN,
+                (true, false) => RUN_ONCE,
+                (false, true) => RUN_WOW,
+                (true, true) => RUN_ONCE_WOW,
+            };
+            let (wpath, wvalue) = (wide_str(path), wide_str(value));
+            // SAFETY: both strings are NUL-terminated and outlive the call.
+            let code = unsafe { RegDeleteKeyValueW(root, wpath.as_ptr(), wvalue.as_ptr()) };
+            if code == ERROR_ACCESS_DENIED {
+                return Err(StartupError::NeedsRoot);
+            }
+            if code != ERROR_SUCCESS {
+                return Err(StartupError::Failed(format!("error {code}")));
+            }
+            // Task Manager's verdict goes with it, or a value of the same name added later
+            // would start off.
+            let (aroot, akey) = approval_of(&item.place);
+            let (wkey, wvalue) = (wide_str(&akey), wide_str(value));
+            // SAFETY: as above; a value that is not there is no error worth reporting.
+            unsafe { RegDeleteKeyValueW(aroot, wkey.as_ptr(), wvalue.as_ptr()) };
+            Ok(())
+        }
+        StartupWhere::Task { name, .. } => schtasks(&["/Delete", "/TN", name, "/F"]),
+        _ => Err(StartupError::Unsupported),
+    }
+}
+
+/// `schtasks` with these arguments, each passed as one argument: no shell is involved.
+#[cfg(windows)]
+fn schtasks(args: &[&str]) -> Result<(), super::startup::StartupError> {
+    use super::startup::StartupError;
+
+    if args.iter().any(|a| a.contains('"')) {
+        return Err(StartupError::Failed(
+            "a task name with a quote in it".into(),
+        ));
+    }
+    let out = std::process::Command::new("schtasks")
+        .args(args)
+        .output()
+        .map_err(|e| StartupError::Failed(e.to_string()))?;
+    if out.status.success() {
+        return Ok(());
+    }
+    let said = String::from_utf8_lossy(&out.stderr);
+    let lower = said.to_lowercase();
+    if lower.contains("denied") || lower.contains("negato") || lower.contains("verweigert") {
+        return Err(StartupError::NeedsRoot);
+    }
+    let line = said.lines().next().unwrap_or("").trim();
+    Err(StartupError::Failed(if line.is_empty() {
+        "schtasks refused".into()
+    } else {
+        line.to_string()
+    }))
+}
+
+/// Now as a `FILETIME`: hundreds of nanoseconds since 1601.
+#[cfg(windows)]
+fn filetime_now() -> u64 {
+    let since = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    116_444_736_000_000_000 + (since.as_nanos() / 100) as u64
+}
+
+/// Every string value of a key — `REG_SZ` and `REG_EXPAND_SZ` — by name, as written.
+#[cfg(windows)]
+fn reg_strings(
+    root: windows_sys::Win32::System::Registry::HKEY,
+    path: &str,
+) -> Vec<(String, String)> {
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::System::Registry::{
+        RegCloseKey, RegEnumValueW, RegOpenKeyExW, HKEY, KEY_READ, REG_EXPAND_SZ, REG_SZ,
+    };
+
+    let mut key: HKEY = std::ptr::null_mut();
+    // SAFETY: the path is a NUL-terminated wide string that outlives the call, and `key` is
+    // one whole handle the call writes into.
+    if unsafe { RegOpenKeyExW(root, wide_str(path).as_ptr(), 0, KEY_READ, &mut key) }
+        != ERROR_SUCCESS
+    {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut index = 0u32;
+    loop {
+        // A value's name is at most 16383 characters; its data here is a command line,
+        // and one longer than this is read as far as it goes.
+        let mut name = vec![0u16; 16384];
+        let mut name_len = name.len() as u32;
+        let mut data = vec![0u8; 8192];
+        let mut data_len = data.len() as u32;
+        let mut kind = 0u32;
+        // SAFETY: both buffers are as long as the call is told, and it writes the lengths
+        // it used back into them.
+        let code = unsafe {
+            RegEnumValueW(
+                key,
+                index,
+                name.as_mut_ptr(),
+                &mut name_len,
+                std::ptr::null(),
+                &mut kind,
+                data.as_mut_ptr(),
+                &mut data_len,
+            )
+        };
+        index += 1;
+        if code != ERROR_SUCCESS {
+            // ERROR_MORE_DATA is a value too long to read here: it is skipped, and the
+            // rest are still read. Anything else is the end of the list.
+            if code == windows_sys::Win32::Foundation::ERROR_MORE_DATA && index < 10_000 {
+                continue;
+            }
+            break;
+        }
+        if kind != REG_SZ && kind != REG_EXPAND_SZ {
+            continue;
+        }
+        let value = String::from_utf16_lossy(&name[..name_len as usize]);
+        let wide: Vec<u16> = data[..data_len as usize]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|c| u16::from_le_bytes(*c))
+            .collect();
+        let command = String::from_utf16_lossy(&wide)
+            .trim_end_matches('\0')
+            .to_string();
+        out.push((value, command));
+    }
+    // SAFETY: the handle came from `RegOpenKeyExW` and is closed exactly once.
+    unsafe { RegCloseKey(key) };
+    out
+}
+
+/// A binary value under a key, or nothing where there is none.
+#[cfg(windows)]
+fn reg_binary(
+    root: windows_sys::Win32::System::Registry::HKEY,
+    path: &str,
+    name: &str,
+) -> Option<Vec<u8>> {
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::System::Registry::{RegGetValueW, RRF_RT_REG_BINARY};
+
+    let (path, name) = (wide_str(path), wide_str(name));
+    let mut buffer = vec![0u8; 64];
+    let mut size = buffer.len() as u32;
+    // SAFETY: both strings are NUL-terminated and outlive the call; the buffer holds `size`
+    // bytes, which the call writes at most.
+    let code = unsafe {
+        RegGetValueW(
+            root,
+            path.as_ptr(),
+            name.as_ptr(),
+            RRF_RT_REG_BINARY,
+            std::ptr::null_mut(),
+            buffer.as_mut_ptr().cast(),
+            &mut size,
+        )
+    };
+    if code != ERROR_SUCCESS {
+        return None;
+    }
+    buffer.truncate(size as usize);
+    Some(buffer)
+}
+
+/// Write a binary value, making the key if it is not there yet.
+#[cfg(windows)]
+fn reg_set_binary(
+    root: windows_sys::Win32::System::Registry::HKEY,
+    path: &str,
+    name: &str,
+    bytes: &[u8],
+) -> Result<(), super::startup::StartupError> {
+    use super::startup::StartupError;
+    use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_SUCCESS};
+    use windows_sys::Win32::System::Registry::{
+        RegCloseKey, RegCreateKeyExW, RegSetValueExW, HKEY, KEY_SET_VALUE, REG_BINARY,
+        REG_OPTION_NON_VOLATILE,
+    };
+
+    let fail = |code: u32| {
+        if code == ERROR_ACCESS_DENIED {
+            StartupError::NeedsRoot
+        } else {
+            StartupError::Failed(format!("error {code}"))
+        }
+    };
+    let mut key: HKEY = std::ptr::null_mut();
+    // SAFETY: the path is NUL-terminated and outlives the call; no class and no security
+    // attributes are passed, which the call documents; `key` is one handle it writes into.
+    let code = unsafe {
+        RegCreateKeyExW(
+            root,
+            wide_str(path).as_ptr(),
+            0,
+            std::ptr::null(),
+            REG_OPTION_NON_VOLATILE,
+            KEY_SET_VALUE,
+            std::ptr::null(),
+            &mut key,
+            std::ptr::null_mut(),
+        )
+    };
+    if code != ERROR_SUCCESS {
+        return Err(fail(code));
+    }
+    let wname = wide_str(name);
+    // SAFETY: the key is open for setting values; the name is NUL-terminated and the data
+    // is `bytes.len()` bytes long, as the call is told.
+    let code = unsafe {
+        RegSetValueExW(
+            key,
+            wname.as_ptr(),
+            0,
+            REG_BINARY,
+            bytes.as_ptr(),
+            bytes.len() as u32,
+        )
+    };
+    // SAFETY: the handle came from `RegCreateKeyExW` and is closed exactly once.
+    unsafe { RegCloseKey(key) };
+    if code != ERROR_SUCCESS {
+        return Err(fail(code));
+    }
+    Ok(())
+}

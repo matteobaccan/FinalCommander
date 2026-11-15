@@ -1743,6 +1743,11 @@ impl Form {
                 t("drive-services"),
                 cfg.panels.services,
             ),
+            Field::toggle(
+                "drives.panels.startup",
+                t("drive-startup"),
+                cfg.panels.startup,
+            ),
             Field::toggle("drives.panels.tools", t("drive-tools"), cfg.panels.tools),
             Field::toggle("drives.panels.temp", t("drive-temp"), cfg.panels.temp),
             Field::toggle("drives.panels.trash", t("drive-trash"), cfg.panels.trash),
