@@ -15,7 +15,7 @@
   <a href="https://github.com/matteobaccan/FinalCommander/releases/latest"><img src="https://img.shields.io/github/v/release/matteobaccan/FinalCommander?label=release&color=blue" alt="Latest release"></a>
   <a href="https://github.com/matteobaccan/FinalCommander/releases"><img src="https://img.shields.io/github/downloads/matteobaccan/FinalCommander/total?label=downloads" alt="Downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-green" alt="MIT licence"></a>
-  <img src="https://img.shields.io/badge/rust-1.89%2B-dea584?logo=rust&logoColor=white" alt="Rust 1.89 or newer">
+  <img src="https://img.shields.io/badge/rust-1.100%2B-dea584?logo=rust&logoColor=white" alt="Rust 1.100 or newer">
   <img src="https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-one%20binary-lightgrey" alt="Linux, macOS and Windows: one binary">
   <a href="https://matteobaccan.github.io/FinalCommander/"><img src="https://img.shields.io/badge/site-matteobaccan.github.io-6f42c1" alt="The project's site"></a>
 </p>
@@ -212,7 +212,7 @@ cannot drift apart.
 macOS will refuse a binary it has not seen before; it is not signed yet, so the first run
 needs `xattr -d com.apple.quarantine fcmd` (or Open anyway in System Settings → Privacy).
 
-From source, with Rust 1.89 or newer:
+From source, with Rust 1.100 or newer:
 
 ```sh
 cargo install --git https://github.com/matteobaccan/FinalCommander fcmd

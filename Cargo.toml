@@ -10,7 +10,7 @@ default-members = ["crates/fcmd"]
 [workspace.package]
 version = "0.43.0"
 edition = "2021"
-rust-version = "1.89"
+rust-version = "1.100"
 license = "MIT"
 repository = "https://github.com/matteobaccan/FinalCommander"
 authors = ["Matteo Baccan and the FinalCommander contributors"]

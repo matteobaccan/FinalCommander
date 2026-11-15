@@ -6,6 +6,11 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Building from source wants Rust 1.100 or newer (`rust-version`), the version the CI and the
+  releases are built with; it was 1.89 on paper and never checked.
+
 ## [0.43.0] — 2026-11-15
 
 ### Added
