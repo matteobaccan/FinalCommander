@@ -13,6 +13,14 @@ Still in the order the menus mention things, with the sections after them taken 
 have. **Open question** marks the rows where a decision comes before the code, and the row
 says what the decision stands on.
 
+## Next release (0.44)
+
+Decided with the author on 16 November 2026.
+
+| Item | Work | Note |
+| --- | --- | --- |
+| **WebAssembly disassembled in the viewer** | S | `F5` on a `.wasm` shows the module as WAT text, with no program to install: `wasmprinter` (and the `wasmparser` it is built on) from the Bytecode Alliance's `wasm-tools`, pure Rust, Apache-2.0 WITH LLVM-exception / MIT, already allowed by `deny.toml`. Chosen over a reader of our own because the format keeps growing (SIMD, threads, GC, exceptions, components) and these are kept by the people who write the specification. The structure pane (`Shift+F11`) lists what `wasmparser` reads: the sections with their sizes, the types, the imports and exports, the functions with their sizes and names from the `name` section. `disasm.rs` already recognises the format; the `[[decompile]]` rule `wasm2wat` stays for whoever prefers wabt. Limits as for the other formats (the size read in one go); a module the parser refuses says why. Tested on a module built in the test, including one with SIMD |
+
 ## Parity after 0.41
 
 "Do we do everything the other commanders do?" — **no: about three quarters of it.** For
