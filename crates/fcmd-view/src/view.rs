@@ -706,6 +706,26 @@ impl Viewer {
 
     /// The text at `offset`: a PNG text chunk when one starts there, otherwise an EXIF value.
     fn text_at(&mut self, offset: u64) -> Option<String> {
+        // An ID3v2 frame — the lyrics of an MP3 — read by the tag's own rules.
+        let tag = self.source.read_vec(0, 10).ok()?;
+        if tag.starts_with(b"ID3") {
+            let frame = self.source.read_vec(offset, 10).ok()?;
+            if matches!(frame.get(..4), Some(b"USLT") | Some(b"COMM")) {
+                let major = tag[3];
+                let size = if major == 4 {
+                    frame[4..8]
+                        .iter()
+                        .fold(0usize, |n, &b| (n << 7) | usize::from(b & 0x7F))
+                } else {
+                    u32::from_be_bytes(frame[4..8].try_into().ok()?) as usize
+                };
+                if size > crate::aigen::TEXT_LIMIT {
+                    return None;
+                }
+                let whole = self.source.read_vec(offset, 10 + size).ok()?;
+                return crate::tags::id3_frame_text(major, &whole);
+            }
+        }
         let head = self.source.read_vec(offset, 8).ok()?;
         if let Some(kind) = head
             .get(4..8)
@@ -3043,6 +3063,47 @@ mod tests {
         let shown = texts(&mut v, 80, 10).join("\n");
         assert!(shown.contains("\"class_type\": \"KSampler\""), "{shown}");
         assert!(shown.lines().count() > 3, "laid out, not one line: {shown}");
+    }
+
+    /// `Enter` on the lyrics of an MP3 in the structure pane: the words, line by line, as a
+    /// view of their own — the frame is read where the row points.
+    #[test]
+    fn enter_on_the_lyrics_of_an_mp3_opens_the_words() {
+        let words = "[Verse 1]\nPrima riga\nSeconda riga\n\0";
+        let mut uslt = b"\x03eng\0".to_vec();
+        uslt.extend(words.as_bytes());
+        let n = uslt.len();
+        let mut frames = b"TIT2".to_vec();
+        frames.extend([0, 0, 0, 6, 0, 0]);
+        frames.extend(b"\x03Brano");
+        frames.extend(b"USLT");
+        frames.extend([
+            (n >> 21) as u8 & 0x7F,
+            (n >> 14) as u8 & 0x7F,
+            (n >> 7) as u8 & 0x7F,
+            n as u8 & 0x7F,
+            0,
+            0,
+        ]);
+        frames.extend(&uslt);
+        let len = frames.len();
+        let mut m = b"ID3\x04\x00\x00".to_vec();
+        m.extend([0, 0, (len >> 7) as u8 & 0x7F, len as u8 & 0x7F]);
+        m.extend(frames);
+        m.extend(vec![0u8; 512]);
+        let mut v = viewer(&m);
+        assert!(v.toggle_structure());
+        let rows = v.structure().expect("a structure").rows.clone();
+        let at = rows
+            .iter()
+            .position(|r| r.kind == crate::structure::RowKind::Text && r.label == "lyrics")
+            .unwrap_or_else(|| panic!("no lyrics row: {rows:#?}"));
+        v.struct_cursor = at;
+        assert!(v.structure_text());
+        let shown = texts(&mut v, 80, 10).join("\n");
+        assert!(shown.contains("[Verse 1]"), "{shown}");
+        assert!(shown.contains("Seconda riga"), "{shown}");
+        assert!(shown.lines().count() >= 3, "line by line: {shown}");
     }
 
     /// A form's `{ … }` of binary data scrolled half off the top: the rows still on screen

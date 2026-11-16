@@ -29,8 +29,7 @@ pub(crate) fn read(src: &mut dyn Bytes, head: &[u8], len: u64) -> Option<Structu
         return Some(gif(head));
     }
     if head.starts_with(b"ID3") {
-        let b = src.at(0, HEAD);
-        return Some(id3(&b, len));
+        return Some(id3(src, len));
     }
     if head.starts_with(b"fLaC") {
         let b = src.at(0, HEAD);
@@ -715,96 +714,583 @@ fn id3_label(id: &str) -> Option<&'static str> {
     })
 }
 
-fn id3(b: &[u8], len: u64) -> Structure {
-    let major = b.get(3).copied().unwrap_or(0);
-    let flags = b.get(5).copied().unwrap_or(0);
-    let size = syncsafe(b, 6).unwrap_or(0) as usize;
+/// The most of an ID3v2 tag read in one go. A tag is a few kilobytes of text and one picture;
+/// sixteen megabytes is a cover nobody embeds on purpose, and what is past it is reported as
+/// cut rather than read.
+const ID3_LIMIT: usize = 16 * 1024 * 1024;
+
+/// How far into the audio the first MPEG frame is looked for, past the tag.
+const AUDIO_PROBE: usize = 64 * 1024;
+
+/// Undo the unsynchronisation scheme: every `FF 00` was an `FF` before the writer put a zero
+/// after it so that no `FF Ex` in the data could pass for the start of an MPEG frame.
+fn unsync(b: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(b.len());
+    let mut prev = 0u8;
+    for &c in b {
+        if !(prev == 0xFF && c == 0) {
+            out.push(c);
+        }
+        prev = c;
+    }
+    out
+}
+
+/// A string up to its terminator, for the encoding given, and what follows it. UTF-16's
+/// terminator is two zero bytes on an even offset; the others' is one zero byte.
+fn id3_split(b: &[u8], enc: u8) -> (&[u8], &[u8]) {
+    if enc == 1 || enc == 2 {
+        let mut i = 0;
+        while i + 1 < b.len() {
+            if b[i] == 0 && b[i + 1] == 0 {
+                return (&b[..i], &b[i + 2..]);
+            }
+            i += 2;
+        }
+        (b, &[])
+    } else {
+        match b.iter().position(|&c| c == 0) {
+            Some(i) => (&b[..i], &b[i + 1..]),
+            None => (b, &[]),
+        }
+    }
+}
+
+/// A string in the encoding given, without the encoding byte in front.
+fn id3_decode(enc: u8, b: &[u8]) -> String {
+    let mut v = Vec::with_capacity(b.len() + 1);
+    v.push(enc);
+    v.extend_from_slice(b);
+    id3_text_whole(&v)
+}
+
+/// Like [`id3_text`], but keeping the line breaks a long text has: lyrics and comments are
+/// read whole, where a title stops at its first terminator.
+fn id3_text_whole(b: &[u8]) -> String {
+    let Some((&enc, rest)) = b.split_first() else {
+        return String::new();
+    };
+    let s = match enc {
+        1 | 2 => {
+            let (body, big) = match rest {
+                [0xFE, 0xFF, tail @ ..] => (tail, true),
+                [0xFF, 0xFE, tail @ ..] => (tail, false),
+                _ => (rest, enc == 2),
+            };
+            let units: Vec<u16> = body
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|c| {
+                    if big {
+                        u16::from_be_bytes([c[0], c[1]])
+                    } else {
+                        u16::from_le_bytes([c[0], c[1]])
+                    }
+                })
+                .collect();
+            String::from_utf16_lossy(&units)
+        }
+        3 => String::from_utf8_lossy(rest).into_owned(),
+        _ => rest.iter().map(|&c| c as char).collect(),
+    };
+    s.trim_end_matches('\0')
+        .replace("\r\n", "\n")
+        .trim()
+        .to_string()
+}
+
+/// What the URL frames are called. They carry no encoding byte: the URL is ISO-8859-1.
+fn id3_url_label(id: &str) -> Option<&'static str> {
+    Some(match id {
+        "WOAS" | "WAS" => "source URL",
+        "WOAR" | "WAR" => "artist URL",
+        "WOAF" | "WAF" => "file URL",
+        "WCOM" | "WCM" => "buy URL",
+        "WCOP" | "WCP" => "copyright URL",
+        "WPUB" | "WPB" => "publisher URL",
+        "WORS" => "radio URL",
+        "WPAY" => "payment URL",
+        _ => return None,
+    })
+}
+
+/// The picture types an `APIC` frame names, in the order the standard lists them.
+fn picture_kind(kind: u8) -> &'static str {
+    match kind {
+        0 => "other",
+        1 => "file icon",
+        2 => "other file icon",
+        3 => "front cover",
+        4 => "back cover",
+        5 => "leaflet page",
+        6 => "media",
+        7 => "lead artist",
+        8 => "artist",
+        9 => "conductor",
+        10 => "band",
+        11 => "composer",
+        12 => "lyricist",
+        13 => "recording location",
+        14 => "during recording",
+        15 => "during performance",
+        16 => "screen capture",
+        18 => "illustration",
+        19 => "band logotype",
+        20 => "publisher logotype",
+        _ => "picture",
+    }
+}
+
+/// A long text on one row: its lines joined, so the row can be read across and a search of the
+/// metadata finds a word in it. `Enter` on the row opens the whole text with its line breaks.
+fn one_line(text: &str) -> String {
+    text.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>()
+        .join(" / ")
+}
+
+/// The text of the `USLT` or `COMM` frame that starts at `frame` in an ID3v2 tag of version
+/// `major` — what `Enter` on the lyrics row opens. `None` when the bytes there are not one.
+pub(crate) fn id3_frame_text(major: u8, frame: &[u8]) -> Option<String> {
+    let id = frame.get(..4)?;
+    if id != b"USLT" && id != b"COMM" {
+        return None;
+    }
+    let size = if major == 4 {
+        syncsafe(frame, 4)?
+    } else {
+        be32(frame, 4)?
+    } as usize;
+    let flags = *frame.get(9)?;
+    let mut body = frame.get(10..10 + size)?.to_vec();
+    if major == 4 {
+        if flags & 0x0C != 0 {
+            return None;
+        }
+        if flags & 0x02 != 0 {
+            body = unsync(&body);
+        }
+        if flags & 0x01 != 0 {
+            body = body.get(4..)?.to_vec();
+        }
+    } else if flags & 0xC0 != 0 {
+        return None;
+    }
+    let enc = *body.first()?;
+    let (_, text) = id3_split(body.get(4..)?, enc);
+    Some(id3_decode(enc, text))
+}
+
+/// What the first MPEG audio frame after the tag says: version, layer, bitrate, sample rate,
+/// channels — and, from the Xing/Info header a VBR encoder writes into it, how many frames
+/// there are, which is the length, and the encoder's own name.
+fn mpeg_audio(b: &[u8], len: u64, audio_at: u64) -> Vec<Row> {
+    let Some(at) = (0..b.len().saturating_sub(4)).find(|&i| {
+        b[i] == 0xFF
+            && b[i + 1] & 0xE0 == 0xE0
+            && (b[i + 1] >> 3) & 3 != 1
+            && (b[i + 1] >> 1) & 3 != 0
+            && b[i + 2] >> 4 != 0xF
+            && (b[i + 2] >> 2) & 3 != 3
+    }) else {
+        return Vec::new();
+    };
+    let h = &b[at..];
+    let version = (h[1] >> 3) & 3; // 0: 2.5, 2: 2, 3: 1
+    let layer = 4 - ((h[1] >> 1) & 3); // 1, 2 or 3
+    let br_index = (h[2] >> 4) as usize;
+    let sr_index = ((h[2] >> 2) & 3) as usize;
+    let mode = h[3] >> 6; // 3: mono
+    let v1 = version == 3;
+    let bitrate: u32 = match (v1, layer) {
+        (true, 1) => [
+            0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448,
+        ],
+        (true, 2) => [
+            0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384,
+        ],
+        (true, _) => [
+            0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320,
+        ],
+        (false, 1) => [
+            0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256,
+        ],
+        (false, _) => [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160],
+    }[br_index.min(14)];
+    let rate = [44100u32, 48000, 32000][sr_index]
+        / match version {
+            3 => 1,
+            2 => 2,
+            _ => 4,
+        };
+    let samples: u32 = match (layer, v1) {
+        (1, _) => 384,
+        (2, _) => 1152,
+        (_, true) => 1152,
+        _ => 576,
+    };
+    let version_name = match version {
+        3 => "MPEG-1",
+        2 => "MPEG-2",
+        _ => "MPEG-2.5",
+    };
+    let channels = if mode == 3 { "mono" } else { "stereo" };
+    let mut rows = vec![
+        Row::group("Audio"),
+        field(
+            "stream",
+            format!("{version_name} layer {layer}, {rate} Hz, {channels}"),
+        ),
+    ];
+    // The Xing/Info header sits after the side information, whose size depends on the version
+    // and the channels.
+    let side = match (v1, mode == 3) {
+        (true, false) => 32,
+        (true, true) => 17,
+        (false, false) => 17,
+        (false, true) => 9,
+    };
+    let x = 4 + side;
+    let mut frames = None;
+    let mut vbr = false;
+    if let Some(tag) = h.get(x..x + 4) {
+        if tag == b"Xing" || tag == b"Info" {
+            vbr = tag == b"Xing";
+            let flags = be32(h, x + 4).unwrap_or(0);
+            if flags & 1 != 0 {
+                frames = be32(h, x + 8);
+            }
+            // The LAME extension follows the 120 bytes of the Xing header at most.
+            let mut lame_at = x + 8;
+            for (bit, n) in [(1, 4), (2, 4), (4, 100), (8, 4)] {
+                if flags & bit != 0 {
+                    lame_at += n;
+                }
+            }
+            if let Some(name) = h.get(lame_at..lame_at + 9) {
+                let name: String = name
+                    .iter()
+                    .take_while(|&&c| (0x20..0x7F).contains(&c))
+                    .map(|&c| c as char)
+                    .collect();
+                if name.len() >= 4 && name.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) {
+                    rows.push(field("encoder", name.trim().to_string()));
+                }
+            }
+        }
+    }
+    let audio_bytes = len.saturating_sub(audio_at);
+    let seconds = match frames {
+        Some(n) if rate > 0 => Some(u64::from(n) * u64::from(samples) / u64::from(rate)),
+        _ if bitrate > 0 => Some(audio_bytes * 8 / (u64::from(bitrate) * 1000)),
+        _ => None,
+    };
+    match (frames, bitrate) {
+        (Some(n), _) if seconds.is_some_and(|s| s > 0) => {
+            let kbps = audio_bytes * 8 / seconds.unwrap_or(1) / 1000;
+            let kind = if vbr { "variable" } else { "constant" };
+            rows.push(field(
+                "bitrate",
+                format!("{kbps} kbit/s on average, {kind}"),
+            ));
+            rows.push(field("frames", n.to_string()));
+        }
+        (_, br) if br > 0 => rows.push(field("bitrate", format!("{br} kbit/s"))),
+        _ => {}
+    }
+    if let Some(s) = seconds.filter(|s| *s > 0) {
+        rows.push(field("length", format!("{}:{:02}", s / 60, s % 60)));
+    }
+    rows
+}
+
+fn id3(src: &mut dyn Bytes, len: u64) -> Structure {
+    let head = src.at(0, 10);
+    let major = head.get(3).copied().unwrap_or(0);
+    let flags = head.get(5).copied().unwrap_or(0);
+    let size = syncsafe(&head, 6).unwrap_or(0) as usize;
+    let footer = if major == 4 && flags & 0x10 != 0 {
+        10
+    } else {
+        0
+    };
+    let b = src.at(0, (10 + size).min(ID3_LIMIT));
     let mut rows = vec![
         Row::group("ID3"),
         field("version", format!("ID3v2.{major}")),
         field("tag size", format!("{size} bytes")),
     ];
-    let mut tags = Vec::new();
     let end = (10 + size).min(b.len());
-    let mut at = 10usize;
+    // The whole tag unsynchronised (ID3v2.3, and v2.2): undone before a frame is read. In v2.4
+    // the flag means every frame is, and each frame says so itself.
+    let whole_unsync = flags & 0x80 != 0 && major < 4;
+    let body: Vec<u8> = if whole_unsync {
+        unsync(&b[10.min(end)..end])
+    } else {
+        b[10.min(end)..end].to_vec()
+    };
+    let mut at = 0usize;
     // An extended header is skipped by the size it states.
     if flags & 0x40 != 0 {
         let ext = if major == 4 {
-            syncsafe(b, at).unwrap_or(0) as usize
+            syncsafe(&body, at).unwrap_or(0) as usize
         } else {
-            be32(b, at).unwrap_or(0) as usize + 4
+            be32(&body, at).unwrap_or(0) as usize + 4
         };
         at += ext;
     }
     let short = major == 2;
-    while at + if short { 6 } else { 10 } <= end && tags.len() < 64 {
-        let (id, fsize, header) = if short {
-            let id = String::from_utf8_lossy(&b[at..at + 3]).into_owned();
-            let s = (usize::from(b[at + 3]) << 16)
-                | (usize::from(b[at + 4]) << 8)
-                | usize::from(b[at + 5]);
-            (id, s, 6)
+    let mut tags = Vec::new();
+    let mut extra = Vec::new();
+    let mut lyrics = Vec::new();
+    let mut comment = String::new();
+    let mut suno = false;
+    let mut credentials = None;
+    let mut unread = Vec::new();
+    while at + if short { 6 } else { 10 } <= body.len() && tags.len() + extra.len() < 96 {
+        let (id, fsize, header, fflags) = if short {
+            let id = String::from_utf8_lossy(&body[at..at + 3]).into_owned();
+            let s = (usize::from(body[at + 3]) << 16)
+                | (usize::from(body[at + 4]) << 8)
+                | usize::from(body[at + 5]);
+            (id, s, 6, 0u8)
         } else {
-            let id = String::from_utf8_lossy(&b[at..at + 4]).into_owned();
+            let id = String::from_utf8_lossy(&body[at..at + 4]).into_owned();
             let s = if major == 4 {
-                syncsafe(b, at + 4).unwrap_or(0)
+                syncsafe(&body, at + 4).unwrap_or(0)
             } else {
-                be32(b, at + 4).unwrap_or(0)
+                be32(&body, at + 4).unwrap_or(0)
             } as usize;
-            (id, s, 10)
+            (id, s, 10, body[at + 9])
         };
         // Padding: the rest of the tag is zeros.
         if id.starts_with('\0') || fsize == 0 {
             break;
         }
-        let Some(body) = b.get(at + header..at + header + fsize) else {
+        let Some(raw) = body.get(at + header..at + header + fsize) else {
             break;
         };
+        // Where the frame starts in the file, for `Enter` — only where the bytes in the file
+        // are the bytes read, which a tag unsynchronised as a whole is not.
+        let offset = (!whole_unsync).then_some((10 + at) as u64);
+        let mut data = raw.to_vec();
+        let mut readable = true;
+        if major == 4 {
+            if fflags & 0x0C != 0 {
+                readable = false;
+            }
+            if fflags & 0x02 != 0 {
+                data = unsync(&data);
+            }
+            if fflags & 0x01 != 0 && data.len() >= 4 {
+                data.drain(..4);
+            }
+        } else if major == 3 {
+            if fflags & 0xC0 != 0 {
+                readable = false;
+            } else if fflags & 0x20 != 0 && !data.is_empty() {
+                data.remove(0); // the grouping byte
+            }
+        }
+        at += header + fsize;
+        if !readable {
+            unread.push(id);
+            continue;
+        }
+        let data = &data[..];
         if let Some(label) = id3_label(&id) {
-            let v = id3_text(body);
+            let v = id3_text(data);
             if !v.is_empty() {
                 tags.push(field(label, v));
             }
-        } else if id == "COMM" || id == "COM" {
-            // encoding, a three-letter language, a description, then the comment.
-            if body.len() > 4 {
-                let enc = body[0];
-                let rest = &body[4..];
-                let wide = enc == 1 || enc == 2;
-                let skip = if wide {
-                    rest.as_chunks::<2>()
-                        .0
-                        .iter()
-                        .position(|c| *c == [0, 0])
-                        .map(|p| p * 2 + 2)
-                } else {
-                    rest.iter().position(|&c| c == 0).map(|p| p + 1)
-                };
-                if let Some(skip) = skip {
-                    let mut v = vec![enc];
-                    v.extend(&rest[skip..]);
-                    let c = id3_text(&v);
-                    if !c.is_empty() {
-                        tags.push(field("comment", c));
-                    }
+        } else if let Some(label) = id3_url_label(&id) {
+            let url = text(data);
+            if url.contains("suno.com/") {
+                suno = true;
+            }
+            if !url.is_empty() {
+                extra.push(field(label, url));
+            }
+        } else if id == "WXXX" || id == "WXX" {
+            if let Some((&enc, rest)) = data.split_first() {
+                let (desc, url) = id3_split(rest, enc);
+                let desc = id3_decode(enc, desc);
+                let url = text(url);
+                if !url.is_empty() {
+                    let label = if desc.is_empty() {
+                        "URL".to_string()
+                    } else {
+                        format!("URL ({desc})")
+                    };
+                    extra.push(field(label, url));
                 }
             }
+        } else if id == "TXXX" || id == "TXX" {
+            if let Some((&enc, rest)) = data.split_first() {
+                let (desc, value) = id3_split(rest, enc);
+                let desc = id3_decode(enc, desc);
+                let value = id3_decode(enc, value);
+                if !value.is_empty() {
+                    extra.push(field(
+                        if desc.is_empty() { "text".into() } else { desc },
+                        one_line(&value),
+                    ));
+                }
+            }
+        } else if id == "COMM" || id == "COM" {
+            // encoding, a three-letter language, a description, then the comment.
+            if data.len() > 4 {
+                let enc = data[0];
+                let (_, rest) = id3_split(&data[4..], enc);
+                let c = id3_decode(enc, rest);
+                if !c.is_empty() && comment.is_empty() {
+                    comment = c;
+                }
+            }
+        } else if id == "USLT" || id == "ULT" {
+            // encoding, a language (which writers fill with `eng` whatever the words are in),
+            // a description, then the words.
+            if data.len() > 4 {
+                let enc = data[0];
+                let (_, rest) = id3_split(&data[4..], enc);
+                let words = id3_decode(enc, rest);
+                if !words.is_empty() {
+                    lyrics.push((words, offset));
+                }
+            }
+        } else if id == "SYLT" || id == "SLT" {
+            extra.push(field("synchronised lyrics", format!("{fsize} bytes")));
         } else if id == "APIC" || id == "PIC" {
-            tags.push(field("cover", format!("a picture, {fsize} bytes")));
+            tags.push(field("cover", picture(data, short, fsize)));
+        } else if id == "GEOB" || id == "GEO" {
+            if let Some((&enc, rest)) = data.split_first() {
+                let (mime, rest) = id3_split(rest, 0);
+                let (name, rest) = id3_split(rest, enc);
+                let (_, object) = id3_split(rest, enc);
+                let mime = text(mime);
+                if mime.contains("c2pa") {
+                    credentials = Some(object.len());
+                } else {
+                    let name = id3_decode(enc, name);
+                    let name = if name.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" `{name}`")
+                    };
+                    extra.push(field(
+                        "object",
+                        format!("{mime}{name}, {} bytes", object.len()),
+                    ));
+                }
+            }
         }
-        at += header + fsize;
     }
-    if !tags.is_empty() {
+    // Suno's comment is three facts in one string: `made with suno; created=…; id=…`.
+    if !comment.is_empty() {
+        let lower = comment.to_ascii_lowercase();
+        if lower.starts_with("made with suno") {
+            suno = true;
+            for part in comment.split(';').map(str::trim).skip(1) {
+                match part.split_once('=') {
+                    Some(("created", v)) => tags.push(field("created", v.trim().to_string())),
+                    Some(("id", v)) => tags.push(field("Suno id", v.trim().to_string())),
+                    Some((k, v)) => tags.push(field(k.trim().to_string(), v.trim().to_string())),
+                    None => {}
+                }
+            }
+        } else {
+            tags.push(field("comment", one_line(&comment)));
+        }
+        // A `TXXX` that only repeats the comment says nothing new — Suno writes both.
+        extra.retain(|r| r.value != one_line(&comment));
+    }
+    if suno {
+        tags.insert(0, field("made with", "Suno"));
+    }
+    if !tags.is_empty() || !extra.is_empty() {
         rows.push(Row::group("Tags"));
         rows.extend(tags);
+        rows.extend(extra);
+    }
+    for (words, offset) in &lyrics {
+        if lyrics.len() == 1 {
+            rows.push(Row::group("Lyrics"));
+        }
+        let lines = words.lines().filter(|l| !l.trim().is_empty()).count();
+        rows.push(field("lines", lines.to_string()));
+        rows.push(Row {
+            kind: crate::structure::RowKind::Text,
+            label: "lyrics".to_string(),
+            raw: String::new(),
+            value: one_line(words),
+            offset: *offset,
+        });
+    }
+    if let Some(bytes) = credentials {
+        rows.push(Row::group("Content credentials (C2PA)"));
+        rows.push(field("manifest", format!("{bytes} bytes, signed")));
+    }
+    if !unread.is_empty() {
+        rows.push(field(
+            "not read",
+            format!("{} (compressed or encrypted)", unread.join(", ")),
+        ));
+    }
+    let audio_at = (10 + size + footer) as u64;
+    if audio_at < len {
+        let probe = src.at(audio_at, AUDIO_PROBE);
+        rows.extend(mpeg_audio(&probe, len, audio_at));
     }
     let title = rows
         .iter()
         .find(|r| r.label == "title")
         .map(|r| format!(" · {}", r.value))
         .unwrap_or_default();
+    let maker = if suno { " · Suno" } else { "" };
+    let length = rows
+        .iter()
+        .find(|r| r.label == "length")
+        .map(|r| format!(" · {}", r.value))
+        .unwrap_or_default();
     let truncated = 10 + size > b.len() && (b.len() as u64) < len;
-    structure("MP3", format!("ID3v2.{major}{title}"), rows, truncated)
+    structure(
+        "MP3",
+        format!("ID3v2.{major}{maker}{title}{length}"),
+        rows,
+        truncated,
+    )
+}
+
+/// An `APIC` (or v2.2 `PIC`) frame in words: what kind of picture, in what format, how big.
+fn picture(data: &[u8], short: bool, size: usize) -> String {
+    let Some((&enc, rest)) = data.split_first() else {
+        return format!("a picture, {size} bytes");
+    };
+    let (mime, rest) = if short {
+        (rest.get(..3).unwrap_or(&[]), rest.get(3..).unwrap_or(&[]))
+    } else {
+        id3_split(rest, 0)
+    };
+    let Some((&kind, rest)) = rest.split_first() else {
+        return format!("a picture, {size} bytes");
+    };
+    let (desc, image) = id3_split(rest, enc);
+    let mime = text(mime);
+    let mime = match mime.to_ascii_lowercase().as_str() {
+        "jpg" => "image/jpeg".to_string(),
+        "png" => "image/png".to_string(),
+        _ => mime,
+    };
+    let desc = id3_decode(enc, desc);
+    let mut out = format!("{}, {mime}", picture_kind(kind));
+    if !desc.is_empty() && !desc.eq_ignore_ascii_case(picture_kind(kind)) {
+        out.push_str(&format!(" `{desc}`"));
+    }
+    out.push_str(&format!(", {} bytes", image.len()));
+    out
 }
 
 fn id3v1(t: &[u8]) -> Structure {
@@ -1141,6 +1627,174 @@ mod tests {
         assert_eq!(s.summary, "FLAC · 0:10");
         assert_eq!(get(&s, "title"), "Nel blu");
         assert_eq!(get(&s, "encoder"), "test");
+    }
+
+    fn synchsafe(n: usize) -> [u8; 4] {
+        [
+            (n >> 21) as u8 & 0x7F,
+            (n >> 14) as u8 & 0x7F,
+            (n >> 7) as u8 & 0x7F,
+            n as u8 & 0x7F,
+        ]
+    }
+
+    /// An ID3v2.4 frame: the id, a synchsafe size, the two flag bytes, the data.
+    fn frame24(id: &[u8], flags: u8, body: &[u8]) -> Vec<u8> {
+        let mut f = id.to_vec();
+        f.extend(synchsafe(body.len()));
+        f.extend([0, flags]);
+        f.extend(body);
+        f
+    }
+
+    fn tag24(frames: &[u8], padding: usize) -> Vec<u8> {
+        let mut m = b"ID3\x04\x00\x00".to_vec();
+        m.extend(synchsafe(frames.len() + padding));
+        m.extend(frames);
+        m.extend(vec![0u8; padding]);
+        m
+    }
+
+    /// An MPEG-1 layer 3 frame at 128 kbit/s, 44.1 kHz, joint stereo, carrying a Xing header
+    /// that counts `frames` frames and a LAME tag after it — the first frame a VBR encoder
+    /// writes.
+    fn xing_frame(frames: u32) -> Vec<u8> {
+        let mut f = vec![0xFF, 0xFB, 0x90, 0x44];
+        f.extend([0u8; 32]); // side information
+        f.extend(b"Xing");
+        f.extend(1u32.to_be_bytes()); // only the frame count
+        f.extend(frames.to_be_bytes());
+        f.extend(b"LAME3.100");
+        f.resize(417, 0);
+        f
+    }
+
+    /// The tag Suno writes, frame for frame as the spec found it in two hundred files: every
+    /// text in UTF-8 but `TXXX` in UTF-16, the comment three facts in one string, the words in
+    /// `USLT` with `eng` whatever language they are in, a front cover, and a C2PA manifest.
+    fn suno_mp3() -> Vec<u8> {
+        let words = "[Verse 1]\nAsfalto madre, notte di luce\n\n[Chorus]\nTorna la voce\n\0";
+        let comment = "made with suno; created=2026-04-19T10:43:41.722477+00:00; id=f63d25df-712a-451b-a981-94a6d02c3d9f";
+        let mut txxx = vec![1u8, 0xFF, 0xFE];
+        for u in "comment".encode_utf16() {
+            txxx.extend(u.to_le_bytes());
+        }
+        txxx.extend([0, 0, 0xFF, 0xFE]);
+        for u in comment.encode_utf16() {
+            txxx.extend(u.to_le_bytes());
+        }
+        let mut frames = Vec::new();
+        frames.extend(frame24(b"TIT2", 0, b"\x03Asfalto madre\0"));
+        frames.extend(frame24(b"TPE1", 0, b"\x03matteobaccan\0"));
+        frames.extend(frame24(b"TSSE", 0, b"\x03Lavf60.16.100\0"));
+        frames.extend(frame24(
+            b"WOAS",
+            0,
+            b"https://suno.com/song/f63d25df-712a-451b-a981-94a6d02c3d9f\0",
+        ));
+        frames.extend(frame24(b"TXXX", 0, &txxx));
+        let mut comm = b"\x03eng\0".to_vec();
+        comm.extend(comment.as_bytes());
+        frames.extend(frame24(b"COMM", 0, &comm));
+        let mut uslt = b"\x03eng\0".to_vec();
+        uslt.extend(words.as_bytes());
+        frames.extend(frame24(b"USLT", 0, &uslt));
+        let mut apic = b"\x03image/jpeg\0\x03Cover\0".to_vec();
+        apic.extend([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4]);
+        frames.extend(frame24(b"APIC", 0, &apic));
+        let mut geob = b"\x03application/c2pa\0c2pa\0c2pa manifest store\0".to_vec();
+        geob.extend([0u8; 40]);
+        frames.extend(frame24(b"GEOB", 0, &geob));
+        let mut m = tag24(&frames, 64);
+        // 1000 frames of 1152 samples at 44.1 kHz: 26 seconds.
+        m.extend(xing_frame(1000));
+        m.extend(vec![0u8; 4096]);
+        m
+    }
+
+    #[test]
+    fn a_suno_mp3_says_who_made_it_when_and_the_words_of_the_song() {
+        let m = suno_mp3();
+        let s = read(&mut &m[..], &m, m.len() as u64).expect("an MP3");
+        assert_eq!(s.summary, "ID3v2.4 · Suno · Asfalto madre · 0:26");
+        assert_eq!(get(&s, "made with"), "Suno");
+        assert_eq!(get(&s, "artist"), "matteobaccan");
+        assert_eq!(
+            get(&s, "source URL"),
+            "https://suno.com/song/f63d25df-712a-451b-a981-94a6d02c3d9f"
+        );
+        assert_eq!(get(&s, "created"), "2026-04-19T10:43:41.722477+00:00");
+        assert_eq!(get(&s, "Suno id"), "f63d25df-712a-451b-a981-94a6d02c3d9f");
+        // The `TXXX` that repeats the comment is not shown twice.
+        assert!(!s.rows.iter().any(|r| r.label == "comment"), "{:?}", s.rows);
+        assert_eq!(get(&s, "cover"), "front cover, image/jpeg `Cover`, 8 bytes");
+        assert_eq!(get(&s, "manifest"), "40 bytes, signed");
+        assert_eq!(get(&s, "lines"), "4");
+        let lyrics = s
+            .rows
+            .iter()
+            .find(|r| r.label == "lyrics")
+            .expect("the words");
+        assert_eq!(lyrics.kind, crate::structure::RowKind::Text);
+        assert_eq!(
+            lyrics.value,
+            "[Verse 1] / Asfalto madre, notte di luce / [Chorus] / Torna la voce"
+        );
+        // `Enter` on the row reads the frame where it points, with its line breaks and
+        // without the terminating zero.
+        let at = lyrics.offset.expect("where the frame is") as usize;
+        assert_eq!(&m[at..at + 4], b"USLT");
+        assert_eq!(
+            id3_frame_text(4, &m[at..]).as_deref(),
+            Some("[Verse 1]\nAsfalto madre, notte di luce\n\n[Chorus]\nTorna la voce")
+        );
+        assert_eq!(get(&s, "stream"), "MPEG-1 layer 3, 44100 Hz, stereo");
+        assert_eq!(get(&s, "encoder"), "Lavf60.16.100");
+        assert_eq!(get(&s, "length"), "0:26");
+        assert_eq!(get(&s, "frames"), "1000");
+    }
+
+    /// An ordinary MP3 is read the same way, and none of it says Suno.
+    #[test]
+    fn an_mp3_that_is_not_from_suno_keeps_its_comment_and_says_nothing_of_suno() {
+        let mut frames = frame24(b"TIT2", 0, b"\x03Volare");
+        frames.extend(frame24(b"COMM", 0, b"\x03itanel blu\0dipinto di blu"));
+        frames.extend(frame24(b"WOAR", 0, b"https://example.org/modugno"));
+        let mut m = tag24(&frames, 0);
+        m.extend(xing_frame(0));
+        let s = read(&mut &m[..], &m, m.len() as u64).expect("an MP3");
+        assert!(!s.summary.contains("Suno"), "{}", s.summary);
+        assert!(!s.rows.iter().any(|r| r.label == "made with"));
+        assert_eq!(get(&s, "comment"), "dipinto di blu");
+        assert_eq!(get(&s, "artist URL"), "https://example.org/modugno");
+    }
+
+    /// A v2.3 tag unsynchronised as a whole, and a v2.4 frame with its own unsynchronisation
+    /// and a data length indicator in front: both read as the text they carry. A compressed
+    /// frame is named as not read rather than read as rubbish.
+    #[test]
+    fn unsynchronisation_and_the_data_length_indicator_are_undone() {
+        // v2.3: `ÿ` in Latin-1 is 0xFF; unsynchronised, a zero follows it.
+        // The size a frame states is the size of its data once the zeros are taken out.
+        let mut frame = b"TIT2".to_vec();
+        frame.extend(4u32.to_be_bytes());
+        frame.extend([0, 0]);
+        frame.extend(b"\x00\xFF\x00ab");
+        let mut m = b"ID3\x03\x00\x80".to_vec();
+        m.extend(synchsafe(frame.len()));
+        m.extend(&frame);
+        let s = read(&mut &m[..], &m, m.len() as u64).expect("an MP3");
+        assert_eq!(get(&s, "title"), "\u{FF}ab");
+
+        // v2.4: unsynchronised (0x02) with a data length indicator (0x01).
+        let mut body = 4u32.to_be_bytes().to_vec();
+        body.extend(b"\x03\xFF\x00z");
+        let mut frames = frame24(b"TPE1", 0x03, &body);
+        frames.extend(frame24(b"TALB", 0x08, b"\x78\x9c..."));
+        let m = tag24(&frames, 0);
+        let s = read(&mut &m[..], &m, m.len() as u64).expect("an MP3");
+        assert_eq!(get(&s, "artist"), "\u{FFFD}z");
+        assert_eq!(get(&s, "not read"), "TALB (compressed or encrypted)");
     }
 
     #[test]

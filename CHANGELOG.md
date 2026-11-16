@@ -6,6 +6,24 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **The words of a song, and more of what an MP3 says** (`Shift+F11`, and so `F11` and the
+  metadata search). The lyrics (`USLT`) are a row of their own, the lines joined so a search of
+  the metadata finds a word in them, and `Enter` opens them line by line. The links (`WOAS` —
+  the song's page — `WOAR`, `WXXX`…), the extra texts (`TXXX`, by their description), the
+  cover's kind and format, synchronised lyrics, attached objects and a C2PA manifest are shown
+  too; and from the first audio frame, the MPEG version and layer, the sample rate, the
+  channels, the bitrate and — from the Xing/LAME header — the exact length and the encoder. A
+  song made with Suno says *made with Suno*, with the moment it was created and its id there.
+
+### Fixed
+
+- An MP3 tag read whole rather than its first 512 KiB, so what comes after a large cover is no
+  longer lost; unsynchronisation (of the whole tag or of a frame) and the v2.4 data length
+  indicator are undone before a frame is read, and a compressed or encrypted frame is named as
+  not read instead of being shown as rubbish.
+
 ## [0.43.1] — 2026-11-15
 
 ### Changed

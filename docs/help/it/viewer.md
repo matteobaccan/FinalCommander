@@ -323,7 +323,12 @@ Lo stesso tasto risponde anche per i file che non sono programmi:
   e nome — lo stesso albero che `structure.txt` mostra quando il messaggio è aperto come
   cartella (*File di posta*). `Enter` su una parte di un `.eml` porta dove comincia nel file;
 - **la musica** — MP3, FLAC, Ogg Vorbis, Opus: titolo, artista, album, anno, traccia, genere,
-  se c'è una copertina, e per FLAC e Ogg il flusso e la durata.
+  la copertina (fronte, retro… e il formato), e per FLAC e Ogg il flusso e la durata. Un MP3
+  mostra anche i suoi link (la pagina del brano), i testi aggiuntivi che porta, il **testo del
+  brano** — su una riga, con `Invio` che apre le parole riga per riga — e, dal primo frame
+  audio, formato, frequenza, canali, bitrate e durata esatta. Un brano fatto con Suno lo dice,
+  con il momento in cui è stato creato e il suo id su Suno, e il suo manifest C2PA firmato
+  compare come credenziali del contenuto.
 
 `Shift+F11` non mostra un'immagine del file. I fotogrammi di un video li mostra `F3` stesso (*I
 video*, qui sopra); per il testo di un PDF o per quello che `ffprobe` dice di un film si
