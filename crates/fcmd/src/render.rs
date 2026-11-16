@@ -2638,6 +2638,10 @@ fn draw_viewer(app: &mut App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer) 
                 status_text = format!("{note}  {status_text}");
             }
         }
+        // A sound playing, or paused, says where it is and how long it runs.
+        if let Some(note) = app.sound_note(&viewer.path) {
+            status_text = format!("{note}  {status_text}");
+        }
         let status_w = status_text.chars().count().min(w as usize) as u16;
         let name_w = w.saturating_sub(status_w + 2);
         buf.put_str(
@@ -6374,6 +6378,67 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         app.handle_input(Input::Key("Down".parse().unwrap()));
         app.handle_input(Input::Key("F3".parse().unwrap()));
         (dir, app)
+    }
+
+    /// `p` on a song: the player on the machine plays it, the status line counts, `p`
+    /// pauses and plays on, `Shift+P` stops, and leaving the viewer stops it too. The
+    /// player here is a stand-in that waits, which is all the viewer can see of a real one.
+    #[cfg(unix)]
+    #[test]
+    fn p_plays_a_song_and_leaving_the_viewer_stops_it() {
+        use std::os::unix::fs::PermissionsExt;
+        let mut song = b"ID3\x04\x00\x00\x00\x00\x00\x00".to_vec();
+        song.extend(vec![0u8; 64]);
+        let (dir, mut app) = app_with_viewer("song.mp3", &song);
+        let player = dir.path().join("player");
+        std::fs::write(&player, "#!/bin/sh\nsleep 30\n").unwrap();
+        std::fs::set_permissions(&player, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let key = app.mode.viewer().expect("the viewer").path.clone();
+
+        // A machine with no player says what to install.
+        app.sound_start(None);
+        assert!(
+            app.status_error && app.status.contains("mpv"),
+            "{}",
+            app.status
+        );
+        assert!(app.sound_note(&key).is_none());
+
+        app.sound_start(Some(("ffplay", player.clone())));
+        assert!(app.status.contains("ffplay"), "{}", app.status);
+        assert!(app.sound_wait().is_some(), "the clock moves");
+        let out = frame(&mut app, 100, 20);
+        assert!(out.contains("▶ 00:00"), "{out}");
+
+        app.handle_input(Input::Key("p".parse().unwrap()));
+        assert!(app.status.contains("paused"), "{}", app.status);
+        assert!(app.sound_wait().is_none(), "a paused sound wakes nobody");
+        assert!(frame(&mut app, 100, 20).contains("⏸"));
+        app.handle_input(Input::Key("p".parse().unwrap()));
+        assert!(app.sound_note(&key).unwrap().starts_with('▶'));
+
+        app.handle_input(Input::Key("Shift+P".parse().unwrap()));
+        assert!(app.sound_note(&key).is_none(), "stopped");
+        assert!(app.status.contains("stopped"), "{}", app.status);
+
+        app.sound_start(Some(("ffplay", player)));
+        assert!(app.sound_note(&key).is_some());
+        app.handle_input(Input::Key("Esc".parse().unwrap()));
+        app.sound_check();
+        assert!(
+            app.sound_note(&key).is_none(),
+            "nobody is listening any more"
+        );
+    }
+
+    /// `p` on a file that is not a sound says so, and starts nothing.
+    #[test]
+    fn p_on_a_text_says_it_is_not_a_sound() {
+        let (_dir, mut app) = app_with_viewer("notes.txt", b"hello, world\n");
+        app.handle_input(Input::Key("p".parse().unwrap()));
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.status.contains("not a sound"), "{}", app.status);
+        assert!(app.sound_wait().is_none());
     }
 
     /// Which of insert and overwrite is on is a thing one has to be able to *see*: in a

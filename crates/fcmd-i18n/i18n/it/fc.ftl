@@ -1642,6 +1642,7 @@ tools-for-archives = archivi: { $what }
 tools-for-decompile = Shift+F6 nel visualizzatore su { $what }
 tools-for-git = il pannello Git (Ctrl+Alt+G) e il ramo nel prompt
 tools-for-video = i fotogrammi di un video nel visualizzatore e nella vista rapida (F3, Ctrl+Q)
+tools-for-sound = ascoltare un suono nel visualizzatore (p)
 tools-for-open = aprire un link nel browser
 tools-for-syslog = Comandi → Log di sistema
 tools-for-services = il pannello dei servizi
@@ -1846,6 +1847,15 @@ video-no-frame = nessun fotogramma da questo video: { $why }
 video-playing = in riproduzione a { $fps } fotogrammi al secondo, senza audio — Spazio mette in pausa
 video-paused = in pausa a { $at } — Spazio riprende, PagSu e PagGiù saltano di un decimo
 video-ended = il video è finito — Spazio lo fa ripartire
+sound-playing = in riproduzione con `{ $player }` — p mette in pausa, Shift+P ferma
+sound-paused = in pausa a { $at } — p riprende
+sound-stopped = il suono è stato fermato
+sound-ended = il suono è finito — p lo fa ripartire
+sound-needs-program = un suono si ascolta con `ffplay` (parte di ffmpeg) o con `mpv`, e su questa macchina non c'è nessuno dei due — Alt+F1, Programmi esterni, dice come installarli
+sound-not-sound = questo file non è un suono da dare a un lettore
+sound-not-local = si può ascoltare solo un file su questo disco: copialo qui prima
+sound-failed = non è stato possibile ascoltare il suono: { $why }
+sound-player-failed = `{ $player }` non è riuscito a riprodurre questo file
 
 
 # finding things

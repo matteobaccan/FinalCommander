@@ -1665,6 +1665,7 @@ tools-for-archives = архіви: { $what }
 tools-for-decompile = Shift+F6 у програмі перегляду для { $what }
 tools-for-git = панель Git (Ctrl+Alt+G) і гілка в запрошенні
 tools-for-video = кадри відео в програмі перегляду та швидкому перегляді (F3, Ctrl+Q)
+tools-for-sound = відтворення звуку в програмі перегляду (p)
 tools-for-open = відкриття посилання в браузері
 tools-for-syslog = Команди → Системний журнал
 tools-for-services = панель служб
@@ -1879,6 +1880,15 @@ video-no-frame = з цього відео немає кадру: { $why }
 video-playing = відтворення зі швидкістю { $fps } кадрів за секунду, без звуку — Space ставить на паузу
 video-paused = пауза на { $at } — Space продовжує, PgUp і PgDn крокують на десяту частину
 video-ended = відео закінчилося — Space відтворює його знову
+sound-playing = відтворення через `{ $player }` — p пауза, Shift+P стоп
+sound-paused = пауза на { $at } — p продовжує
+sound-stopped = відтворення зупинено
+sound-ended = звук закінчився — p запускає знову
+sound-needs-program = звук відтворюється через `ffplay` (входить до ffmpeg) або `mpv`, але жодної з них на цій машині немає — Alt+F1, Зовнішні програми, підкаже, як їх встановити
+sound-not-sound = цей файл не є звуком, який можна передати програвачу
+sound-not-local = відтворити можна лише файл на цьому диску: спершу скопіюйте його сюди
+sound-failed = не вдалося відтворити звук: { $why }
+sound-player-failed = `{ $player }` не зміг відтворити цей файл
 
 
 # finding things

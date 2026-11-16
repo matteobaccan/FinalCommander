@@ -1662,6 +1662,7 @@ tools-for-archives = archiwa: { $what }
 tools-for-decompile = Shift+F6 w podglądzie na { $what }
 tools-for-git = panel Git (Ctrl+Alt+G) i gałąź w znaku zachęty
 tools-for-video = klatki wideo w podglądzie i szybkim podglądzie (F3, Ctrl+Q)
+tools-for-sound = odtwarzanie dźwięku w podglądzie (p)
 tools-for-open = otwieranie odnośnika w przeglądarce
 tools-for-syslog = Polecenia → Dziennik systemowy
 tools-for-services = panel usług
@@ -1872,6 +1873,15 @@ video-no-frame = nie ma klatki z tego wideo: { $why }
 video-playing = odtwarzanie z prędkością { $fps } klatek na sekundę, bez dźwięku — Space wstrzymuje
 video-paused = wstrzymano na { $at } — Space odtwarza dalej, PgUp i PgDn skaczą o jedną dziesiątą
 video-ended = wideo się skończyło — Space odtwarza je ponownie
+sound-playing = odtwarzanie przez `{ $player }` — p pauza, Shift+P stop
+sound-paused = pauza na { $at } — p wznawia
+sound-stopped = odtwarzanie zatrzymane
+sound-ended = dźwięk się skończył — p odtwarza ponownie
+sound-needs-program = dźwięk odtwarza `ffplay` (część ffmpeg) lub `mpv`, a żadnego z nich nie ma na tej maszynie — Alt+F1, Programy zewnętrzne, podpowie, jak je zainstalować
+sound-not-sound = ten plik nie jest dźwiękiem, który można przekazać odtwarzaczowi
+sound-not-local = odtworzyć można tylko plik na tym dysku: najpierw skopiuj go tutaj
+sound-failed = nie udało się odtworzyć dźwięku: { $why }
+sound-player-failed = `{ $player }` nie zdołał odtworzyć tego pliku
 
 
 # finding things

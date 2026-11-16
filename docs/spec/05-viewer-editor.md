@@ -586,6 +586,38 @@ external programs panel, and named by the viewer when it is missing.
 - Only a file on this disk: a film on a server is fetched whole by `F3` first, as every file
   is, and the quick view does not fetch.
 
+#### 1.15a Sound: played through `ffplay` or `mpv`
+
+The same rule for sound (`audio.rs`): fcmd decodes none, and a sound file is handed to the
+first of **`ffplay`** (it comes with `ffmpeg`) and **`mpv`** found on the `PATH`, run with no
+window and no terminal — `ffplay -nodisp -autoexit -nostats -loglevel quiet [-ss <t>] <file>`,
+`mpv --no-video --no-terminal --really-quiet [--start=<t>] -- <file>` — with its input and
+output on the null device. Both are listed in the external programs panel.
+
+- **What is a sound**: by the first bytes (`media::may_be_sound`) — an ID3 tag or an MPEG audio
+  frame's sync word, `fLaC`, `OggS`, RIFF `WAVE`, `FORM` `AIFF`/`AIFC`, an `ftyp` of `M4A ` or
+  `M4B `. A film's sound is the film's and is not counted.
+- **Keys**: `p` plays from the beginning, pauses, and plays on; `Shift+P` stops
+  (`viewer.play`, `viewer.stop`). Neither player can be told to pause without a window or a
+  terminal to send the key to, so a pause stops the player and remembers the moment, and
+  playing on starts it again with that seek. A sound paused within a second of its end starts
+  from the beginning.
+- **The status line** leads with `▶ time / length`, `⏸` while paused. The time is the app's
+  own clock from the moment the player was started, not read back from the player; the
+  length is the *length* (MP3 from the Xing/Info header, FLAC) or *duration* (WAVE, MPEG-4)
+  row of the structure pane, and is left out when the file does not say. While it plays the
+  loop wakes once a second for it, and only then.
+- **It stops** when the viewer of that file is no longer on screen — closed, `+`/`-` to
+  another file, or the program quit — checked on every turn of the loop, and the player is
+  killed when the state that holds it is dropped. One sound at a time: `p` on another file
+  stops the first.
+- **The end**: a player that exits by itself with success says *the sound has ended* and `p`
+  plays it again; one that fails is named as unable to play the file. No player installed:
+  the status line names both and the panel where they are installed.
+- Only a file on this disk, as for a film: the copy `F3` fetched of a file on a server.
+- **Later**: an MP3 decoder in process (a crate from the author's *inga* project) replaces the
+  external player for MP3.
+
 ### 1.11 Table mode: the tabular formats
 
 A commander opens a `.csv`, a `.jsonl` and a `.dbf` every day, and all three read as what they

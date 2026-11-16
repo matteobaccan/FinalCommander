@@ -326,6 +326,8 @@ impl Command {
             Command::ViewerDecompile => "decompile, where a tool for it exists",
             Command::ViewerFilter => "read the output of a command instead of the file",
             Command::ViewerBlame => "who changed each line of the file, and when (git blame)",
+            Command::ViewerPlay => "play the sound, or pause it (ffplay or mpv)",
+            Command::ViewerStop => "stop the sound",
 
             Command::EditorQuit => "close the editor",
             Command::EditorSave => "save",

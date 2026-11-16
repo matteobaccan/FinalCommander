@@ -166,6 +166,7 @@ since 0.41.0 also `MU` (muCommander), `NNN`, `RANGER`, `LF`, `BROOT`, `VIFM`, `X
 | 5.21 | **Base64 decoded in the viewer** (`Alt+B`): the bare payload, PEM armour or a `data:` URI, shown as text or in the hex pane depending on what came out | NEW | ✓ |
 | 5.22 | **Pictures in the viewer**: `F3` on a PNG, JPEG, GIF or BMP draws it in real pixels where the terminal has them (kitty, iTerm2, sixel) and in half blocks in any other; `F4` goes on to the bytes | TC/KRU (lister plugins) | ✓ |
 | 5.24 | **Video frames through `ffmpeg`**: `F3` and `Ctrl+Q` on a video show a frame, `PgUp`/`PgDn` step by a tenth of it, `Space` plays without sound; `ffmpeg` is run as a program and named when it is missing | YAZI (video thumbnails) | ✓ |
+| 5.25 | **Sound played from the viewer**: `p` on an MP3, FLAC, Ogg, WAVE, AIFF or `.m4a` plays it through `ffplay` or `mpv` run as a program, pauses and plays on; `Shift+P` stops, leaving the viewer stops, and the status line shows the time and the length | TC/DC/NNN | ✓ |
 | 5.19 | **DBF**: dBase III/IV and FoxPro tables in table mode — the typed header, fixed-length records read at an offset so a 2 GB table opens at once, the deleted flag, and the memo files beside it (`.dbt`, `.fpt`) | NEW | ✓ |
 | 5.10 | Chrome toggles (key bar, status line, scrollbar) and the viewer's own settings | FAR | ✓ |
 | 5.11 | **Disassembly** (`F5`): ELF/PE/Mach-O/raw recognition, sections and symbols, x86/x86-64 decoding with symbol headings, instruction-accurate scrolling, raw sweep for files over the parse limit | NEW | ✓ |
@@ -467,7 +468,7 @@ work it is and whether the house rules allow it.
 | 12.32 | Fonts and SVG drawn in the preview | YAZI | ✗ |
 | 12.33 | Manual pages laid out (`nroff`) | MC | ~ through the filtered view (5.9) |
 | 12.34 | A ruler in the viewer, a right margin in the editor | MC | ✗ |
-| 12.35 | Sound played | TC/DC/NNN | ✗ decided with the video: sound stays out |
+| 12.35 | Sound played | TC/DC/NNN | ✓ through a player on the machine (5.25) |
 | 12.36 | HTML and RTF laid out to be read | TC/DC | ✗ Markdown is (5.7) |
 | 12.37 | Line numbers beside the text in the editor | MC | ✗ |
 | 12.38 | Spell check | MC | ✗ |

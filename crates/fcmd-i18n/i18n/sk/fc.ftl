@@ -1663,6 +1663,7 @@ tools-for-archives = archívy: { $what }
 tools-for-decompile = Shift+F6 v zobrazovači na { $what }
 tools-for-git = panel Git (Ctrl+Alt+G) a vetva vo výzve
 tools-for-video = snímky videa v zobrazovači a v rýchlom info (F3, Ctrl+Q)
+tools-for-sound = prehranie zvuku v zobrazovači (p)
 tools-for-open = otvorenie odkazu v prehliadači
 tools-for-syslog = Príkazy → Systémový log
 tools-for-services = panel služieb
@@ -1873,6 +1874,15 @@ video-no-frame = žiadna snímka z tohto videa: { $why }
 video-playing = prehráva sa pri { $fps } snímkach za sekundu, bez zvuku — Space pozastaví
 video-paused = pozastavené na { $at } — Space pokračuje, PgUp a PgDn krokujú po desatine
 video-ended = video skončilo — Space ho prehrá znova
+sound-playing = prehrávanie cez `{ $player }` — p pozastaví, Shift+P zastaví
+sound-paused = pozastavené na { $at } — p pokračuje
+sound-stopped = prehrávanie zastavené
+sound-ended = zvuk skončil — p ho prehrá znova
+sound-needs-program = zvuk prehráva `ffplay` (súčasť ffmpeg) alebo `mpv` a ani jeden na tomto počítači nie je — Alt+F1, Externé programy, poradí, ako ich nainštalovať
+sound-not-sound = tento súbor nie je zvuk, ktorý možno odovzdať prehrávaču
+sound-not-local = prehrať sa dá len súbor na tomto disku: najprv ho sem skopírujte
+sound-failed = zvuk sa nepodarilo prehrať: { $why }
+sound-player-failed = `{ $player }` tento súbor nedokázal prehrať
 
 
 # finding things

@@ -1010,6 +1010,17 @@ scope = "viewer"
 cmd = "viewer.blame"
 
 [[bind]]
+# A sound file is played by a program on the machine — ffplay, or mpv — and `p` pauses it.
+keys = ["p"]
+scope = "viewer"
+cmd = "viewer.play"
+
+[[bind]]
+keys = ["Shift+P"]
+scope = "viewer"
+cmd = "viewer.stop"
+
+[[bind]]
 keys = ["+"]
 scope = "viewer"
 cmd = "viewer.file.next"

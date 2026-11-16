@@ -1651,6 +1651,7 @@ tools-for-archives = archives: { $what }
 tools-for-decompile = Shift+F6 in the viewer on { $what }
 tools-for-git = the Git panel (Ctrl+Alt+G) and the branch in the prompt
 tools-for-video = the frames of a video in the viewer and the quick view (F3, Ctrl+Q)
+tools-for-sound = playing a sound in the viewer (p)
 tools-for-open = opening a link in the browser
 tools-for-syslog = Commands → System log
 tools-for-services = the services panel
@@ -1855,6 +1856,15 @@ video-no-frame = no frame from this video: { $why }
 video-playing = playing at { $fps } frames a second, without sound — Space pauses
 video-paused = paused at { $at } — Space plays on, PgUp and PgDn step by a tenth
 video-ended = the video has ended — Space plays it again
+sound-playing = playing through `{ $player }` — p pauses, Shift+P stops
+sound-paused = paused at { $at } — p plays on
+sound-stopped = the sound has stopped
+sound-ended = the sound has ended — p plays it again
+sound-needs-program = a sound is played through `ffplay` (part of ffmpeg) or `mpv`, and neither is installed on this machine — Alt+F1, External programs, says how to install them
+sound-not-sound = this file is not a sound a player can be given
+sound-not-local = only a file on this disk can be played: copy it here first
+sound-failed = the sound could not be played: { $why }
+sound-player-failed = `{ $player }` could not play this file
 
 
 # finding things

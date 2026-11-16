@@ -1651,6 +1651,7 @@ tools-for-archives = archívumok: { $what }
 tools-for-decompile = Shift+F6 a nézőkében ezen: { $what }
 tools-for-git = a Git panel (Ctrl+Alt+G) és az ág a promptban
 tools-for-video = videó képkockái a nézőkében és a gyorsnézetben (F3, Ctrl+Q)
+tools-for-sound = hang lejátszása a nézőkében (p)
 tools-for-open = hivatkozás megnyitása a böngészőben
 tools-for-syslog = Parancsok → Rendszernapló
 tools-for-services = a szolgáltatások panelje
@@ -1855,6 +1856,15 @@ video-no-frame = nincs képkocka ebből a videóból: { $why }
 video-playing = lejátszás { $fps } képkocka/másodperccel, hang nélkül — Space szünet
 video-paused = szünet itt: { $at } — Space folytatja, PgUp és PgDn tizedenként lép
 video-ended = a videó véget ért — Space újra lejátssza
+sound-playing = lejátszás ezzel: `{ $player }` — p szünet, Shift+P leállítás
+sound-paused = szüneteltetve itt: { $at } — p folytatja
+sound-stopped = a lejátszás leállt
+sound-ended = a hang véget ért — p újra lejátssza
+sound-needs-program = a hangot az `ffplay` (az ffmpeg része) vagy az `mpv` játssza le, és egyik sincs telepítve ezen a gépen — Alt+F1, Külső programok, megmutatja, hogyan telepíthetők
+sound-not-sound = ez a fájl nem olyan hang, amelyet egy lejátszó lejátszhat
+sound-not-local = csak ezen a lemezen lévő fájl játszható le: előbb másold ide
+sound-failed = a hangot nem sikerült lejátszani: { $why }
+sound-player-failed = `{ $player }` nem tudta lejátszani ezt a fájlt
 
 
 # finding things

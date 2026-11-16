@@ -1641,6 +1641,7 @@ tools-for-archives = archives : { $what }
 tools-for-decompile = Shift+F6 dans la visionneuse sur { $what }
 tools-for-git = le panneau Git (Ctrl+Alt+G) et la branche dans l'invite
 tools-for-video = les images d'une vidéo dans la visionneuse et l'aperçu rapide (F3, Ctrl+Q)
+tools-for-sound = écouter un son dans la visionneuse (p)
 tools-for-open = ouvrir un lien dans le navigateur
 tools-for-syslog = Commandes → Journal système
 tools-for-services = le panneau des services
@@ -1845,6 +1846,15 @@ video-no-frame = aucune image de cette vidéo : { $why }
 video-playing = lecture à { $fps } images par seconde, sans le son — Espace met en pause
 video-paused = en pause à { $at } — Espace reprend, PgPréc et PgSuiv avancent d'un dixième
 video-ended = la vidéo est terminée — Espace la relance
+sound-playing = lecture avec `{ $player }` — p met en pause, Maj+P arrête
+sound-paused = en pause à { $at } — p reprend
+sound-stopped = le son est arrêté
+sound-ended = le son est terminé — p le relance
+sound-needs-program = un son est joué avec `ffplay` (fourni avec ffmpeg) ou `mpv`, et aucun des deux n'est installé sur cette machine — Alt+F1, Programmes externes, explique comment les installer
+sound-not-sound = ce fichier n'est pas un son qu'un lecteur peut jouer
+sound-not-local = seul un fichier sur ce disque peut être joué : copiez-le ici d'abord
+sound-failed = le son n'a pas pu être joué : { $why }
+sound-player-failed = `{ $player }` n'a pas pu lire ce fichier
 
 
 # finding things

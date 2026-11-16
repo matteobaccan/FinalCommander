@@ -1604,6 +1604,7 @@ tools-for-archives = 压缩包：{ $what }
 tools-for-decompile = 在查看器中对 { $what } 按 Shift+F6
 tools-for-git = Git 面板 (Ctrl+Alt+G) 和提示符中的分支
 tools-for-video = 查看器和快速查看中的视频帧（F3、Ctrl+Q）
+tools-for-sound = 在查看器中播放声音（p）
 tools-for-open = 在浏览器中打开链接
 tools-for-syslog = 命令 → 系统日志
 tools-for-services = 服务面板
@@ -1783,6 +1784,15 @@ video-no-frame = 无法取得此视频的画面：{ $why }
 video-playing = 正在以每秒 { $fps } 帧播放，无声音 — 空格暂停
 video-paused = 已暂停于 { $at } — 空格继续，PgUp 和 PgDn 跳过十分之一
 video-ended = 视频已结束 — 空格重新播放
+sound-playing = 正在通过 `{ $player }` 播放 — p 暂停，Shift+P 停止
+sound-paused = 暂停于 { $at } — p 继续播放
+sound-stopped = 已停止播放
+sound-ended = 播放结束 — p 重新播放
+sound-needs-program = 声音通过 `ffplay`（ffmpeg 的一部分）或 `mpv` 播放，但本机两者都未安装 — Alt+F1 的“外部程序”说明了如何安装
+sound-not-sound = 此文件不是可以交给播放器的声音
+sound-not-local = 只能播放本磁盘上的文件：请先复制到这里
+sound-failed = 无法播放声音：{ $why }
+sound-player-failed = `{ $player }` 无法播放此文件
 
 
 # finding things

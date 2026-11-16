@@ -3584,6 +3584,9 @@ pub struct App {
     /// The number of the newest frame asked of `ffmpeg`, shared with the workers: one that
     /// is fetching an older frame gives up, and one that is playing stops.
     video_newest: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    /// The sound being played from the viewer (`p`), and the file it is the viewer's of:
+    /// one at a time, stopped when that viewer is no longer on screen.
+    sound: Option<(VPath, crate::audio::Playing)>,
     /// The last sum, so the calculator opens on it.
     pub last_calc: String,
     /// What the plugins provide (SPEC 08 §1): `F11` lists these.
@@ -3957,6 +3960,7 @@ impl App {
             quick_size: (40, 20),
             pixels: crate::pixels::Screen::default(),
             video_newest: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            sound: None,
             last_calc: String::new(),
             plugin_commands,
             plugin_titles: plugin_columns.iter().map(|c| c.title.clone()).collect(),
@@ -12849,6 +12853,8 @@ impl App {
             // useful on a file nobody wrote a rule for.
             Command::ViewerFilter => self.open_filter_prompt(),
             Command::ViewerBlame => self.viewer_blame(),
+            Command::ViewerPlay => self.sound_toggle(),
+            Command::ViewerStop => self.sound_stop(),
             // Midnight Commander's external panelize: a command prints paths, and they
             // become the panel's rows. `find`, `git ls-files`, `grep -l` — anything that
             // names files, which is most of the shell.
@@ -13928,6 +13934,11 @@ impl App {
                 // `ffmpeg` has one to give (SPEC 05 §1.15).
                 if viewer.may_be_film() {
                     viewer.film_file = Some(local.to_path_buf());
+                }
+                // And a sound is played from the copy on this disk, by a player that is
+                // only looked for when `p` asks for it.
+                if viewer.may_be_sound() {
+                    viewer.sound_file = Some(local.to_path_buf());
                 }
                 self.mode = Mode::Viewer(Box::new(viewer));
             }
@@ -29276,6 +29287,144 @@ impl App {
             self.set_status(m);
         }
         true
+    }
+
+    // ── sound (SPEC 05 §1.15) ──────────────────────────────────────────────────────────────
+
+    /// `p` in the viewer: play the sound file through the player on the machine, pause it,
+    /// or play on from where it was paused.
+    fn sound_toggle(&mut self) {
+        let Some(key) = self.mode.viewer().map(|v| v.path.clone()) else {
+            return;
+        };
+        if let Some((_, playing)) = self.sound.as_mut().filter(|(of, _)| *of == key) {
+            let said = if playing.paused() {
+                playing.resume().map(|()| {
+                    self.i18n
+                        .t_args("sound-playing", &[("player", playing.player.into())])
+                })
+            } else {
+                playing.pause();
+                let at = fcmd_view::media::Film::clock(playing.at());
+                Ok(self.i18n.t_args("sound-paused", &[("at", at.into())]))
+            };
+            match said {
+                Ok(m) => self.set_status(m),
+                Err(e) => {
+                    self.sound = None;
+                    let m = self
+                        .i18n
+                        .t_args("sound-failed", &[("why", e.to_string().into())]);
+                    self.set_error(m);
+                }
+            }
+            return;
+        }
+        self.sound_start(crate::audio::find());
+    }
+
+    /// Play the viewer's sound from its beginning with `found`, the player this machine has
+    /// — `None` when it has none.
+    pub(crate) fn sound_start(&mut self, found: Option<(&'static str, PathBuf)>) {
+        let Some(viewer) = self.mode.viewer_mut() else {
+            return;
+        };
+        let key = viewer.path.clone();
+        let (sound, file) = (viewer.may_be_sound(), viewer.sound_file.clone());
+        let length = if sound { viewer.sound_length() } else { None };
+        let error = if !sound {
+            Some("sound-not-sound")
+        } else if file.is_none() {
+            Some("sound-not-local")
+        } else {
+            None
+        };
+        if let Some(id) = error {
+            let m = self.i18n.t(id);
+            self.set_error(m);
+            return;
+        }
+        let Some((player, program)) = found else {
+            let m = self.i18n.t("sound-needs-program");
+            self.set_error(m);
+            return;
+        };
+        // One sound at a time: the one before is stopped as this one starts.
+        self.sound = None;
+        match crate::audio::Playing::start(player, program, file.unwrap_or_default(), length) {
+            Ok(playing) => {
+                self.sound = Some((key, playing));
+                let m = self
+                    .i18n
+                    .t_args("sound-playing", &[("player", player.into())]);
+                self.set_status(m);
+            }
+            Err(e) => {
+                let m = self
+                    .i18n
+                    .t_args("sound-failed", &[("why", e.to_string().into())]);
+                self.set_error(m);
+            }
+        }
+    }
+
+    /// `Shift+P`: stop the sound.
+    fn sound_stop(&mut self) {
+        if self.sound.take().is_some() {
+            let m = self.i18n.t("sound-stopped");
+            self.set_status(m);
+        }
+    }
+
+    /// While a sound plays the loop wakes once a second, so the time on the status line
+    /// moves and the end of the sound is noticed.
+    pub fn sound_wait(&self) -> Option<std::time::Duration> {
+        self.sound
+            .as_ref()
+            .filter(|(_, p)| !p.paused())
+            .map(|_| std::time::Duration::from_secs(1))
+    }
+
+    /// On every turn of the loop: a sound whose viewer is gone is stopped, and one that has
+    /// ended says so.
+    pub fn sound_check(&mut self) {
+        let Some((key, _)) = self.sound.as_ref() else {
+            return;
+        };
+        let watched = matches!(&self.mode, Mode::Viewer(v) if v.path == *key)
+            || self
+                .viewer_under_prompt
+                .as_ref()
+                .is_some_and(|v| v.path == *key);
+        if !watched {
+            self.sound = None;
+            return;
+        }
+        let Some((_, playing)) = self.sound.as_mut() else {
+            return;
+        };
+        match playing.ended() {
+            Some(true) => {
+                let m = self.i18n.t("sound-ended");
+                self.set_status(m);
+            }
+            Some(false) => {
+                let m = self
+                    .i18n
+                    .t_args("sound-player-failed", &[("player", playing.player.into())]);
+                self.sound = None;
+                self.set_error(m);
+            }
+            None => {}
+        }
+    }
+
+    /// What the viewer of `key` says about its sound on the status line, if it has one.
+    pub fn sound_note(&self, key: &VPath) -> Option<String> {
+        self.sound
+            .as_ref()
+            .filter(|(of, _)| of == key)
+            .map(|(_, p)| p.note())
     }
 
     /// A prompt that keeps the viewer underneath it (search, go to).

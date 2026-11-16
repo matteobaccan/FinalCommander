@@ -15,11 +15,8 @@ says what the decision stands on.
 
 ## Next release (0.44)
 
-Decided with the author on 16 November 2026.
-
-| Item | Work | Note |
-| --- | --- | --- |
-| **Play an MP3 (and the other sound files) from the viewer, through a program on the machine** | S | Decided on 16 November 2026: an external player for now, as the film frames are asked of `ffmpeg` — run, never linked, so no GPL reaches the binary. `ffplay -nodisp -autoexit` where `ffmpeg` is installed, else `mpv --no-video`; the `:tools` panel lists both. In the viewer on a sound file: a key plays and pauses, another stops, and the status line shows the time played and the length the structure pane already reads (Xing/LAME). Leaving the viewer stops it. Nothing installed: the status line names the two programs. **Later**: the author will pass an MP3 crate from his *inga* project to decode and play in process, which replaces the external program for MP3 |
+Decided with the author on 16 November 2026: WebAssembly printed as its text, the cover of a
+song shown, and sound played through a program on the machine — all three done.
 
 ## Parity after 0.41
 
@@ -223,7 +220,7 @@ Checked against the same sources: none of the programs above does these out of t
 | Item | Where | What is left |
 | --- | --- | --- |
 | Pictures | `F3` on an image | What is left after the real pixels (feature 5.22): decoding a picture off the drawing thread, as its scaling and encoding already are; `auto` recognising Windows Terminal, `xterm -ti 340` and VS Code, which today have to be named in `viewer.pixels` because their environment does not say enough; real pixels through tmux's passthrough; kitty's and iTerm2's protocols looked at in those terminals — they are tested by their bytes, and only sixel against a real terminal (xterm). The thumbnail view and the photo-marking slideshow are their own rows below. |
-| Video | `F3`, `Ctrl+Q` on a video | What is left after the frames and the playback through `ffmpeg` (feature 5.24): containers the structure pane does not read — MPEG-TS, MPEG-PS, FLV, ASF/WMV — are not recognised as films, since the running time and the codec come from that reader; stepping in the quick view (it shows the frame at a tenth and no other); a step smaller than a tenth, and a frame-by-frame one; sound, which stays out. Playing is eight frames a second and a preview: a faster one wants frames compared and only the difference sent, which none of the three protocols makes easy. |
+| Video | `F3`, `Ctrl+Q` on a video | What is left after the frames and the playback through `ffmpeg` (feature 5.24): containers the structure pane does not read — MPEG-TS, MPEG-PS, FLV, ASF/WMV — are not recognised as films, since the running time and the codec come from that reader; stepping in the quick view (it shows the frame at a tenth and no other); a step smaller than a tenth, and a frame-by-frame one; a film's sound (a sound file alone is played through `ffplay` or `mpv`, feature 5.25). Playing is eight frames a second and a preview: a faster one wants frames compared and only the difference sent, which none of the three protocols makes easy. |
 | Following a branch | `Enter` on a `call` | The jumped-from stack shown on the screen, and a virtual address in `Alt+F8` (feature 5.16). |
 | More than one file in the editor | `F4` | Several files open at once, each a screen of its own today through `F12` (feature 6.1). |
 | Search and replace | `F7`, `Ctrl+F7` | Replacing inside a marked block only; the separator half of FAR's *preserve style* (`foo_bar` ↔ `fooBar`); a key that repeats *Replace next* without the dialog (feature 6.4). |

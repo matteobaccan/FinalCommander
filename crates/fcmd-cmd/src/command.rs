@@ -529,6 +529,10 @@ pub enum Command {
     /// Who wrote each line of the file in the viewer, and when: `git blame`, as a view of the
     /// file, on the line that was on top.
     ViewerBlame,
+    /// Play a sound file through a player on the machine, or pause it (SPEC 05 §1.15).
+    ViewerPlay,
+    /// Stop the sound being played.
+    ViewerStop,
 
     // Editor (scope `editor`). Movement and typing are handled directly by the editor; the
     // keymap binds its commands.
@@ -917,6 +921,8 @@ impl Command {
             Command::ViewerDecompile,
             Command::ViewerFilter,
             Command::ViewerBlame,
+            Command::ViewerPlay,
+            Command::ViewerStop,
             Command::ViewerToEditor,
             Command::ViewerNextFile,
             Command::ViewerPrevFile,
@@ -1267,6 +1273,8 @@ impl Command {
             Command::ViewerDecompile => "viewer.decompile".into(),
             Command::ViewerFilter => "viewer.filter".into(),
             Command::ViewerBlame => "viewer.blame".into(),
+            Command::ViewerPlay => "viewer.play".into(),
+            Command::ViewerStop => "viewer.stop".into(),
             Command::EditorQuit => "editor.quit".into(),
             Command::EditorSave => "editor.save".into(),
             Command::EditorSaveAs => "editor.save.as".into(),
@@ -1592,6 +1600,8 @@ impl Command {
             ("viewer.decompile", _) => Command::ViewerDecompile,
             ("viewer.filter", _) => Command::ViewerFilter,
             ("viewer.blame", _) => Command::ViewerBlame,
+            ("viewer.play", _) => Command::ViewerPlay,
+            ("viewer.stop", _) => Command::ViewerStop,
             ("editor.quit", _) => Command::EditorQuit,
             ("editor.save", _) => Command::EditorSave,
             ("editor.save.as", _) => Command::EditorSaveAs,
@@ -1741,6 +1751,8 @@ mod tests {
             Command::ViewerDecompile,
             Command::ViewerFilter,
             Command::ViewerBlame,
+            Command::ViewerPlay,
+            Command::ViewerStop,
             Command::EditorSave,
             Command::EditorPaste,
             Command::EditorToggleReadOnly,

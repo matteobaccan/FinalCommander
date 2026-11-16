@@ -26,6 +26,8 @@ pub enum Use {
     Git,
     /// The frames of a film in the viewer and the quick view (SPEC 05 §1.15).
     Video,
+    /// Playing a sound from the viewer (`p`): the first of [`crate::audio::PLAYERS`] found.
+    Sound,
     /// Opening a link in the desktop's browser.
     Open,
     /// *Commands → System log*.
@@ -44,6 +46,7 @@ impl Use {
             Use::Decompile => "tools-for-decompile",
             Use::Git => "tools-for-git",
             Use::Video => "tools-for-video",
+            Use::Sound => "tools-for-sound",
             Use::Open => "tools-for-open",
             Use::SysLog => "tools-for-syslog",
             Use::Services => "tools-for-services",
@@ -89,7 +92,7 @@ fn version_args_for(program: &str) -> &'static [&'static str] {
     match base {
         "7z" | "7za" | "7zz" => &[],
         "javap" | "java" => &["-version"],
-        "ffmpeg" | "ffprobe" | "es" => &["-version"],
+        "ffmpeg" | "ffprobe" | "ffplay" | "es" => &["-version"],
         _ => &["--version"],
     }
 }
@@ -141,6 +144,14 @@ pub fn catalogue(decompile: &[fcmd_config::DecompileRule]) -> Vec<Tool> {
         ));
     }
     out.push(tool("ffmpeg", Use::Video, Vec::new(), Some(&["-version"])));
+    for player in crate::audio::PLAYERS {
+        out.push(tool(
+            player,
+            Use::Sound,
+            Vec::new(),
+            Some(version_args_for(player)),
+        ));
+    }
     // The system's own index, by the names the search itself looks for: asked from the
     // find dialog, never needed. Spotlight's program has no version to say.
     for program in fcmd_find::Index::program_names() {
@@ -296,7 +307,8 @@ pub fn install_command(program: &str, manager: Option<Manager>) -> Option<String
         Manager::Apt => match program {
             "7z" => "p7zip-full",
             "git" => "git",
-            "ffmpeg" => "ffmpeg",
+            "ffmpeg" | "ffplay" => "ffmpeg",
+            "mpv" => "mpv",
             "javap" => "default-jdk-headless",
             "python3" => "python3",
             "wasm2wat" => "wabt",
@@ -307,7 +319,8 @@ pub fn install_command(program: &str, manager: Option<Manager>) -> Option<String
         },
         Manager::Pacman => match program {
             "git" => "git",
-            "ffmpeg" => "ffmpeg",
+            "ffmpeg" | "ffplay" => "ffmpeg",
+            "mpv" => "mpv",
             "javap" => "jdk-openjdk",
             "python3" => "python",
             "wasm2wat" => "wabt",
@@ -318,7 +331,8 @@ pub fn install_command(program: &str, manager: Option<Manager>) -> Option<String
         },
         Manager::Apk => match program {
             "git" => "git",
-            "ffmpeg" => "ffmpeg",
+            "ffmpeg" | "ffplay" => "ffmpeg",
+            "mpv" => "mpv",
             "python3" => "python3",
             "objdump" => "binutils",
             "xdg-open" => "xdg-utils",
@@ -326,7 +340,8 @@ pub fn install_command(program: &str, manager: Option<Manager>) -> Option<String
         },
         Manager::Brew => match program {
             "git" => "git",
-            "ffmpeg" => "ffmpeg",
+            "ffmpeg" | "ffplay" => "ffmpeg",
+            "mpv" => "mpv",
             "python3" => "python",
             "wasm2wat" => "wabt",
             _ => return None,
@@ -334,7 +349,7 @@ pub fn install_command(program: &str, manager: Option<Manager>) -> Option<String
         Manager::Winget => match program {
             "7z" => "7zip.7zip",
             "git" => "Git.Git",
-            "ffmpeg" => "Gyan.FFmpeg",
+            "ffmpeg" | "ffplay" => "Gyan.FFmpeg",
             "javap" => "Microsoft.OpenJDK.21",
             "python3" => "Python.Python.3.12",
             "es" => "voidtools.Everything.Cli",
@@ -357,7 +372,8 @@ pub fn homepage(program: &str) -> Option<&'static str> {
     Some(match program {
         "7z" | "7za" | "7zz" => "https://www.7-zip.org/download.html",
         "git" => "https://git-scm.com/downloads",
-        "ffmpeg" | "ffprobe" => "https://ffmpeg.org/download.html",
+        "ffmpeg" | "ffprobe" | "ffplay" => "https://ffmpeg.org/download.html",
+        "mpv" => "https://mpv.io/installation/",
         "javap" => "https://adoptium.net/",
         "ilspycmd" => "https://github.com/icsharpcode/ILSpy",
         "python3" => "https://www.python.org/downloads/",
@@ -383,6 +399,7 @@ mod tests {
         assert!(has("7z", Use::Archives));
         assert!(has("git", Use::Git));
         assert!(has("ffmpeg", Use::Video));
+        assert!(has("ffplay", Use::Sound) && has("mpv", Use::Sound));
         assert!(has("javap", Use::Decompile));
         // The index the find dialog may ask: whichever this system calls its own.
         let index = if cfg!(windows) {

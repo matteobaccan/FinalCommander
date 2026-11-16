@@ -1651,6 +1651,7 @@ tools-for-archives = arquivos compactados: { $what }
 tools-for-decompile = Shift+F6 no visualizador em { $what }
 tools-for-git = o painel Git (Ctrl+Alt+G) e o ramo no prompt
 tools-for-video = os quadros de um vídeo no visualizador e na visualização rápida (F3, Ctrl+Q)
+tools-for-sound = ouvir um som no visualizador (p)
 tools-for-open = abrir um link no navegador
 tools-for-syslog = Comandos → Log do sistema
 tools-for-services = o painel de serviços
@@ -1855,6 +1856,15 @@ video-no-frame = nenhum quadro deste vídeo: { $why }
 video-playing = reproduzindo a { $fps } quadros por segundo, sem som — Space pausa
 video-paused = em pausa em { $at } — Space continua, PgUp e PgDn avançam um décimo
 video-ended = o vídeo terminou — Space o reproduz de novo
+sound-playing = tocando com `{ $player }` — p pausa, Shift+P para
+sound-paused = pausado em { $at } — p continua
+sound-stopped = o som foi parado
+sound-ended = o som terminou — p toca de novo
+sound-needs-program = um som é tocado com `ffplay` (parte do ffmpeg) ou `mpv`, e nenhum dos dois está instalado nesta máquina — Alt+F1, Programas externos, diz como instalá-los
+sound-not-sound = este arquivo não é um som que um reprodutor possa tocar
+sound-not-local = só um arquivo neste disco pode ser tocado: copie-o para cá antes
+sound-failed = não foi possível tocar o som: { $why }
+sound-player-failed = `{ $player }` não conseguiu tocar este arquivo
 
 
 # finding things

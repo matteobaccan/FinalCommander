@@ -23,6 +23,12 @@ Notable changes, newest first. The format follows
   channels, the bitrate and — from the Xing/LAME header — the exact length and the encoder. A
   song made with Suno says *made with Suno*, with the moment it was created and its id there.
 
+- **Sound played from the viewer** — `p` on an MP3, a FLAC, an Ogg, a WAVE, an AIFF or an
+  `.m4a` plays it through `ffplay` (it comes with `ffmpeg`) or `mpv`, run as a program with no
+  window; `p` pauses and plays on, `Shift+P` stops, and leaving the viewer stops it. The status
+  line shows the time played and the length the file says. Both players are listed in
+  *External programs* (`Alt+F1`), and the viewer names them when neither is installed.
+
 - **The cover of a song, shown** — `Enter` on the *cover* row of an MP3 (`APIC`) or a FLAC
   (`PICTURE`) draws the picture the way a JPEG or a PNG is drawn; `F2` goes back to the bytes.
 

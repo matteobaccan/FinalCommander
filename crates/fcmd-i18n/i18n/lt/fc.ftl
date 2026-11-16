@@ -1666,6 +1666,7 @@ tools-for-archives = archyvai: { $what }
 tools-for-decompile = Shift+F6 peržiūroje failams { $what }
 tools-for-git = Git langas (Ctrl+Alt+G) ir šaka raginime
 tools-for-video = vaizdo įrašo kadrai peržiūroje ir greitajame vaizde (F3, Ctrl+Q)
+tools-for-sound = garso grojimas peržiūroje (p)
 tools-for-open = nuorodos atvėrimas naršyklėje
 tools-for-syslog = Komandos → Sistemos žurnalas
 tools-for-services = tarnybų langas
@@ -1876,6 +1877,15 @@ video-no-frame = iš šio vaizdo įrašo kadro negauta: { $why }
 video-playing = rodoma { $fps } kadrų per sekundę greičiu, be garso — Space pristabdo
 video-paused = pristabdyta ties { $at } — Space tęsia, PgUp ir PgDn žengia po dešimtadalį
 video-ended = vaizdo įrašas baigėsi — Space rodo iš naujo
+sound-playing = grojama per `{ $player }` — p pristabdo, Shift+P sustabdo
+sound-paused = pristabdyta ties { $at } — p tęsia
+sound-stopped = grojimas sustabdytas
+sound-ended = garsas baigėsi — p groja iš naujo
+sound-needs-program = garsą groja `ffplay` (ffmpeg dalis) arba `mpv`, bet nė vieno iš jų šiame kompiuteryje nėra — Alt+F1, Išorinės programos, parodys, kaip jas įdiegti
+sound-not-sound = šis failas nėra garsas, kurį galima perduoti grotuvui
+sound-not-local = groti galima tik šio disko failą: pirmiausia nukopijuokite jį čia
+sound-failed = nepavyko groti garso: { $why }
+sound-player-failed = `{ $player }` negalėjo groti šio failo
 
 
 # finding things

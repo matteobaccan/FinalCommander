@@ -132,6 +132,18 @@ che cos'è il file, apre il file come i suoi byte come ha sempre fatto, e `Shift
 il contenitore; `Alt+F1` → *Programmi esterni* elenca `ffmpeg`, e lì `F4` lo installa. Un file
 che contiene solo suono — un `.m4a`, un `.mka` — non è un film e non gli viene passato.
 
+# Il suono
+
+`p` su un file audio — MP3, FLAC, Ogg, WAVE, AIFF, `.m4a` — lo fa ascoltare, `p` di nuovo lo
+mette in pausa e poi riprende da lì, e `Shift+P` lo ferma. La riga di stato comincia con
+`▶ tempo / durata` (`⏸` in pausa); la durata è quella che `Shift+F11` legge dal file. Uscire
+dal visualizzatore, o passare a un altro file, lo ferma.
+
+Il suono viene da un lettore sulla macchina, eseguito come programma senza finestra:
+**`ffplay`**, che arriva con `ffmpeg`, oppure **`mpv`**. Se non c'è nessuno dei due la riga di
+stato lo dice, e `Alt+F1` → *Programmi esterni* li elenca entrambi. Un file su un server si
+ascolta dalla copia che `F3` ha scaricato.
+
 # Decodifica
 
 `Alt+B` decodifica un file che è byte di qualcuno scritti come testo — base64, base32, UUencode,

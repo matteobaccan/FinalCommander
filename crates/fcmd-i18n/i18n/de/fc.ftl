@@ -1641,6 +1641,7 @@ tools-for-archives = Archive: { $what }
 tools-for-decompile = Shift+F6 im Betrachter auf { $what }
 tools-for-git = das Git-Panel (Ctrl+Alt+G) und der Zweig in der Eingabeaufforderung
 tools-for-video = die Bilder eines Videos im Betrachter und in der Schnellansicht (F3, Strg+Q)
+tools-for-sound = einen Ton im Betrachter abspielen (p)
 tools-for-open = einen Link im Browser öffnen
 tools-for-syslog = Befehle → Systemprotokoll
 tools-for-services = das Dienste-Panel
@@ -1845,6 +1846,15 @@ video-no-frame = kein Bild aus diesem Video: { $why }
 video-playing = Wiedergabe mit { $fps } Bildern pro Sekunde, ohne Ton — Leertaste hält an
 video-paused = angehalten bei { $at } — Leertaste spielt weiter, Bild↑ und Bild↓ springen um ein Zehntel
 video-ended = das Video ist zu Ende — Leertaste spielt es erneut
+sound-playing = wird mit `{ $player }` abgespielt — p pausiert, Shift+P stoppt
+sound-paused = pausiert bei { $at } — p spielt weiter
+sound-stopped = die Wiedergabe wurde gestoppt
+sound-ended = die Wiedergabe ist zu Ende — p spielt erneut
+sound-needs-program = Töne werden mit `ffplay` (Teil von ffmpeg) oder `mpv` abgespielt, und keines davon ist auf diesem Rechner installiert — Alt+F1, Externe Programme, zeigt, wie man sie installiert
+sound-not-sound = diese Datei ist kein Ton, den ein Player abspielen kann
+sound-not-local = nur eine Datei auf diesem Datenträger kann abgespielt werden: zuerst hierher kopieren
+sound-failed = der Ton konnte nicht abgespielt werden: { $why }
+sound-player-failed = `{ $player }` konnte diese Datei nicht abspielen
 
 
 # finding things

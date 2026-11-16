@@ -306,6 +306,12 @@ pub struct Viewer {
     /// Where the film is as a file on this disk, for the program that reads its frames: the
     /// path shown may be on a server, and this is the copy that was fetched.
     pub film_file: Option<std::path::PathBuf>,
+    /// The first bytes say this is sound — MP3, FLAC, Ogg, WAVE, AIFF, an MPEG-4 audio file —
+    /// which a program on the machine can play (SPEC 05 §1.15).
+    may_be_sound: bool,
+    /// Where that sound is as a file on this disk, for the player; set by whoever opened the
+    /// viewer, the way [`Viewer::film_file`] is.
+    pub sound_file: Option<std::path::PathBuf>,
     /// How large a picture file this viewer will decode. [`PICTURE_LIMIT`] for the one `F3`
     /// opens, where the reader asked for this file and will wait for it; much smaller for the
     /// quick view, where the cursor walks a directory of photographs and every step would
@@ -446,7 +452,9 @@ impl Viewer {
             may_be_film: crate::media::may_be_film(&head),
             film_ask: 0,
             film: None,
+            may_be_sound: crate::media::may_be_sound(&head),
             film_file: None,
+            sound_file: None,
             picture_limit: PICTURE_LIMIT,
             binary: None,
             show_structure: false,
@@ -1885,6 +1893,22 @@ impl Viewer {
     /// derived from something else — a decompiler's output, a decoded base64 — never is.
     pub fn may_be_film(&self) -> bool {
         self.may_be_film && self.derived.is_none()
+    }
+
+    /// Is this, by its first bytes, a sound a player could play?
+    pub fn may_be_sound(&self) -> bool {
+        self.may_be_sound && self.derived.is_none()
+    }
+
+    /// How long the sound runs, in seconds, as the structure pane worked it out: the
+    /// *length* row of an MP3 or a FLAC, the *duration* of a WAVE or an MPEG-4 file. `None`
+    /// when the file does not say.
+    pub fn sound_length(&mut self) -> Option<f64> {
+        let rows = &self.structure()?.rows;
+        rows.iter()
+            .filter(|r| r.label == "length" || r.label == "duration")
+            .find_map(|r| crate::media::seconds_of(&r.value))
+            .filter(|s| *s > 0.0)
     }
 
     /// A new number for a frame about to be asked for, which outdates every earlier one.

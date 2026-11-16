@@ -121,6 +121,18 @@ the file is, opens the file as its bytes as it always did, and `Shift+F11` still
 container; `Alt+F1` → *External programs* lists `ffmpeg`, and `F4` there installs it. A file
 that holds only sound — an `.m4a`, a `.mka` — is not a film and is not handed to it.
 
+# Sound
+
+`p` on a sound file — MP3, FLAC, Ogg, WAVE, AIFF, `.m4a` — plays it, `p` again pauses it and
+plays on from there, and `Shift+P` stops it. The status line leads with `▶ time / length`
+(`⏸` while paused); the length is the one `Shift+F11` reads from the file. Leaving the
+viewer, or going on to another file, stops it.
+
+The sound comes from a player on the machine, run as a program with no window: **`ffplay`**,
+which comes with `ffmpeg`, or else **`mpv`**. Without either the status line says so, and
+`Alt+F1` → *External programs* lists both. A file on a server is played from the copy `F3`
+fetched.
+
 # Decoding
 
 `Alt+B` decodes a file that is somebody's bytes written down as text — base64, base32,

@@ -114,6 +114,37 @@ pub fn may_be_film(head: &[u8]) -> bool {
         )
 }
 
+/// Is this, by its first bytes, sound a player could play: an MP3 (its ID3 tag, or the
+/// sync word of its first frame), FLAC, Ogg (Vorbis, Opus, FLAC), WAVE, AIFF, or an
+/// MPEG-4 audio file (`M4A `, `M4B `)? A video's sound is the video's: a film is asked of
+/// [`may_be_film`] and is not counted here.
+pub fn may_be_sound(head: &[u8]) -> bool {
+    let at = |i: usize, s: &[u8]| head.len() >= i + s.len() && head[i..i + s.len()] == *s;
+    at(0, b"ID3")
+        || at(0, b"fLaC")
+        || at(0, b"OggS")
+        || (at(0, b"RIFF") && at(8, b"WAVE"))
+        || (at(0, b"FORM") && (at(8, b"AIFF") || at(8, b"AIFC")))
+        || (at(4, b"ftyp") && (at(8, b"M4A ") || at(8, b"M4B ")))
+        // An MPEG audio frame with no tag in front: eleven bits of sync, then a layer that
+        // is not the reserved one.
+        || (head.len() >= 2 && head[0] == 0xFF && head[1] & 0xE0 == 0xE0 && head[1] & 0x06 != 0)
+}
+
+/// Seconds from a length as the structure pane writes it: `3:12`, `00:01.000`, `1:02:03`.
+pub fn seconds_of(text: &str) -> Option<f64> {
+    let first = text.split_whitespace().next()?;
+    let mut total = 0.0;
+    for part in first.split(':') {
+        let n: f64 = part.parse().ok()?;
+        if !n.is_finite() || n < 0.0 {
+            return None;
+        }
+        total = total * 60.0 + n;
+    }
+    Some(total)
+}
+
 /// The film in a container: its first picture track and the running time. `None` for a file
 /// that is not a container, and for one that holds only sound — an `.m4a` is an MP4 too.
 pub fn film(src: &mut dyn Bytes, head: &[u8], len: u64) -> Option<Film> {
@@ -1891,6 +1922,31 @@ fn iso639(packed: u16) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sound_is_told_by_its_first_bytes_and_its_length_read_back() {
+        assert!(may_be_sound(b"ID3\x04\0\0\0\0\0\0"));
+        assert!(may_be_sound(&[0xFF, 0xFB, 0x90, 0x64]));
+        assert!(may_be_sound(b"fLaC\0\0\0\x22"));
+        assert!(may_be_sound(b"OggS\0\x02"));
+        assert!(may_be_sound(b"RIFF\0\0\0\0WAVEfmt "));
+        assert!(may_be_sound(b"FORM\0\0\0\0AIFF"));
+        assert!(may_be_sound(b"\0\0\0\x20ftypM4A \0\0\0\0"));
+        // A film's sound is the film's, and a text is not sound.
+        assert!(!may_be_sound(b"RIFF\0\0\0\0AVI LIST"));
+        assert!(!may_be_sound(b"\0\0\0\x20ftypisom\0\0\0\0"));
+        assert!(!may_be_sound(b"hello, world"));
+        assert!(
+            !may_be_sound(&[0xFF, 0xE0]),
+            "the reserved layer is not a frame"
+        );
+
+        assert_eq!(seconds_of("3:12"), Some(192.0));
+        assert_eq!(seconds_of("00:01.500"), Some(1.5));
+        assert_eq!(seconds_of("1:02:03.000"), Some(3723.0));
+        assert_eq!(seconds_of("0:26 (Xing)"), Some(26.0));
+        assert_eq!(seconds_of("long"), None);
+    }
     use crate::structure;
 
     // ── builders, so each test says what the file holds and nothing else ────────────────────

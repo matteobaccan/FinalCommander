@@ -1665,6 +1665,7 @@ tools-for-archives = архівы: { $what }
 tools-for-decompile = Shift+F6 у праграме прагляду для { $what }
 tools-for-git = панэль Git (Ctrl+Alt+G) і галіна ў запрашэнні
 tools-for-video = кадры відэа ў праграме прагляду і хуткім праглядзе (F3, Ctrl+Q)
+tools-for-sound = прайграванне гуку ў праграме прагляду (p)
 tools-for-open = адкрыццё спасылкі ў браўзеры
 tools-for-syslog = Каманды → Сістэмны журнал
 tools-for-services = панэль службаў
@@ -1879,6 +1880,15 @@ video-no-frame = з гэтага відэа няма кадра: { $why }
 video-playing = прайграванне з хуткасцю { $fps } кадраў за секунду, без гуку — Space ставіць на паўзу
 video-paused = паўза на { $at } — Space працягвае, PgUp і PgDn крочаць на дзясятую частку
 video-ended = відэа скончылася — Space прайграе яго зноў
+sound-playing = прайграванне праз `{ $player }` — p паўза, Shift+P стоп
+sound-paused = паўза на { $at } — p працягвае
+sound-stopped = прайграванне спынена
+sound-ended = гук скончыўся — p запускае зноў
+sound-needs-program = гук прайграецца праз `ffplay` (уваходзіць у ffmpeg) або `mpv`, але ніводнай з іх на гэтай машыне няма — Alt+F1, Вонкавыя праграмы, падкажа, як іх усталяваць
+sound-not-sound = гэты файл не з'яўляецца гукам, які можна перадаць прайгравальніку
+sound-not-local = прайграць можна толькі файл на гэтым дыску: спачатку скапіруйце яго сюды
+sound-failed = не ўдалося прайграць гук: { $why }
+sound-player-failed = `{ $player }` не змог прайграць гэты файл
 
 
 # finding things
