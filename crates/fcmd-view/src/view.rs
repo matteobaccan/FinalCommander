@@ -839,9 +839,14 @@ impl Viewer {
                 return Ok(Started::Derived("bytecode"));
             }
             // A module is bytecode, so a raw sweep with the host architecture would be
-            // nonsense rather than a fallback. Its text format comes from a `[[decompile]]`
-            // rule — `wasm2wat`, which ships as a default — and the error says exactly that.
-            Format::Wasm => return Err(DisasmError::NoDisassembler("WebAssembly")),
+            // nonsense rather than a fallback: it is printed as its text format instead, in
+            // process. A `[[decompile]]` rule (`wasm2wat`) is still there for wabt's spelling.
+            Format::Wasm => {
+                let bytes = self.whole_file()?;
+                let text = crate::wasm::listing(&bytes).map_err(DisasmError::Parse)?;
+                self.show_derived("WAT", text);
+                return Ok(Started::Derived("WAT"));
+            }
             Format::Pe => {
                 let bytes = self.whole_file()?;
                 if il::is_managed(&bytes) {
@@ -4131,25 +4136,25 @@ mod tests {
     }
 
     #[test]
-    fn a_wasm_module_is_sent_to_an_external_tool_rather_than_swept_as_x86() {
+    fn a_wasm_module_is_printed_as_its_text_format_rather_than_swept_as_x86() {
         let wasm: &[u8] = &[
             0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x05, 0x01, 0x60, 0x00, 0x01,
             0x7f, 0x03, 0x02, 0x01, 0x00, 0x0a, 0x06, 0x01, 0x04, 0x00, 0x41, 0x2a, 0x0b,
         ];
         let mut v = viewer(wasm);
         assert_eq!(v.format(), crate::disasm::Format::Wasm);
-        // A module is bytes, so the viewer opens it in the hex dump; whatever it was showing
-        // has to still be showing after a refusal.
+        // `F5` on bytecode prints it, in process: the WAT text, as a view derived from the
+        // file, never a sweep with the host's instruction set.
+        let started = v.start_disasm().expect("a module prints");
+        assert!(matches!(started, Started::Derived("WAT")), "{started:?}");
+        let shown = texts(&mut v, 80, 10).join("\n");
+        assert!(shown.contains("(module"), "{shown}");
+        assert!(shown.contains("i32.const 42"), "{shown}");
+
+        // A damaged one is refused with the parser's reason, and the viewer stays where it was.
+        let mut v = viewer(&wasm[..20]);
         let before = v.mode;
-        // `F5` on bytecode has nothing to sweep: the error names the format and points at the
-        // configuration, which is where `wasm2wat` is.
-        let why = v.start_disasm().expect_err("nothing to disassemble");
-        assert!(
-            matches!(why, DisasmError::NoDisassembler("WebAssembly")),
-            "{why}"
-        );
-        assert!(why.to_string().contains("external tool"), "{why}");
-        // Nothing was derived, and the viewer is still showing the file.
+        assert!(v.start_disasm().is_err());
         assert!(v.derived.is_none());
         assert_eq!(v.mode, before, "the mode must not change on failure");
     }

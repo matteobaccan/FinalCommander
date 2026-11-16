@@ -254,7 +254,9 @@ file e lo colora esattamente.
 distinguono, e il nome di ogni funzione apre il suo codice. La vista esadecimale è colorata per
 byte — gli zeri attenuati, così il codice e le stringhe di un file sono dove sta il colore. x86,
 x86-64 e AArch64 sono decodificati nel programma stesso; su un'altra
-architettura chiede a `objdump`, e lo dice invece di indovinare. Le istruzioni AArch64 sono
+architettura chiede a `objdump`, e lo dice invece di indovinare. Un modulo WebAssembly viene
+stampato nel suo formato testuale (WAT), con i nomi che dà la sua sezione `name`, e
+`Shift+F11` ne elenca sezioni, import, export e funzioni. Le istruzioni AArch64 sono
 lunghe quattro byte ciascuna, quindi una parola che non si decodifica è una riga `(bad)` e non
 quattro, e un salto è mostrato come l'indirizzo a cui arriva, non come lo scostamento scritto
 nell'istruzione. `Enter` su una `call` o una

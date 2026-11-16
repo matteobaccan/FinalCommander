@@ -239,7 +239,9 @@ colours it exactly.
 numbers are told apart, and each function's name heads its code. The hex view is coloured by
 byte — zeros dim, so the code and the strings in a file are where the colour is. x86, x86-64
 and AArch64 are decoded in the program itself; on another
-architecture it asks `objdump`, and says so instead of guessing. AArch64 instructions are four
+architecture it asks `objdump`, and says so instead of guessing. A WebAssembly module is
+printed as its text format (WAT), with the names its `name` section gives, and `Shift+F11`
+lists its sections, imports, exports and functions. AArch64 instructions are four
 bytes each, so a word nothing decodes is one `(bad)` line rather than four, and a branch is
 shown as the address it arrives at rather than as the displacement in the encoding. `Enter` on a `call` or a `jmp` follows it and
 `Backspace` comes back, with the places you jumped from kept on screen.

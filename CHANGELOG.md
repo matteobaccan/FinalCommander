@@ -8,6 +8,12 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **WebAssembly in the viewer.** `F5` on a `.wasm` prints the module as its text format (WAT),
+  with no program to install, and `Shift+F11` lists its sections, types, imports, exports and
+  functions — named from the `name` section, `Enter` going to the code. Through the Bytecode
+  Alliance's `wasmprinter` and `wasmparser`, which follow the format's extensions as they
+  arrive; 1.3 MB of binary, decided with that number on the table.
+
 - **The words of a song, and more of what an MP3 says** (`Shift+F11`, and so `F11` and the
   metadata search). The lyrics (`USLT`) are a row of their own, the lines joined so a search of
   the metadata finds a word in them, and `Enter` opens them line by line. The links (`WOAS` —

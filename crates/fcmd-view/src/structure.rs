@@ -319,6 +319,13 @@ pub fn read(src: &mut dyn Bytes) -> Option<Structure> {
         }
         _ => {}
     }
+    // A WebAssembly module: read whole up to the parse limit, since its sections are what
+    // the pane lists and the code section is usually most of the file.
+    if head.starts_with(b"\0asm") {
+        let want = len.min(crate::disasm::MAX_PARSE as u64) as usize;
+        let bytes = src.at(0, want);
+        return crate::wasm::read(&bytes, len);
+    }
     if head.len() >= 8 && head[..8] == *b"!<arch>\n" {
         return Some(ar(src, len));
     }

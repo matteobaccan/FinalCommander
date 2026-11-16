@@ -26,6 +26,7 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `object` | MIT OR Apache-2.0 | reading ELF/PE/Mach-O structure for the disassembler |
 | `iced-x86` | MIT | x86 and x86-64 instruction decoding |
 | `yaxpeax-arm`, `yaxpeax-arch` | 0BSD | AArch64 instruction decoding — a viewer that only reads x86 is half a tool on an Apple Silicon or ARM server machine, and a decoder is a table nobody should write twice. Pure Rust, so the Windows and macOS builds need no C toolchain, and it carries `bitvec` (MIT) with it |
+| `wasmprinter`, `wasmparser` | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | WebAssembly: a module printed as its text format on `F5`, and its sections, imports, exports and functions in the structure pane. The Bytecode Alliance's own crates, kept by the people who write the specification; they carry `termcolor` (Unlicense OR MIT) and `semver` (MIT OR Apache-2.0) with them |
 | `encoding_rs` | (MIT OR Apache-2.0) AND BSD-3-Clause | legacy code pages in the viewer |
 | `regex`, `memchr` | MIT OR Apache-2.0 / Unlicense OR MIT | search in the viewer |
 | `thiserror`, `anyhow` | MIT OR Apache-2.0 | error types |

@@ -31,6 +31,7 @@ pub mod structure;
 pub mod table;
 mod tags;
 pub mod view;
+pub mod wasm;
 
 pub use asm::{assemble, AsmError, Assembled};
 pub use bindiff::BinDiff;

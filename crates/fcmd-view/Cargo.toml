@@ -42,6 +42,13 @@ iced-x86 = { version = "1.21.0", default-features = false, features = ["decoder"
 # own spelling of an instruction, which this crate then re-reads for the branch targets.
 yaxpeax-arm = { version = "0.5.0", default-features = false, features = ["std", "alloc", "fmt"] }
 yaxpeax-arch = { version = "0.3.3", default-features = false }
+# WebAssembly (SPEC 05 §1.6): the module as its text format on `F5`, and its sections, types,
+# imports, exports and functions in the structure pane. The Bytecode Alliance's own crates —
+# the ones `wasm-tools` is made of, kept by the people who write the specification, so the
+# extensions (SIMD, threads, GC, exceptions) are read as they arrive. Pure Rust, Apache-2.0
+# WITH LLVM-exception or MIT.
+wasmprinter = "0.263.0"
+wasmparser = "0.263.0"
 # Pictures in the viewer (SPEC 05 §1.14): the decoder only, never the drawing, which is ours.
 # `default-features = false` is what keeps this small — the four formats a commander actually
 # opens and none of the research ones, no `rayon`, no C. One dependency instead of four
