@@ -6386,13 +6386,10 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
     #[cfg(unix)]
     #[test]
     fn p_plays_a_song_and_leaving_the_viewer_stops_it() {
-        use std::os::unix::fs::PermissionsExt;
         let mut song = b"ID3\x04\x00\x00\x00\x00\x00\x00".to_vec();
         song.extend(vec![0u8; 64]);
         let (dir, mut app) = app_with_viewer("song.mp3", &song);
-        let player = dir.path().join("player");
-        std::fs::write(&player, "#!/bin/sh\nsleep 30\n").unwrap();
-        std::fs::set_permissions(&player, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let player = crate::audio::testing::stand_in(dir.path(), "player", "sleep 30");
         let key = app.mode.viewer().expect("the viewer").path.clone();
 
         // A machine with no player says what to install.

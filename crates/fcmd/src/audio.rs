@@ -231,23 +231,15 @@ mod tests {
     /// A stand-in for the player: a program that runs for a while and then exits as asked.
     /// `sh` on Unix; the arguments it is given are the player's, which it ignores.
     #[cfg(unix)]
-    fn stand_in(dir: &Path, seconds: &str, code: i32) -> PathBuf {
-        use std::os::unix::fs::PermissionsExt;
-        let script = dir.join("player");
-        std::fs::write(
-            &script,
-            format!("#!/bin/sh\nsleep {seconds}\nexit {code}\n"),
-        )
-        .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        script
+    fn stand_in(dir: &Path, name: &str, seconds: &str, code: i32) -> PathBuf {
+        testing::stand_in(dir, name, &format!("sleep {seconds}\nexit {code}"))
     }
 
     #[cfg(unix)]
     #[test]
     fn a_pause_stops_the_player_and_playing_on_starts_it_from_where_it_was() {
         let dir = tempfile::tempdir().unwrap();
-        let program = stand_in(dir.path(), "30", 0);
+        let program = stand_in(dir.path(), "player", "30", 0);
         let mut p =
             Playing::start("ffplay", program, dir.path().join("a.mp3"), Some(200.0)).unwrap();
         assert!(!p.paused());
@@ -270,7 +262,7 @@ mod tests {
     fn a_player_that_finishes_says_whether_it_got_to_the_end() {
         let dir = tempfile::tempdir().unwrap();
         for (code, fine) in [(0, true), (1, false)] {
-            let program = stand_in(dir.path(), "0", code);
+            let program = stand_in(dir.path(), &format!("player{code}"), "0", code);
             let mut p = Playing::start("mpv", program, dir.path().join("a.flac"), None).unwrap();
             let mut said = None;
             for _ in 0..200 {
@@ -291,5 +283,37 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let missing = dir.path().join("no-such-player");
         assert!(Playing::start("ffplay", missing, dir.path().join("a.mp3"), None).is_err());
+    }
+}
+
+/// What the tests here and the viewer's share: a player that is a shell script.
+#[cfg(all(test, unix))]
+pub(crate) mod testing {
+    use std::path::{Path, PathBuf};
+
+    /// Write `body` as an executable script called `name` in `dir`, and run it once with
+    /// `probe` as its argument, which it answers by exiting. The test binary runs tests on
+    /// many threads, and a file just written can still be held open for writing by a
+    /// child another thread is forking — `exec` then fails with "text file busy" — so the
+    /// probe is tried until that has passed, and the script is ready when this returns.
+    pub(crate) fn stand_in(dir: &Path, name: &str, body: &str) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let script = dir.join(name);
+        std::fs::write(
+            &script,
+            format!("#!/bin/sh\n[ \"$1\" = probe ] && exit 0\n{body}\n"),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        for _ in 0..200 {
+            match std::process::Command::new(&script).arg("probe").status() {
+                Ok(_) => return script,
+                Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy => {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(e) => panic!("{}: {e}", script.display()),
+            }
+        }
+        panic!("{} stayed busy", script.display());
     }
 }
