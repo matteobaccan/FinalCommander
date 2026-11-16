@@ -6,6 +6,8 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.44.0] — 2026-11-16
+
 ### Added
 
 - **WebAssembly in the viewer.** `F5` on a `.wasm` prints the module as its text format (WAT),
