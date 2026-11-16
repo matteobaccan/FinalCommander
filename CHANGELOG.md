@@ -23,6 +23,9 @@ Notable changes, newest first. The format follows
   channels, the bitrate and — from the Xing/LAME header — the exact length and the encoder. A
   song made with Suno says *made with Suno*, with the moment it was created and its id there.
 
+- **The cover of a song, shown** — `Enter` on the *cover* row of an MP3 (`APIC`) or a FLAC
+  (`PICTURE`) draws the picture the way a JPEG or a PNG is drawn; `F2` goes back to the bytes.
+
 ### Fixed
 
 - An MP3 tag read whole rather than its first 512 KiB, so what comes after a large cover is no

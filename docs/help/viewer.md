@@ -307,7 +307,8 @@ The same key answers for the files that are not programs:
   the same tree `structure.txt` shows when the message is opened as a folder (*Mail files*).
   `Enter` on a part of an `.eml` goes to where it starts in the file;
 - **music** — MP3, FLAC, Ogg Vorbis, Opus: the title, the artist, the album, the year, the
-  track, the genre, the cover (front, back… and its format), and for FLAC and Ogg the stream
+  track, the genre, the cover (front, back… and its format; `Enter` on it shows the picture, `F2` goes back to
+  the bytes), and for FLAC and Ogg the stream
   and its length. An MP3 also shows its links (the song's page), the extra texts it carries,
   the **lyrics** — on one row, with `Enter` opening the words line by line — and, from its
   first audio frame, the format, the sample rate, the channels, the bitrate and the exact

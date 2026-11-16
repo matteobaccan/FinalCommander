@@ -20,7 +20,6 @@ Decided with the author on 16 November 2026.
 | Item | Work | Note |
 | --- | --- | --- |
 | **Play an MP3 (and the other sound files) from the viewer, through a program on the machine** | S | Decided on 16 November 2026: an external player for now, as the film frames are asked of `ffmpeg` — run, never linked, so no GPL reaches the binary. `ffplay -nodisp -autoexit` where `ffmpeg` is installed, else `mpv --no-video`; the `:tools` panel lists both. In the viewer on a sound file: a key plays and pauses, another stops, and the status line shows the time played and the length the structure pane already reads (Xing/LAME). Leaving the viewer stops it. Nothing installed: the status line names the two programs. **Later**: the author will pass an MP3 crate from his *inga* project to decode and play in process, which replaces the external program for MP3 |
-| **The cover of an MP3 shown in the viewer** | S | `Enter` on the *cover* row of the structure pane (`APIC`) hands the picture's bytes to the decoder the viewer already uses for JPEG and PNG, and draws it as a view of its own (half blocks, or real pixels where the terminal has them); no new crate. The same for a FLAC's `PICTURE` block |
 
 ## Parity after 0.41
 

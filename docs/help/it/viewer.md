@@ -325,7 +325,7 @@ Lo stesso tasto risponde anche per i file che non sono programmi:
   e nome — lo stesso albero che `structure.txt` mostra quando il messaggio è aperto come
   cartella (*File di posta*). `Enter` su una parte di un `.eml` porta dove comincia nel file;
 - **la musica** — MP3, FLAC, Ogg Vorbis, Opus: titolo, artista, album, anno, traccia, genere,
-  la copertina (fronte, retro… e il formato), e per FLAC e Ogg il flusso e la durata. Un MP3
+  la copertina (fronte, retro… e il formato; `Invio` la mostra, `F2` torna ai byte), e per FLAC e Ogg il flusso e la durata. Un MP3
   mostra anche i suoi link (la pagina del brano), i testi aggiuntivi che porta, il **testo del
   brano** — su una riga, con `Invio` che apre le parole riga per riga — e, dal primo frame
   audio, formato, frequenza, canali, bitrate e durata esatta. Un brano fatto con Suno lo dice,

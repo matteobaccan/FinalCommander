@@ -1164,7 +1164,10 @@ fn id3(src: &mut dyn Bytes, len: u64) -> Structure {
         } else if id == "SYLT" || id == "SLT" {
             extra.push(field("synchronised lyrics", format!("{fsize} bytes")));
         } else if id == "APIC" || id == "PIC" {
-            tags.push(field("cover", picture(data, short, fsize)));
+            // Where the frame is, for `Enter` to show the picture — not for v2.2's `PIC`,
+            // whose frame header the reader below does not know.
+            let at = offset.filter(|_| !short);
+            tags.push(cover_row(picture(data, short, fsize), at));
         } else if id == "GEOB" || id == "GEO" {
             if let Some((&enc, rest)) = data.split_first() {
                 let (mime, rest) = id3_split(rest, 0);
@@ -1262,6 +1265,71 @@ fn id3(src: &mut dyn Bytes, len: u64) -> Structure {
         rows,
         truncated,
     )
+}
+
+/// The row for a picture a sound file carries: `Enter` on it shows the picture, which is why
+/// it points at the frame or the block it is in.
+fn cover_row(value: String, offset: Option<u64>) -> Row {
+    Row::entry("cover", value, offset)
+}
+
+/// The kind of picture a FLAC `PICTURE` block says it is.
+fn flac_picture_kind(body: &[u8]) -> Option<&'static str> {
+    Some(picture_kind(u8::try_from(be32(body, 0)?).ok()?))
+}
+
+/// The image in a FLAC `PICTURE` block: type, MIME, description, four sizes, then the data.
+fn flac_picture_data(body: &[u8]) -> Option<&[u8]> {
+    let mime = be32(body, 4)? as usize;
+    let desc_at = 8 + mime;
+    let desc = be32(body, desc_at)? as usize;
+    let len_at = desc_at + 4 + desc + 16;
+    let len = be32(body, len_at)? as usize;
+    body.get(len_at + 4..len_at + 4 + len)
+}
+
+/// The bytes of the picture whose frame or block starts at `at` in a file that starts with
+/// `head`: an ID3v2 `APIC` frame, or a FLAC `PICTURE` block. What `Enter` on a *cover* row
+/// hands to the picture decoder.
+pub(crate) fn picture_at(head: &[u8], block: &[u8]) -> Option<Vec<u8>> {
+    if head.starts_with(b"ID3") {
+        let major = *head.get(3)?;
+        if block.get(..4)? != b"APIC" {
+            return None;
+        }
+        let size = if major == 4 {
+            syncsafe(block, 4)?
+        } else {
+            be32(block, 4)?
+        } as usize;
+        let flags = *block.get(9)?;
+        let mut data = block.get(10..10 + size)?.to_vec();
+        if major == 4 {
+            if flags & 0x0C != 0 {
+                return None;
+            }
+            if flags & 0x02 != 0 {
+                data = unsync(&data);
+            }
+            if flags & 0x01 != 0 {
+                data = data.get(4..)?.to_vec();
+            }
+        }
+        let (&enc, rest) = data.split_first()?;
+        let (_, rest) = id3_split(rest, 0);
+        let (_, image) = id3_split(rest.get(1..)?, enc);
+        return Some(image.to_vec());
+    }
+    if head.starts_with(b"fLaC") {
+        if block.first()? & 0x7F != 6 {
+            return None;
+        }
+        let size = (usize::from(*block.get(1)?) << 16)
+            | (usize::from(*block.get(2)?) << 8)
+            | usize::from(*block.get(3)?);
+        return flac_picture_data(block.get(4..4 + size)?).map(<[u8]>::to_vec);
+    }
+    None
 }
 
 /// An `APIC` (or v2.2 `PIC`) frame in words: what kind of picture, in what format, how big.
@@ -1393,7 +1461,12 @@ fn flac(b: &[u8]) -> Structure {
                 }
             }
             4 => tags.extend(vorbis_comments(body)),
-            6 => tags.push(field("cover", format!("a picture, {size} bytes"))),
+            6 => tags.push(cover_row(
+                flac_picture_kind(body)
+                    .map(|k| format!("{k}, {size} bytes"))
+                    .unwrap_or_else(|| format!("a picture, {size} bytes")),
+                Some(at as u64),
+            )),
             _ => {}
         }
         at += 4 + size;

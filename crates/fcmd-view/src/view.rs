@@ -691,6 +691,12 @@ impl Viewer {
         let Some(row) = self.structure().and_then(|s| s.rows.get(at)).cloned() else {
             return false;
         };
+        // The cover of a song: the picture itself, drawn as a picture file is.
+        if row.label == "cover" {
+            if let Some(offset) = row.offset {
+                return self.show_cover(offset);
+            }
+        }
         if row.kind != crate::structure::RowKind::Text {
             return false;
         }
@@ -702,6 +708,35 @@ impl Viewer {
         };
         self.show_derived("metadata", crate::aigen::readable(&text));
         true
+    }
+
+    /// Show the picture an MP3 or a FLAC carries in the frame or block at `offset`, as the
+    /// viewer shows a picture file. `false` when it is not one the decoder reads, and the
+    /// viewer is left as it was.
+    fn show_cover(&mut self, offset: u64) -> bool {
+        let Ok(head) = self.source.read_vec(0, 10) else {
+            return false;
+        };
+        let len = self.source.len();
+        let want = (len.saturating_sub(offset)).min(self.picture_limit) as usize;
+        let Ok(block) = self.source.read_vec(offset, want) else {
+            return false;
+        };
+        let Some(bytes) = crate::tags::picture_at(&head, &block) else {
+            return false;
+        };
+        match crate::picture::read(&bytes) {
+            Ok(picture) => {
+                self.picture = Some(Ok(std::sync::Arc::new(picture)));
+                self.picture_serial = next_picture_serial();
+                // The mode only: `F2` goes back to the bytes, and the base the `F4` wheel
+                // turns on stays the one a sound file has.
+                self.mode = Mode::Image;
+                self.col = 0;
+                true
+            }
+            Err(_) => false,
+        }
     }
 
     /// The text at `offset`: a PNG text chunk when one starts there, otherwise an EXIF value.
@@ -3068,6 +3103,72 @@ mod tests {
         let shown = texts(&mut v, 80, 10).join("\n");
         assert!(shown.contains("\"class_type\": \"KSampler\""), "{shown}");
         assert!(shown.lines().count() > 3, "laid out, not one line: {shown}");
+    }
+
+    /// `Enter` on the cover of an MP3 and of a FLAC: the picture itself, the way a picture
+    /// file is shown; `F2` goes back to the bytes.
+    #[test]
+    fn enter_on_the_cover_of_a_song_shows_the_picture() {
+        let buffer: image::RgbaImage =
+            image::ImageBuffer::from_fn(3, 2, |_, _| image::Rgba([200, 30, 30, 255]));
+        let mut png = Vec::new();
+        image::DynamicImage::ImageRgba8(buffer)
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        let syncsafe = |n: usize| {
+            [
+                (n >> 21) as u8 & 0x7F,
+                (n >> 14) as u8 & 0x7F,
+                (n >> 7) as u8 & 0x7F,
+                n as u8 & 0x7F,
+            ]
+        };
+        // An ID3v2.4 tag with one APIC frame.
+        let mut apic = b"\x03image/png\0\x03Cover\0".to_vec();
+        apic.extend(&png);
+        let mut frame = b"APIC".to_vec();
+        frame.extend(syncsafe(apic.len()));
+        frame.extend([0, 0]);
+        frame.extend(&apic);
+        let mut mp3 = b"ID3\x04\x00\x00".to_vec();
+        mp3.extend(syncsafe(frame.len()));
+        mp3.extend(&frame);
+        mp3.extend(vec![0u8; 256]);
+
+        // A FLAC with STREAMINFO and a PICTURE block.
+        let mut picture = 3u32.to_be_bytes().to_vec();
+        picture.extend(9u32.to_be_bytes());
+        picture.extend(b"image/png");
+        picture.extend(0u32.to_be_bytes());
+        picture.extend([0u8; 16]);
+        picture.extend((png.len() as u32).to_be_bytes());
+        picture.extend(&png);
+        let mut flac = b"fLaC".to_vec();
+        flac.extend([0x00, 0, 0, 34]);
+        flac.extend([0u8; 34]);
+        flac.push(0x80 | 6);
+        flac.extend(&(picture.len() as u32).to_be_bytes()[1..]);
+        flac.extend(&picture);
+
+        for bytes in [mp3, flac] {
+            let mut v = viewer(&bytes);
+            let before = v.mode;
+            assert!(v.toggle_structure());
+            let rows = v.structure().expect("a structure").rows.clone();
+            let at = rows
+                .iter()
+                .position(|r| r.label == "cover")
+                .unwrap_or_else(|| panic!("no cover row: {rows:#?}"));
+            assert!(rows[at].value.starts_with("front cover"), "{:?}", rows[at]);
+            v.struct_cursor = at;
+            assert!(v.structure_text(), "the picture was not shown");
+            assert_eq!(v.mode, Mode::Image);
+            let shown = v.decode_picture().as_ref().expect("a picture").clone();
+            assert_eq!((shown.width, shown.height), (3, 2));
+            v.toggle_wrap(); // F2
+            assert_ne!(v.mode, Mode::Image, "F2 goes back to the bytes");
+            let _ = before;
+        }
     }
 
     /// `Enter` on the lyrics of an MP3 in the structure pane: the words, line by line, as a
