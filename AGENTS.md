@@ -142,8 +142,13 @@ A release carries at least one feature or one fix. Dependency updates merged fro
 Dependabot never cut one on their own: they wait on `main` and ship with the next release that
 has something of its own in it.
 
-1. Write the section in `CHANGELOG.md` under a dated heading: `## [0.7.0] — 2026-10-28`.
-   The release notes are read from that section.
+1. Write the section in `CHANGELOG.md` under a dated heading: `## [0.7.0] — 2026-10-28`,
+   opening with a paragraph of a few lines that says what the release is about, before its
+   `### Added` / `### Changed` / `### Fixed`. The release notes are made from that section
+   by `tools/release-notes.sh`: a table of the downloads, then the section under *What's
+   new*, so the paragraph is the first thing read on the release page. Words improved after
+   a release went out reach its page through *Actions → Release notes* (`release-notes.yml`),
+   which rewrites the notes from `main` and builds nothing.
 2. Bump `version` in the workspace `Cargo.toml` (one place — every crate inherits it) and run
    a build so `Cargo.lock` follows.
    Regenerate the manual page, which carries the version and is compared byte for byte by

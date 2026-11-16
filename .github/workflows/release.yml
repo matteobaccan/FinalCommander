@@ -183,14 +183,9 @@ jobs:
 
       - name: Release notes from the changelog
         run: |
-          version="${TAG#v}"
-          # The section for this version, without its heading.
-          awk -v v="$version" '
-            $0 ~ "^## \\[" v "\\]" { found = 1; next }
-            found && /^## / { exit }
-            found { print }
-          ' CHANGELOG.md > notes.md
-          if [ ! -s notes.md ]; then
+          # The downloads first, then the version's section of CHANGELOG.md under "What's
+          # new": its summary paragraph, then what was added, changed and fixed.
+          if ! bash tools/release-notes.sh "$TAG" CHANGELOG.md > notes.md; then
             echo "See CHANGELOG.md." > notes.md
           fi
           cat notes.md

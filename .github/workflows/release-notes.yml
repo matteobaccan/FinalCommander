@@ -1,0 +1,31 @@
+# Write the notes of a release that is already published again, from CHANGELOG.md on `main`,
+# without building or uploading anything: for when the changelog's words for a version are
+# improved after its archives went out.
+name: Release notes
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release whose notes to write again (e.g. v0.44.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  notes:
+    name: Notes of ${{ inputs.tag }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Write the notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          bash tools/release-notes.sh "$TAG" CHANGELOG.md > notes.md
+          cat notes.md
+          gh release edit "$TAG" --notes-file notes.md

@@ -8,6 +8,12 @@ Notable changes, newest first. The format follows
 
 ## [0.44.0] — 2026-11-16
 
+The viewer learns to read what a song and a WebAssembly module carry. A `.wasm` is printed as
+its text format with nothing to install and listed in the structure pane; an MP3 shows its
+lyrics, its links and the encoder and exact length from its first frame, and says when Suno
+made it; the cover of an MP3 or a FLAC is drawn on `Enter`; and `p` plays a sound file through
+`ffplay` or `mpv` from the viewer, with the time on the status line.
+
 ### Added
 
 - **WebAssembly in the viewer.** `F5` on a `.wasm` prints the module as its text format (WAT),
