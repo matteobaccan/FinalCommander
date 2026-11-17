@@ -6,6 +6,12 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `fcmd.exe` starts on a Windows without the Visual C++ Redistributable — a fresh Windows
+  Server, for one — where it stopped at once asking for `VCRUNTIME140.dll`: the C runtime is
+  now linked into the executable.
+
 ## [0.44.0] — 2026-11-16
 
 The viewer learns to read what a song and a WebAssembly module carry. A `.wasm` is printed as

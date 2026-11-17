@@ -1,0 +1,9 @@
+# The C runtime of Visual C++ linked into the Windows executable rather than taken from
+# VCRUNTIME140.dll: a Windows without the Visual C++ Redistributable — a fresh Windows Server,
+# for one — has no such DLL, and `fcmd.exe` would not start there. One file that runs on any
+# Windows is what the release archive promises.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
