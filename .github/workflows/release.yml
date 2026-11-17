@@ -128,6 +128,12 @@ jobs:
             windows-*) "$dir/fcmd.exe" --version ;;
             *) "$dir/fcmd" --version ;;
           esac
+          # And on Windows it must not need the Visual C++ Redistributable: the C runtime is
+          # linked in (`.cargo/config.toml`), and an import of VCRUNTIME140.dll would mean it
+          # came back as a DLL — `fcmd.exe` would not start on a fresh Windows.
+          case "${{ matrix.name }}" in
+            windows-*) python tools/pe-imports.py "$dir/fcmd.exe" --static ;;
+          esac
           # The files sit at the root of the archive, with no directory of their own: the
           # program is one executable, and unpacking it should put that executable where the
           # user is, not one level down.
