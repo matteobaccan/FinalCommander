@@ -6,6 +6,13 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.44.1] — 2026-11-17
+
+A fix for Windows: `fcmd.exe` now starts on a machine without the Visual C++ Redistributable,
+such as a fresh Windows Server, where 0.44.0 stopped at once asking for `VCRUNTIME140.dll`.
+The release page also opens, from this version on, with the downloads and a few lines on what
+is new.
+
 ### Fixed
 
 - `fcmd.exe` starts on a Windows without the Visual C++ Redistributable — a fresh Windows

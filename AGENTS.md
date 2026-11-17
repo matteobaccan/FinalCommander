@@ -196,13 +196,17 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.44.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.44.1 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.44.1** — the next day: the C runtime linked into `fcmd.exe` (`.cargo/config.toml`,
+  `+crt-static`), which 0.44.0 asked for as `VCRUNTIME140.dll` and a fresh Windows Server
+  does not have; and release notes that open with the downloads and a summary
+  (`tools/release-notes.sh`).
 - **0.44.0** — the author's three for the day: a WebAssembly module printed as its text
   format (`wasmprinter`) and listed in the structure pane; the words of a song and more of
   what an MP3 says (Suno included), with the cover shown on `Enter`; and sound played from the
