@@ -18,6 +18,40 @@ says what the decision stands on.
 Decided with the author on 16 November 2026: WebAssembly printed as its text, the cover of a
 song shown, and sound played through a program on the machine — all three done.
 
+## Candidates for 0.45
+
+Gathered on 17 November 2026 from three readings, to be discussed with the author before
+anything is started: the open issues of Midnight Commander (the 125 most recently updated of
+659, of which 46 ask for something), and the pages of two macOS commanders, Captain's Deck
+(its comparison with ForkLift 4, Commander One, Nimble Commander, Path Finder and Finder) and
+R2 Commander. What we already do was checked against this document and the code, not by
+running each one.
+
+| Item | Asked by | Work | Note |
+| --- | --- | --- | --- |
+| **Make a folder and enter it** (`F7`, a box *Enter it*) | MC #5207 | S | The created folder becomes the panel's, as `mkdir x && cd x` |
+| **The source's name in the copy and move dialog** | MC #5194 | S | A key in the target field puts the name of the one file being copied there, to edit into a new name |
+| **The terminal's window title** says where we are: the folder, or the file in the viewer and the editor | MC #1364, #5142 | S | OSC 0/2, restored on exit; a setting to turn it off |
+| **A command typed with a space in front is not kept in the history** | MC #5072 | S | bash's `ignorespace`, as a setting |
+| **Folder sizes that stop at other file systems** | MC #5014 | S | A setting: the walk does not cross into a mount point, as `du -x` |
+| **The info panel shows what a command prints** | MC #3713 | S–M | A command of one's own (`df -h`, `git status`) run for the panel's folder |
+| **Copy that updates in place**: an overwrite rewrites only the blocks that differ | MC #5128 | M | For big files that change little (disk images, databases); not atomic, so a choice in the overwrite question, never the default |
+| **A `vi` keymap** (`hjkl`, `gg`/`G`, `/`) and a visual selection (`Shift+V`) | Captain's Deck | S + M | `keymaps/vi.toml` beside `far` and `mc`; feature 9.2 lists `vi` as missing |
+| **Synchronised browsing**: entering a folder in one panel enters the one of the same name in the other | Captain's Deck, ForkLift | S–M | Feature 12.5 |
+| **AWS profiles** to choose from in the S3 session (`~/.aws/credentials`, `~/.aws/config`) | Captain's Deck | S | Today the default profile or the environment |
+| **A shared link to an S3 object** (presigned, 1 h / 24 h / 7 days) copied to the clipboard | Captain's Deck | S | Signed with the session's key, nothing sent anywhere |
+| **Parquet in table mode** | R2 Commander | M | The `parquet` crate (Apache Arrow, Apache-2.0); its size in the binary to be measured before deciding, as for `wasmprinter` |
+
+To verify before deciding, since only the documents were read: whether each panel tab keeps
+a terminal of its own (Captain's Deck); whether Cloudflare R2 works in the S3 panel with its
+endpoint (R2 Commander); a move that deletes each file as soon as it is copied (MC #2310); the
+syntax files asked for in MC (BitBake, Kconfig, `ssh_config`/`sshd_config`, TOML); and the
+speed of an SFTP listing of thousands of files (MC #5179).
+
+Read and left out: SMB (already 4.5b), attaching to a running instance (MC #2490), a JavaScript
+plugin SDK (the plugin manager is 10.5, M4), Captain's Deck's CRT effects and sounds and its
+audit log, and MC's own skins and key-learning dialog.
+
 ## Parity after 0.41
 
 "Do we do everything the other commanders do?" — **no: about three quarters of it.** For
