@@ -20,7 +20,8 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | --- | --- | --- |
 | `crossterm` | MIT | the terminal backend: input decoding, raw mode, painting |
 | `tokio` | MIT | the async runtime for filesystem and (later) network work |
-| `chrono` | MIT OR Apache-2.0 | local-time formatting in panel columns |
+| `jiff` | Unlicense OR MIT | dates in the panel columns, the clock and the attributes dialog, in the machine's time zone (in place of `chrono`, wound down by its author in November 2026) |
+| `chrono` | MIT OR Apache-2.0 | carried only by `russh-sftp`, for the file times of the SFTP protocol |
 | `serde`, `toml` | MIT OR Apache-2.0 | configuration, keymaps and themes |
 | `unicode-width` | MIT OR Apache-2.0 | correct double-width (CJK) layout |
 | `object` | MIT OR Apache-2.0 | reading ELF/PE/Mach-O structure for the disassembler |
@@ -32,7 +33,7 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `thiserror`, `anyhow` | MIT OR Apache-2.0 | error types |
 | `async-trait` | MIT OR Apache-2.0 | the `Vfs` trait |
 | `russh`, `russh-sftp` | Apache-2.0 | SSH and SFTP in the netbox |
-| `suppaftp` | Apache-2.0 OR MIT | FTP and FTPS in the netbox (it carries `chrono`, MIT OR Apache-2.0, for the `MDTM` reply it parses itself) |
+| `suppaftp` | Apache-2.0 OR MIT | FTP and FTPS in the netbox (it carries `jiff` for the `MDTM` reply it parses itself) |
 | `rustls-native-certs` | MIT OR Apache-2.0 OR ISC | the machine's own certificate authorities, for FTPS — already in the tree under `reqwest` |
 | `ring` (russh's crypto backend, chosen over `aws-lc-rs`) | Apache-2.0 AND ISC | ciphers, key exchange, signatures; the secrets file's AES-256-GCM and PBKDF2 |
 | `ssh-key`, `ssh-encoding`, `ssh-cipher` | Apache-2.0 OR MIT | OpenSSH key and `known_hosts` formats |
@@ -49,7 +50,7 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `tokio-util` | MIT | streaming a body off the disk, and a WebDAV `PUT` through a pipe |
 | `futures-util` | MIT OR Apache-2.0 | a WebDAV response body's errors made into `io::Error` as it streams |
 | `vte` | Apache-2.0 OR MIT | recognising the escape sequences a program writes to a terminal |
-| `trash` (with `urlencoding`, `scopeguard`, `once_cell`, `chrono`; `objc2-foundation` on macOS) | MIT | handing a file to the system's own wastebasket — the XDG trash spec, `NSFileManager`, `IFileOperation` — and, for the undo, listing it and restoring from it on Linux and Windows |
+| `trash` (with `urlencoding`, `scopeguard`, `once_cell`, `jiff`; `objc2-foundation` on macOS) | MIT | handing a file to the system's own wastebasket — the XDG trash spec, `NSFileManager`, `IFileOperation` — and, for the undo, listing it and restoring from it on Linux and Windows |
 | `md5`, `sha1`, `sha2` | MIT OR Apache-2.0 | three of the four hashes the checksum dialog offers (all three were already in the tree under the SSH client) |
 | `crc32fast` | MIT OR Apache-2.0 | the fourth: CRC32, which is what a `.sfv` list holds (already in the tree under `zip` and `flate2`) |
 | `image` | MIT OR Apache-2.0 | decoding PNG, JPEG, GIF and BMP for the viewer's picture mode; built with `default-features = false`, so it is those four formats and nothing else |

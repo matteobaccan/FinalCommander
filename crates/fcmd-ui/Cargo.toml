@@ -9,8 +9,10 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
-chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
 fcmd-core = { workspace = true }
+# Dates in the panels and the dialogs, in the machine's own time zone. chrono did this until
+# its author wound it down (RUSTSEC-2026-0543) and pointed to jiff.
+jiff = "1.0.1"
 serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2.0.21"
 toml = "1.0.7"

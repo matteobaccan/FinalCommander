@@ -19,15 +19,15 @@ thiserror = "2"
 # The wastebasket, sending to it and — since the undo of 0.39.0 — listing and restoring from
 # it. The features are named rather than taken by default so that the D-Bus `portal` backend,
 # which would bring zbus, stays out: `freedesktop` is the Linux and BSD backend (a feature of
-# its own since 5.3), `chrono` gives a trashed item its real deletion time there, which the
+# its own since 5.3), `jiff` gives a trashed item its real deletion time there (it was `chrono`
+# until 5.4, when the crate left the unmaintained chrono for jiff), which the
 # undo needs to pick the newest of two items with one name (without it the time is a
 # placeholder), and `coinit_apartmentthreaded` has to stay: on Windows the crate initialises
 # COM and refuses to compile, on purpose, unless it is told which threading model to use.
-# chrono is in the tree already through fcmd-ui.
-trash = { version = "5.3.0", default-features = false, features = [
+trash = { version = "5.4.0", default-features = false, features = [
   "coinit_apartmentthreaded",
   "freedesktop",
-  "chrono",
+  "jiff",
 ] }
 # CRC32 for the `.sfv` lists, which is the one check those still use. Already in the tree
 # under `zip` and `tar`, so it costs nothing to build; named here because this crate calls it.

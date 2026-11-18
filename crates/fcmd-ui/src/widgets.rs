@@ -1,9 +1,9 @@
 use std::time::SystemTime;
 
-use chrono::{DateTime, Local};
 use fcmd_core::{
     format_count, format_size, Entry, EntryFlags, EntryKind, Listing, Selection, ViewMode,
 };
+use jiff::{civil, tz::TimeZone, Timestamp, ZonedDateTime};
 use unicode_width::UnicodeWidthStr;
 
 use crate::buffer::{elide_middle, truncate_cols, Border, Buffer, Rect, Style};
@@ -1243,13 +1243,19 @@ fn attrs(e: &Entry) -> String {
 /// Hours and minutes and no seconds, which is what decides how often the clock has to be
 /// redrawn: once a minute rather than once a second.
 pub fn clock_now() -> String {
-    Local::now().format("%H:%M").to_string()
+    ZonedDateTime::now().strftime("%H:%M").to_string()
+}
+
+/// A moment in the given clock, spelt by a `strftime` format; `None` for a moment jiff
+/// cannot hold (before the year -9999 or after 9999) or a format it cannot follow.
+fn strftime(t: SystemTime, tz: TimeZone, fmt: &str) -> Option<String> {
+    let zoned = Timestamp::try_from(t).ok()?.to_zoned_datetime(tz);
+    jiff::fmt::strtime::format(fmt, &zoned).ok()
 }
 
 /// `2026-10-23 17:42`, in local time.
 pub fn format_mtime(t: SystemTime) -> String {
-    let dt: DateTime<Local> = t.into();
-    dt.format("%Y-%m-%d %H:%M").to_string()
+    strftime(t, TimeZone::system(), "%Y-%m-%d %H:%M").unwrap_or_default()
 }
 
 /// A time in the spelling a column set asked for — a `strftime` string, which is what FAR's
@@ -1259,12 +1265,9 @@ pub fn format_mtime(t: SystemTime) -> String {
 /// spelling rather than drawing an empty column, so a typo in the configuration is visible as
 /// an ordinary date and not as a missing one.
 pub fn format_time(t: SystemTime, fmt: &str) -> String {
-    let dt: DateTime<Local> = t.into();
-    let text = dt.format(fmt).to_string();
-    if text.trim().is_empty() {
-        format_mtime(t)
-    } else {
-        text
+    match strftime(t, TimeZone::system(), fmt) {
+        Some(text) if !text.trim().is_empty() => text,
+        _ => format_mtime(t),
     }
 }
 
@@ -1273,8 +1276,7 @@ pub fn format_time(t: SystemTime, fmt: &str) -> String {
 /// The panel's column has no room for the seconds and does not need them; a dialog that sets a
 /// time does, or saving it unchanged would quietly round it down to the minute.
 pub fn format_stamp(t: SystemTime) -> String {
-    let dt: DateTime<Local> = t.into();
-    dt.format("%Y-%m-%d %H:%M:%S").to_string()
+    strftime(t, TimeZone::system(), "%Y-%m-%d %H:%M:%S").unwrap_or_default()
 }
 
 /// The same, in UTC: what the attributes dialog shows while its `UTC` box is ticked.
@@ -1283,8 +1285,24 @@ pub fn format_stamp(t: SystemTime) -> String {
 /// one this machine is set to — a build server's log and a laptop's copy of it are an hour
 /// apart in local time and the same instant in UTC.
 pub fn format_stamp_utc(t: SystemTime) -> String {
-    let dt: DateTime<chrono::Utc> = t.into();
-    dt.format("%Y-%m-%d %H:%M:%S").to_string()
+    strftime(t, TimeZone::UTC, "%Y-%m-%d %H:%M:%S").unwrap_or_default()
+}
+
+/// A date and time typed into a dialog, with no clock attached yet: with seconds, without,
+/// or a date alone, which means its midnight.
+fn parse_civil(text: &str) -> Option<civil::DateTime> {
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    civil::DateTime::strptime("%Y-%m-%d %H:%M:%S", text)
+        .or_else(|_| civil::DateTime::strptime("%Y-%m-%d %H:%M", text))
+        .ok()
+        .or_else(|| {
+            civil::Date::strptime("%Y-%m-%d", text)
+                .ok()
+                .map(|d| d.to_datetime(civil::Time::midnight()))
+        })
 }
 
 /// A time typed into a dialog, in local time. The seconds may be left off.
@@ -1292,44 +1310,22 @@ pub fn format_stamp_utc(t: SystemTime) -> String {
 /// `None` for anything else, including an empty string — which is how a row the user did not
 /// touch says "leave this alone".
 pub fn parse_stamp(text: &str) -> Option<SystemTime> {
-    use chrono::TimeZone;
-
-    let text = text.trim();
-    if text.is_empty() {
-        return None;
-    }
-    let naive = chrono::NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M:%S")
-        .or_else(|_| chrono::NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M"))
-        .or_else(|_| {
-            chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d")
-                .map(|d| d.and_hms_opt(0, 0, 0).expect("midnight exists"))
-        })
-        .ok()?;
+    let civil = parse_civil(text)?;
     // A local time in the hour a clock goes forward does not exist, and one in the hour it
     // goes back happens twice; the earlier of the two is the answer that does not surprise.
-    Local
-        .from_local_datetime(&naive)
-        .earliest()
-        .map(SystemTime::from)
+    let moment = TimeZone::system().to_ambiguous_zoned_datetime(civil);
+    if matches!(moment.offset(), jiff::tz::AmbiguousOffset::Gap { .. }) {
+        return None;
+    }
+    let zoned = moment.earlier().ok()?;
+    SystemTime::try_from(zoned.timestamp()).ok()
 }
 
 /// A time typed into a dialog whose `UTC` box is ticked. Every hour of UTC exists exactly
 /// once, so there is no pair to choose between here.
 pub fn parse_stamp_utc(text: &str) -> Option<SystemTime> {
-    use chrono::TimeZone;
-
-    let text = text.trim();
-    if text.is_empty() {
-        return None;
-    }
-    let naive = chrono::NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M:%S")
-        .or_else(|_| chrono::NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M"))
-        .or_else(|_| {
-            chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d")
-                .map(|d| d.and_hms_opt(0, 0, 0).expect("midnight exists"))
-        })
-        .ok()?;
-    Some(chrono::Utc.from_utc_datetime(&naive).into())
+    let zoned = parse_civil(text)?.to_zoned_datetime(TimeZone::UTC).ok()?;
+    SystemTime::try_from(zoned.timestamp()).ok()
 }
 
 /// A time shown in the clock the dialog is set to.
@@ -1952,6 +1948,36 @@ mod tests {
     }
 
     use super::*;
+
+    /// The dates a dialog shows and takes back, now through jiff: what goes out comes back,
+    /// in UTC and in local time, and what is not a date is refused rather than guessed.
+    #[test]
+    fn a_stamp_goes_out_and_comes_back_in_either_clock() {
+        let t = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_763_456_789);
+        assert_eq!(format_stamp_utc(t), "2025-11-18 09:06:29");
+        assert_eq!(parse_stamp_utc("2025-11-18 09:06:29"), Some(t));
+        assert_eq!(parse_stamp(&format_stamp(t)), Some(t));
+        // Without the seconds, or a date alone, which is its midnight.
+        let minute = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_763_456_760);
+        assert_eq!(parse_stamp_utc(" 2025-11-18 09:06 "), Some(minute));
+        let midnight = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_763_424_000);
+        assert_eq!(parse_stamp_utc("2025-11-18"), Some(midnight));
+        for wrong in [
+            "",
+            "   ",
+            "yesterday",
+            "2025-13-01",
+            "2025-11-18 25:00",
+            "2025-11-18 09:06:29 extra",
+        ] {
+            assert_eq!(parse_stamp_utc(wrong), None, "{wrong:?}");
+            assert_eq!(parse_stamp(wrong), None, "{wrong:?}");
+        }
+        // A column format that cannot be followed falls back to the usual spelling.
+        assert_eq!(format_time(t, "%Q%"), format_mtime(t));
+        assert_eq!(format_time(t, "%Y"), "2025");
+        assert_eq!(clock_now().len(), 5);
+    }
     use fcmd_core::{EntryId, Sort, SortKey};
     use std::ffi::OsString;
 

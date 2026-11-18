@@ -6,6 +6,13 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Dates — the panels' columns, the clock, the attributes dialog — are read and written through
+  `jiff` rather than `chrono`, whose author wound it down this month and which RustSec now
+  marks unmaintained (RUSTSEC-2026-0543). The FTP client (`suppaftp` 13) and the wastebasket
+  (`trash` 5.4) moved to `jiff` too; the SFTP client is the one part still on `chrono`.
+
 ## [0.44.1] — 2026-11-17
 
 A fix for Windows: `fcmd.exe` now starts on a machine without the Visual C++ Redistributable,
