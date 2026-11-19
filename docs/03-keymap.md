@@ -58,7 +58,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | Alt+F6 | create hard/symlink | — | — | create link |
 | Alt+F7 | find files | search | — | find files |
 | Alt+F8 | command history | command-line history | — | command history |
-| Alt+F9 | toggle window size (console) | — | — | toggle maximise/zoom panel |
+| Alt+F9 | toggle window size (console) | — | — | **toggle window size**: the console window on Windows, xterm's `CSI 9;1t`/`9;0t` elsewhere; in the editor, its list of commands |
 | Alt+F10 | find folder | directory tree | — | find folder / tree |
 | Alt+F11 | view & edit history | — | — | **the files read or edited**, newest first: `Enter` reads one, `F4` edits it (SPEC 06 §6) |
 | Alt+F12 | folder history | — | — | folder history |

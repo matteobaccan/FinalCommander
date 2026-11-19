@@ -1736,6 +1736,15 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                 Request::Font { by } => {
                     let _ = term.font_step(by);
                 }
+                // `Alt+F9`: the system sizes a console window it can reach (Windows); any
+                // other terminal is asked, and may or may not do it.
+                Request::WindowSize { maximise } => {
+                    let answer = fcmd_platform::toggle_window_size();
+                    if answer.is_none() {
+                        let _ = term.window_maximise(maximise);
+                    }
+                    app.window_sized(answer);
+                }
                 Request::Clipboard { text } => {
                     // Nothing to report: the terminal does not answer, and a terminal that
                     // does not understand the request ignores it.
@@ -7499,6 +7508,7 @@ dir_attr = "D"
                 }
                 // No terminal in a test: what the request carries is checked where it is made.
                 Request::Font { .. }
+                | Request::WindowSize { .. }
                 | Request::Mouse { .. }
                 | Request::Clipboard { .. }
                 | Request::Owners { .. }

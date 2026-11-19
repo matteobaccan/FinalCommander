@@ -1731,6 +1731,35 @@ pub fn held_keys() -> Option<super::HeldKeys> {
     })
 }
 
+/// Maximise the console's window or restore it, as FAR's `Alt+F9` does.
+///
+/// In the old console host the window is the console's own. In Windows Terminal that window
+/// is a hidden stand-in owned by the terminal's real window, and it is the owner that is
+/// sized. `None` when there is no window at all (a program started without a console).
+pub fn toggle_window_size() -> Option<bool> {
+    use windows_sys::Win32::System::Console::GetConsoleWindow;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetAncestor, IsWindowVisible, IsZoomed, ShowWindow, GA_ROOTOWNER, SW_MAXIMIZE, SW_RESTORE,
+    };
+    // SAFETY: no pointers are passed or kept; every handle is checked for null before use,
+    // and a window that has gone away makes these calls fail, not misbehave.
+    unsafe {
+        let console = GetConsoleWindow();
+        if console.is_null() {
+            return None;
+        }
+        let owner = GetAncestor(console, GA_ROOTOWNER);
+        let window = if IsWindowVisible(console) == 0 && !owner.is_null() {
+            owner
+        } else {
+            console
+        };
+        let maximised = IsZoomed(window) != 0;
+        ShowWindow(window, if maximised { SW_RESTORE } else { SW_MAXIMIZE });
+        Some(!maximised)
+    }
+}
+
 /// The keypad's `Clear`, read off the console before the terminal library sees it (issue 45).
 ///
 /// The library reads key records and keeps the ones that carry a character or have a name;

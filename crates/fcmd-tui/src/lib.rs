@@ -399,6 +399,17 @@ impl Term {
         Ok(())
     }
 
+    /// Ask the terminal to maximise its window, or to give it back its size: xterm's window
+    /// operation `CSI 9 ; 1 t` and `CSI 9 ; 0 t`. xterm and the terminals that copy it do
+    /// this; many leave a program no say over the window and ignore it, and there is no
+    /// answer to wait for. A window that did change size is read again on the next frame.
+    pub fn window_maximise(&mut self, on: bool) -> io::Result<()> {
+        self.out.write_all(window_request(on).as_bytes())?;
+        self.out.flush()?;
+        self.invalidate();
+        Ok(())
+    }
+
     /// Ask the terminal to put text on the system clipboard.
     ///
     /// This is `OSC 52`, and it is the only way a program in a terminal can reach the
@@ -518,6 +529,15 @@ impl Drop for Term {
 }
 
 /// Restore the terminal if we panic, so a crash never leaves an unusable shell.
+/// The window operation that maximises the terminal's window (`true`) or restores it.
+pub fn window_request(on: bool) -> &'static str {
+    if on {
+        "\x1b[9;1t"
+    } else {
+        "\x1b[9;0t"
+    }
+}
+
 /// The `OSC 52` request that puts `text` on the clipboard, as a string so that it can be
 /// tested without a terminal to send it to.
 pub fn clipboard_request(text: &str) -> String {
@@ -1166,6 +1186,13 @@ mod tests {
             key(CKey::PageUp, KeyModifiers::CONTROL),
             Some(Input::Key("Ctrl+PgUp".parse().unwrap()))
         );
+    }
+
+    /// `Alt+F9` outside Windows: xterm's maximise and restore.
+    #[test]
+    fn the_window_request_is_xterms_maximise_and_restore() {
+        assert_eq!(window_request(true), "\x1b[9;1t");
+        assert_eq!(window_request(false), "\x1b[9;0t");
     }
 
     /// Base64 against the three cases that matter: a length that is a multiple of three, and

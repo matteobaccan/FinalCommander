@@ -288,6 +288,11 @@ pub enum Request {
     Font {
         by: i8,
     },
+    /// `Alt+F9`: maximise the window or give it back its size. On Windows the console's window
+    /// is sized directly; elsewhere the terminal is asked, with `maximise` saying which way.
+    WindowSize {
+        maximise: bool,
+    },
     /// Start or stop asking the terminal to report the mouse. Like the font, only the loop
     /// that owns the terminal can do it.
     Mouse {
@@ -3584,6 +3589,9 @@ pub struct App {
     /// The number of the newest frame asked of `ffmpeg`, shared with the workers: one that
     /// is fetching an older frame gives up, and one that is playing stops.
     video_newest: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    /// What `Alt+F9` last asked of the window: maximised or as it was. Windows answers with
+    /// the window's real state, which replaces this; a terminal is only asked.
+    window_maximised: bool,
     /// The sound being played from the viewer (`p`), and the file it is the viewer's of:
     /// one at a time, stopped when that viewer is no longer on screen.
     sound: Option<(VPath, crate::audio::Playing)>,
@@ -3961,6 +3969,7 @@ impl App {
             pixels: crate::pixels::Screen::default(),
             video_newest: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
             sound: None,
+            window_maximised: false,
             last_calc: String::new(),
             plugin_commands,
             plugin_titles: plugin_columns.iter().map(|c| c.title.clone()).collect(),
@@ -12263,6 +12272,12 @@ impl App {
                     scroll: 0,
                     at: 0,
                 }
+            }
+            Command::AppWindowSize => {
+                self.window_maximised = !self.window_maximised;
+                self.requests.push(Request::WindowSize {
+                    maximise: self.window_maximised,
+                });
             }
             Command::AppFont(by) => {
                 self.requests.push(Request::Font { by });
@@ -29368,6 +29383,25 @@ impl App {
         }
     }
 
+    /// The loop's answer to [`Request::WindowSize`]: `Some(state)` when the system sized the
+    /// window and said how it is now, `None` when the terminal was only asked.
+    pub fn window_sized(&mut self, answer: Option<bool>) {
+        let id = match answer {
+            Some(state) => {
+                self.window_maximised = state;
+                if state {
+                    "window-maximised"
+                } else {
+                    "window-restored"
+                }
+            }
+            None if self.window_maximised => "window-asked-maximise",
+            None => "window-asked-restore",
+        };
+        let m = self.i18n.t(id);
+        self.set_status(m);
+    }
+
     /// `Shift+P`: stop the sound.
     fn sound_stop(&mut self) {
         if self.sound.take().is_some() {
@@ -34513,6 +34547,31 @@ mod tests {
             // A program cannot know whether the terminal did it, and the line says so.
             assert!(app.status.contains("terminal"), "{}", app.status);
         }
+    }
+
+    /// `Alt+F9`, FAR's toggle of the window size: maximise, then back, and the line says what
+    /// happened — sized by the system, or only asked of the terminal.
+    #[test]
+    fn alt_f9_toggles_the_window_size_and_says_how() {
+        let mut app = app();
+        let asked = |app: &mut App| {
+            app.take_requests().into_iter().find_map(|r| match r {
+                Request::WindowSize { maximise } => Some(maximise),
+                _ => None,
+            })
+        };
+        for want in [true, false] {
+            press(&mut app, "Alt+F9");
+            assert_eq!(asked(&mut app), Some(want));
+            // A terminal that is only asked: the line does not claim it happened.
+            app.window_sized(None);
+            assert!(app.status.contains("asked the terminal"), "{}", app.status);
+        }
+        // Windows answers with the window's real state, which the next press starts from.
+        app.window_sized(Some(true));
+        assert!(app.status.contains("maximised"), "{}", app.status);
+        press(&mut app, "Alt+F9");
+        assert_eq!(asked(&mut app), Some(false), "the next press restores it");
     }
 
     // ── checksums (SPEC 03 §9) ──────────────────────────────────────────────────────────────

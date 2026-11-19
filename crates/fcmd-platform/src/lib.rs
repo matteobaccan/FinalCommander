@@ -239,6 +239,21 @@ pub fn held_keys() -> Option<HeldKeys> {
     }
 }
 
+/// `Alt+F9`, FAR's toggle of the window size: maximise the window the program runs in, or
+/// give it back the size it had. `Some(true)` when it is now maximised, `Some(false)` when it
+/// was put back; `None` where there is no window this program can reach — every platform but
+/// Windows, where the terminal is asked instead with a control sequence (`fcmd-tui`).
+pub fn toggle_window_size() -> Option<bool> {
+    #[cfg(windows)]
+    {
+        windows::toggle_window_size()
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
 /// What the console has for the keyboard reader, asked before the terminal library reads it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConsoleKey {

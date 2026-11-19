@@ -6,6 +6,13 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`Alt+F9`, FAR's toggle of the window size**: the window maximised, and `Alt+F9` again
+  gives it back its size. On Windows the console's window is sized (the terminal's own in
+  Windows Terminal); elsewhere the terminal is asked with xterm's window operation, and the
+  status line says it asked. In the editor `Alt+F9` stays the list of its commands.
+
 ### Changed
 
 - Dates — the panels' columns, the clock, the attributes dialog — are read and written through

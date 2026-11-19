@@ -116,6 +116,9 @@ pub enum Command {
     /// with. A program does not own its font; this is a request, and `docs/03-keymap.md` §9
     /// says which terminals answer it.
     AppFont(i8),
+    /// `Alt+F9`, FAR's *toggle the window size*: the console window maximised, or back to the
+    /// size it had.
+    AppWindowSize,
     /// The theme list (SPEC 10 §4).
     AppThemes,
     /// The language list (SPEC 10 §4).
@@ -683,6 +686,7 @@ impl Command {
             Command::AppFont(-1),
             Command::AppFont(1),
             Command::AppFont(0),
+            Command::AppWindowSize,
             Command::AppThemes,
             Command::AppLanguages,
             Command::AppSetupSave,
@@ -1042,6 +1046,7 @@ impl Command {
             Command::AppPalette => "app.palette".into(),
             Command::AppThemeNext => "app.theme.next".into(),
             Command::AppFont(by) => format!("app.font({by})"),
+            Command::AppWindowSize => "app.window.size".into(),
             Command::AppThemes => "app.themes".into(),
             Command::AppLanguages => "app.languages".into(),
             Command::AppSetupSave => "app.setup.save".into(),
@@ -1369,6 +1374,7 @@ impl Command {
             ("app.palette", _) => Command::AppPalette,
             ("app.theme.next", _) => Command::AppThemeNext,
             ("app.font", Some(a)) => Command::AppFont(a.trim().parse().ok()?),
+            ("app.window.size", _) => Command::AppWindowSize,
             ("app.themes", _) => Command::AppThemes,
             ("app.languages", _) => Command::AppLanguages,
             ("app.setup.save", _) => Command::AppSetupSave,

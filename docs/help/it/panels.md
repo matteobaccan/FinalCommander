@@ -332,6 +332,13 @@ chiedere. xterm e i terminali che lo imitano rispondono; sulla maggior parte deg
 Terminal, Konsole, Windows Terminal, alacritty, foot) quei tasti sono lo zoom dell'emulatore
 stesso e non arrivano mai fino a noi — e ti danno la stessa cosa per una strada più corta.
 
+`Alt+F9` è il cambio di dimensione della finestra di FAR: la finestra massimizzata, e `Alt+F9`
+di nuovo la riporta alla dimensione che aveva. Su Windows la finestra della console viene
+ridimensionata direttamente — in Windows Terminal, la finestra del terminale stesso. Altrove si
+chiede al terminale, come per il font: xterm e i terminali che lo imitano lo fanno, molti altri
+non lasciano a un programma la loro finestra, e la riga di stato dice che ha chiesto, non che è
+successo. Nell'editor `Alt+F9` resta la lista dei suoi comandi.
+
 # Cartelle a portata di mano
 
 `Ctrl+Shift+0`…`Ctrl+Shift+9` mettono su una cifra la cartella in cui sei; `Alt+0`…`Alt+9` ti

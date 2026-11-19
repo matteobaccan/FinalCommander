@@ -317,6 +317,13 @@ answer; on most others (GNOME Terminal, Konsole, Windows Terminal, alacritty, fo
 are the emulator's own zoom and never reach us at all — which gets you the same thing by a
 shorter road.
 
+`Alt+F9` is FAR's toggle of the window size: the window maximised, and `Alt+F9` again gives it
+back the size it had. On Windows the console's window is sized directly — in Windows Terminal,
+the terminal's own window. Elsewhere the terminal is asked, as with the font: xterm and the
+terminals that copy it do it, many others do not let a program touch their window, and the
+status line says it asked rather than that it happened. In the editor `Alt+F9` stays the list
+of its commands.
+
 # Folders kept to hand
 
 `Ctrl+Shift+0` to `Ctrl+Shift+9` put the directory you are in on a digit; `Alt+0` to `Alt+9`

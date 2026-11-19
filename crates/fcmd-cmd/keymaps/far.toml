@@ -616,6 +616,13 @@ scope = "global"
 cmd = "app.font(0)"
 
 [[bind]]
+# FAR's toggle of the window size: the console window maximised, or back to what it was. In
+# the editor `Alt+F9` stays the list of its commands, which is the editor's own binding.
+keys = ["Alt+F9"]
+scope = "global"
+cmd = "app.window.size"
+
+[[bind]]
 keys = ["Alt++"]
 cmd = "sel.name.add"
 

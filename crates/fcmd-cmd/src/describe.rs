@@ -29,6 +29,7 @@ impl Command {
                 by if by < 0 => "ask the terminal for a smaller font",
                 _ => "ask the terminal for a larger font",
             },
+            Command::AppWindowSize => "maximise the window, or give it back its size",
             Command::AppThemes => "choose a colour theme",
             Command::AppLanguages => "choose the language",
             Command::AppSetupSave => "write the settings to fcmd.toml",
