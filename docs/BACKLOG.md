@@ -13,19 +13,11 @@ Still in the order the menus mention things, with the sections after them taken 
 have. **Open question** marks the rows where a decision comes before the code, and the row
 says what the decision stands on.
 
-## Next release (0.44)
+## Next release (0.45)
 
-Decided with the author on 16 November 2026: WebAssembly printed as its text, the cover of a
-song shown, and sound played through a program on the machine — all three done.
-
-## Candidates for 0.45
-
-Gathered on 17 November 2026 from three readings, to be discussed with the author before
-anything is started: the open issues of Midnight Commander (the 125 most recently updated of
-659, of which 46 ask for something), and the pages of two macOS commanders, Captain's Deck
-(its comparison with ForkLift 4, Commander One, Nimble Commander, Path Finder and Finder) and
-R2 Commander. What we already do was checked against this document and the code, not by
-running each one.
+Decided with the author on 19 November 2026: the small candidates below, and the quick view
+inside a container. Done since 0.44.1 and already in `CHANGELOG.md`: `Alt+F9` (the window
+size, as in FAR) and the dates through `jiff`.
 
 | Item | Asked by | Work | Note |
 | --- | --- | --- | --- |
@@ -34,12 +26,25 @@ running each one.
 | **The terminal's window title** says where we are: the folder, or the file in the viewer and the editor | MC #1364, #5142 | S | OSC 0/2, restored on exit; a setting to turn it off |
 | **A command typed with a space in front is not kept in the history** | MC #5072 | S | bash's `ignorespace`, as a setting |
 | **Folder sizes that stop at other file systems** | MC #5014 | S | A setting: the walk does not cross into a mount point, as `du -x` |
+| **AWS profiles** to choose from in the S3 session (`~/.aws/credentials`, `~/.aws/config`) | Captain's Deck | S | Today the default profile or the environment |
+| **A shared link to an S3 object** (presigned, 1 h / 24 h / 7 days) copied to the clipboard | Captain's Deck | S | Signed with the session's key, nothing sent anywhere |
+| **The quick view inside a container**: `Ctrl+Q` on an entry of a JSON, a zip, a tar… on this disk shows its bytes, as it does for a file | Matteo, 19 November 2026 | M | Today it says *the bytes are not here: F3 brings them out first* for anything in a container (`quick_view_for`), because a preview must not decompress or fetch on every cursor move. On a container on this disk and an entry up to 4 MiB the bytes are read on a worker (`Archive::read`), the answer kept only if the cursor is still on that row, as the film frames are; a server, a large entry and a solid 7z block stay as they are |
+
+## Candidates for a later release
+
+Gathered on 17 November 2026 from three readings, to be discussed with the author before
+anything is started — the small ones went into 0.45 (above): the open issues of Midnight Commander (the 125 most recently updated of
+659, of which 46 ask for something), and the pages of two macOS commanders, Captain's Deck
+(its comparison with ForkLift 4, Commander One, Nimble Commander, Path Finder and Finder) and
+R2 Commander. What we already do was checked against this document and the code, not by
+running each one.
+
+| Item | Asked by | Work | Note |
+| --- | --- | --- | --- |
 | **The info panel shows what a command prints** | MC #3713 | S–M | A command of one's own (`df -h`, `git status`) run for the panel's folder |
 | **Copy that updates in place**: an overwrite rewrites only the blocks that differ | MC #5128 | M | For big files that change little (disk images, databases); not atomic, so a choice in the overwrite question, never the default |
 | **A `vi` keymap** (`hjkl`, `gg`/`G`, `/`) and a visual selection (`Shift+V`) | Captain's Deck | S + M | `keymaps/vi.toml` beside `far` and `mc`; feature 9.2 lists `vi` as missing |
 | **Synchronised browsing**: entering a folder in one panel enters the one of the same name in the other | Captain's Deck, ForkLift | S–M | Feature 12.5 |
-| **AWS profiles** to choose from in the S3 session (`~/.aws/credentials`, `~/.aws/config`) | Captain's Deck | S | Today the default profile or the environment |
-| **A shared link to an S3 object** (presigned, 1 h / 24 h / 7 days) copied to the clipboard | Captain's Deck | S | Signed with the session's key, nothing sent anywhere |
 | **Parquet in table mode** | R2 Commander | M | The `parquet` crate (Apache Arrow, Apache-2.0); its size in the binary to be measured before deciding, as for `wasmprinter` |
 
 To verify before deciding, since only the documents were read: whether each panel tab keeps
