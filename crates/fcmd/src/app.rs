@@ -9938,6 +9938,22 @@ impl App {
         });
     }
 
+    /// The name of the one file being copied or moved, into the destination at the caret:
+    /// after the prefilled folder it makes `folder/name`, which is the line to edit into a
+    /// copy under another name. Several files have no one name, and the key says so rather
+    /// than doing nothing.
+    fn copy_source_name(&mut self) {
+        let [one] = self.copy_sources.as_slice() else {
+            let m = self.i18n.t("copy-name-several");
+            self.set_error(m);
+            return;
+        };
+        let name = one.display_name();
+        if let Mode::Form(form) = &mut self.mode {
+            form.insert_str(&name);
+        }
+    }
+
     /// OK in the make-folder dialog: the folder, and whether the panel goes into it.
     fn apply_mkdir_form(&mut self, form: &Form) {
         let enter = form.toggle_value("mkdir.enter");
@@ -23152,6 +23168,23 @@ impl App {
             && self.keymap.resolve(&[Scope::Panel], key) == Some(Command::AiRename)
         {
             self.ai_rename_prompt();
+            return;
+        }
+        // The destination of a copy or a move takes the key that puts the name under the
+        // cursor on the command line — `Ctrl+Enter` unless the keymap says otherwise — and
+        // it means the name of what is being copied: a copy under another name starts from
+        // the name it has. Anywhere else in the dialog the key is the dialog's own.
+        if matches!(
+            &self.mode,
+            Mode::Form(f)
+                if f.kind == FormKind::Copy && f.button.is_none() && f.on_key("copy.target")
+        ) && self.keymap.resolve(&[Scope::Panel], key)
+            == Some(Command::CmdInsert(
+                fcmd_cmd::Insert::Name,
+                fcmd_cmd::Which::Active,
+            ))
+        {
+            self.copy_source_name();
             return;
         }
         // And the find dialog the one that asks for its rows in words, the same way.
@@ -44143,6 +44176,78 @@ run = ["echo one", "echo two", "echo three"]
             }
             other => panic!("expected the copy dialog, got {other:?}"),
         }
+    }
+
+    /// `Ctrl+Enter` in the destination of a copy of one file puts that file's name there,
+    /// after the folder the dialog offered, to be edited into another name; the job then
+    /// goes to that name. Off the destination row the key is the dialog's `Enter` still.
+    #[test]
+    fn ctrl_enter_puts_the_name_of_the_one_file_into_the_destination() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "Down"); // a.txt
+        let name = app.panel().current().expect("a row").name_str().to_string();
+        let source = app.panel().cwd.join(&name);
+        press(&mut app, "F5");
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        let offered = form.text_value("copy.target");
+        press(&mut app, "Ctrl+Enter");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the key answered the dialog: {:?}", app.mode)
+        };
+        assert_eq!(form.text_raw("copy.target"), format!("{offered}{name}"));
+        // The caret is after the name, so what is typed next goes on from it.
+        typed(&mut app, ".bak");
+        press(&mut app, "Enter");
+        let (id, spec) = job_request(&mut app);
+        assert_eq!(spec.kind, JobKind::Copy);
+        assert_eq!(spec.sources, vec![source]);
+        let target = spec.target.expect("a target").to_string();
+        assert!(target.ends_with(&format!("{name}.bak")), "{target}");
+        app.handle_event(Event::JobDone {
+            id,
+            kind: JobKind::Copy,
+            outcome: fcmd_jobs::Outcome {
+                files: 1,
+                ..Default::default()
+            },
+        });
+
+        // `F6` has the same field and the same key.
+        press(&mut app, "F6");
+        press(&mut app, "Ctrl+Enter");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the key answered the dialog: {:?}", app.mode)
+        };
+        assert!(form.text_raw("copy.target").ends_with(&name));
+        // On another row it answers the dialog, as it always did.
+        press(&mut app, "Down");
+        press(&mut app, "Ctrl+Enter");
+        assert!(!matches!(&app.mode, Mode::Form(_)), "{:?}", app.mode);
+    }
+
+    /// Several files have no one name: the key says so and the destination stays as it was.
+    #[test]
+    fn ctrl_enter_names_nothing_when_several_files_are_copied() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "Ins"); // a.txt
+        press(&mut app, "Ins"); // b.rs
+        press(&mut app, "F5");
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        let offered = form.text_raw("copy.target");
+        press(&mut app, "Ctrl+Enter");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the key answered the dialog: {:?}", app.mode)
+        };
+        assert_eq!(form.text_raw("copy.target"), offered);
+        assert!(app.status_error, "{}", app.status);
+        assert_eq!(app.status, app.i18n.t("copy-name-several"));
     }
 
     /// Every row of the copy dialog reaches the job: the engine could already do all of this

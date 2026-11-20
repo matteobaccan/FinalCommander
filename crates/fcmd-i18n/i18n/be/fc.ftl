@@ -200,6 +200,7 @@ job-attrs = Усталяванне атрыбутаў
 copy-title = Капіяванне
 copy-title-move = Пераназыванне або перанос
 copy-target = Куды
+copy-name-several = Выбрана некалькі файлаў: аднаго імя для ўстаўкі няма
 copy-conflict = Калі файл ужо існуе
 copy-conflict-ask = спытаць
 copy-conflict-overwrite = перазапісаць

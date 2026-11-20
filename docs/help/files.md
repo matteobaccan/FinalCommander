@@ -14,6 +14,12 @@ Every one of them is a job: it runs in the background with a progress bar, `Esc`
 what it has already done stays done. A conflict — a file that is already there — stops and
 asks, with "all" and "none" answers so a long copy is not a thousand questions.
 
+To copy or move **one file under another name**, press `Ctrl+Enter` in the destination: the
+file's own name is put there, after the folder the dialog offered, ready to be edited —
+`report.txt` into `report-old.txt` — before `Enter`. It is the key that puts the name under
+the cursor on the command line, and it follows the keymap if that key was moved. With
+several files selected there is no one name to offer, and the status line says so.
+
 The copy dialog has more in it than the destination, and all of it is optional — type a path,
 press `Enter`, and nothing below the first line applies:
 

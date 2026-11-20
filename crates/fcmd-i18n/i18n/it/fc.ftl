@@ -190,6 +190,7 @@ job-attrs = Impostazione attributi
 copy-title = Copia
 copy-title-move = Rinomina o sposta
 copy-target = In
+copy-name-several = Sono selezionati più file: non c'è un solo nome da mettere qui
 copy-conflict = Se c'è già
 copy-conflict-ask = chiedi
 copy-conflict-overwrite = sovrascrivi

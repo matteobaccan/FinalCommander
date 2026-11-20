@@ -103,7 +103,7 @@ since 0.41.0 also `MU` (muCommander), `NNN`, `RANGER`, `LF`, `BROOT`, `VIFM`, `X
 
 | # | Feature | Origin | State |
 | --- | --- | --- | --- |
-| 3.1 | Copy / move / rename (`F5`/`F6`), same-panel copy (`Shift+F5`), rename in place (`Shift+F6`) | all | ✓ |
+| 3.1 | Copy / move / rename (`F5`/`F6`), same-panel copy (`Shift+F5`), rename in place (`Shift+F6`); the source's name put into the destination to edit (`Ctrl+Enter`) | all | ✓ |
 | 3.2 | Delete to trash and permanent delete; wipe (overwrite then delete) | FAR | ✓ |
 | 3.3 | Create directory (`F7`), create file (`Shift+F4`), create nested path `a/b/c` in one go; make a folder and go into it (a box in the `F7` dialog) | all | ✓ |
 | 3.4 | Hard links, symlinks (absolute/relative), junctions/reparse points, link targets shown and followed | FAR/MC | ✓ |

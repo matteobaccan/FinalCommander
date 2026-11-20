@@ -14,6 +14,12 @@ Ognuna di queste è un lavoro: gira in sottofondo con una barra di avanzamento, 
 quello che ha già fatto resta fatto. Un conflitto — un file che è già là — si ferma e chiede,
 con le risposte "tutti" e "nessuno" perché una copia lunga non sia mille domande.
 
+Per copiare o spostare **un file con un altro nome**, premi `Ctrl+Invio` nella destinazione:
+il nome del file viene messo lì, dopo la cartella proposta dal dialogo, pronto da correggere —
+`relazione.txt` in `relazione-vecchia.txt` — prima di `Invio`. È il tasto che mette sulla riga
+di comando il nome sotto il cursore, e segue la mappa dei tasti se quel tasto è stato spostato.
+Con più file selezionati non c'è un solo nome da proporre, e la riga di stato lo dice.
+
 Il dialogo di copia ha dentro più della destinazione, e tutto il resto è opzionale: scrivi un
 percorso, premi `Enter`, e niente sotto la prima riga si applica.
 

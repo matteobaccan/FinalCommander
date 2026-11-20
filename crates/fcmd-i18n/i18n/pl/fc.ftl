@@ -198,6 +198,7 @@ job-attrs = Ustawianie atrybutów
 copy-title = Kopiuj
 copy-title-move = Zmień nazwę lub przenieś
 copy-target = Do
+copy-name-several = Zaznaczono kilka plików: nie ma jednej nazwy do wstawienia
 copy-conflict = Jeśli plik już istnieje
 copy-conflict-ask = zapytaj
 copy-conflict-overwrite = zastąp

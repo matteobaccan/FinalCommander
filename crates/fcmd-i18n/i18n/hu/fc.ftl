@@ -196,6 +196,7 @@ job-attrs = Attribútumok beállítása
 copy-title = Másolás
 copy-title-move = Átnevezés-Mozgatás
 copy-target = Ide
+copy-name-several = Több fájl van kijelölve: nincs egyetlen beilleszthető név
 copy-conflict = Már létező fájloknál
 copy-conflict-ask = kérdez
 copy-conflict-overwrite = felülír

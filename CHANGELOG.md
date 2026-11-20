@@ -14,6 +14,12 @@ Notable changes, newest first. The format follows
   session, and a folder that could not be made is not entered. Left alone it is the `F7`
   there always was: the cursor lands on the new folder.
 
+- **The source's name in the copy and move dialog.** `Ctrl+Enter` in the destination of `F5`
+  or `F6` puts the name of the file being copied there, after the folder the dialog offered,
+  to be edited into the new name: a copy under another name no longer means typing the old
+  one again. It is the key that puts the name under the cursor on the command line, and it
+  follows the keymap; with several files selected it says there is no one name to offer.
+
 ### Changed
 
 - Dates — the panels' columns, the clock, the attributes dialog — are read and written through

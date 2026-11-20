@@ -200,6 +200,7 @@ job-attrs = Uždedu atributus
 copy-title = Kopijuoti
 copy-title-move = Pervadinti/Perkelti
 copy-target = Į
+copy-name-several = Pažymėti keli failai: nėra vieno vardo, kurį būtų galima įterpti
 copy-conflict = Jei toks failas jau yra
 copy-conflict-ask = klausti
 copy-conflict-overwrite = perrašyti

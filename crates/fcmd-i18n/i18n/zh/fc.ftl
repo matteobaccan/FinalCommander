@@ -190,6 +190,7 @@ job-attrs = 正在设置属性
 copy-title = 复制
 copy-title-move = 重命名或移动
 copy-target = 到
+copy-name-several = 选中了多个文件：没有可填入的单一名称
 copy-conflict = 如果已经存在
 copy-conflict-ask = 询问
 copy-conflict-overwrite = 覆盖

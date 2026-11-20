@@ -198,6 +198,7 @@ job-attrs = Nastavujem atribúty
 copy-title = Kopírovanie
 copy-title-move = Premenovanie/Presunutie
 copy-target = Kam
+copy-name-several = Je vybraných viac súborov: nie je jeden názov, ktorý by sa dal vložiť
 copy-conflict = Už existujúce súbory
 copy-conflict-ask = opýtať sa
 copy-conflict-overwrite = prepísať
