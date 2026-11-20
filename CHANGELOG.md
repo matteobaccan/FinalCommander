@@ -20,6 +20,13 @@ Notable changes, newest first. The format follows
   one again. It is the key that puts the name under the cursor on the command line, and it
   follows the keymap; with several files selected it says there is no one name to offer.
 
+- **A command typed with a space in front is not kept in the history**, as bash's
+  `ignorespace` has it: the line runs, and neither `↑` nor `Alt+F8` nor the state file holds
+  it — for the command with a password on it. With the panels on the space goes in front
+  with `Home`, `Space`, since `Space` on an empty line measures a folder; with the panels off
+  (`Ctrl+O`) `Space` on an empty line is now typed like any other character.
+  `cmdline.history_ignore_space = false` keeps every line, as before.
+
 ### Changed
 
 - Dates — the panels' columns, the clock, the attributes dialog — are read and written through

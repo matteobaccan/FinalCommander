@@ -322,7 +322,8 @@ di entrambi i pannelli e dove erano. `ui.command_history` e `ui.file_history` di
 tenere del primo e del terzo elenco, e `ui.history_lifetime` quanti giorni si tiene una riga
 che nessuno ha fissato dopo l'ultima volta che è stata usata — novanta di default, `0` per
 tenerle per sempre. `Ins` in uno qualunque dei tre elenchi fissa la riga sotto il cursore, e
-niente spinge fuori una riga fissata.
+niente spinge fuori una riga fissata. Un comando scritto con uno spazio davanti viene eseguito
+e non viene tenuto affatto (`cmdline.history_ignore_space`, acceso finché non lo spegni).
 
 Un file che hai già letto si riapre dove l'avevi lasciato — la posizione, la code page, il
 modo, l'andata a capo e i dieci segnalibri — a meno che non togli *Ricorda posizione e

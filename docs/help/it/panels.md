@@ -407,6 +407,13 @@ svuota l'elenco di tutto ciò che non hai fissato, dopo averlo chiesto. Una riga
 fissato e nessuno usa da novanta giorni se ne va da sola; il numero sta in *Opzioni →
 Impostazioni di sistema*.
 
+**Un comando scritto con uno spazio davanti non resta nella cronologia**: viene eseguito, e né
+`↑` né `Alt+F8` lo riproporranno — per la riga con dentro una password, come in bash. Con i
+pannelli accesi scrivi il comando, poi `Home` e `Spazio`, perché `Spazio` su una riga vuota
+misura una cartella; con i pannelli spenti (`Ctrl+O`) lo spazio si scrive semplicemente per
+primo. Per conservare ogni riga, metti `cmdline.history_ignore_space` a `false` in
+*Opzioni → Tutti i parametri*.
+
 `Ctrl+Invio` mette sulla riga il nome sotto il cursore, `Ctrl+Maiusc+Invio` quello dell'altro
 pannello, `Ctrl+[` e `Ctrl+]` i percorsi dei due pannelli, `Ctrl+Maiusc+[` e `Ctrl+Maiusc+]`
 quelli del pannello sinistro e destro qualunque abbia il fuoco, `Ctrl+F` il nome completo e

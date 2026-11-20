@@ -385,6 +385,12 @@ push it out — `Shift+Del` takes one row out of the history for good, and `Del`
 list of everything you have not pinned, after asking. A line nobody has pinned and nobody has
 used for ninety days goes by itself; *Options → System settings* is where that number lives.
 
+**A command typed with a space in front is not kept in the history** — it runs, and neither
+`↑` nor `Alt+F8` will offer it again: for the line with a password on it, as in bash. With the
+panels on, type the command, then `Home` and `Space`, because `Space` on an empty line measures
+a folder; with the panels off (`Ctrl+O`) the space is simply typed first. To keep every line,
+set `cmdline.history_ignore_space` to `false` in *Options → All settings*.
+
 `Ctrl+Enter` puts the name under the cursor on the line, `Ctrl+Shift+Enter` the other panel's,
 `Ctrl+[` and `Ctrl+]` the two panels' paths, `Ctrl+Shift+[` and `Ctrl+Shift+]` the left and
 right one's whichever has the focus, `Ctrl+F` the full name and `Ctrl+Alt+F` the full name in

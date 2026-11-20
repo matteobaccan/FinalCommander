@@ -367,6 +367,9 @@ depth = 0                 # how deep when it does; 1 = the two directories, 0 = 
 # The prompt (SPEC 06 §7.0b). FAR's letters, plus `$r` for ` (branch)` in a git repository and
 # `%GITBRANCH%` for the bare branch name.
 prompt = "$p$r$g "
+# A line typed with a space in front runs and is not kept in the command history, as bash's
+# `HISTCONTROL=ignorespace` has it (SPEC 06 §7.0c). `false` keeps every line that runs.
+history_ignore_space = true
 ```
 
 ## 2c-quinquies. `[find]`

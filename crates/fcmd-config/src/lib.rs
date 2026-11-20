@@ -678,6 +678,11 @@ pub struct CmdLineCfg {
     /// bare branch name, spelled the way the plugin everybody installs spells it. Empty
     /// means the default.
     pub prompt: String,
+    /// A line that starts with a space runs and is not kept in the history: bash's
+    /// `ignorespace`, for the command with a password on it, or the one nobody wants
+    /// offered back for ninety days. On by default — the space has no other meaning in
+    /// front of a command, so nobody types one there by accident and loses a line.
+    pub history_ignore_space: bool,
     /// What the line completes from while one types (SPEC 06 §7.4).
     pub complete: CompleteCfg,
 }
@@ -733,6 +738,7 @@ impl Default for CmdLineCfg {
     fn default() -> Self {
         CmdLineCfg {
             prompt: "$p$r$g ".to_string(),
+            history_ignore_space: true,
             complete: CompleteCfg::default(),
         }
     }
@@ -2419,6 +2425,9 @@ impl Config {
             // somebody can change (SPEC 07 §2e): the browser is generated from this file, and
             // a key it shows that `set` refuses would be a setting nobody can reach.
             "cmdline.prompt" => self.cmdline.prompt = value.to_string(),
+            "cmdline.history_ignore_space" => {
+                self.cmdline.history_ignore_space = parse_bool(value)?
+            }
             "ai_guard.redact" => self.ai_guard.redact = parse_bool(value)?,
             "ai_guard.local_only" => self.ai_guard.local_only = parse_bool(value)?,
             "arc.max_entries" => self.arc.max_entries = parse_usize(value)?,

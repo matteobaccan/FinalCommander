@@ -12155,6 +12155,16 @@ impl App {
         if self.panels_off && key.code == KeyCode::Enter && key.mods == Mods::NONE {
             return;
         }
+        // Nor is `Space` there: it measures the folder under the cursor, and there is no
+        // cursor on screen. It is the line's instead, which is what makes the space in front
+        // of a command that is not to be remembered something one can simply type.
+        if self.panels_off
+            && self.cfg.ui.command_line
+            && key == Key::new(KeyCode::Char(' '), Mods::NONE)
+        {
+            self.cmd.insert(' ');
+            return;
+        }
         // The quick view with the focus is a reader, so the reader's keys come first: `F4`
         // walks the modes, `F5` disassembles, `F8` changes the code page, `F7` searches —
         // the same keys as the viewer, because it is the viewer (SPEC 02 §8).
@@ -14744,11 +14754,17 @@ impl App {
         if line.is_empty() {
             return;
         }
-        self.cmd.remember(&line);
-        self.marks
-            .touch(crate::history::COMMANDS, &line, crate::history::now());
-        let locked = self.marks.locked_lines(crate::history::COMMANDS);
-        self.cmd.trim_history(self.cfg.ui.command_history, &locked);
+        // A space in front says "run this and forget it", as bash's `ignorespace` does: the
+        // line is not put in the history, so neither `↑` nor `Alt+F8` nor the state file
+        // ever holds it. A line that was already there from an earlier run stays there.
+        let unkept = self.cfg.cmdline.history_ignore_space && self.cmd.text.starts_with(' ');
+        if !unkept {
+            self.cmd.remember(&line);
+            self.marks
+                .touch(crate::history::COMMANDS, &line, crate::history::now());
+            let locked = self.marks.locked_lines(crate::history::COMMANDS);
+            self.cmd.trim_history(self.cfg.ui.command_history, &locked);
+        }
         self.cmd.clear();
         self.run_line(&line);
     }
@@ -36659,6 +36675,57 @@ mod tests {
             app.panel().cwd != cwd || app.mode.is_normal(),
             "Enter with an empty line is the panel's"
         );
+    }
+
+    /// A line with a space in front runs and is not kept, as bash's `ignorespace` has it;
+    /// the same line without the space is. With the panels on the space is put there with
+    /// `Home`, because `Space` on an empty line measures a folder.
+    #[test]
+    fn a_command_with_a_space_in_front_runs_and_is_not_remembered() {
+        let mut app = app();
+        typed(&mut app, "echo secret");
+        press(&mut app, "Home");
+        press(&mut app, "Space");
+        assert_eq!(app.cmd.text, " echo secret");
+        press(&mut app, "Enter");
+        assert_eq!(shell_requests(&app), ["echo secret"], "it ran");
+        assert!(app.cmd.history().is_empty(), "{:?}", app.cmd.history());
+        assert!(app.cmd.is_empty());
+
+        typed(&mut app, "echo kept");
+        press(&mut app, "Enter");
+        assert_eq!(app.cmd.history(), ["echo kept"]);
+        // Walking back from a new line finds only what was kept.
+        typed(&mut app, "x");
+        press(&mut app, "Up");
+        assert_eq!(app.cmd.text, "echo kept");
+    }
+
+    /// With the panels off there is no folder to measure, so the space is simply typed.
+    #[test]
+    fn with_the_panels_off_the_space_in_front_is_typed_like_any_other() {
+        let mut app = app();
+        app.run(Command::ShellOutputShow);
+        assert!(app.panels_off);
+        typed(&mut app, " echo secret");
+        assert_eq!(app.cmd.text, " echo secret");
+        press(&mut app, "Enter");
+        assert_eq!(shell_requests(&app), ["echo secret"]);
+        assert!(app.cmd.history().is_empty(), "{:?}", app.cmd.history());
+    }
+
+    /// `cmdline.history_ignore_space = false`: every line that runs is kept, as before.
+    #[test]
+    fn the_space_in_front_means_nothing_when_the_setting_is_off() {
+        let mut app = app();
+        app.cfg
+            .set("cmdline.history_ignore_space", "false")
+            .expect("a setting");
+        typed(&mut app, "echo secret");
+        press(&mut app, "Home");
+        press(&mut app, "Space");
+        press(&mut app, "Enter");
+        assert_eq!(app.cmd.history(), ["echo secret"]);
     }
 
     #[test]

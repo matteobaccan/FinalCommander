@@ -594,6 +594,25 @@ reads one small file (`HEAD`, or the `gitdir:` line of a worktree's `.git` file 
 looked up when the panel's directory changes rather than on every frame, and not at all for a
 directory on a server or inside an archive, which has no `.git` to read.
 
+### 7.0c A line that is not remembered (`cmdline.history_ignore_space`)
+
+A command line that **starts with a space** runs like any other and is not kept: it is not
+added to the command history, so `↑`, `Ctrl+E`, `Alt+F8` and the state file never hold it.
+This is bash's `HISTCONTROL=ignorespace`, and it is for the same lines: the one with a
+password or a token on it, and the one-off nobody wants offered back by the completion for
+the next ninety days. The line runs trimmed, so the space changes nothing about what the
+command is.
+
+* It decides only whether *this* run is recorded. The same line already in the history from
+  an earlier run stays there, with its place and its pin.
+* The space is typed where the line takes it. With the panels on, `Space` on an **empty** line
+  is the panel's key (it measures a folder), so the space is put in front afterwards — `Home`,
+  `Space` — or arrives with a paste. With the panels off (`Ctrl+O`) there is no cursor to
+  measure anything under, and `Space` on an empty line is typed like any other character.
+* On by default: a space has no other meaning in front of a command. `false` keeps every line.
+* Only the command line. The histories of the dialogs' fields are not touched by it, and a
+  kept shell's own history file is that shell's business.
+
 ### 7.4 Autocomplete (`Ctrl+Space`, and while one types)
 
 Four sources, each one a setting with three states — `on`, `off`, or `asked` for only when
