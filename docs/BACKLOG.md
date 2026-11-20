@@ -16,8 +16,19 @@ says what the decision stands on.
 ## Next release (0.45)
 
 Decided with the author on 19 November 2026: the small candidates below, and the quick view
-inside a container. Done since 0.44.1 and already in `CHANGELOG.md`: `Alt+F9` (the window
-size, as in FAR) and the dates through `jiff`.
+inside a container. **All eight are done** and described in `CHANGELOG.md`, with `Alt+F9`
+(the window size, as in FAR), the dates through `jiff`, the ARM 64-bit Linux archive and the
+page that runs the program in a browser tab. The table stays as the record of what was asked
+and by whom until the release, which removes it.
+
+What was settled along the way: `F7`'s box is remembered for the session only; the source's
+name goes into the copy dialog with `Ctrl+Enter` (the command line's own key for the name);
+the space in front is `cmdline.history_ignore_space` and the title `ui.window_title`, both on
+by default; the folder walk stays on one file system with `panel.size_one_filesystem`, off by
+default, and does nothing on Windows; AWS profiles hold static keys only — SSO, assumed roles
+and `credential_process` are listed and refused with the reason; the shared link is
+`Ctrl+Alt+O`; the quick view reads a container entry of up to 4 MiB, and a format that has
+to be unpacked from its start only when the container is under 16 MiB.
 
 | Item | Asked by | Work | Note |
 | --- | --- | --- | --- |
