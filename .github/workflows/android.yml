@@ -6,13 +6,14 @@
 # - `emulator`: the same for x86_64, run on Android's x86_64 emulator (KVM):
 #   packaging/android/emulator-test.sh — `fcmd --version` and `fcmd --web-terminal` from
 #   `adb shell`, the app started, its page and WebSocket reached, the app stopped.
-# When: a pull request or push that touches the app, the web terminal or this workflow; a
+# When: a push or pull request that touches the app, the web terminal or this workflow; a
 # manual run; and, called by release.yml on a tag, `apk` alone (`release: true`).
 name: Android
 
 on:
+  # Any branch: a workflow that is not yet on main cannot be started by hand, and the
+  # branch that brings a change to the app is where it has to be tried.
   push:
-    branches: [main]
     paths:
       - "packaging/android/**"
       - "crates/fcmd/src/webterm.rs"
