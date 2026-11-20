@@ -118,7 +118,8 @@ msg-dirsize-no-folder = itt nincs mérhető mappa
 # Jobs: prompts, confirmations, progress, conflicts
 prompt-copy-to = { $what } másolása ide:
 prompt-move-to = { $what } átnevezése-mozgatása ide:
-prompt-mkdir = Mappa neve:
+mkdir-name = Mappa neve
+mkdir-enter = Belépés a mappába
 prompt-tab-name = A fül neve:
 prompt-bookmark-name = A mappa neve:
 what-selected = { $count } kijelölt elem

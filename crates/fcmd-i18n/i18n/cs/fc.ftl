@@ -118,7 +118,8 @@ msg-dirsize-no-folder = není tu žádný adresář k měření
 # Jobs: prompts, confirmations, progress, conflicts
 prompt-copy-to = Kopírovat { $what } do:
 prompt-move-to = Přejmenovat nebo přesunout { $what } do:
-prompt-mkdir = Vytvořit adresář:
+mkdir-name = Vytvořit adresář
+mkdir-enter = Vstoupit do něj
 prompt-tab-name = Název této karty:
 prompt-bookmark-name = Název tohoto adresáře:
 what-selected = označené položky ({ $count })

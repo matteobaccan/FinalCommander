@@ -6,6 +6,14 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Make a folder and enter it.** `F7` is now a small dialog: the name, and a box, *Enter it*.
+  Ticked, the panel goes into the folder as soon as it is made — `mkdir x && cd x` in one
+  answer, down the whole path when the name is `a/b/c`. The box stays as it was left for the
+  session, and a folder that could not be made is not entered. Left alone it is the `F7`
+  there always was: the cursor lands on the new folder.
+
 ### Changed
 
 - Dates — the panels' columns, the clock, the attributes dialog — are read and written through

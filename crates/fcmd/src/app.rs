@@ -1839,8 +1839,6 @@ pub enum PromptKind {
     /// The name to keep the find dialog's search under (`F2` in `Alt+F7`).
     SearchName,
     EditorSaveAs,
-    /// Name for F7.
-    Mkdir,
     /// The message of a commit, from the git panel.
     GitCommit,
     /// What to call this tab. An empty answer takes the name off again.
@@ -3491,6 +3489,11 @@ pub struct App {
     /// The folder `F7` is making, as the panel and the row name to put the cursor on when
     /// the job ends.
     mkdir_cursor: Option<(usize, String)>,
+    /// The folder `F7` is making and the panel that goes into it once it exists, when the
+    /// dialog's *Enter it* was ticked.
+    mkdir_into: Option<(usize, VPath)>,
+    /// How the *Enter it* box of `F7` was left, which is how it starts the next time.
+    mkdir_enter: bool,
     /// The archive a test is reading, so its end can name it; and, after a test that found
     /// damage, where each row of the list of bad entries is — the list shows the reasons,
     /// and `Enter` wants the path.
@@ -3924,6 +3927,8 @@ impl App {
             tools: Vec::new(),
             plugins: Vec::new(),
             mkdir_cursor: None,
+            mkdir_into: None,
+            mkdir_enter: false,
             testing: None,
             test_bad: Vec::new(),
             git_view: None,
@@ -8325,18 +8330,6 @@ impl App {
                 }
                 self.git_ask(GitAsk::Commit(message));
             }
-            PromptKind::Mkdir => {
-                let raw = prompt.text.trim();
-                if raw.is_empty() {
-                    return;
-                }
-                let target = self.resolve_path(raw);
-                // The cursor goes to the new folder once it exists, as FAR's does: what one
-                // does after making a folder is go into it. For `a/b/c` that is `a`, the part
-                // this panel shows; for a path somewhere else entirely, nothing moves.
-                self.mkdir_cursor = self.row_in_panel(self.active, &target);
-                self.start_job(JobSpec::new(JobKind::Mkdir, vec![], Some(target)));
-            }
             PromptKind::TabName => {
                 let raw = prompt.text.trim().to_string();
                 self.panel_mut().name = (!raw.is_empty()).then_some(raw);
@@ -9943,6 +9936,25 @@ impl App {
             options: Box::new(options),
             cancel,
         });
+    }
+
+    /// OK in the make-folder dialog: the folder, and whether the panel goes into it.
+    fn apply_mkdir_form(&mut self, form: &Form) {
+        let enter = form.toggle_value("mkdir.enter");
+        self.mkdir_enter = enter;
+        let raw = form.text_value("mkdir.name");
+        let raw = raw.trim();
+        if raw.is_empty() {
+            return;
+        }
+        let target = self.resolve_path(raw);
+        // The cursor goes to the new folder once it exists, as FAR's does: what one does
+        // after making a folder is go into it. For `a/b/c` that is `a`, the part this panel
+        // shows; for a path somewhere else entirely, nothing moves. With *Enter it* the
+        // panel goes in instead, all the way down the path that was typed.
+        self.mkdir_cursor = self.row_in_panel(self.active, &target);
+        self.mkdir_into = enter.then(|| (self.active, target.clone()));
+        self.start_job(JobSpec::new(JobKind::Mkdir, vec![], Some(target)));
     }
 
     /// What the dialog asked for: walk both trees and decide.
@@ -11839,9 +11851,19 @@ impl App {
     fn job_done(&mut self, id: u64, kind: JobKind, outcome: Outcome) {
         // A folder made with `F7`: the re-read below lands on it, if it was made.
         if kind == JobKind::Mkdir {
+            let made = outcome.errors.is_empty() && !outcome.cancelled;
+            let into = self.mkdir_into.take();
             if let Some((side, name)) = self.mkdir_cursor.take() {
-                if outcome.errors.is_empty() && !outcome.cancelled {
+                if made && into.is_none() {
                     self.panels[side].want_cursor = Some(name);
+                }
+            }
+            // *Enter it* was ticked: the panel that asked goes into the folder, the whole
+            // path of it, as `mkdir -p a/b && cd a/b` would. Only into a folder that was
+            // made — a refusal leaves the panel where the message about it makes sense.
+            if let Some((side, path)) = into {
+                if made {
+                    self.panel_go(side, path, true);
                 }
             }
         }
@@ -13480,14 +13502,9 @@ impl App {
                 self.open_ai_threads()
             }
             Command::FileMkdir => {
-                let title = self.i18n.t("prompt-mkdir");
-                self.mode = Mode::Prompt(Prompt {
-                    kind: PromptKind::Mkdir,
-                    title,
-                    text: String::new(),
-                    secret: false,
-                    sources: Vec::new(),
-                });
+                // The box starts as it was left the last time: somebody who makes folders to
+                // work in them ticks it once.
+                self.mode = Mode::Form(Box::new(Form::mkdir(self.mkdir_enter, &self.i18n)));
             }
             Command::FileAssoc => self.open_with_list(),
             // In a git panel `F2` is the git menu: push, pull, the other views.
@@ -23579,6 +23596,10 @@ impl App {
         }
         if form.kind == FormKind::Link {
             self.apply_link_form(&form);
+            return;
+        }
+        if form.kind == FormKind::Mkdir {
+            self.apply_mkdir_form(&form);
             return;
         }
         let problems = form.apply(&mut self.cfg);
@@ -42961,6 +42982,91 @@ run = ["echo one", "echo two", "echo three"]
             .name_str()
             .to_string();
         assert_eq!(on, "new");
+    }
+
+    /// `F7` with *Enter it* ticked: the panel goes into the folder once it is made — down
+    /// the whole path that was typed, as `mkdir -p new/deep && cd new/deep` — and the box
+    /// is still ticked the next time the dialog opens.
+    #[test]
+    fn f7_with_enter_it_takes_the_panel_into_the_new_folder() {
+        let mut app = app();
+        let cwd = app.panel().cwd.clone();
+        press(&mut app, "F7");
+        let mut buf = fcmd_ui::Buffer::new(80, 25);
+        crate::render::draw(&mut app, &mut buf);
+        let drawn = buf.to_text();
+        assert!(drawn.contains("[ ] Enter it"), "{drawn}");
+        typed(&mut app, "new/deep");
+        press(&mut app, "Down");
+        press(&mut app, "Space");
+        press(&mut app, "Enter");
+        let (id, spec) = job_request(&mut app);
+        let made = spec.target.clone().expect("a folder to make");
+        assert_eq!(made, cwd.join("new").join("deep"));
+        // Nothing moves until the folder is there.
+        assert_eq!(app.panel().cwd, cwd);
+        app.handle_event(Event::JobDone {
+            id,
+            kind: JobKind::Mkdir,
+            outcome: fcmd_jobs::Outcome {
+                dirs: 2,
+                ..Default::default()
+            },
+        });
+        assert_eq!(app.panel().cwd, made);
+        assert_eq!(app.panels[0].want_cursor, None);
+
+        press(&mut app, "F7");
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        assert_eq!(form.kind, FormKind::Mkdir);
+        assert!(form.toggle_value("mkdir.enter"), "the box is remembered");
+    }
+
+    /// The box left alone is the `F7` there always was, and a folder that could not be made
+    /// is not entered: the panel stays where the message about it makes sense.
+    #[test]
+    fn f7_enters_nothing_unasked_and_nothing_that_was_not_made() {
+        let mut app = app();
+        let cwd = app.panel().cwd.clone();
+        press(&mut app, "F7");
+        typed(&mut app, "plain");
+        press(&mut app, "Enter");
+        let (id, _) = job_request(&mut app);
+        app.handle_event(Event::JobDone {
+            id,
+            kind: JobKind::Mkdir,
+            outcome: fcmd_jobs::Outcome {
+                dirs: 1,
+                ..Default::default()
+            },
+        });
+        assert_eq!(app.panel().cwd, cwd, "the box was not ticked");
+
+        press(&mut app, "F7");
+        typed(&mut app, "refused");
+        press(&mut app, "Down");
+        press(&mut app, "Space");
+        press(&mut app, "Enter");
+        let (id, spec) = job_request(&mut app);
+        app.handle_event(Event::JobDone {
+            id,
+            kind: JobKind::Mkdir,
+            outcome: fcmd_jobs::Outcome {
+                errors: vec![(spec.target.expect("a target"), "denied".into())],
+                ..Default::default()
+            },
+        });
+        assert_eq!(app.panel().cwd, cwd, "a folder that was not made");
+        // An empty name makes nothing, as before.
+        app.mode = Mode::Normal;
+        press(&mut app, "F7");
+        press(&mut app, "Enter");
+        assert!(app
+            .take_requests()
+            .iter()
+            .all(|r| !matches!(r, Request::Job { .. })));
     }
 
     /// The programs from elsewhere: every one the code runs is a row, the versions arrive

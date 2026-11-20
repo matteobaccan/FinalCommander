@@ -285,6 +285,7 @@ impl Form {
             | FormKind::Drives
             | FormKind::Sync
             | FormKind::Link
+            | FormKind::Mkdir
             | FormKind::Highlight
             | FormKind::FilterSet
             | FormKind::SortGroup
@@ -671,6 +672,7 @@ impl Form {
             FormKind::EditorReplace => "editor-replace-title",
             FormKind::HexReplace | FormKind::HexReplaceAsk => "hex-replace-title",
             FormKind::Link => "link-title",
+            FormKind::Mkdir => "menu-mkdir",
             FormKind::Highlight => "hl-new",
             FormKind::FilterSet => "filter-new",
             FormKind::SortGroup => "sg-title",
@@ -1833,6 +1835,32 @@ impl Form {
             // On the name: it is the one field anybody edits, and the kind is remembered from
             // the last time.
             cursor: 1,
+            site: None,
+            button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+        }
+    }
+
+    /// `F7`: the folder to make, and a box for going into it.
+    ///
+    /// It was a one-line prompt, and still reads as one: the cursor is on the name and
+    /// `Enter` answers. The box is what the prompt had no room for — `mkdir x && cd x`, which
+    /// is what a folder is made for more often than not — and it starts as it was last left.
+    pub fn mkdir(enter: bool, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let fields = vec![
+            Field::text("mkdir.name", t("mkdir-name"), ""),
+            Field::Separator,
+            Field::toggle("mkdir.enter", t("mkdir-enter"), enter),
+        ];
+        Form {
+            pages: Vec::new(),
+            page: 0,
+            kind: FormKind::Mkdir,
+            // The menu's own words for it, without the `&` that marks the menu's key.
+            title: fcmd_ui::mnemonic(&t("menu-mkdir")).0,
+            fields,
+            cursor: 0,
             site: None,
             button: None,
             buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],

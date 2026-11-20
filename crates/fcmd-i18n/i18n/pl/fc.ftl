@@ -118,7 +118,8 @@ msg-dirsize-no-folder = nie ma tu folderu do zmierzenia
 # Jobs: prompts, confirmations, progress, conflicts
 prompt-copy-to = Kopiuj { $what } do:
 prompt-move-to = Zmień nazwę lub przenieś { $what } do:
-prompt-mkdir = Utwórz folder:
+mkdir-name = Utwórz folder
+mkdir-enter = Wejdź do niego
 prompt-tab-name = Nazwa tej karty:
 prompt-bookmark-name = Nazwa tego folderu:
 what-selected = zaznaczone elementy ({ $count })

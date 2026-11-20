@@ -105,7 +105,7 @@ since 0.41.0 also `MU` (muCommander), `NNN`, `RANGER`, `LF`, `BROOT`, `VIFM`, `X
 | --- | --- | --- | --- |
 | 3.1 | Copy / move / rename (`F5`/`F6`), same-panel copy (`Shift+F5`), rename in place (`Shift+F6`) | all | ✓ |
 | 3.2 | Delete to trash and permanent delete; wipe (overwrite then delete) | FAR | ✓ |
-| 3.3 | Create directory (`F7`), create file (`Shift+F4`), create nested path `a/b/c` in one go | all | ✓ |
+| 3.3 | Create directory (`F7`), create file (`Shift+F4`), create nested path `a/b/c` in one go; make a folder and go into it (a box in the `F7` dialog) | all | ✓ |
 | 3.4 | Hard links, symlinks (absolute/relative), junctions/reparse points, link targets shown and followed | FAR/MC | ✓ |
 | 3.5 | Attributes/permissions dialog: chmod (numeric + rwx matrix), timestamps, recursive apply; chown, the Windows compressed and encrypted attributes | FAR/MC | ~ the shell's own property sheet, the NTFS compressed and encrypted bits, and the owner on Windows |
 | 3.6 | Extended attributes / ADS (NTFS streams), xattr on Linux/macOS, resource forks | FAR | ~ a copy carries them on Linux and macOS (`operations.preserve`), the resource fork among them; nothing lists or edits them, and NTFS streams are decided against |

@@ -112,7 +112,8 @@ msg-dirsize-no-folder = здесь нечего измерять
 
 prompt-copy-to = Копировать { $what } в:
 prompt-move-to = Перенести/переименовать { $what } в:
-prompt-mkdir = Создать каталог:
+mkdir-name = Создать каталог
+mkdir-enter = Войти в неё
 prompt-tab-name = Название закладки:
 prompt-bookmark-name = Название папки:
 what-selected = отмечено элементов: { $count }

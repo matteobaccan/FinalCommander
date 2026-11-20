@@ -112,7 +112,8 @@ msg-dirsize-no-folder = aquí no hay ninguna carpeta que medir
 
 prompt-copy-to = Copiar { $what } a:
 prompt-move-to = Mover/renombrar { $what } a:
-prompt-mkdir = Crear el directorio:
+mkdir-name = Crear el directorio
+mkdir-enter = Entrar en ella
 prompt-tab-name = Nombre de la pestaña:
 prompt-bookmark-name = Nombre de la carpeta:
 what-selected = { $count } elementos seleccionados

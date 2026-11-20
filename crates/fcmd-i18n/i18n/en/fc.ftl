@@ -118,7 +118,8 @@ msg-dirsize-no-folder = there is no folder here to measure
 # Jobs: prompts, confirmations, progress, conflicts
 prompt-copy-to = Copy { $what } to:
 prompt-move-to = Move/rename { $what } to:
-prompt-mkdir = Create the directory:
+mkdir-name = Create the directory
+mkdir-enter = Enter it
 prompt-tab-name = Call this tab:
 prompt-bookmark-name = Call this folder:
 what-selected = { $count } selected items

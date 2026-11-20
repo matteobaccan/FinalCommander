@@ -118,7 +118,8 @@ msg-dirsize-no-folder = čia nėra katalogo, kurį būtų galima išmatuoti
 # Jobs: prompts, confirmations, progress, conflicts
 prompt-copy-to = Kopijuoti { $what } į:
 prompt-move-to = Pervadinti ar perkelti { $what } į:
-prompt-mkdir = Sukurti katalogą:
+mkdir-name = Sukurti katalogą
+mkdir-enter = Įeiti į jį
 prompt-tab-name = Šios kortelės pavadinimas:
 prompt-bookmark-name = Šio katalogo pavadinimas:
 what-selected = pažymėtus elementus ({ $count })

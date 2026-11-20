@@ -112,7 +112,8 @@ msg-dirsize-no-folder = hier gibt es keinen Ordner zu messen
 
 prompt-copy-to = { $what } kopieren nach:
 prompt-move-to = { $what } verschieben/umbenennen nach:
-prompt-mkdir = Verzeichnis anlegen:
+mkdir-name = Verzeichnis anlegen
+mkdir-enter = Hineinwechseln
 prompt-tab-name = Name des Reiters:
 prompt-bookmark-name = Name des Ordners:
 what-selected = { $count } ausgewählte Einträge

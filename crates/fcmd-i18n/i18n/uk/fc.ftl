@@ -118,7 +118,8 @@ msg-dirsize-no-folder = тут немає папки для вимірюванн
 # Jobs: prompts, confirmations, progress, conflicts
 prompt-copy-to = Копіювати { $what } в:
 prompt-move-to = Перейменувати або перемістити { $what } в:
-prompt-mkdir = Створити папку:
+mkdir-name = Створити папку
+mkdir-enter = Увійти в неї
 prompt-tab-name = Назва цієї вкладки:
 prompt-bookmark-name = Назва цієї папки:
 what-selected = позначені елементи ({ $count })

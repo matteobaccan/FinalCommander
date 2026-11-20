@@ -118,7 +118,8 @@ msg-dirsize-no-folder = nie je tu priečinok, ktorý by sa dal zmerať
 # Jobs: prompts, confirmations, progress, conflicts
 prompt-copy-to = Kopírovať { $what } do:
 prompt-move-to = Premenovať alebo presunúť { $what } do:
-prompt-mkdir = Vytvoriť priečinok:
+mkdir-name = Vytvoriť priečinok
+mkdir-enter = Vstúpiť doň
 prompt-tab-name = Názov tejto karty:
 prompt-bookmark-name = Názov tohto priečinka:
 what-selected = vybraté položky ({ $count })

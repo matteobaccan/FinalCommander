@@ -182,6 +182,22 @@ Three rules keep it from being a second copy engine rather than a faster one:
 Every call that needs `unsafe` or a `#[cfg]` is in `fcmd-platform`, which is the rule the
 workspace is built on; the engine asks it one question and takes `None` for an answer.
 
+### 3e. Making a folder (`F7`, `file.mkdir`)
+
+A dialog of two rows: the name, and a box, *Enter it*. The name is a path — `a/b/c` makes all
+three, relative to the panel's folder, and an absolute one is made where it says. `Enter`
+answers the dialog from the name, so the box costs nothing to somebody who never looks at it.
+
+* **Box off** (the default): once the folder exists the cursor is on it — on `a` for `a/b/c`,
+  the part the panel shows — and nothing moves for a path outside the panel's folder.
+* **Box on**: the panel that asked goes *into* the folder, the whole path of it, as
+  `mkdir -p a/b/c && cd a/b/c` would, and the place it left is in the folders history. Only
+  into a folder that was made: a refusal, or `Esc` on the job, leaves the panel where it was.
+
+The box starts as it was last left, for the session — as the copy dialog's choices and the
+link dialog's kind do — and unticked in a new one. In the panels where `F7` means something
+else (the git panel's commit, the wastebasket, the AI panels) there is no dialog to tick it in.
+
 ## 4. Delete, trash, wipe (shipped)
 
 - **`F8`** hands each thing to the system's own wastebasket when `general.use_trash` says so,

@@ -112,7 +112,8 @@ msg-dirsize-no-folder = 这里没有可统计的文件夹
 
 prompt-copy-to = 复制 { $what } 到：
 prompt-move-to = 移动/重命名 { $what } 到：
-prompt-mkdir = 新建目录：
+mkdir-name = 新建目录
+mkdir-enter = 进入该目录
 prompt-tab-name = 标签页名称：
 prompt-bookmark-name = 文件夹名称：
 what-selected = 已选 { $count } 项

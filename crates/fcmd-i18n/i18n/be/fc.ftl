@@ -118,7 +118,8 @@ msg-dirsize-no-folder = тут няма каталога для вымярэнн
 # Jobs: prompts, confirmations, progress, conflicts
 prompt-copy-to = Капіяваць { $what } у:
 prompt-move-to = Пераназваць або перанесці { $what } у:
-prompt-mkdir = Стварыць каталог:
+mkdir-name = Стварыць каталог
+mkdir-enter = Увайсці ў яго
 prompt-tab-name = Назва гэтай укладкі:
 prompt-bookmark-name = Назва гэтага каталога:
 what-selected = адзначаныя элементы ({ $count })
