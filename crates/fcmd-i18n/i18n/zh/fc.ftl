@@ -1034,6 +1034,7 @@ compare-contents-unread = { $count } 个无法读取
 compare-contents-stopped = 比较已停止
 quick-view-directory = { $name } 是一个目录 — F3 可以统计它
 quick-view-not-here = 字节不在这里：先用 F3 取出
+quick-view-reading = 正在从容器中读取…
 info-path = 路径
 info-kind = 类型
 info-kind-local = 本机上的一个目录

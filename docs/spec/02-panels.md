@@ -588,7 +588,7 @@ panel's cursor.
 | What it shows | the viewer's own rows for the file under the other panel's cursor | where that panel is, what kind of place that is, the free space, what the directory holds, what is selected, the row under the cursor | the directories under that panel's root |
 | Where the focus goes | to the files: there is nothing to select in a preview | the same | **into the tree**, because moving its cursor is how it changes the other panel's directory |
 | What it reads | the file, once, and again only when the cursor moves to another | nothing: everything shown is already known | one directory per expansion, through the worker, cached beyond the panel's life |
-| What it refuses | a directory (`F3` measures one) and a file whose bytes are not local (`F3` brings them out) | — | nothing: a directory it cannot read is an empty branch |
+| What it refuses | a directory (`F3` measures one), a file on a server or in a bucket, and an entry of a container that costs more than a glance (`F3` brings them out) | — | nothing: a directory it cannot read is an empty branch |
 
 The tree is rooted where the other panel's path starts — the drive, the archive, the server —
 and opens its way down a level per read until the cursor is on the directory that panel is
@@ -648,6 +648,19 @@ viewer binds them to.
 list of installed programs, the quick view holds the same page `F3` opens over there (§7b),
 built when the cursor lands on the row. The card is longer than the panel, which is exactly
 why it is a reader: it scrolls.
+
+**An entry of a container on this disk is previewed too.** Inside a zip, a tar, a JSON
+document, a mail or any other container whose file is on this machine, an entry of up to
+4 MiB is read on a worker and shown when it comes back — as the frames of a film are — if the
+cursor is still on that row; moving on cancels the read, and an answer for a row the cursor
+has left is dropped. The rule that a preview must not unpack or fetch on every cursor move
+still holds, and the worker is where it is kept: a format that goes straight to the entry (zip,
+plain tar, `ar`, cpio, JSON, mail) is read; one that has to be unpacked from its start to
+reach it — a compressed tar, a 7z whose block is solid, an rpm, a cabinet, a single `.gz`, a
+database whose tables are written out on the spot, anything a program on the machine reads —
+only when the whole container is under 16 MiB. Everything else, a container in a container,
+and anything on a server or in a bucket, says the bytes are not here and that `F3` brings
+them out.
 
 ## 8. Tabs (shipped)
 

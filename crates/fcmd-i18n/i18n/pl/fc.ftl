@@ -1074,6 +1074,7 @@ compare-contents-unread = nie udało się odczytać: { $count }
 compare-contents-stopped = porównywanie zatrzymane
 quick-view-directory = { $name } to folder — F3 go mierzy
 quick-view-not-here = bajtów tu nie ma: F3 najpierw je sprowadzi
+quick-view-reading = odczyt z kontenera…
 info-path = Ścieżka
 info-kind = Rodzaj
 info-kind-local = folder na tym komputerze

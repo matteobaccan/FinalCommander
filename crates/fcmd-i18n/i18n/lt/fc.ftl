@@ -1078,6 +1078,7 @@ compare-contents-unread = { $count } nepavyko perskaityti
 compare-contents-stopped = lyginimas sustabdytas
 quick-view-directory = { $name } yra katalogas — F3 jį išmatuoja
 quick-view-not-here = baitų čia nėra: F3 pirmiausia juos atsiunčia
+quick-view-reading = skaitoma iš konteinerio…
 info-path = Kelias
 info-kind = Rūšis
 info-kind-local = katalogas šiame kompiuteryje

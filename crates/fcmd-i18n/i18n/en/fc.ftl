@@ -1066,6 +1066,7 @@ compare-contents-unread = { $count } could not be read
 compare-contents-stopped = comparison stopped
 quick-view-directory = { $name } is a directory — F3 measures it
 quick-view-not-here = the bytes are not here: F3 brings them out first
+quick-view-reading = reading it out of the container…
 info-path = Path
 info-kind = Kind
 info-kind-local = a directory on this machine

@@ -298,6 +298,12 @@ che scrivi va comunque alla riga di comando. E accanto a una lista di processi, 
 programmi installati l'anteprima tiene la scheda di quella riga — la stessa pagina che apre
 `F3` lì, che è più lunga del pannello e scorre.
 
+Dentro un archivio, un file JSON o una mail su questo disco l'anteprima mostra anche la voce
+sotto il cursore, fino a 4 MiB: viene letta in sottofondo e compare quando è pronta, così il
+cursore non la aspetta mai. Una voce grande, un contenitore che andrebbe scompattato
+dall'inizio per arrivarci (un `.tar.gz` grande o un 7z solid), un archivio dentro un archivio e
+tutto ciò che sta su un server dicono che i byte non sono qui: `F3` li tira fuori.
+
 Un pannello locale si rilegge anche da sé: un file che arriva da una compilazione, da uno
 scaricamento o da un altro programma compare senza che tu lo chieda, e il cursore resta sul
 nome su cui stava. L'impostazione è `Aggiorna il pannello automaticamente` in

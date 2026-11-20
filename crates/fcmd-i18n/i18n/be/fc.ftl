@@ -1077,6 +1077,7 @@ compare-contents-unread = не ўдалося прачытаць: { $count }
 compare-contents-stopped = параўнанне спынена
 quick-view-directory = { $name } — каталог: F3 яго вымярае
 quick-view-not-here = байтаў тут няма: F3 спачатку іх дастане
+quick-view-reading = чытаецца з кантэйнера…
 info-path = Шлях
 info-kind = Від
 info-kind-local = каталог на гэтым камп'ютары

@@ -2353,6 +2353,17 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         let _ = tx.send(Event::GitQuick { key, result });
                     });
                 }
+                Request::QuickEntry { key, cancel } => {
+                    let tx = tx.clone();
+                    let archives = archives.clone();
+                    runtime.spawn_blocking(move || {
+                        let result = quick_entry(&archives, &key, &cancel);
+                        // A read given up because the cursor moved on has nobody to tell.
+                        if !cancel.is_cancelled() {
+                            let _ = tx.send(Event::QuickEntry { key, result });
+                        }
+                    });
+                }
                 Request::SqlQuery { db, sql } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || {
@@ -4671,6 +4682,54 @@ fn run_rebuild(
 
 /// Copy one entry out of an archive into the temporary directory, for the viewer and the
 /// editor — which both read a real file (SPEC 04 §5, the same shape as a remote fetch).
+/// The bytes of one entry of a container on this disk, for the quick view, or `Err(None)`
+/// when reading it would cost more than a glance is worth (SPEC 05 §1.15).
+///
+/// The app asks only for an entry it knows is small; what it cannot know is the format, and
+/// that decides the cost. A zip, a plain tar, an `ar`, a cpio, a JSON document or a mail go
+/// straight to the entry. A compressed tar, a 7z (whose blocks are usually solid), an rpm, a cabinet, a
+/// single `.gz` or `.xz` (whose size may not be written anywhere), a database (whose entries
+/// are tables written out on the spot) and anything a program on the machine reads cost an
+/// unknown amount of unpacking, so they are read only when the whole container is small.
+fn quick_entry(
+    archives: &std::sync::Arc<fcmd_arc::Cache>,
+    path: &VPath,
+    cancel: &CancelToken,
+) -> Result<Vec<u8>, Option<String>> {
+    use fcmd_arc::Format;
+    let (archive, inner) = archives
+        .open_in(path, cancel)
+        .map_err(|e| Some(e.to_string()))?;
+    let entry = archive
+        .entry(&inner)
+        .ok_or_else(|| Some(format!("{path}: no such entry")))?;
+    if entry.size > app::QUICK_ENTRY_LIMIT {
+        return Err(None);
+    }
+    let streamed = !matches!(
+        archive.format(),
+        Some(
+            Format::Zip
+                | Format::Tar
+                | Format::Ar
+                | Format::Cpio
+                | Format::Json
+                | Format::Eml
+                | Format::Mbox
+                | Format::Msg
+        )
+    );
+    if streamed {
+        let whole = std::fs::metadata(archive.source()).map(|m| m.len());
+        if whole.map_or(true, |len| len > app::QUICK_STREAM_LIMIT) {
+            return Err(None);
+        }
+    }
+    archive
+        .read(&inner, cancel)
+        .map_err(|e| Some(e.to_string()))
+}
+
 fn fetch_entry(
     archives: &std::sync::Arc<fcmd_arc::Cache>,
     path: &VPath,
@@ -5813,6 +5872,92 @@ fn open_url(url: &str) {
 
 #[cfg(test)]
 mod tests {
+
+    /// The quick view reads an entry of a container on this disk when that is cheap: a zip's
+    /// entry comes out; one past the limit is refused, as is anything in a compressed tar too
+    /// large to unpack from its start for a glance — while a small one is read.
+    #[test]
+    fn the_quick_view_reads_inside_a_container_only_what_a_glance_is_worth() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let zip = root.join("notes.zip");
+        let mut writer = zip::ZipWriter::new(std::fs::File::create(&zip).unwrap());
+        let options = zip::write::SimpleFileOptions::default();
+        writer.start_file("hello.md", options).unwrap();
+        std::io::Write::write_all(&mut writer, b"# Hello").unwrap();
+        writer.start_file("zeros.bin", options).unwrap();
+        let zeros = vec![0u8; app::QUICK_ENTRY_LIMIT as usize + 1];
+        std::io::Write::write_all(&mut writer, &zeros).unwrap();
+        writer.finish().unwrap();
+
+        let archives = std::sync::Arc::new(fcmd_arc::Cache::new(Default::default()));
+        let cancel = CancelToken::new();
+        let at = |host: &std::path::Path, inner: &str| VPath::local(host).enter(inner);
+        assert_eq!(
+            quick_entry(&archives, &at(&zip, "/hello.md"), &cancel).unwrap(),
+            b"# Hello"
+        );
+        assert_eq!(
+            quick_entry(&archives, &at(&zip, "/zeros.bin"), &cancel),
+            Err(None),
+            "past the limit"
+        );
+        assert!(matches!(
+            quick_entry(&archives, &at(&zip, "/missing"), &cancel),
+            Err(Some(_))
+        ));
+
+        // A compressed tar has to be unpacked from its start to reach an entry: read when
+        // the whole of it is small, refused when it is not.
+        let small = root.join("small");
+        std::fs::create_dir(&small).unwrap();
+        std::fs::write(small.join("a.txt"), b"alpha").unwrap();
+        let small_tgz = root.join("small.tar.gz");
+        fcmd_arc::create(
+            &small_tgz,
+            fcmd_arc::Format::TarGz,
+            &[small.join("a.txt")],
+            fcmd_arc::Level::default(),
+            false,
+            &cancel,
+            &mut |_, _| {},
+        )
+        .unwrap();
+        assert_eq!(
+            quick_entry(&archives, &at(&small_tgz, "/a.txt"), &cancel).unwrap(),
+            b"alpha"
+        );
+        // Bytes that do not compress, so the archive is as large as what is in it.
+        let large = root.join("large");
+        std::fs::create_dir(&large).unwrap();
+        let mut noise = Vec::with_capacity(app::QUICK_STREAM_LIMIT as usize + 4096);
+        let mut x: u64 = 0x2545_f491_4f6c_dd1d;
+        while noise.len() < noise.capacity() {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            noise.extend_from_slice(&x.to_le_bytes());
+        }
+        std::fs::write(large.join("noise.bin"), &noise).unwrap();
+        std::fs::write(large.join("b.txt"), b"beta").unwrap();
+        let large_tgz = root.join("large.tar.gz");
+        fcmd_arc::create(
+            &large_tgz,
+            fcmd_arc::Format::TarGz,
+            &[large.join("noise.bin"), large.join("b.txt")],
+            fcmd_arc::Level::default(),
+            false,
+            &cancel,
+            &mut |_, _| {},
+        )
+        .unwrap();
+        assert!(std::fs::metadata(&large_tgz).unwrap().len() > app::QUICK_STREAM_LIMIT);
+        assert_eq!(
+            quick_entry(&archives, &at(&large_tgz, "/b.txt"), &cancel),
+            Err(None),
+            "a large compressed tar waits for F3"
+        );
+    }
     /// A shell that is not there is named, with the setting that names it; the line it was
     /// to run is said as what did not happen, not as what is missing (issue 43: every line
     /// came back "cmd: program not found" because `pwsh` was not installed).
@@ -7526,6 +7671,11 @@ dir_attr = "D"
                     while let Ok(event) = rx.try_recv() {
                         app.handle_event(event);
                     }
+                }
+                Request::QuickEntry { key, cancel } => {
+                    let archives = std::sync::Arc::new(fcmd_arc::Cache::new(Default::default()));
+                    let result = quick_entry(&archives, &key, &cancel);
+                    app.handle_event(Event::QuickEntry { key, result });
                 }
                 Request::Find {
                     id,

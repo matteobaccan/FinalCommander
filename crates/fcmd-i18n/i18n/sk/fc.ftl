@@ -1075,6 +1075,7 @@ compare-contents-unread = { $count } sa nedalo prečítať
 compare-contents-stopped = porovnávanie zastavené
 quick-view-directory = { $name } je priečinok — F3 ho zmeria
 quick-view-not-here = bajty tu nie sú: F3 ich najprv prinesie
+quick-view-reading = čítam z kontajnera…
 info-path = Cesta
 info-kind = Druh
 info-kind-local = priečinok na tomto počítači

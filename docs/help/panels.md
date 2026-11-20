@@ -282,6 +282,12 @@ structure pane. The key bar says so while it has the focus. What you type still 
 command line. And beside a process, socket or programs list the preview holds that row's
 card — the same page `F3` opens there, which is longer than the panel and scrolls.
 
+Inside an archive, a JSON file or a mail on this disk the preview shows the entry under the
+cursor too, up to 4 MiB: it is read in the background and appears when it is ready, so the
+cursor never waits for it. A large entry, a container that would have to be unpacked from the
+start to reach it (a big `.tar.gz` or a solid 7z), an archive inside an archive, and anything
+on a server say that the bytes are not here: `F3` brings them out.
+
 A local panel also re-reads itself: a file that arrives from a build, a download or another
 program appears without being asked for, and the cursor stays on the name it was on. The
 setting is `Refresh the panel automatically` in `Options → Panel settings`

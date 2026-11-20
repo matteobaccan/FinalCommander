@@ -1077,6 +1077,7 @@ compare-contents-unread = не вдалося прочитати: { $count }
 compare-contents-stopped = порівняння зупинено
 quick-view-directory = { $name } — папка: F3 її вимірює
 quick-view-not-here = байтів тут немає: F3 спершу їх дістане
+quick-view-reading = читається з контейнера…
 info-path = Шлях
 info-kind = Вид
 info-kind-local = папка на цьому комп'ютері

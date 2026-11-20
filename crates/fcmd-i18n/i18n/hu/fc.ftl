@@ -1066,6 +1066,7 @@ compare-contents-unread = { $count } nem volt olvasható
 compare-contents-stopped = összehasonlítás leállítva
 quick-view-directory = { $name } mappa — az F3 megméri
 quick-view-not-here = a bájtok nincsenek itt: az F3 előbb idehozza őket
+quick-view-reading = olvasás a tárolóból…
 info-path = Útvonal
 info-kind = Fajta
 info-kind-local = mappa ezen a gépen

@@ -1074,6 +1074,7 @@ compare-contents-unread = nešlo přečíst: { $count }
 compare-contents-stopped = porovnávání zastaveno
 quick-view-directory = { $name } je adresář — F3 ho změří
 quick-view-not-here = bajty tu nejsou: F3 je nejprve přinese
+quick-view-reading = čtu z kontejneru…
 info-path = Cesta
 info-kind = Druh
 info-kind-local = adresář na tomto počítači

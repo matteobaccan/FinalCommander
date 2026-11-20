@@ -21,6 +21,13 @@ Notable changes, newest first. The format follows
   on a Linux kernel compiled to WebAssembly, with a folder of its own documents to work on in
   the tab's memory. Nothing to install; Chrome or Edge 137+, Firefox 153+ or Safari 27+.
 
+- **The quick view inside a container**: `Ctrl+Q` beside an archive, a JSON document, a mail
+  or any other container on this disk shows the entry under the cursor, as it does a file,
+  instead of *the bytes are not here*. Entries up to 4 MiB are read on a worker and shown if
+  the cursor is still there; a compressed tar, a solid 7z and the like only when the whole
+  container is small, because reaching an entry means unpacking everything before it. A
+  server, a bucket, a larger entry and an archive inside an archive still wait for `F3`.
+
 ### Changed
 
 - Dates — the panels' columns, the clock, the attributes dialog — are read and written through

@@ -1066,6 +1066,7 @@ compare-contents-unread = { $count } não puderam ser lidos
 compare-contents-stopped = comparação interrompida
 quick-view-directory = { $name } é um diretório — F3 o mede
 quick-view-not-here = os bytes não estão aqui: F3 os traz primeiro
+quick-view-reading = lendo do contêiner…
 info-path = Caminho
 info-kind = Tipo
 info-kind-local = um diretório nesta máquina

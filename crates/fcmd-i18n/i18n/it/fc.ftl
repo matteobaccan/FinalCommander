@@ -1058,6 +1058,7 @@ compare-contents-unread = { $count } non leggibili
 compare-contents-stopped = confronto interrotto
 quick-view-directory = { $name } è una directory — F3 la misura
 quick-view-not-here = i byte non sono qui: prima F3 li estrae
+quick-view-reading = lo leggo dal contenitore…
 info-path = Percorso
 info-kind = Tipo
 info-kind-local = una directory su questa macchina

@@ -93,6 +93,13 @@ pub enum Request {
         cwd: std::path::PathBuf,
         what: GitAsk,
     },
+    /// The bytes of one entry of a container on this disk, for the quick view (SPEC 05
+    /// §1.15): read on a worker, given up when the cursor moves on, refused by the worker
+    /// when the read would cost more than a glance should (see [`QUICK_ENTRY_LIMIT`]).
+    QuickEntry {
+        key: VPath,
+        cancel: CancelToken,
+    },
     /// Read the latest entries of the system log into a file for the viewer (SPEC 06 §16).
     SysLog,
     /// Ask which release is the latest (SPEC 11 §5). `manual` is the menu's command, which
@@ -601,6 +608,19 @@ pub const TREE_CACHE_KEPT: usize = 20_000;
 /// mebibytes is a screenshot, a diagram and most photographs; anything larger waits for the
 /// `F3` the reader presses on purpose.
 pub const QUICK_PICTURE_LIMIT: u64 = 8 * 1024 * 1024;
+
+/// How large an entry inside a container the quick view reads by itself (SPEC 05 §1.15).
+///
+/// The quick view follows the cursor, so what it shows has to be cheap to get: an entry of a
+/// zip, a plain tar, a JSON document or a mail up to this size is read on a worker and
+/// shown while the cursor stays on it. Anything larger, and anything on a server, waits for
+/// the `F3` the reader presses on purpose.
+pub const QUICK_ENTRY_LIMIT: u64 = 4 * 1024 * 1024;
+
+/// How large a container may be for the quick view to read inside it when the format has no
+/// index to seek by — a compressed tar, a solid 7z, an rpm, a database whose tables are
+/// written out on the spot — and finding an entry means unpacking everything before it. A small one costs no more than a large entry would.
+pub const QUICK_STREAM_LIMIT: u64 = 16 * 1024 * 1024;
 
 /// Why a remote file is being fetched.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1184,6 +1204,13 @@ pub enum Event {
     GitQuick {
         key: VPath,
         result: Result<String, String>,
+    },
+    /// The bytes of the container entry `key` for the quick view. `Err(None)` is the
+    /// worker's refusal — a read that would unpack more than a glance is worth — and
+    /// `Err(Some(why))` a read that failed.
+    QuickEntry {
+        key: VPath,
+        result: Result<Vec<u8>, Option<String>>,
     },
     /// The git column's answer: a status per name, empty outside a repository.
     GitColumn {
@@ -3579,6 +3606,9 @@ pub struct App {
     /// and kept while it stays there, so moving down a directory does not reopen a file.
     pub quick: Option<Box<Viewer>>,
     quick_of: Option<VPath>,
+    /// The read of a container entry the quick view is waiting for, cancelled when the
+    /// cursor moves on before it is done.
+    quick_read: Option<CancelToken>,
     /// Why there is nothing to show, when there is not: an empty frame looks broken.
     pub quick_why: Option<String>,
     /// The quick view's drawing area, so a page scroll in it is a page of what is on screen.
@@ -3964,6 +3994,7 @@ impl App {
             tree_cache: crate::tree::Cache::default(),
             quick: None,
             quick_of: None,
+            quick_read: None,
             quick_why: None,
             quick_size: (40, 20),
             pixels: crate::pixels::Screen::default(),
@@ -4808,6 +4839,38 @@ impl App {
                         self.quick_why = None;
                     }
                     Err(why) => {
+                        self.quick = None;
+                        self.quick_why = Some(why);
+                    }
+                }
+            }
+            Event::QuickEntry { key, result } => {
+                // The cursor may have moved on while the entry was being read.
+                if self.quick_of.as_ref() != Some(&key) {
+                    return;
+                }
+                self.quick_read = None;
+                match result {
+                    Ok(bytes) => {
+                        // Named as the entry is, so the reader picks the same mode for it
+                        // as for the same file on the disk: a table, Markdown, a picture.
+                        let shown = VPath::local(key.display_name());
+                        let size = bytes.len() as u64;
+                        let source = fcmd_view::BytesSource::new(bytes);
+                        let mut viewer = Viewer::new(Box::new(source), shown);
+                        self.tune_viewer(&mut viewer);
+                        viewer.show_key_bar = false;
+                        viewer.show_status_line = false;
+                        viewer.show_scrollbar = false;
+                        viewer.limit_pictures(QUICK_PICTURE_LIMIT.max(size));
+                        self.quick = Some(Box::new(viewer));
+                        self.quick_why = None;
+                    }
+                    Err(None) => {
+                        self.quick = None;
+                        self.quick_why = Some(self.i18n.t("quick-view-not-here"));
+                    }
+                    Err(Some(why)) => {
                         self.quick = None;
                         self.quick_why = Some(why);
                     }
@@ -30882,6 +30945,9 @@ impl App {
         if self.quick_of.as_ref() == Some(&path) {
             return;
         }
+        if let Some(read) = self.quick_read.take() {
+            read.cancel();
+        }
         // A row of a process, socket or programs list is not a file and has no bytes: what
         // belongs beside it is its card, which is the page `F3` opens over there (SPEC 02
         // §7b). It is built here and read like any other page.
@@ -30931,9 +30997,23 @@ impl App {
             ));
             return;
         }
+        if path.is_local() && path.depth() == 1 && entry.size <= QUICK_ENTRY_LIMIT {
+            // An entry of a container on this disk: small enough to read for a glance, on a
+            // worker, so the cursor moves on without waiting for it. The worker also says no
+            // when finding the entry would mean unpacking the container from its start.
+            let cancel = CancelToken::new();
+            self.quick = None;
+            self.quick_why = Some(self.i18n.t("quick-view-reading"));
+            self.quick_of = Some(path.clone());
+            self.quick_read = Some(cancel.clone());
+            self.requests
+                .push(Request::QuickEntry { key: path, cancel });
+            return;
+        }
         if !path.is_local() || path.in_container() {
             // The bytes would have to be fetched, and a preview that copies a file down on
-            // every cursor movement is a trap. `F3` fetches it when the user asks.
+            // every cursor movement is a trap. `F3` fetches it when the user asks; so does
+            // an entry too large to read for a glance, or one in an archive in an archive.
             self.quick = None;
             self.quick_of = None;
             self.quick_why = Some(self.i18n.t("quick-view-not-here"));
@@ -42292,6 +42372,109 @@ run = ["echo one", "echo two", "echo three"]
         );
         press(&mut app, "Esc");
         assert!(app.mode.viewer().is_some(), "Esc goes back to the viewer");
+    }
+
+    /// `Ctrl+Q` inside an archive on this disk shows the entry under the cursor, as it does a
+    /// file: the bytes are asked of a worker and shown when they come back for the row still
+    /// under the cursor. An answer for a row the cursor has left is dropped and its read
+    /// cancelled; an entry past the limit still waits for `F3`.
+    #[test]
+    fn the_quick_view_shows_an_entry_of_an_archive_read_on_a_worker() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip = dir.path().join("data.zip");
+        let mut writer = zip::ZipWriter::new(std::fs::File::create(&zip).unwrap());
+        let options = zip::write::SimpleFileOptions::default();
+        writer.start_file("a.json", options).unwrap();
+        std::io::Write::write_all(&mut writer, br#"{"name": "alpha"}"#).unwrap();
+        writer.start_file("b.txt", options).unwrap();
+        std::io::Write::write_all(&mut writer, b"beta").unwrap();
+        writer.start_file("big.bin", options).unwrap();
+        std::io::Write::write_all(&mut writer, &vec![0u8; QUICK_ENTRY_LIMIT as usize + 1]).unwrap();
+        writer.finish().unwrap();
+
+        let mut app = app();
+        let inside = VPath::local(&zip).enter("/");
+        let vfs = fcmd_vfs::ArcVfs::new(fcmd_arc::Limits::default());
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        let entries = rt
+            .block_on(fcmd_vfs::Vfs::list(&vfs, &inside, CancelToken::new()))
+            .unwrap();
+        app.panels[0].cwd = inside;
+        let generation = app.panels[0].generation;
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation,
+            result: Ok(entries),
+        });
+        let to = |app: &mut App, name: &str| {
+            let row = app.panels[0].listing.row_of_name(name).expect(name);
+            app.panels[0].cursor_to(row);
+            app.quick_view_for(0);
+        };
+        let asked = |app: &mut App| -> Vec<(VPath, CancelToken)> {
+            app.take_requests()
+                .into_iter()
+                .filter_map(|r| match r {
+                    Request::QuickEntry { key, cancel } => Some((key, cancel)),
+                    _ => None,
+                })
+                .collect()
+        };
+
+        to(&mut app, "a.json");
+        let first = asked(&mut app);
+        assert_eq!(first.len(), 1, "one read, on a worker");
+        assert!(app.quick.is_none());
+        assert_eq!(
+            app.quick_why.as_deref(),
+            Some(app.i18n.t("quick-view-reading").as_str())
+        );
+
+        // The cursor moves on before the answer: the first read is cancelled, and its
+        // answer, when it comes, is not shown over the second row.
+        to(&mut app, "b.txt");
+        let second = asked(&mut app);
+        assert!(
+            first[0].1.is_cancelled(),
+            "the read the cursor left is given up"
+        );
+        app.handle_event(Event::QuickEntry {
+            key: first[0].0.clone(),
+            result: Ok(br#"{"name": "alpha"}"#.to_vec()),
+        });
+        assert!(
+            app.quick.is_none(),
+            "a late answer for another row is dropped"
+        );
+        app.handle_event(Event::QuickEntry {
+            key: second[0].0.clone(),
+            result: Ok(b"beta".to_vec()),
+        });
+        let quick = app.quick.as_ref().expect("the entry is shown");
+        assert_eq!(quick.path.display_name(), "b.txt");
+        assert!(app.quick_why.is_none());
+
+        // The worker's refusal says what it always said: `F3` brings the bytes out.
+        to(&mut app, "a.json");
+        let third = asked(&mut app);
+        app.handle_event(Event::QuickEntry {
+            key: third[0].0.clone(),
+            result: Err(None),
+        });
+        assert_eq!(
+            app.quick_why.as_deref(),
+            Some(app.i18n.t("quick-view-not-here").as_str())
+        );
+
+        // Past the limit nothing is asked at all.
+        to(&mut app, "big.bin");
+        assert!(asked(&mut app).is_empty());
+        assert_eq!(
+            app.quick_why.as_deref(),
+            Some(app.i18n.t("quick-view-not-here").as_str())
+        );
     }
 
     /// Coming back out of a directory — or out of an archive — puts the cursor back on what
