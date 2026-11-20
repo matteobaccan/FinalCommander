@@ -630,6 +630,48 @@ environment variables, and `~/.aws/credentials` — the file every AWS tool shar
 format they all write, profiles and session tokens included. `credentials = "anonymous"` signs
 nothing, which is how a bucket with a public read policy is browsed.
 
+**The two shared files, read together** (`fcmd_s3::creds::SharedFiles`). Beside
+`~/.aws/credentials` sits `~/.aws/config`, which holds what is not a secret about each profile
+— its region above all. `AWS_SHARED_CREDENTIALS_FILE` and `AWS_CONFIG_FILE` say where they are
+when they are not in `~/.aws/`. The two name their profiles differently and both spellings are
+read: `[work]` in the credentials file is `[profile work]` in the configuration, where only
+`[default]` goes without the word, and `[sso-session …]` and `[services …]` are not profiles at
+all. The keys of a profile come from the credentials file, else from its section of the
+configuration, where the AWS tools accept them too — always both halves from one section. The
+region comes from the configuration.
+
+The files are INI as the AWS tools write it and are read by a few lines of our own
+(`creds::parse_ini`) rather than by a crate: headings, `key = value`, whole-line comments with
+`#` or `;`, a comment after a value when a blank precedes it (a secret may hold either
+character, and never a blank), and the indented lines under a key with nothing after its `=` —
+`s3 =` and its nested settings — skipped rather than taken for keys of the profile. Nothing in
+them is ever an error: a file another tool wrote is read for what can be read in it.
+
+**The region of a service** is its block's `region` when that names one; otherwise
+`AWS_REGION`, then `AWS_DEFAULT_REGION`, then the region its profile has in the configuration
+file, then `us-east-1` — the order the AWS tools keep, so a shell that sets the variable means
+here what it means to them. With the environment as the source the profile asked is the one
+`AWS_PROFILE` names, `default` when it names none.
+
+**Choosing a profile** (`net.s3.profile`, *Commands → AWS profile of an object store*). The
+command is about one service: the one the panel is in, or the `s3://name@` row under the cursor
+in the sessions panel, or the only one configured. A worker reads the two files — a key handler
+reads no disk — and a list opens: *Environment*, every profile either file names (`default`
+first, the others by name) with its region beside it, and *Anonymous*; the row in force is
+marked and the cursor is on it. `Enter` writes the choice into the block as `credentials =
+"aws:work"` would be by hand, so *Save setup* keeps it and without it the choice lasts the
+session, and hands the block to a worker that looks the keys and the region up again and puts
+the service in the place of the one of its name (`S3Vfs::set_service`). The clients kept for
+that service's buckets were built on the old keys and go with them; a panel in one of its
+buckets is read again, since what it may see has changed; the status line says as whom the
+service signs now and for which region, or that no keys were found.
+
+**Only static keys.** A profile that signs another way — single sign-on, an assumed role, a
+`credential_process` — is a profile and is listed, marked *no keys*; choosing it changes
+nothing and says why. Each of those is a protocol of its own, and the AWS command line is the
+tool that speaks them: `aws configure export-credentials --format env` puts the keys it
+obtains where this program reads them.
+
 ### 8.6 What works, and what is not there yet
 
 Browsing, and reading. A prefix opens as a directory, `F3` brings an object down to a temporary

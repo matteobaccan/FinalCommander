@@ -1120,6 +1120,7 @@ fn draw_pick(
         crate::menu::PickKind::AiThreads => "ai-threads-hint",
         crate::menu::PickKind::StripMeta => "strip-hint",
         crate::menu::PickKind::ServiceStart => "svc-start-hint",
+        crate::menu::PickKind::S3Profile => "s3-profile-hint",
         crate::menu::PickKind::PluginsConfig => "plugins-config-hint",
         crate::menu::PickKind::ReplaceTemplates => "replace-tpl-hint",
         crate::menu::PickKind::EditorMatches => "editor-matches-hint",

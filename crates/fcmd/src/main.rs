@@ -2466,6 +2466,34 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         let _ = tx.send(Event::UsageTree { id, tree });
                     });
                 }
+                Request::S3Profiles { service } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let profiles =
+                            fcmd_s3::creds::SharedFiles::discover(dirs_home().as_deref())
+                                .profiles();
+                        let _ = tx.send(Event::S3Profiles { service, profiles });
+                    });
+                }
+                Request::S3Service { block } => {
+                    // The provider every panel, viewer and job shares is the one changed:
+                    // the service of this name is replaced in it, and the clients it kept
+                    // for that service's buckets go with the keys they were built on.
+                    let tx = tx.clone();
+                    let objects = objects.clone();
+                    runtime.spawn_blocking(move || {
+                        let shared = fcmd_s3::creds::SharedFiles::discover(dirs_home().as_deref());
+                        let service = object_service(&block, &shared);
+                        let event = Event::S3ServiceSet {
+                            service: service.name.clone(),
+                            source: fcmd_s3::creds::Source::parse(&block.credentials).describe(),
+                            signed: service.credentials.is_some(),
+                            region: service.endpoint.region.clone(),
+                        };
+                        objects.set_service(service);
+                        let _ = tx.send(event);
+                    });
+                }
                 Request::DirSize { panel, path } => {
                     let tx = tx.clone();
                     // A directory inside an archive has a size too, and it is what the
@@ -4979,35 +5007,53 @@ fn stamp_of_entry(entry: &fcmd_core::Entry) -> RemoteStamp {
 /// or from `~/.aws/credentials` like every other tool on the machine.
 fn object_storage(cfg: &fcmd_config::Config) -> fcmd_s3::vfs::S3Vfs {
     use fcmd_s3::creds;
-    use fcmd_s3::endpoint::Endpoint;
-    use fcmd_s3::vfs::Service;
 
-    let home = dirs_home();
+    // The two shared files are read once for all the blocks, and not at all with no block.
+    let shared = if cfg.s3.is_empty() {
+        creds::SharedFiles::default()
+    } else {
+        creds::SharedFiles::discover(dirs_home().as_deref())
+    };
     let services = cfg
         .s3
         .iter()
-        .map(|block| {
-            let region = if block.region.trim().is_empty() {
-                creds::region_from_env().unwrap_or_else(|| "us-east-1".to_string())
-            } else {
-                block.region.trim().to_string()
-            };
-            let endpoint = if block.endpoint.trim().is_empty() {
-                Endpoint::aws(region)
-            } else {
-                Endpoint::parse(block.endpoint.trim(), region)
-            };
-            let endpoint = match block.path_style {
-                Some(path_style) => endpoint.with_path_style(path_style),
-                None => endpoint,
-            };
-            let source = creds::Source::parse(&block.credentials);
-            Service::new(block.name.trim(), endpoint)
-                .with_credentials(creds::resolve(&source, home.as_deref()))
-                .with_listing_cap(block.listing_cap)
-        })
+        .map(|block| object_service(block, &shared))
         .collect();
     fcmd_s3::vfs::S3Vfs::new(services)
+}
+
+/// One `[[s3]]` block as a service: where it is, and who we are to it.
+///
+/// The region is the block's own when it names one; otherwise the environment's, then the
+/// one the profile has in `~/.aws/config`, then `us-east-1` — and a bucket that lives
+/// elsewhere says where when it is first asked, which the client follows.
+fn object_service(
+    block: &fcmd_config::S3Cfg,
+    shared: &fcmd_s3::creds::SharedFiles,
+) -> fcmd_s3::vfs::Service {
+    use fcmd_s3::creds;
+    use fcmd_s3::endpoint::Endpoint;
+
+    let source = creds::Source::parse(&block.credentials);
+    let region = if block.region.trim().is_empty() {
+        shared
+            .region_for(&source)
+            .unwrap_or_else(|| "us-east-1".to_string())
+    } else {
+        block.region.trim().to_string()
+    };
+    let endpoint = if block.endpoint.trim().is_empty() {
+        Endpoint::aws(region)
+    } else {
+        Endpoint::parse(block.endpoint.trim(), region)
+    };
+    let endpoint = match block.path_style {
+        Some(path_style) => endpoint.with_path_style(path_style),
+        None => endpoint,
+    };
+    fcmd_s3::vfs::Service::new(block.name.trim(), endpoint)
+        .with_credentials(shared.resolve(&source))
+        .with_listing_cap(block.listing_cap)
 }
 
 /// Where `~` is. The same answer the configuration paths use, asked again here because the
@@ -7833,6 +7879,9 @@ dir_attr = "D"
                 // Never for real in a test: the wastebasket is the user's own.
                 | Request::Trash { .. }
                 | Request::StripMeta { .. }
+                // The shared AWS files are the user's own: a test hands the profiles in.
+                | Request::S3Profiles { .. }
+                | Request::S3Service { .. }
                 | Request::OpenUrl { .. }
                 // Nor a printer: the tests look at the line the request carries.
                 | Request::Print { .. }

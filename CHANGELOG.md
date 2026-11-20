@@ -14,6 +14,15 @@ Notable changes, newest first. The format follows
   started from, as `du -x` does: a network share or another disk mounted under the folder
   counts as empty instead of being walked. Linux and macOS; on Windows the setting has no
   effect.
+- **AWS profiles for an object store.** *Commands → AWS profile of an object store*
+  (`net.s3.profile`) lists the profiles of `~/.aws/credentials` and `~/.aws/config` — the
+  `[profile name]` sections of the second included, each with its region — beside
+  *Environment* and *Anonymous*, and signs the service's requests with the one chosen from
+  then on; *Save setup* keeps it as `credentials = "aws:name"`. A service whose block names no
+  region now takes the one its profile has in `~/.aws/config`, after `AWS_REGION` and before
+  `us-east-1`, and keys kept in the configuration file are read as the AWS tools read them.
+  `AWS_SHARED_CREDENTIALS_FILE` and `AWS_CONFIG_FILE` are honoured. Static keys only: a
+  profile that signs through single sign-on or a role is listed, and refused with the reason.
 
 ### Changed
 

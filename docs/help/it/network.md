@@ -192,6 +192,22 @@ Le chiavi non stanno mai in `fcmd.toml`. Vengono da `AWS_ACCESS_KEY_ID` e
 profili compresi. Un bucket che chiunque può leggere vuole `credentials = "anonymous"` e nessuna
 chiave.
 
+**Quale profilo.** `credentials = "aws:lavoro"` nel blocco ne nomina uno, e *Comandi → Profilo
+AWS di un object store* (`net.s3.profile`) ne sceglie uno da un elenco: con il pannello in un
+bucket del servizio, o il cursore sulla sua riga `s3://nome@` nel pannello delle sessioni,
+mostra *Ambiente* — le variabili `AWS_*`, altrimenti il profilo `default` — poi ogni profilo
+trovato in `~/.aws/credentials` e in `~/.aws/config` con accanto la sua regione, poi *Anonimo*.
+`Invio` firma da lì in poi le richieste del servizio con quel profilo, e rilegge un pannello
+che si trova in uno dei suoi bucket. La scelta vale per la sessione; *Opzioni → Salva
+impostazioni* la conserva.
+
+La regione è quella del blocco, `region`, quando c'è; altrimenti `AWS_REGION`, poi la `region`
+che il profilo ha in `~/.aws/config`, poi `us-east-1`. `AWS_SHARED_CREDENTIALS_FILE` e
+`AWS_CONFIG_FILE` sono rispettate quando i due file stanno altrove. Un profilo segnato *senza
+chiavi* firma a modo suo — single sign-on, un ruolo — cosa che parlano solo gli strumenti AWS:
+`aws configure export-credentials --format env` lo trasforma in variabili che questo programma
+legge.
+
 `F3` su un oggetto lo porta giù in una copia temporanea e mostra quella, come fa per un file su
 un server, e `net.fetch_limit_mb` è il tetto a quello che scarica. `F4` modifica quella copia e
 il salvataggio la rimanda su con una sola scrittura.

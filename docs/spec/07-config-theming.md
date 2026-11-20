@@ -333,9 +333,9 @@ group = "work"            # a heading in the site list
 [[s3]]
 name = "work"             # empty name = the default, reached by `s3://bucket/`
 endpoint = ""             # empty = AWS itself; else `https://minio.lan:9000`
-region = "eu-west-1"      # empty = $AWS_REGION, then $AWS_DEFAULT_REGION, then us-east-1
+region = "eu-west-1"      # empty = $AWS_REGION, $AWS_DEFAULT_REGION, the profile's own in ~/.aws/config, us-east-1
 path_style = false        # left out = by host for AWS, by path for everything else
-credentials = "env"       # env | aws | aws:<profile> | anonymous
+credentials = "env"       # env | aws | aws:<profile> | anonymous — `net.s3.profile` chooses one from a list
 listing_cap = 100000      # rows a listing with no delimiter may gather; 0 = no limit
 ```
 

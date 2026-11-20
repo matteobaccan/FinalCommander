@@ -182,6 +182,20 @@ The keys are never kept in `fcmd.toml`. They come from `AWS_ACCESS_KEY_ID` and
 `AWS_SECRET_ACCESS_KEY`, or from `~/.aws/credentials` — the file the AWS tools share, profiles
 and all. A bucket that anyone may read needs `credentials = "anonymous"` and no keys at all.
 
+**Which profile.** `credentials = "aws:work"` in the block names one, and *Commands → AWS
+profile of an object store* (`net.s3.profile`) chooses one from a list instead: with the panel
+in a bucket of the service, or the cursor on its `s3://name@` row in the sessions panel, it
+shows *Environment* — the `AWS_*` variables, else the `default` profile — then every profile
+found in `~/.aws/credentials` and `~/.aws/config` with its region beside it, then *Anonymous*.
+`Enter` signs the service's requests with that profile from then on, and re-reads a panel that
+is in one of its buckets. The choice is for the session; *Options → Save setup* keeps it.
+
+The region is the block's own `region` when it has one; otherwise `AWS_REGION`, then the
+`region` the profile has in `~/.aws/config`, then `us-east-1`. `AWS_SHARED_CREDENTIALS_FILE`
+and `AWS_CONFIG_FILE` are honoured when the two files live somewhere else. A profile marked
+*no keys* signs in a way of its own — single sign-on, a role — which only the AWS tools speak:
+`aws configure export-credentials --format env` turns it into variables this program reads.
+
 `F3` on an object brings it down to a temporary copy and shows you that, the way it does for a
 file on a server, and `net.fetch_limit_mb` is the ceiling on what it will fetch. `F4` edits
 that copy and saving sends it back as one write.

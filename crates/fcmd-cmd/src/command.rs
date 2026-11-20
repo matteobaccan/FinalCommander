@@ -378,6 +378,9 @@ pub enum Command {
     NetTunnel,
     /// The tunnels that are open, with what has gone through them.
     NetTunnels,
+    /// Choose the AWS profile an object storage service signs with, from the profiles of
+    /// `~/.aws/credentials` and `~/.aws/config`.
+    NetS3Profile,
     ToolUserMenu,
     /// The user menu again, with the cursor on the row taken last (FAR's `Shift+F10`).
     ToolUserMenuLast,
@@ -849,6 +852,7 @@ impl Command {
             Command::ArcTest,
             Command::NetTunnel,
             Command::NetTunnels,
+            Command::NetS3Profile,
             Command::ToolUserMenu,
             Command::ToolUserMenuLast,
             Command::ToolCompareDirs,
@@ -1197,6 +1201,7 @@ impl Command {
             Command::ArcTest => "arc.test".into(),
             Command::NetTunnel => "net.tunnel".into(),
             Command::NetTunnels => "net.tunnels".into(),
+            Command::NetS3Profile => "net.s3.profile".into(),
             Command::ToolUserMenu => "tool.usermenu".into(),
             Command::ToolUserMenuLast => "tool.usermenu.last".into(),
             Command::ToolCompareDirs => "tool.compare.dirs".into(),
@@ -1545,6 +1550,7 @@ impl Command {
             ("arc.test" | "file.archive.test", _) => Command::ArcTest,
             ("net.tunnel", _) => Command::NetTunnel,
             ("net.tunnels", _) => Command::NetTunnels,
+            ("net.s3.profile", _) => Command::NetS3Profile,
             ("tool.usermenu", _) => Command::ToolUserMenu,
             ("tool.usermenu.last", _) => Command::ToolUserMenuLast,
             ("tool.find", _) => Command::ToolFind,
