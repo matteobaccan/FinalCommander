@@ -518,6 +518,7 @@ mod tests {
         fcmd_jobs::usage::walk(
             &fcmd_jobs::LocalFs,
             &VPath::local(dir.path()),
+            &fcmd_jobs::usage::Bounds::none(),
             &CancelToken::new(),
             &mut |_, _| {},
         )

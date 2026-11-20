@@ -570,6 +570,7 @@ menu-quit = Ki&lépés
 opt-natural-sort = Számjegyek számként rendezve
 opt-allow-reverse = Fordított rendezés engedélyezve
 opt-select-folders = A maszkok mappákat is kijelölnek
+opt-size-one-filesystem = A mappaméretek egy fájlrendszeren maradnak
 cmd-no-network-name = Ezen a lemezen lévő útvonalnak nincs hálózati neve
 opt-trash = Törlés a Lomtárba
 opt-system-copy = A rendszer másolórutinjának használata

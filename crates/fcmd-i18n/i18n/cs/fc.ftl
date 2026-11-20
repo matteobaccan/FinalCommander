@@ -573,6 +573,7 @@ menu-quit = &Konec
 opt-natural-sort = Přirozené pořadí čísel
 opt-allow-reverse = Povolit obrácené řazení
 opt-select-folders = Masky označují i adresáře
+opt-size-one-filesystem = Velikosti adresářů zůstávají na jednom souborovém systému
 cmd-no-network-name = Cesta na tomto disku nemá síťový název
 opt-trash = Používat systémový Koš
 opt-system-copy = Používat systémovou rutinu kopírování

@@ -2440,20 +2440,29 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                             runtime.handle().clone(),
                         ),
                     );
+                    let bounds = fcmd_jobs::usage::Bounds::one_file_system(
+                        &root,
+                        app.cfg.panel.size_one_filesystem,
+                    );
                     runtime.spawn_blocking(move || {
                         // The screen hears how far the walk has got a few times a second and
                         // no more: a folder is read in microseconds, and an event for each
                         // would be a queue the loop spends the walk draining.
                         let mut told = std::time::Instant::now();
                         let progress = tx.clone();
-                        let tree =
-                            fcmd_jobs::usage::walk(&fs, &root, &cancel, &mut |files, bytes| {
+                        let tree = fcmd_jobs::usage::walk(
+                            &fs,
+                            &root,
+                            &bounds,
+                            &cancel,
+                            &mut |files, bytes| {
                                 if told.elapsed() >= std::time::Duration::from_millis(150) {
                                     told = std::time::Instant::now();
                                     let _ =
                                         progress.send(Event::UsageProgress { id, files, bytes });
                                 }
-                            });
+                            },
+                        );
                         let _ = tx.send(Event::UsageTree { id, tree });
                     });
                 }
@@ -2469,8 +2478,14 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                             runtime.handle().clone(),
                         ),
                     );
+                    // `du -x` when the setting asks for it: what is mounted under the folder
+                    // is not what the folder holds (SPEC 02 §3c).
+                    let bounds = fcmd_jobs::usage::Bounds::one_file_system(
+                        &path,
+                        app.cfg.panel.size_one_filesystem,
+                    );
                     runtime.spawn_blocking(move || {
-                        let (bytes, files) = dir_size(&fs, &path, &CancelToken::new(), 0);
+                        let (bytes, files) = dir_size(&fs, &path, &bounds, &CancelToken::new(), 0);
                         let _ = tx.send(Event::DirSized {
                             panel,
                             path,
@@ -3508,7 +3523,6 @@ fn run_decompiler(rule: &fcmd_config::DecompileRule, path: &VPath) -> Result<Str
     Ok(text)
 }
 
-/// Recursive size of a directory. Depth-limited, cancellable, and it never follows symlinks.
 /// Two files on this disk compared byte against byte (SPEC 05 §3a). The error names the file
 /// that could not be opened; one that fails halfway is named by the pair.
 fn bin_compare(
@@ -3524,9 +3538,13 @@ fn bin_compare(
         .map_err(|e| format!("{} ↔ {}: {e}", left.display(), right.display()))
 }
 
+/// Recursive size of a directory. Depth-limited, cancellable, and it never follows symlinks;
+/// a folder past `bounds` — on another file system, when the setting says to stop there —
+/// counts as empty.
 fn dir_size(
     fs: &dyn fcmd_jobs::JobFs,
     path: &VPath,
+    bounds: &fcmd_jobs::usage::Bounds,
     cancel: &CancelToken,
     depth: u32,
 ) -> (u64, u64) {
@@ -3542,7 +3560,11 @@ fn dir_size(
         match facts.kind {
             fcmd_core::EntryKind::Parent | fcmd_core::EntryKind::Symlink => {}
             fcmd_core::EntryKind::Dir => {
-                let (b, f) = dir_size(fs, &path.join(&name), cancel, depth + 1);
+                let child = path.join(&name);
+                if bounds.leaves(&child) {
+                    continue;
+                }
+                let (b, f) = dir_size(fs, &child, bounds, cancel, depth + 1);
                 bytes += b;
                 files += f;
             }
@@ -7788,8 +7810,13 @@ dir_attr = "D"
                     app.handle_event(Event::BinCompared { id, result });
                 }
                 Request::UsageTree { id, root, cancel } => {
-                    let tree =
-                        fcmd_jobs::usage::walk(&fcmd_jobs::LocalFs, &root, &cancel, &mut |_, _| {});
+                    let tree = fcmd_jobs::usage::walk(
+                        &fcmd_jobs::LocalFs,
+                        &root,
+                        &fcmd_jobs::usage::Bounds::none(),
+                        &cancel,
+                        &mut |_, _| {},
+                    );
                     app.handle_event(Event::UsageTree { id, tree });
                 }
                 Request::DirSize { .. }
@@ -9329,10 +9356,41 @@ dir_attr = "D"
         let (bytes, files) = dir_size(
             &fcmd_jobs::LocalFs,
             &VPath::local(dir.path()),
+            &fcmd_jobs::usage::Bounds::none(),
             &CancelToken::new(),
             0,
         );
         assert_eq!((bytes, files), (42, 2));
+    }
+
+    #[test]
+    fn dir_size_kept_on_one_file_system_leaves_a_mount_point_out() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a"), vec![0u8; 10]).unwrap();
+        std::fs::create_dir_all(dir.path().join("elsewhere/deep")).unwrap();
+        std::fs::write(dir.path().join("elsewhere/b"), vec![0u8; 32]).unwrap();
+        std::fs::write(dir.path().join("elsewhere/deep/c"), vec![0u8; 64]).unwrap();
+        // No mount is made: the folder called `elsewhere` is said to be on another device.
+        let device: fn(&VPath) -> Option<u64> = |p| {
+            let other = p.os().components().any(|c| c.as_os_str() == "elsewhere");
+            Some(if other { 2 } else { 1 })
+        };
+        let root = VPath::local(dir.path());
+        let measure = |on: bool| {
+            dir_size(
+                &fcmd_jobs::LocalFs,
+                &root,
+                &fcmd_jobs::usage::Bounds::reading(&root, on, device),
+                &CancelToken::new(),
+                0,
+            )
+        };
+        assert_eq!(measure(true), (10, 1));
+        assert_eq!(
+            measure(false),
+            (106, 3),
+            "off, it is the walk it always was"
+        );
     }
 
     #[test]
@@ -9342,7 +9400,13 @@ dir_attr = "D"
         let token = CancelToken::new();
         token.cancel();
         assert_eq!(
-            dir_size(&fcmd_jobs::LocalFs, &VPath::local(dir.path()), &token, 0),
+            dir_size(
+                &fcmd_jobs::LocalFs,
+                &VPath::local(dir.path()),
+                &fcmd_jobs::usage::Bounds::none(),
+                &token,
+                0
+            ),
             (0, 0)
         );
     }

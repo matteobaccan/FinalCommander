@@ -576,6 +576,7 @@ menu-quit = Вы&хад
 opt-natural-sort = Натуральны парадак лікаў
 opt-allow-reverse = Дазволіць зваротнае парадкаванне
 opt-select-folders = Маскі адзначаюць і каталогі
+opt-size-one-filesystem = Памеры каталогаў не выходзяць за межы файлавай сістэмы
 cmd-no-network-name = Шлях на гэтым дыску не мае сеткавага імя
 opt-trash = Ужываць сістэмны Сметнік
 opt-system-copy = Ужываць сістэмны метад капіявання

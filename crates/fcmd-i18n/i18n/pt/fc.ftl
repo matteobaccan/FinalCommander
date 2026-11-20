@@ -570,6 +570,7 @@ menu-quit = Sai&r
 opt-natural-sort = Tratar dígitos como números
 opt-allow-reverse = Permitir classificação inversa
 opt-select-folders = As máscaras selecionam diretórios também
+opt-size-one-filesystem = Os tamanhos dos diretórios ficam num só sistema de arquivos
 cmd-no-network-name = Um caminho neste disco não tem nome de rede
 opt-trash = Apagar para a lixeira
 opt-system-copy = Usar a rotina de cópia do sistema

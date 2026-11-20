@@ -457,6 +457,11 @@ impl Form {
                     t("opt-select-folders"),
                     cfg.panel.select_folders,
                 ),
+                Field::toggle(
+                    "panel.size_one_filesystem",
+                    t("opt-size-one-filesystem"),
+                    cfg.panel.size_one_filesystem,
+                ),
                 Field::Separator,
                 Field::toggle("general.use_trash", t("opt-trash"), cfg.general.use_trash),
                 Field::toggle(

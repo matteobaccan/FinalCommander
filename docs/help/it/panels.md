@@ -171,6 +171,14 @@ grosso. La cifra prende poi il posto della parola `Cartella` nella colonna della
 riga dei totali in fondo la conta, e l'ordinamento per dimensione mette quella cartella dove le
 spetta. Rileggere la cartella se ne dimentica, perché la cifra riguardava la cartella com'era.
 
+Una cartella con una condivisione di rete o un altro disco montato da qualche parte lì sotto
+viene misurata con tutto quello che c'è su quella condivisione, il che può durare a lungo e
+dice poco del disco su cui sei. `Le dimensioni delle cartelle restano su un solo file system`,
+in `F9 → Opzioni → Impostazioni di sistema` (`panel.size_one_filesystem`, spento di default),
+ferma la visita dove comincia un altro file system, come fa `du -x`: il punto di montaggio
+conta come vuoto. L'elenco dell'occupazione del disco e la sua mappa seguono la stessa
+impostazione. Funziona su Linux e macOS; su Windows non cambia niente.
+
 `Alt+F10` trova una cartella per nome: un elenco di tutte le cartelle che questo programma
 conosce sotto la radice in cui sei, che si restringe mentre scrivi, e `Enter` ci va. Parte da
 quello che l'albero ha già letto — conservato fra una sessione e l'altra — e legge il resto

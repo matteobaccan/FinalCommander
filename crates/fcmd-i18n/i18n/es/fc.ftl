@@ -562,6 +562,7 @@ menu-quit = S&alir
 opt-natural-sort = Orden natural de los números
 opt-allow-reverse = Permitir el orden inverso
 opt-select-folders = Las máscaras también seleccionan carpetas
+opt-size-one-filesystem = Los tamaños de carpeta no salen de un sistema de archivos
 cmd-no-network-name = Una ruta en este disco no tiene nombre de red
 opt-trash = Usar la papelera del sistema
 opt-system-copy = Usar la copia del sistema

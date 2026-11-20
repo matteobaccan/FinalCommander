@@ -576,6 +576,7 @@ menu-quit = Iš&eiti
 opt-natural-sort = Skaitmenis laikyti skaičiais
 opt-allow-reverse = Leisti atvirkštinį rūšiavimą
 opt-select-folders = Maskuotės žymi ir katalogus
+opt-size-one-filesystem = Katalogų dydžiai neišeina už vienos failų sistemos
 cmd-no-network-name = Kelias šiame diske neturi tinklo vardo
 opt-trash = Trinti į šiukšlinę
 opt-system-copy = Naudoti sisteminę kopijavimo funkciją

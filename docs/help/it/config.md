@@ -576,6 +576,21 @@ in cui sono scritte. Il nome ha comunque l'ultima parola dopo di esse, così l'o
 fra due letture della stessa cartella, e invertire l'ordinamento inverte tutto l'insieme invece
 del solo primo passo.
 
+# Le dimensioni delle cartelle e gli altri file system
+
+```toml
+[panel]
+size_one_filesystem = true    # spento di default
+```
+
+Misurare una cartella — `Spazio`, l'elenco dell'occupazione del disco di `Alt+Shift+F3` e la
+sua mappa — di norma entra in tutto quello che c'è sotto, comprese una condivisione di rete o
+un secondo disco montati lì. Con questa impostazione accesa la visita resta sul file system da
+cui è partita, come fa `du -x`, e un punto di montaggio conta come vuoto: la cifra è quello
+che la cartella occupa sul suo disco. Partendo dal punto di montaggio stesso, la visita misura
+quello che vi è montato. È anche una riga di `F9 → Opzioni → Impostazioni di sistema`. Su
+Windows l'impostazione non ha effetto.
+
 # L'ordine dei nomi
 
 ```toml

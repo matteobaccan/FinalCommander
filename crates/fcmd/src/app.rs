@@ -38267,7 +38267,13 @@ mod tests {
         });
         assert!(matches!(&app.mode, Mode::Usage(v) if v.progress == (2, 5000)));
         // An answer that is another walk's is not this screen's.
-        let tree = fcmd_jobs::usage::walk(&fcmd_jobs::LocalFs, &root, &cancel, &mut |_, _| {});
+        let tree = fcmd_jobs::usage::walk(
+            &fcmd_jobs::LocalFs,
+            &root,
+            &fcmd_jobs::usage::Bounds::none(),
+            &cancel,
+            &mut |_, _| {},
+        );
         app.handle_event(Event::UsageTree {
             id: id + 1,
             tree: tree.clone(),
@@ -38339,7 +38345,13 @@ mod tests {
         let Some(Request::UsageTree { id, root, cancel }) = app.take_requests().pop() else {
             panic!("no walk was asked for")
         };
-        let tree = fcmd_jobs::usage::walk(&fcmd_jobs::LocalFs, &root, &cancel, &mut |_, _| {});
+        let tree = fcmd_jobs::usage::walk(
+            &fcmd_jobs::LocalFs,
+            &root,
+            &fcmd_jobs::usage::Bounds::none(),
+            &cancel,
+            &mut |_, _| {},
+        );
         app.handle_event(Event::UsageTree { id, tree });
         press(&mut app, "g");
         assert!(matches!(app.mode, Mode::Normal));

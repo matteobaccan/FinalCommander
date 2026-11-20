@@ -562,6 +562,7 @@ menu-quit = 退出
 opt-natural-sort = 数字自然顺序
 opt-allow-reverse = 允许反向排序
 opt-select-folders = 掩码也选中文件夹
+opt-size-one-filesystem = 文件夹大小不跨越文件系统
 cmd-no-network-name = 本地磁盘上的路径没有网络名称
 opt-trash = 使用系统回收站
 opt-system-copy = 使用系统复制

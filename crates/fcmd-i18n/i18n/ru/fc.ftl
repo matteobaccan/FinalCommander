@@ -562,6 +562,7 @@ menu-quit = Вы&ход
 opt-natural-sort = Естественный порядок чисел
 opt-allow-reverse = Разрешить обратную сортировку
 opt-select-folders = Маски выделяют и папки
+opt-size-one-filesystem = Размеры папок не выходят за пределы файловой системы
 cmd-no-network-name = У пути на этом диске нет сетевого имени
 opt-trash = Использовать корзину системы
 opt-system-copy = Использовать копирование системы

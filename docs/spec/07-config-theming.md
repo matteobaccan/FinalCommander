@@ -50,6 +50,7 @@ allow_reverse_sort = true
 mouse = true
 quick_search = "alt"            # alt | plain | off   (FAR vs mc behaviour)
 dir_size_on_enter = false
+size_one_filesystem = false     # measuring a folder stops at a mount point, as `du -x` (SPEC 02 §3c)
 watch = true
 columns_brief = 3
 

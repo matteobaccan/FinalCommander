@@ -6,6 +6,15 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Folder sizes that stop at other file systems.** `Folder sizes stay on one file system` in
+  *Options → System settings* (`panel.size_one_filesystem`, off by default) keeps the walk
+  that measures a folder — `Space`, the disk usage list and its map — on the file system it
+  started from, as `du -x` does: a network share or another disk mounted under the folder
+  counts as empty instead of being walked. Linux and macOS; on Windows the setting has no
+  effect.
+
 ### Changed
 
 - Dates — the panels' columns, the clock, the attributes dialog — are read and written through

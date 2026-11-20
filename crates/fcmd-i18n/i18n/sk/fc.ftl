@@ -573,6 +573,7 @@ menu-quit = Ko&niec
 opt-natural-sort = Považovať cifry za čísla
 opt-allow-reverse = Povoliť obrátené triedenie
 opt-select-folders = Masky označujú aj priečinky
+opt-size-one-filesystem = Veľkosti priečinkov zostávajú na jednom súborovom systéme
 cmd-no-network-name = Cesta na tomto disku nemá sieťový názov
 opt-trash = Mazať do Koša
 opt-system-copy = Použiť systémovú kopírovaciu rutinu

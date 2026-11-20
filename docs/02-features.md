@@ -73,6 +73,7 @@ since 0.41.0 also `MU` (muCommander), `NNN`, `RANGER`, `LF`, `BROOT`, `VIFM`, `X
 | 1.17 | Branch view (flat recursive listing of the current tree) | TC | ✓ `Ctrl+Alt+B` |
 | 1.18 | Panelize: fill a panel with the result of a search or an external command | MC | ✓ |
 | 1.19 | Directory sizes computed on demand (`Space`/`F3` on a dir) and in background | FAR/TC | ✓ |
+| 1.19b | Folder sizes that stop at other file systems: the walk does not cross into a mount point, as `du -x` | MC (#5014) | ✓ `panel.size_one_filesystem`, off by default; no effect on Windows |
 | 1.20 | Long-path support (`\\?\` on Windows, >260 chars), UNC paths | FAR/MTN2 | ✓ |
 | 1.21 | Per-panel encoding/codepage for names and previews | MC/FAR | ~ the names, yes; a preview pane has its own page already |
 | 1.22 | Icons / nerd-font glyphs per file type, optional | YAZI/LF/NNN/SPF/BROOT | ✗ M2 |

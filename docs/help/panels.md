@@ -161,6 +161,13 @@ place of the word `Folder` in the size column, the totals bar at the bottom coun
 sorting by size puts that folder where it belongs. Re-reading the directory forgets it, since
 the figure was about the directory as it was.
 
+A folder with a network share or another disk mounted somewhere under it is measured with
+everything on that share, which can take long and says little about the disk you are on.
+`Folder sizes stay on one file system`, in `F9 → Options → System settings`
+(`panel.size_one_filesystem`, off by default), stops the walk where another file system
+begins, as `du -x` does: the mount point counts as empty. The disk usage list and its map
+follow the same setting. It works on Linux and macOS; on Windows it changes nothing.
+
 `Alt+F10` finds a folder by name: a list of every folder this program knows under the root you
 are on, which narrows as you type, and `Enter` goes there. It starts from what the tree has
 read — kept between sessions — and reads the rest behind the dialog while you type. In the

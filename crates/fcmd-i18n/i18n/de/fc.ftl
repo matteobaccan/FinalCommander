@@ -562,6 +562,7 @@ menu-quit = Beenden
 opt-natural-sort = Natürliche Zahlenfolge
 opt-allow-reverse = Umgekehrte Sortierung erlauben
 opt-select-folders = Masken wählen auch Ordner aus
+opt-size-one-filesystem = Ordnergrößen bleiben auf einem Dateisystem
 cmd-no-network-name = Ein Pfad auf dieser Platte hat keinen Netzwerknamen
 opt-trash = Systempapierkorb verwenden
 opt-system-copy = Kopierfunktion des Systems verwenden

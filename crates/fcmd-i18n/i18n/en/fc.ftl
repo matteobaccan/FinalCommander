@@ -570,6 +570,7 @@ menu-quit = &Quit
 opt-natural-sort = Natural number order
 opt-allow-reverse = Allow reverse sort
 opt-select-folders = Masks select folders too
+opt-size-one-filesystem = Folder sizes stay on one file system
 cmd-no-network-name = A path on this disk has no network name
 opt-trash = Use the system recycle bin
 opt-system-copy = Use the system copy routine

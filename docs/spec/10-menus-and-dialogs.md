@@ -275,6 +275,7 @@ it.
 | Sort by | `panel.sort` | name / ext / size / mtime / none |
 | Quick search | `panel.quick_search` | with Alt / by letters / off |
 | Masks select folders too | `panel.select_folders` | on/off |
+| Folder sizes stay on one file system | `panel.size_one_filesystem` | on/off, off by default (SPEC 02 §3c; no effect on Windows) |
 
 ### 3.3 Interface settings
 
