@@ -114,7 +114,7 @@ skips that check, which is the one thing it exists for.
    is not green within its window it says so and refuses to tag, which is the correct outcome.
 4. `.github/workflows/release.yml` then builds `linux-x86_64`, `linux-x86_64-static` (musl),
    `linux-aarch64-static` (musl, on an ARM runner), `macos-universal` (Intel + Apple Silicon in one binary) and `windows-x86_64`, runs
-   `fcmd --version` on each, and publishes the five `FinalCommander-*` archives with
+   `fcmd --version` on each, and publishes the five `FinalCommander-*` archives, the Android app and its archive (`android.yml`) with
    `SHA256SUMS`. The publish step needs the workflow token to be allowed to write:
    Settings → Actions → General → Workflow permissions → *Read and write*.
 

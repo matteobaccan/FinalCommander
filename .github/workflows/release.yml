@@ -182,9 +182,18 @@ jobs:
           path: ${{ steps.package.outputs.archive }}
           if-no-files-found: error
 
+  # Android: the executable for Termux and the app, built by android.yml (its `apk` job,
+  # whose artifact the publish step merges with the others).
+  android:
+    name: Android aarch64
+    uses: ./.github/workflows/android.yml
+    with:
+      release: true
+      ref: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || github.sha }}
+
   publish:
     name: Publish the release
-    needs: build
+    needs: [build, android]
     # Only a run that knows which tag it is for publishes anything.
     if: inputs.tag != '' || github.ref_type == 'tag'
     runs-on: ubuntu-latest

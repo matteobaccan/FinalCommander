@@ -52,6 +52,32 @@ Roadmap item 18, shipped. A tag builds five archives and publishes them:
 The executable sits at the root of the archive, so unpacking leaves `fcmd` where one is rather
 than one directory down. There is no installer and nothing asks for privileges.
 
+**Android.** `FinalCommander-android-aarch64-<v>.apk` is the app and
+`FinalCommander-android-aarch64-<v>.tar.gz` the executable for Termux, both built by
+`packaging/android/build.sh` with the NDK against Android's own C library (a static musl
+build would find no `/etc/resolv.conf` there, and resolve no name). A phone has no terminal,
+so the app brings one through §2a; how it is put together is in `packaging/android/README.md`.
+It is signed with a key made for each build, so a new version installs only after the old one
+is removed; a key kept as a repository secret is the step that would end that.
+
+### 2a. `--web-terminal`: the program in a page
+
+`fcmd --web-terminal ADDR` (`crates/fcmd/src/webterm.rs`) listens on a loopback address — a
+port alone means `127.0.0.1` — prints `http://ADDR/?t=TOKEN`, and serves until killed:
+
+- `/` with the token is the page (`crates/fcmd/assets/webterm/index.html`): xterm.js 6.0.0
+  and its fit addon (MIT, compiled into the binary, nothing fetched elsewhere), and a row of
+  keys a phone's keyboard lacks — `Esc`, `Tab`, `F1`–`F12`, the arrows and the paging keys,
+  and `Ctrl`, `Alt`, `Shift` held until the next key, sent as xterm sends them;
+- `/ws` with the token is a WebSocket (RFC 6455, written here) joined to a pseudo-terminal
+  on which this same executable runs with the other options it was given: binary frames carry
+  bytes both ways, a text frame `r COLS ROWS` resizes, and the program's end closes the
+  socket with the reason the page shows;
+- the token is 128 random bits per run, compared in constant time; an address that is not
+  loopback is refused at start, a request whose `Host` is not a loopback name is refused, so
+  neither another machine nor a page elsewhere that resolves a name of its own here can
+  reach it. A closed page kills the program it was showing.
+
 The ARM 64-bit archive also runs in a browser tab: `web/try/index.html` starts a Linux kernel
 compiled to WebAssembly ([unkernel](https://github.com/pithings/unkernel), loaded from a CDN
 at a pinned version, never linked or shipped with the program) and runs that `fcmd` in it,

@@ -6,6 +6,23 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **FinalCommander on Android**: `FinalCommander-android-aarch64-<v>.apk`, an app that starts
+  the program and shows it in a web view, with a row above the phone's keyboard of the keys it
+  lacks — `Esc`, `Tab`, `F1`–`F12`, the arrows, `Ctrl`, `Alt` and `Shift` — and the Back
+  button as `Esc`. It asks once for the permission to see all the phone's files and opens on
+  them; without it, in a folder of its own. Beside it, `FinalCommander-android-aarch64-<v>.tar.gz`
+  is the executable for Termux. Both are built with the NDK against Android's own C library.
+  The app is signed with a key made for each build: uninstall an earlier version first.
+- **`fcmd --web-terminal ADDR`**: the program in a browser page on this machine. It prints an
+  address with a token, and each page that opens it runs its own `fcmd` on a pseudo-terminal,
+  over a WebSocket; the terminal in the page is xterm.js, compiled into the binary. Only a
+  loopback address is listened on, and a page without the token, or reached by a name that is
+  not this machine's, is refused. The Android app is this, in a web view.
+- On Android the process list, the sockets, the mounts and the memory figures read `/proc`
+  as they do on Linux.
+
 ## [0.45.0] — 2026-11-20
 
 The small things people asked for, and a way to try the program without installing it.

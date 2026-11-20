@@ -38,12 +38,15 @@ cat <<EOF
 | **Windows** x86-64 | [ZIP]($(archive windows-x86_64 zip)) |
 | **Linux** x86-64 | [tar.gz]($(archive linux-x86_64 tar.gz)) · [static, for any distribution]($(archive linux-x86_64-static tar.gz)) |
 | **Linux** ARM 64-bit | [static, for any distribution]($(archive linux-aarch64-static tar.gz)) |
+| **Android** ARM 64-bit | [APK, the app](https://github.com/${repo}/releases/download/v${version}/FinalCommander-android-aarch64-${version}.apk) · [tar.gz, for Termux]($(archive android-aarch64 tar.gz)) |
 | **macOS** Intel and Apple Silicon | [tar.gz]($(archive macos-universal tar.gz)) |
 
 Each archive holds the \`fcmd\` executable, \`README.md\`, \`LICENSE\`, \`THIRD-PARTY.md\` and
 \`CHANGELOG.md\`, and on Linux and macOS the manual page \`fcmd.1\`.
 \`SHA256SUMS\` holds the SHA-256 of every archive (\`sha256sum -c SHA256SUMS --ignore-missing\`).
 A Mac archive downloaded with a browser needs \`xattr -d com.apple.quarantine fcmd\` once.
+The Android app is signed with a key made for each build: uninstall an earlier version
+before installing this one.
 
 ## What's new
 

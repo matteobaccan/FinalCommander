@@ -183,6 +183,7 @@ One file, nothing to install beside it. Download the archive for your machine fr
 | --- | --- |
 | Linux (x86-64) | `FinalCommander-linux-x86_64-<version>.tar.gz`, or `FinalCommander-linux-x86_64-static-<version>.tar.gz` for a statically linked build that runs on any distribution |
 | Linux (ARM 64-bit) | `FinalCommander-linux-aarch64-static-<version>.tar.gz`, statically linked: a Raspberry Pi, an ARM server, or a Linux that runs in a browser tab such as [unkernel](https://github.com/pithings/unkernel) |
+| Android (ARM 64-bit) | `FinalCommander-android-aarch64-<version>.apk`, the app — a terminal in a web view with a row of the keys a phone lacks — or `FinalCommander-android-aarch64-<version>.tar.gz` for Termux. The app's signing key changes with each build: uninstall an earlier version first |
 | macOS (Intel and Apple Silicon) | `FinalCommander-macos-universal-<version>.tar.gz` — one binary for both |
 | Windows (x86-64) | `FinalCommander-windows-x86_64-<version>.zip` |
 
@@ -193,6 +194,10 @@ To look at it before downloading anything, [try it in the
 browser](https://matteobaccan.github.io/FinalCommander/try/): the ARM 64-bit build, unchanged,
 running on a Linux kernel compiled to WebAssembly in the tab. Its files live in the tab's
 memory, and it is slower than on a machine of its own.
+
+`fcmd --web-terminal 8080` puts the program in a browser page on this machine: it prints an
+address with a token to open, and each page that opens it runs its own `fcmd`. It listens on
+`127.0.0.1` alone. The Android app is this, in a web view.
 
 ```sh
 # Linux, for example
