@@ -31,7 +31,7 @@ pub struct Process {
 ///
 /// The order is whatever the system gives; the panel sorts it, as it sorts a directory.
 pub fn processes() -> Vec<Process> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         linux()
     }
@@ -39,7 +39,7 @@ pub fn processes() -> Vec<Process> {
     {
         super::windows::processes()
     }
-    #[cfg(not(any(target_os = "linux", windows)))]
+    #[cfg(not(any(any(target_os = "linux", target_os = "android"), windows)))]
     {
         // macOS and the BSDs keep the list behind a `sysctl` whose shape is a C structure
         // this crate would have to mirror by hand, field for field, per release. That is a
@@ -52,7 +52,7 @@ pub fn processes() -> Vec<Process> {
 /// Linux keeps it in a directory of numbers, which is the whole of the work here: no call
 /// into the kernel, no `unsafe`, and a process that ends halfway through simply stops
 /// answering and is left out.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn linux() -> Vec<Process> {
     let Ok(dir) = std::fs::read_dir("/proc") else {
         return Vec::new();
@@ -136,12 +136,12 @@ mod tests {
 
     // The only test here is Linux's: `/proc` is the one list this crate reads without a
     // call, so it is the one that can be checked against the machine running the tests.
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     use super::*;
 
     /// On a machine where the list can be read, we are on it.
     #[test]
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     fn this_very_process_is_in_the_list() {
         let all = processes();
         assert!(!all.is_empty(), "nothing is running?");
@@ -157,7 +157,7 @@ mod tests {
     /// row here is readable for a process of one's own, which is what the test can promise —
     /// somebody else's answers fewer of them, and the card is written for that.
     #[test]
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     fn our_own_card_is_filled_in() {
         let me = details(std::process::id()).expect("we are running");
         assert!(me.user.is_some() && me.group.is_some(), "{me:?}");
@@ -286,7 +286,7 @@ pub fn kill(pid: u32) -> Result<(), String> {
 /// A peak is never below what it is the peak of. The counters come in two readings — the
 /// kernel's table for every process, then the process's own answer a moment later — and a
 /// process that grew in between would show a peak lower than now.
-#[cfg(any(target_os = "linux", windows))]
+#[cfg(any(any(target_os = "linux", target_os = "android"), windows))]
 fn peaks_hold(mut d: Details) -> Details {
     d.memory_peak = d.memory_peak.max(d.memory);
     d.virtual_peak = d.virtual_peak.max(d.virtual_size);
@@ -295,7 +295,7 @@ fn peaks_hold(mut d: Details) -> Details {
 }
 
 pub fn details(pid: u32) -> Option<Details> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         linux_details(pid).map(peaks_hold)
     }
@@ -303,7 +303,7 @@ pub fn details(pid: u32) -> Option<Details> {
     {
         super::windows::details(pid).map(peaks_hold)
     }
-    #[cfg(not(any(target_os = "linux", windows)))]
+    #[cfg(not(any(any(target_os = "linux", target_os = "android"), windows)))]
     {
         let _ = pid;
         None
@@ -314,7 +314,7 @@ pub fn details(pid: u32) -> Option<Details> {
 /// `cmdline` for the command, two symbolic links for the executable and the directory, and
 /// the directory's own timestamp for when it started — which saves asking the kernel how many
 /// clock ticks it counts in a second, the one figure `stat` would need to be read with.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn linux_details(pid: u32) -> Option<Details> {
     let dir = std::path::PathBuf::from(format!("/proc/{pid}"));
     let status = std::fs::read_to_string(dir.join("status")).ok()?;
@@ -470,7 +470,7 @@ fn linux_details(pid: u32) -> Option<Details> {
 
 /// How many clock ticks the kernel counts in a second, which is what the two times in `stat`
 /// are measured in. It is a constant of the running kernel, so it is asked for once.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn clock_ticks() -> u64 {
     use std::sync::OnceLock;
     static TICKS: OnceLock<u64> = OnceLock::new();
@@ -486,7 +486,7 @@ fn clock_ticks() -> u64 {
     })
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn ticks_to_time(ticks: u64, per_second: u64) -> std::time::Duration {
     let per_second = per_second.max(1);
     std::time::Duration::new(ticks / per_second, 0)
@@ -494,7 +494,7 @@ fn ticks_to_time(ticks: u64, per_second: u64) -> std::time::Duration {
 }
 
 /// The name behind a numeric group id, or the number itself where there is no name for it.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn group_name(gid: u32) -> String {
     nix::unistd::Group::from_gid(nix::unistd::Gid::from_raw(gid))
         .ok()
@@ -504,7 +504,7 @@ fn group_name(gid: u32) -> String {
 }
 
 /// The name behind a numeric user id, or the number itself where there is no name for it.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn user_name(uid: u32) -> String {
     nix::unistd::User::from_uid(nix::unistd::Uid::from_raw(uid))
         .ok()
@@ -514,7 +514,7 @@ fn user_name(uid: u32) -> String {
 }
 
 /// 32 or 64 from the first five bytes of an ELF file, or `None` for anything else.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn elf_bits(path: std::path::PathBuf) -> Option<u8> {
     use std::io::Read;
 

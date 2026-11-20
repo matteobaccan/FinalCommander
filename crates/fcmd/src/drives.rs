@@ -8,7 +8,7 @@
 //! has not actually read — a column it cannot fill stays empty rather than guessing.
 
 // Only the mount table and its labels use a map, and only two platforms have one.
-#[cfg(any(target_os = "linux", test))]
+#[cfg(any(any(target_os = "linux", target_os = "android"), test))]
 use std::collections::HashMap;
 
 /// One row of the change-drive dialog.
@@ -141,7 +141,7 @@ fn fill_spaces(drives: &mut [Drive]) -> Vec<String> {
     late.into_iter().map(|i| drives[i].path.clone()).collect()
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn platform() -> (Vec<Drive>, Vec<String>) {
     let text = std::fs::read_to_string("/proc/mounts").unwrap_or_default();
     let labels = linux_labels();
@@ -152,7 +152,7 @@ fn platform() -> (Vec<Drive>, Vec<String>) {
 }
 
 /// `/dev/disk/by-label/Backup -> ../../sdb1`, read back as `/dev/sdb1 -> Backup`.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn linux_labels() -> HashMap<String, String> {
     let mut out = HashMap::new();
     let Ok(entries) = std::fs::read_dir("/dev/disk/by-label") else {
@@ -287,7 +287,11 @@ fn platform() -> (Vec<Drive>, Vec<String>) {
     (drives, late_paths)
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+#[cfg(not(any(
+    any(target_os = "linux", target_os = "android"),
+    target_os = "macos",
+    windows
+)))]
 fn platform() -> (Vec<Drive>, Vec<String>) {
     let mut root = Drive {
         path: "/".to_string(),
@@ -305,7 +309,10 @@ fn platform() -> (Vec<Drive>, Vec<String>) {
 /// The two sizes, through `fcmd-platform`, which is where the per-platform call lives and
 /// the reason this one has no `#[cfg]` of its own any more. What is free is what an
 /// unprivileged process may really use, as the panel frame already reports.
-#[cfg_attr(any(target_os = "linux", target_os = "macos"), allow(dead_code))]
+#[cfg_attr(
+    any(any(target_os = "linux", target_os = "android"), target_os = "macos"),
+    allow(dead_code)
+)]
 fn fill_space(drive: &mut Drive) {
     if let Some(d) = fcmd_platform::disk(std::path::Path::new(drive.path.as_str())) {
         drive.total = Some(d.total);
@@ -325,7 +332,7 @@ fn filesystem_name(path: &str) -> Option<String> {
 ///
 /// Pseudo filesystems are left out. They are mounted, but none of them is a place to put a
 /// file, and a dialog with forty rows of `cgroup` in it is a dialog nobody reads.
-#[cfg(any(target_os = "linux", test))]
+#[cfg(any(any(target_os = "linux", target_os = "android"), test))]
 fn parse_mounts(
     text: &str,
     labels: &HashMap<String, String>,
@@ -374,7 +381,7 @@ fn parse_mounts(
 /// The filesystem type is not enough on its own: a `tmpfs` under `/run` or `/sys/fs/cgroup`
 /// is plumbing, while a `tmpfs` someone mounted on `/mnt/fast` is a place they chose. The
 /// rule is where it is mounted, not what it is.
-#[cfg(any(target_os = "linux", test))]
+#[cfg(any(any(target_os = "linux", target_os = "android"), test))]
 fn is_plumbing(point: &str) -> bool {
     const UNDER: [&str; 5] = ["/proc", "/sys", "/dev", "/run", "/var/lib/docker"];
     UNDER
@@ -383,7 +390,7 @@ fn is_plumbing(point: &str) -> bool {
 }
 
 /// A filesystem the kernel makes up rather than one holding files of ours.
-#[cfg(any(target_os = "linux", test))]
+#[cfg(any(any(target_os = "linux", target_os = "android"), test))]
 fn is_pseudo(fs: &str) -> bool {
     const PSEUDO: [&str; 22] = [
         "autofs",
@@ -412,7 +419,7 @@ fn is_pseudo(fs: &str) -> bool {
     PSEUDO.contains(&fs)
 }
 
-#[cfg(any(target_os = "linux", test))]
+#[cfg(any(any(target_os = "linux", target_os = "android"), test))]
 fn kind_of(fs: &str, device: &str, removable: &dyn Fn(&str) -> bool) -> Kind {
     const NETWORK: [&str; 10] = [
         "nfs",
@@ -448,7 +455,7 @@ fn kind_of(fs: &str, device: &str, removable: &dyn Fn(&str) -> bool) -> Kind {
 /// It is passed in rather than called directly so that the parsing can be tested without a
 /// `/sys` to read: on a machine with no such device the honest answer is "not removable",
 /// and a test that depended on this machine's disks would say nothing about the parser.
-#[cfg(any(target_os = "linux", test))]
+#[cfg(any(any(target_os = "linux", target_os = "android"), test))]
 fn is_removable(device: &str) -> bool {
     let Some(name) = device.strip_prefix("/dev/") else {
         return false;
@@ -462,7 +469,7 @@ fn is_removable(device: &str) -> bool {
 }
 
 /// `\040` and friends, as the mount table writes a space.
-#[cfg(any(target_os = "linux", test))]
+#[cfg(any(any(target_os = "linux", target_os = "android"), test))]
 fn unescape(raw: &str) -> String {
     if !raw.contains('\\') {
         return raw.to_string();

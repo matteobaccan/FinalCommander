@@ -31,7 +31,7 @@ pub struct Socket {
 ///
 /// The order is the system's; the panel sorts it, as it sorts a directory.
 pub fn sockets() -> Vec<Socket> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         linux()
     }
@@ -39,7 +39,7 @@ pub fn sockets() -> Vec<Socket> {
     {
         super::windows::sockets()
     }
-    #[cfg(not(any(target_os = "linux", windows)))]
+    #[cfg(not(any(any(target_os = "linux", target_os = "android"), windows)))]
     {
         // The BSDs and macOS keep it behind the same kind of `sysctl` as the process list,
         // with the same problem (`docs/BACKLOG.md`).
@@ -51,7 +51,7 @@ pub fn sockets() -> Vec<Socket> {
 /// process is the other way round: every process's open files include `socket:[12345]`, where
 /// the number is the inode the table's last column holds. So the tables are read first and
 /// the processes once, rather than once per socket.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn linux() -> Vec<Socket> {
     let owners = socket_owners();
     let mut out = Vec::new();
@@ -109,7 +109,7 @@ fn linux() -> Vec<Socket> {
 ///
 /// A process somebody else owns will not show us its files, which is not an error: its
 /// sockets are in the table all the same and simply go unnamed.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn socket_owners() -> std::collections::HashMap<u64, (u32, String)> {
     let mut out = std::collections::HashMap::new();
     let Ok(dir) = std::fs::read_dir("/proc") else {
@@ -157,7 +157,7 @@ fn socket_owners() -> std::collections::HashMap<u64, (u32, String)> {
 ///
 /// The address is written as 32-bit words in the machine's own order, which is why each group
 /// of eight hex digits is read as a number and then taken apart again.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn address(field: &str, six: bool) -> Option<String> {
     let (host, port) = field.rsplit_once(':')?;
     let port = u16::from_str_radix(port, 16).ok()?;
@@ -183,7 +183,7 @@ fn address(field: &str, six: bool) -> Option<String> {
 }
 
 /// The two hex digits the kernel writes for a TCP socket's state.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn state_name(code: &str) -> &'static str {
     match code {
         "01" => "ESTABLISHED",
@@ -204,7 +204,7 @@ fn state_name(code: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     #[test]
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     fn an_address_is_read_the_way_the_kernel_writes_it() {
         use super::address;
 
@@ -231,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     fn the_table_is_read_and_the_listeners_have_no_other_end() {
         let all = super::sockets();
         // A machine with no socket at all is possible in a sealed container, so the shape is

@@ -176,6 +176,9 @@ impl Wastebasket for System {
     }
 
     fn throw_away(&self, path: &Path) -> Result<(), String> {
+        #[cfg(target_os = "android")]
+        return Err(format!("{}: Android has no wastebasket", path.display()));
+        #[cfg(not(target_os = "android"))]
         ::trash::delete(path).map_err(|e| e.to_string())
     }
 }

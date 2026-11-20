@@ -22,7 +22,7 @@ pub fn disk(path: &Path) -> Option<Disk> {
     })
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 pub fn memory() -> Option<Memory> {
     // `/proc/meminfo` in kibibytes, one `Name: value kB` per line. `MemAvailable` is the
     // kernel's own estimate of what a program could get without swapping, which is the
@@ -65,7 +65,7 @@ pub fn memory() -> Option<Memory> {
     })
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(any(target_os = "linux", target_os = "android"), target_os = "macos")))]
 pub fn memory() -> Option<Memory> {
     None
 }

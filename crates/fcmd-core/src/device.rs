@@ -266,7 +266,7 @@ mod tests {
     /// the one that matters either way: a regular file's length is never reported as unknown,
     /// whatever the seek says.
     #[test]
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     fn a_file_that_cannot_be_measured_falls_back_to_its_metadata() {
         let Ok(mut file) = File::open("/proc/self/stat") else {
             return;

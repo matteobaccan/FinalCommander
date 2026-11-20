@@ -177,7 +177,7 @@ fn io_error(e: std::io::Error) -> StartupError {
 }
 
 /// A name handed to a command line is checked first, as a service's is.
-#[cfg_attr(windows, allow(dead_code))]
+#[cfg_attr(any(windows, target_os = "android"), allow(dead_code))]
 fn checked_name(name: &str) -> Result<(), StartupError> {
     let ok = !name.is_empty()
         && !name.starts_with('-')

@@ -420,6 +420,14 @@ impl JobFs for LocalFs {
         let os = PathBuf::from(path.os().to_string_lossy().replace('/', "\\"));
         #[cfg(not(windows))]
         let os = path.os().to_path_buf();
+        // Android keeps no wastebasket: the caller offers to delete outright, as it does for
+        // a device with no trash directory.
+        #[cfg(target_os = "android")]
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!("{}: Android has no wastebasket", os.display()),
+        ));
+        #[cfg(not(target_os = "android"))]
         ::trash::delete(&os).map_err(|e| match e {
             // The wastebasket cannot take it: on Linux a path on a device with no trash
             // directory, on any system one the desktop refuses. It is not a bug and it is

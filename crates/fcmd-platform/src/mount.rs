@@ -62,7 +62,7 @@ pub fn max_file_size(fs: &str) -> Option<u64> {
 /// The mount a path is on, or `None` where this platform or this path will not say.
 pub fn mount_of(path: &Path) -> Option<Mount> {
     let real = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         let table = std::fs::read_to_string("/proc/self/mountinfo")
             .ok()
@@ -102,7 +102,11 @@ pub fn mount_of(path: &Path) -> Option<Mount> {
             options: Vec::new(),
         });
     }
-    #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+    #[cfg(not(any(
+        any(target_os = "linux", target_os = "android"),
+        target_os = "macos",
+        windows
+    )))]
     {
         let _ = real;
         None
@@ -118,7 +122,7 @@ pub fn mount_of(path: &Path) -> Option<Mount> {
 /// The fields up to the `-` are the mount's own, the ones after it the filesystem's. Between
 /// them is a list of optional fields of unknown length, which is exactly why the separator is
 /// there and why this splits on it rather than counting.
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg_attr(not(any(target_os = "linux", target_os = "android")), allow(dead_code))]
 fn pick_mountinfo(text: &str, path: &Path) -> Option<Mount> {
     let mut best: Option<Mount> = None;
     for line in text.lines() {
@@ -152,7 +156,7 @@ fn pick_mountinfo(text: &str, path: &Path) -> Option<Mount> {
 
 /// `/proc/mounts`: `source target fstype options freq passno`, which is the same answer with
 /// the bind-mount detail left out.
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg_attr(not(any(target_os = "linux", target_os = "android")), allow(dead_code))]
 fn pick_mounts(text: &str, path: &Path) -> Option<Mount> {
     let mut best: Option<Mount> = None;
     for line in text.lines() {
@@ -381,7 +385,7 @@ tmpfs /dev/shm tmpfs rw,nosuid,nodev 0 0
     /// The one test that asks the machine this is running on, which has a root filesystem
     /// whatever it is.
     #[test]
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(any(target_os = "linux", target_os = "android"), target_os = "macos"))]
     fn this_machine_answers_for_its_own_root() {
         let m = mount_of(Path::new("/")).expect("every unix knows what / is");
         assert!(!m.fs.is_empty(), "{m:?}");

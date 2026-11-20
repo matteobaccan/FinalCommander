@@ -16,19 +16,6 @@ fcmd-core = { workspace = true }
 fcmd-platform = { workspace = true }
 regex = "1"
 thiserror = "2"
-# The wastebasket, sending to it and — since the undo of 0.39.0 — listing and restoring from
-# it. The features are named rather than taken by default so that the D-Bus `portal` backend,
-# which would bring zbus, stays out: `freedesktop` is the Linux and BSD backend (a feature of
-# its own since 5.3), `jiff` gives a trashed item its real deletion time there (it was `chrono`
-# until 5.4, when the crate left the unmaintained chrono for jiff), which the
-# undo needs to pick the newest of two items with one name (without it the time is a
-# placeholder), and `coinit_apartmentthreaded` has to stay: on Windows the crate initialises
-# COM and refuses to compile, on purpose, unless it is told which threading model to use.
-trash = { version = "5.4.0", default-features = false, features = [
-  "coinit_apartmentthreaded",
-  "freedesktop",
-  "jiff",
-] }
 # CRC32 for the `.sfv` lists, which is the one check those still use. Already in the tree
 # under `zip` and `tar`, so it costs nothing to build; named here because this crate calls it.
 crc32fast = "1"
@@ -40,3 +27,19 @@ sha2 = "0.11"
 tempfile = "3"
 # Only to build the archive a test then reads through the engine.
 zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+# The wastebasket, sending to it and — since the undo of 0.39.0 — listing and restoring from
+# it. The features are named rather than taken by default so that the D-Bus `portal` backend,
+# which would bring zbus, stays out: `freedesktop` is the Linux and BSD backend (a feature of
+# its own since 5.3), `jiff` gives a trashed item its real deletion time there (it was `chrono`
+# until 5.4, when the crate left the unmaintained chrono for jiff), which the
+# undo needs to pick the newest of two items with one name (without it the time is a
+# placeholder), and `coinit_apartmentthreaded` has to stay: on Windows the crate initialises
+# COM and refuses to compile, on purpose, unless it is told which threading model to use.
+# Android has no wastebasket, and the crate no backend for it: there a deletion is one.
+trash = { version = "5.4.0", default-features = false, features = [
+  "coinit_apartmentthreaded",
+  "freedesktop",
+  "jiff",
+] }
