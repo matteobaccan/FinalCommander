@@ -13,38 +13,10 @@ Still in the order the menus mention things, with the sections after them taken 
 have. **Open question** marks the rows where a decision comes before the code, and the row
 says what the decision stands on.
 
-## Next release (0.45)
-
-Decided with the author on 19 November 2026: the small candidates below, and the quick view
-inside a container. **All eight are done** and described in `CHANGELOG.md`, with `Alt+F9`
-(the window size, as in FAR), the dates through `jiff`, the ARM 64-bit Linux archive and the
-page that runs the program in a browser tab. The table stays as the record of what was asked
-and by whom until the release, which removes it.
-
-What was settled along the way: `F7`'s box is remembered for the session only; the source's
-name goes into the copy dialog with `Ctrl+Enter` (the command line's own key for the name);
-the space in front is `cmdline.history_ignore_space` and the title `ui.window_title`, both on
-by default; the folder walk stays on one file system with `panel.size_one_filesystem`, off by
-default, and does nothing on Windows; AWS profiles hold static keys only — SSO, assumed roles
-and `credential_process` are listed and refused with the reason; the shared link is
-`Ctrl+Alt+O`; the quick view reads a container entry of up to 4 MiB, and a format that has
-to be unpacked from its start only when the container is under 16 MiB.
-
-| Item | Asked by | Work | Note |
-| --- | --- | --- | --- |
-| **Make a folder and enter it** (`F7`, a box *Enter it*) | MC #5207 | S | The created folder becomes the panel's, as `mkdir x && cd x` |
-| **The source's name in the copy and move dialog** | MC #5194 | S | A key in the target field puts the name of the one file being copied there, to edit into a new name |
-| **The terminal's window title** says where we are: the folder, or the file in the viewer and the editor | MC #1364, #5142 | S | OSC 0/2, restored on exit; a setting to turn it off |
-| **A command typed with a space in front is not kept in the history** | MC #5072 | S | bash's `ignorespace`, as a setting |
-| **Folder sizes that stop at other file systems** | MC #5014 | S | A setting: the walk does not cross into a mount point, as `du -x` |
-| **AWS profiles** to choose from in the S3 session (`~/.aws/credentials`, `~/.aws/config`) | Captain's Deck | S | Today the default profile or the environment |
-| **A shared link to an S3 object** (presigned, 1 h / 24 h / 7 days) copied to the clipboard | Captain's Deck | S | Signed with the session's key, nothing sent anywhere |
-| **The quick view inside a container**: `Ctrl+Q` on an entry of a JSON, a zip, a tar… on this disk shows its bytes, as it does for a file | Matteo, 19 November 2026 | M | Today it says *the bytes are not here: F3 brings them out first* for anything in a container (`quick_view_for`), because a preview must not decompress or fetch on every cursor move. On a container on this disk and an entry up to 4 MiB the bytes are read on a worker (`Archive::read`), the answer kept only if the cursor is still on that row, as the film frames are; a server, a large entry and a solid 7z block stay as they are |
-
 ## Candidates for a later release
 
 Gathered on 17 November 2026 from three readings, to be discussed with the author before
-anything is started — the small ones went into 0.45 (above): the open issues of Midnight Commander (the 125 most recently updated of
+anything is started — the small ones went into 0.45.0: the open issues of Midnight Commander (the 125 most recently updated of
 659, of which 46 ask for something), and the pages of two macOS commanders, Captain's Deck
 (its comparison with ForkLift 4, Commander One, Nimble Commander, Path Finder and Finder) and
 R2 Commander. What we already do was checked against this document and the code, not by

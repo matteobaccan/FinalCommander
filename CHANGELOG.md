@@ -6,6 +6,17 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.45.0] — 2026-11-20
+
+The small things people asked for, and a way to try the program without installing it.
+`F7` can enter the folder it makes, the copy dialog offers the file's own name to edit, the
+terminal's title says where you are, a command typed with a space in front stays out of the
+history, folder sizes can stay on one file system, an object store can use any AWS profile
+and hand out a signed link to an object, and the quick view now shows what is inside an
+archive or a JSON file. There is a new archive for ARM 64-bit Linux, and the site runs that
+build in a browser tab, on a Linux kernel compiled to WebAssembly. `Alt+F9` toggles the window
+size as in FAR.
+
 ### Added
 
 - **`Alt+F9`, FAR's toggle of the window size**: the window maximised, and `Alt+F9` again

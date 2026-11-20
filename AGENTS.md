@@ -196,13 +196,19 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.44.1 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
-like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
+**0.45.0 is the version in `main`**, tagged and released with five archives and `SHA256SUMS`
+(ARM 64-bit Linux joined with this one). A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.45.0** — the eight small items decided on 19 November (`F7` make-and-enter, the
+  source's name in the copy dialog, the window title, `ignorespace` for the history, folder
+  sizes on one file system, AWS profiles, presigned S3 links, the quick view inside a
+  container), `Alt+F9`, dates through `jiff`, a `linux-aarch64-static` archive built on an
+  ARM runner, and `web/try/`, the page that runs that build in a browser tab on unkernel (a
+  Linux kernel in WebAssembly), published by `pages.yml` with the release's archive beside it.
 - **0.44.1** — the next day: the C runtime linked into `fcmd.exe` (`.cargo/config.toml`,
   `+crt-static`), which 0.44.0 asked for as `VCRUNTIME140.dll` and a fresh Windows Server
   does not have; and release notes that open with the downloads and a summary
