@@ -12,6 +12,14 @@ Notable changes, newest first. The format follows
   gives it back its size. On Windows the console's window is sized (the terminal's own in
   Windows Terminal); elsewhere the terminal is asked with xterm's window operation, and the
   status line says it asked. In the editor `Alt+F9` stays the list of its commands.
+- **A release archive for ARM 64-bit Linux**, `FinalCommander-linux-aarch64-static-<v>.tar.gz`:
+  statically linked with musl and built on an ARM runner, so it runs on a Raspberry Pi, on an
+  ARM server, and inside a Linux kernel compiled to WebAssembly — `npx unkernel --mount
+  dir:/work`, then `/work/fcmd`, and the panels come up in a browser tab or under Node. The
+  release now refuses a static build that asks for a shared library.
+- **FinalCommander in a browser tab**, on the site at `/try/`: the ARM 64-bit build, unchanged,
+  on a Linux kernel compiled to WebAssembly, with a folder of its own documents to work on in
+  the tab's memory. Nothing to install; Chrome or Edge 137+, Firefox 153+ or Safari 27+.
 
 ### Changed
 

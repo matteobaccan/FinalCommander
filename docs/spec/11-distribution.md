@@ -38,18 +38,25 @@ script.** Nothing to run, nothing to configure, nothing to register.
 
 ## 2. What exists today
 
-Roadmap item 18, shipped. A tag builds four archives and publishes them:
+Roadmap item 18, shipped. A tag builds five archives and publishes them:
 
 | Archive | What is in it |
 | --- | --- |
 | `FinalCommander-linux-x86_64-<v>.tar.gz` | glibc build |
 | `FinalCommander-linux-x86_64-static-<v>.tar.gz` | musl, static — runs on any distribution |
+| `FinalCommander-linux-aarch64-static-<v>.tar.gz` | musl, static, for ARM 64-bit, built on an ARM runner |
 | `FinalCommander-macos-universal-<v>.tar.gz` | one binary for Intel and Apple Silicon |
 | `FinalCommander-windows-x86_64-<v>.zip` | msvc build |
 | `SHA256SUMS` | a checksum per archive |
 
 The executable sits at the root of the archive, so unpacking leaves `fcmd` where one is rather
 than one directory down. There is no installer and nothing asks for privileges.
+
+The ARM 64-bit archive also runs in a browser tab: `web/try/index.html` starts a Linux kernel
+compiled to WebAssembly ([unkernel](https://github.com/pithings/unkernel), loaded from a CDN
+at a pinned version, never linked or shipped with the program) and runs that `fcmd` in it,
+unchanged, on a folder held in the tab's memory. `pages.yml` publishes the page at `/try/`
+with the archive of the release the site describes beside it.
 
 What is *not* there: any way to say "install it" in one line, any way for a machine to learn
 that a new version exists, and any signature beyond the checksum file (§6).

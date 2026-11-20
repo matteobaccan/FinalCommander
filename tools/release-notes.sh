@@ -37,6 +37,7 @@ cat <<EOF
 |---|---|
 | **Windows** x86-64 | [ZIP]($(archive windows-x86_64 zip)) |
 | **Linux** x86-64 | [tar.gz]($(archive linux-x86_64 tar.gz)) · [static, for any distribution]($(archive linux-x86_64-static tar.gz)) |
+| **Linux** ARM 64-bit | [static, for any distribution]($(archive linux-aarch64-static tar.gz)) |
 | **macOS** Intel and Apple Silicon | [tar.gz]($(archive macos-universal tar.gz)) |
 
 Each archive holds the \`fcmd\` executable, \`README.md\`, \`LICENSE\`, \`THIRD-PARTY.md\` and

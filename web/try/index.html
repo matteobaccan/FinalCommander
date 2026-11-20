@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Try FinalCommander</title>
+<meta name="description" content="FinalCommander running in this browser tab, on a Linux kernel compiled to WebAssembly.">
+<!--
+  The one page of the site with a script in it, because it cannot be otherwise: it starts a
+  Linux kernel compiled to WebAssembly (unkernel, https://github.com/pithings/unkernel) in
+  the tab, and runs in it the same `fcmd` the release publishes for ARM 64-bit Linux,
+  unchanged. Nothing is installed and nothing leaves the tab: the files the panels show are
+  in the tab's memory and are gone when it closes.
+
+  `fcmd-linux-aarch64.tar.gz`, next to this page, is the release's
+  `FinalCommander-linux-aarch64-static-<v>.tar.gz` under a name that does not change, put
+  there by the workflow that publishes the site. The kernel and the terminal are loaded from
+  a CDN, each at a pinned version.
+-->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0/css/xterm.css">
+<style>
+  :root {
+    --bg: #f6f7f9; --fg: #1d2330; --muted: #5a6478; --accent: #1b5fc1; --panel: #000080;
+    --line: #d5dae3; --warn: #a33a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151b; --fg: #e3e7ee; --muted: #9aa4b6; --accent: #7fb0ff; --line: #2b313c;
+      --warn: #ffb37f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151b; --fg: #e3e7ee; --muted: #9aa4b6; --accent: #7fb0ff; --line: #2b313c;
+    --warn: #ffb37f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column;
+  }
+  header { padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 18px; }
+  header p { margin: 4px 0 0; color: var(--muted); max-width: 70em; }
+  a { color: var(--accent); }
+  main { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 12px 16px 16px; }
+  #controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  button {
+    font: inherit; padding: 6px 14px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  #status { color: var(--muted); }
+  #status.error { color: var(--warn); white-space: pre-wrap; }
+  #screen {
+    flex: 1; min-height: 300px; background: var(--panel); border-radius: 6px; padding: 4px;
+    overflow: hidden;
+  }
+  #screen:empty::before {
+    content: "Press Start. About 30 MB is downloaded once; the program then runs in this tab.";
+    display: block; color: #c0c8ff; padding: 16px; font-family: ui-monospace, monospace;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>FinalCommander in this tab</h1>
+  <p>
+    The release's <code>fcmd</code> for ARM 64-bit Linux, unchanged, running on a Linux kernel
+    compiled to WebAssembly (<a href="https://github.com/pithings/unkernel">unkernel</a>).
+    The panels open on a folder with the program's own documents in it; what you copy, edit or
+    delete stays in this tab's memory. It is slower than on a machine of its own, and has no
+    network. <code>F10</code> quits. <a href="../">Back to the site</a>.
+  </p>
+</header>
+<main>
+  <div id="controls">
+    <button id="start">Start</button>
+    <span id="status"></span>
+  </div>
+  <div id="screen"></div>
+</main>
+<script type="module">
+  import { checkSupport, createKernel, MemoryFs } from "https://cdn.jsdelivr.net/npm/unkernel@0.2.0-261119-040e142/dist/web.mjs";
+  import { Terminal } from "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0/lib/xterm.mjs";
+  import { FitAddon } from "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0/lib/addon-fit.mjs";
+
+  const ARCHIVE = "fcmd-linux-aarch64.tar.gz";
+  const HOME = "/home/demo";
+  const start = document.getElementById("start");
+  const status = document.getElementById("status");
+  const screen = document.getElementById("screen");
+
+  function say(text, error = false) {
+    status.textContent = text;
+    status.className = error ? "error" : "";
+  }
+
+  // A tar archive's regular files, by name. The release's archives are plain ustar written
+  // by GNU tar, with the files at the root (`./fcmd`), so this is all the reader needed.
+  function untar(bytes) {
+    const files = new Map();
+    const text = (at, length) => {
+      let end = at;
+      while (end < at + length && bytes[end] !== 0) end++;
+      return new TextDecoder().decode(bytes.subarray(at, end));
+    };
+    let at = 0;
+    while (at + 512 <= bytes.length && bytes[at] !== 0) {
+      const name = text(at, 100).replace(/^\.\//, "");
+      const size = parseInt(text(at + 124, 12).trim() || "0", 8);
+      const type = String.fromCharCode(bytes[at + 156] || 48);
+      if ((type === "0" || type === "\0") && name) {
+        files.set(name, bytes.slice(at + 512, at + 512 + size));
+      }
+      at += 512 + Math.ceil(size / 512) * 512;
+    }
+    return files;
+  }
+
+  async function fetchArchive() {
+    const response = await fetch(ARCHIVE);
+    if (!response.ok) throw new Error(`${ARCHIVE}: ${response.status} ${response.statusText}`);
+    const unzipped = response.body.pipeThrough(new DecompressionStream("gzip"));
+    return untar(new Uint8Array(await new Response(unzipped).arrayBuffer()));
+  }
+
+  let terminal = null;
+  let fit = null;
+
+  async function run() {
+    start.disabled = true;
+    try {
+      say("Checking what this browser can do…");
+      const support = await checkSupport();
+      if (!support.ok) {
+        throw new Error("This browser cannot run the kernel:\n" + support.problems.join("\n") +
+          "\nChrome or Edge 137+, Firefox 153+ or Safari 27+ can.");
+      }
+      say("Downloading FinalCommander…");
+      const files = await fetchArchive();
+      const fcmd = files.get("fcmd");
+      if (!fcmd) throw new Error(`${ARCHIVE} has no fcmd in it`);
+
+      // The program on a mount of its own, executable; its documents in the home folder,
+      // where the panels open and where anything can be changed.
+      const program = new MemoryFs();
+      program.writeFile("/fcmd", fcmd, { mode: 0o755 });
+      const home = new MemoryFs();
+      for (const [name, bytes] of files) {
+        if (name !== "fcmd") home.writeFile("/" + name, bytes, { mode: 0o644 });
+      }
+      home.mkdirp("/notes", { mode: 0o755 });
+      home.writeFile("/notes/hello.md",
+        "# Hello\n\nThis file lives in the tab's memory. `F4` edits it, `F5` copies it.\n",
+        { mode: 0o644 });
+
+      say("Starting Linux…");
+      const vm = await createKernel({
+        mounts: { "/opt/fcmd": program, [HOME]: home },
+        onProgress: (p) => say(`Starting Linux: ${p.stage}…`),
+      });
+
+      if (!terminal) {
+        terminal = new Terminal({
+          fontFamily: 'ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace',
+          fontSize: 15, cursorBlink: true, allowProposedApi: false,
+          theme: { background: "#000080" },
+        });
+        fit = new FitAddon();
+        terminal.loadAddon(fit);
+        terminal.open(screen);
+      }
+      terminal.reset();
+      fit.fit();
+
+      say("Starting FinalCommander…");
+      const session = await vm.spawn("/opt/fcmd/fcmd", [], {
+        cols: terminal.cols, rows: terminal.rows, cwd: HOME,
+        env: { TERM: "xterm-256color", COLORTERM: "truecolor", HOME, LANG: "C.UTF-8" },
+      });
+      session.output.pipeTo(new WritableStream({ write: (bytes) => terminal.write(bytes) }));
+      const typing = terminal.onData((data) => session.write(data));
+      const resizing = terminal.onResize(({ cols, rows }) => session.resize(cols, rows));
+      const onWindow = () => fit.fit();
+      window.addEventListener("resize", onWindow);
+      terminal.focus();
+      say("Running. F10 quits.");
+
+      await session.ended;
+      typing.dispose();
+      resizing.dispose();
+      window.removeEventListener("resize", onWindow);
+      vm.stop();
+      say("FinalCommander has ended. Start runs it again, on a fresh folder.");
+      start.textContent = "Start again";
+    } catch (error) {
+      console.error(error);
+      say(error.message || String(error), true);
+    } finally {
+      start.disabled = false;
+    }
+  }
+
+  start.addEventListener("click", run);
+</script>
+</body>
+</html>

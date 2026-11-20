@@ -182,11 +182,17 @@ One file, nothing to install beside it. Download the archive for your machine fr
 | Platform | Archive |
 | --- | --- |
 | Linux (x86-64) | `FinalCommander-linux-x86_64-<version>.tar.gz`, or `FinalCommander-linux-x86_64-static-<version>.tar.gz` for a statically linked build that runs on any distribution |
+| Linux (ARM 64-bit) | `FinalCommander-linux-aarch64-static-<version>.tar.gz`, statically linked: a Raspberry Pi, an ARM server, or a Linux that runs in a browser tab such as [unkernel](https://github.com/pithings/unkernel) |
 | macOS (Intel and Apple Silicon) | `FinalCommander-macos-universal-<version>.tar.gz` — one binary for both |
 | Windows (x86-64) | `FinalCommander-windows-x86_64-<version>.zip` |
 
 The files sit at the root of the archive, so unpacking leaves `fcmd` where you are rather than
 one directory down.
+
+To look at it before downloading anything, [try it in the
+browser](https://matteobaccan.github.io/FinalCommander/try/): the ARM 64-bit build, unchanged,
+running on a Linux kernel compiled to WebAssembly in the tab. Its files live in the tab's
+memory, and it is slower than on a machine of its own.
 
 ```sh
 # Linux, for example

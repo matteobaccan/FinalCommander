@@ -67,6 +67,29 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo run --quiet -p fcmd-site -- --out site
+      # The page that runs the program in the browser (`web/try/`), and next to it, under a
+      # name that does not change, the ARM 64-bit archive of the release the site describes:
+      # the tag being published, or else the latest release. A release from before there was
+      # such an archive leaves the page without one, and the page says so when started.
+      - name: The page that runs it in the browser
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ inputs.ref || '' }}
+        run: |
+          set -eu
+          mkdir -p site/try
+          cp web/try/index.html site/try/
+          case "$REF" in
+            v*) tag="$REF" ;;
+            *) tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName 2>/dev/null || true)" ;;
+          esac
+          if [ -n "$tag" ] && gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
+               --pattern 'FinalCommander-linux-aarch64-static-*.tar.gz' --dir site/try 2>/dev/null; then
+            mv site/try/FinalCommander-linux-aarch64-static-*.tar.gz site/try/fcmd-linux-aarch64.tar.gz
+            ls -l site/try
+          else
+            echo "::warning title=No ARM 64-bit archive for the browser page::${tag:-no release} has no FinalCommander-linux-aarch64-static archive; the page is published without it."
+          fi
       # A site that lost its landing page or its help is not worth publishing.
       - name: Check what was written
         run: |

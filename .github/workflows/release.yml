@@ -45,6 +45,12 @@ jobs:
           - name: linux-x86_64-static
             os: ubuntu-latest
             target: x86_64-unknown-linux-musl
+          # The same, for ARM: a Raspberry Pi, an ARM server, and the Linux that runs
+          # inside a browser tab (a kernel built for WebAssembly runs aarch64 programs as
+          # they are). Built on an ARM runner, so nothing is cross-compiled.
+          - name: linux-aarch64-static
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
           # One binary for both Intel and Apple Silicon.
           - name: macos-universal
             os: macos-latest
@@ -64,11 +70,11 @@ jobs:
           key: ${{ matrix.name }}
 
       - name: Install the musl toolchain
-        if: matrix.target == 'x86_64-unknown-linux-musl'
+        if: endsWith(matrix.target, '-linux-musl')
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools
-          rustup target add x86_64-unknown-linux-musl
+          rustup target add ${{ matrix.target }}
 
       - name: Build
         if: matrix.name != 'macos-universal'
@@ -76,6 +82,7 @@ jobs:
         env:
           # `ring` compiles C, and the musl target needs its own compiler.
           CC_x86_64_unknown_linux_musl: musl-gcc
+          CC_aarch64_unknown_linux_musl: musl-gcc
         run: cargo build --release --locked --target ${{ matrix.target }} -p fcmd
 
       - name: Build both architectures and join them
@@ -133,6 +140,17 @@ jobs:
           # came back as a DLL — `fcmd.exe` would not start on a fresh Windows.
           case "${{ matrix.name }}" in
             windows-*) python tools/pe-imports.py "$dir/fcmd.exe" --static ;;
+          esac
+          # A static build that asks for a shared library is not one: it would not start on
+          # a distribution without that library, nor inside a Linux with no libraries at all.
+          case "${{ matrix.name }}" in
+            *-static)
+              if readelf -d "$dir/fcmd" | grep -q NEEDED; then
+                readelf -d "$dir/fcmd" | grep NEEDED
+                echo "$dir/fcmd is not statically linked" >&2
+                exit 1
+              fi
+              ;;
           esac
           # The files sit at the root of the archive, with no directory of their own: the
           # program is one executable, and unpacking it should put that executable where the
