@@ -18,12 +18,20 @@ on:
       - "packaging/android/**"
       - "crates/fcmd/src/webterm.rs"
       - "crates/fcmd/assets/webterm/**"
+      # What breaks an Android build most often: a dependency, and the code with a #[cfg]
+      # for the platform in it.
+      - "Cargo.lock"
+      - "crates/fcmd-platform/**"
       - ".github/workflows/android.yml"
   pull_request:
     paths:
       - "packaging/android/**"
       - "crates/fcmd/src/webterm.rs"
       - "crates/fcmd/assets/webterm/**"
+      # What breaks an Android build most often: a dependency, and the code with a #[cfg]
+      # for the platform in it.
+      - "Cargo.lock"
+      - "crates/fcmd-platform/**"
       - ".github/workflows/android.yml"
   workflow_dispatch:
   workflow_call:
