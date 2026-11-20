@@ -1693,6 +1693,14 @@ keys = ["Ctrl+Alt+W"]
 scope = "editor"
 cmd = "ai.rewrite"
 
+# A link to the object under the cursor, in a bucket (SPEC 04 §8.5b): good for an hour, a day
+# or a week, and copied to the clipboard. `O` for the object; the letters nearer "link" and
+# "share" are taken (`Ctrl+Alt+L`, `Ctrl+Alt+S`) or do not arrive as themselves (`H`).
+[[bind]]
+keys = ["Ctrl+Alt+O"]
+scope = "panel"
+cmd = "net.s3.link"
+
 # Undo the last file operation (SPEC 03 §14). FAR has none; `Ctrl+Z` in a panel is the
 # description, as it is there, so the undo takes `Alt` with it as well.
 [[bind]]

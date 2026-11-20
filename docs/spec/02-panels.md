@@ -281,6 +281,23 @@ selected-totals bar adds it up (`Bytes: 69 082 073, files: 0, folders: 2`), and 
 size puts the measured tree where it belongs. A re-read drops it, because the figure was about
 the directory as it was.
 
+**Other file systems** (`panel.size_one_filesystem`, off by default). A folder with a network
+share, a backup disk or `/proc` mounted somewhere under it does not hold what is on them, and
+a walk that goes in answers — after however long the share takes — with a figure nobody frees
+by deleting the folder. With the setting on the walk does what `du -x` does: a folder on
+another device than the one the walk started from (`st_dev`, the folder's own, links not
+followed) is counted as empty and not gone into. The walk started *on* the mounted side stays
+on that side, so `Space` on the mount point itself still measures the share. It is the same
+rule for every walk that adds up a folder — `Space`, the disk usage list and its map (SPEC 06
+§12), where the mount point stays a row of its folder, holding nothing. Off, nothing changes:
+the walk is the one it always was.
+
+Only a folder of this machine has a device. A server, a bucket and the inside of an archive
+have no mount points, and nothing is left out there. **On Windows the setting has no effect**:
+the volume a folder is on is not something the standard library answers there, and asking
+the system directly for every folder of a walk is not worth the call; a volume mounted in a
+folder is rare enough there that the walk goes in as it always did.
+
 ### 3d. The branch view (`panel.branch`, `Ctrl+Alt+B`, shipped 0.31.0)
 
 Total Commander's `Ctrl+B`: every file under the folder, as one flat list, each row named by

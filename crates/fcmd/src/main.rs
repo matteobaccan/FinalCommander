@@ -2464,21 +2464,71 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                             runtime.handle().clone(),
                         ),
                     );
+                    let bounds = fcmd_jobs::usage::Bounds::one_file_system(
+                        &root,
+                        app.cfg.panel.size_one_filesystem,
+                    );
                     runtime.spawn_blocking(move || {
                         // The screen hears how far the walk has got a few times a second and
                         // no more: a folder is read in microseconds, and an event for each
                         // would be a queue the loop spends the walk draining.
                         let mut told = std::time::Instant::now();
                         let progress = tx.clone();
-                        let tree =
-                            fcmd_jobs::usage::walk(&fs, &root, &cancel, &mut |files, bytes| {
+                        let tree = fcmd_jobs::usage::walk(
+                            &fs,
+                            &root,
+                            &bounds,
+                            &cancel,
+                            &mut |files, bytes| {
                                 if told.elapsed() >= std::time::Duration::from_millis(150) {
                                     told = std::time::Instant::now();
                                     let _ =
                                         progress.send(Event::UsageProgress { id, files, bytes });
                                 }
-                            });
+                            },
+                        );
                         let _ = tx.send(Event::UsageTree { id, tree });
+                    });
+                }
+                Request::S3Link { path, seconds } => {
+                    // Answered here, like the clipboard it is on its way to: a signature is
+                    // arithmetic on a key this process already holds, and nothing is asked
+                    // of the disk or of the network to make one.
+                    let result = objects
+                        .presign(&path, seconds, std::time::SystemTime::now())
+                        .map_err(|e| e.to_string());
+                    let _ = tx.send(Event::S3Link {
+                        name: path.display_name(),
+                        seconds,
+                        result,
+                    });
+                }
+                Request::S3Profiles { service } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let profiles =
+                            fcmd_s3::creds::SharedFiles::discover(dirs_home().as_deref())
+                                .profiles();
+                        let _ = tx.send(Event::S3Profiles { service, profiles });
+                    });
+                }
+                Request::S3Service { block } => {
+                    // The provider every panel, viewer and job shares is the one changed:
+                    // the service of this name is replaced in it, and the clients it kept
+                    // for that service's buckets go with the keys they were built on.
+                    let tx = tx.clone();
+                    let objects = objects.clone();
+                    runtime.spawn_blocking(move || {
+                        let shared = fcmd_s3::creds::SharedFiles::discover(dirs_home().as_deref());
+                        let service = object_service(&block, &shared);
+                        let event = Event::S3ServiceSet {
+                            service: service.name.clone(),
+                            source: fcmd_s3::creds::Source::parse(&block.credentials).describe(),
+                            signed: service.credentials.is_some(),
+                            region: service.endpoint.region.clone(),
+                        };
+                        objects.set_service(service);
+                        let _ = tx.send(event);
                     });
                 }
                 Request::DirSize { panel, path } => {
@@ -2493,8 +2543,14 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                             runtime.handle().clone(),
                         ),
                     );
+                    // `du -x` when the setting asks for it: what is mounted under the folder
+                    // is not what the folder holds (SPEC 02 §3c).
+                    let bounds = fcmd_jobs::usage::Bounds::one_file_system(
+                        &path,
+                        app.cfg.panel.size_one_filesystem,
+                    );
                     runtime.spawn_blocking(move || {
-                        let (bytes, files) = dir_size(&fs, &path, &CancelToken::new(), 0);
+                        let (bytes, files) = dir_size(&fs, &path, &bounds, &CancelToken::new(), 0);
                         let _ = tx.send(Event::DirSized {
                             panel,
                             path,
@@ -3532,7 +3588,6 @@ fn run_decompiler(rule: &fcmd_config::DecompileRule, path: &VPath) -> Result<Str
     Ok(text)
 }
 
-/// Recursive size of a directory. Depth-limited, cancellable, and it never follows symlinks.
 /// Two files on this disk compared byte against byte (SPEC 05 §3a). The error names the file
 /// that could not be opened; one that fails halfway is named by the pair.
 fn bin_compare(
@@ -3548,9 +3603,13 @@ fn bin_compare(
         .map_err(|e| format!("{} ↔ {}: {e}", left.display(), right.display()))
 }
 
+/// Recursive size of a directory. Depth-limited, cancellable, and it never follows symlinks;
+/// a folder past `bounds` — on another file system, when the setting says to stop there —
+/// counts as empty.
 fn dir_size(
     fs: &dyn fcmd_jobs::JobFs,
     path: &VPath,
+    bounds: &fcmd_jobs::usage::Bounds,
     cancel: &CancelToken,
     depth: u32,
 ) -> (u64, u64) {
@@ -3566,7 +3625,11 @@ fn dir_size(
         match facts.kind {
             fcmd_core::EntryKind::Parent | fcmd_core::EntryKind::Symlink => {}
             fcmd_core::EntryKind::Dir => {
-                let (b, f) = dir_size(fs, &path.join(&name), cancel, depth + 1);
+                let child = path.join(&name);
+                if bounds.leaves(&child) {
+                    continue;
+                }
+                let (b, f) = dir_size(fs, &child, bounds, cancel, depth + 1);
                 bytes += b;
                 files += f;
             }
@@ -5029,35 +5092,53 @@ fn stamp_of_entry(entry: &fcmd_core::Entry) -> RemoteStamp {
 /// or from `~/.aws/credentials` like every other tool on the machine.
 fn object_storage(cfg: &fcmd_config::Config) -> fcmd_s3::vfs::S3Vfs {
     use fcmd_s3::creds;
-    use fcmd_s3::endpoint::Endpoint;
-    use fcmd_s3::vfs::Service;
 
-    let home = dirs_home();
+    // The two shared files are read once for all the blocks, and not at all with no block.
+    let shared = if cfg.s3.is_empty() {
+        creds::SharedFiles::default()
+    } else {
+        creds::SharedFiles::discover(dirs_home().as_deref())
+    };
     let services = cfg
         .s3
         .iter()
-        .map(|block| {
-            let region = if block.region.trim().is_empty() {
-                creds::region_from_env().unwrap_or_else(|| "us-east-1".to_string())
-            } else {
-                block.region.trim().to_string()
-            };
-            let endpoint = if block.endpoint.trim().is_empty() {
-                Endpoint::aws(region)
-            } else {
-                Endpoint::parse(block.endpoint.trim(), region)
-            };
-            let endpoint = match block.path_style {
-                Some(path_style) => endpoint.with_path_style(path_style),
-                None => endpoint,
-            };
-            let source = creds::Source::parse(&block.credentials);
-            Service::new(block.name.trim(), endpoint)
-                .with_credentials(creds::resolve(&source, home.as_deref()))
-                .with_listing_cap(block.listing_cap)
-        })
+        .map(|block| object_service(block, &shared))
         .collect();
     fcmd_s3::vfs::S3Vfs::new(services)
+}
+
+/// One `[[s3]]` block as a service: where it is, and who we are to it.
+///
+/// The region is the block's own when it names one; otherwise the environment's, then the
+/// one the profile has in `~/.aws/config`, then `us-east-1` — and a bucket that lives
+/// elsewhere says where when it is first asked, which the client follows.
+fn object_service(
+    block: &fcmd_config::S3Cfg,
+    shared: &fcmd_s3::creds::SharedFiles,
+) -> fcmd_s3::vfs::Service {
+    use fcmd_s3::creds;
+    use fcmd_s3::endpoint::Endpoint;
+
+    let source = creds::Source::parse(&block.credentials);
+    let region = if block.region.trim().is_empty() {
+        shared
+            .region_for(&source)
+            .unwrap_or_else(|| "us-east-1".to_string())
+    } else {
+        block.region.trim().to_string()
+    };
+    let endpoint = if block.endpoint.trim().is_empty() {
+        Endpoint::aws(region)
+    } else {
+        Endpoint::parse(block.endpoint.trim(), region)
+    };
+    let endpoint = match block.path_style {
+        Some(path_style) => endpoint.with_path_style(path_style),
+        None => endpoint,
+    };
+    fcmd_s3::vfs::Service::new(block.name.trim(), endpoint)
+        .with_credentials(shared.resolve(&source))
+        .with_listing_cap(block.listing_cap)
 }
 
 /// Where `~` is. The same answer the configuration paths use, asked again here because the
@@ -7952,8 +8033,13 @@ dir_attr = "D"
                     app.handle_event(Event::BinCompared { id, result });
                 }
                 Request::UsageTree { id, root, cancel } => {
-                    let tree =
-                        fcmd_jobs::usage::walk(&fcmd_jobs::LocalFs, &root, &cancel, &mut |_, _| {});
+                    let tree = fcmd_jobs::usage::walk(
+                        &fcmd_jobs::LocalFs,
+                        &root,
+                        &fcmd_jobs::usage::Bounds::none(),
+                        &cancel,
+                        &mut |_, _| {},
+                    );
                     app.handle_event(Event::UsageTree { id, tree });
                 }
                 Request::DirSize { .. }
@@ -7970,6 +8056,10 @@ dir_attr = "D"
                 // Never for real in a test: the wastebasket is the user's own.
                 | Request::Trash { .. }
                 | Request::StripMeta { .. }
+                // The shared AWS files are the user's own: a test hands the profiles in.
+                | Request::S3Profiles { .. }
+                | Request::S3Link { .. }
+                | Request::S3Service { .. }
                 | Request::OpenUrl { .. }
                 // Nor a printer: the tests look at the line the request carries.
                 | Request::Print { .. }
@@ -9493,10 +9583,41 @@ dir_attr = "D"
         let (bytes, files) = dir_size(
             &fcmd_jobs::LocalFs,
             &VPath::local(dir.path()),
+            &fcmd_jobs::usage::Bounds::none(),
             &CancelToken::new(),
             0,
         );
         assert_eq!((bytes, files), (42, 2));
+    }
+
+    #[test]
+    fn dir_size_kept_on_one_file_system_leaves_a_mount_point_out() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a"), vec![0u8; 10]).unwrap();
+        std::fs::create_dir_all(dir.path().join("elsewhere/deep")).unwrap();
+        std::fs::write(dir.path().join("elsewhere/b"), vec![0u8; 32]).unwrap();
+        std::fs::write(dir.path().join("elsewhere/deep/c"), vec![0u8; 64]).unwrap();
+        // No mount is made: the folder called `elsewhere` is said to be on another device.
+        let device: fn(&VPath) -> Option<u64> = |p| {
+            let other = p.os().components().any(|c| c.as_os_str() == "elsewhere");
+            Some(if other { 2 } else { 1 })
+        };
+        let root = VPath::local(dir.path());
+        let measure = |on: bool| {
+            dir_size(
+                &fcmd_jobs::LocalFs,
+                &root,
+                &fcmd_jobs::usage::Bounds::reading(&root, on, device),
+                &CancelToken::new(),
+                0,
+            )
+        };
+        assert_eq!(measure(true), (10, 1));
+        assert_eq!(
+            measure(false),
+            (106, 3),
+            "off, it is the walk it always was"
+        );
     }
 
     #[test]
@@ -9506,7 +9627,13 @@ dir_attr = "D"
         let token = CancelToken::new();
         token.cancel();
         assert_eq!(
-            dir_size(&fcmd_jobs::LocalFs, &VPath::local(dir.path()), &token, 0),
+            dir_size(
+                &fcmd_jobs::LocalFs,
+                &VPath::local(dir.path()),
+                &fcmd_jobs::usage::Bounds::none(),
+                &token,
+                0
+            ),
             (0, 0)
         );
     }

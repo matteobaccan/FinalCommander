@@ -909,7 +909,9 @@ before the first rectangle can be drawn. So it is one walk, a worker's
 seen a few times a second and answers once; the screen says how far it has got and `Esc`
 cancels it. Half a tree is never shown: a map of the folders the walk happened to reach would
 lie about every one it did not. Links are neither followed nor counted, as `F3` does, so the
-two agree about what a folder weighs.
+two agree about what a folder weighs — and with `panel.size_one_filesystem` on neither goes
+into a folder that is on another file system (SPEC 02 §3c): the mount point is a rectangle of
+its folder like any other, holding nothing.
 
 *Aggregated once.* The walk adds every row into its parents in one backwards pass and leaves
 each folder's rows largest first; the screen never sums, never sorts and never reads a disk.

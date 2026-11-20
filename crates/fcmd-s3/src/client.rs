@@ -120,6 +120,35 @@ impl Client {
         )
     }
 
+    /// A URL that reads one object with no keys at all, for `expires` seconds from `now`
+    /// (SPEC 04 §8.5b).
+    ///
+    /// Made here and nowhere else: no request goes out, and the service first hears of the
+    /// link when somebody follows it. A client with no keys has nothing to sign with — and
+    /// a bucket it can read anonymously needs no link, its plain URL is one.
+    pub fn presigned_get(
+        &self,
+        bucket: &str,
+        key: &str,
+        expires: u64,
+        now: SystemTime,
+    ) -> Result<String> {
+        let Some(signer) = &self.signer else {
+            return Err(S3Error::NoCredentials(
+                "a link is signed with the service's keys, and this service has none".into(),
+            ));
+        };
+        let target = self.endpoint.target(bucket, key);
+        let query = signer.presign(
+            "GET",
+            &target.host,
+            &target.path,
+            expires,
+            &crate::sign::Stamp::at(now),
+        );
+        Ok(target.url(&query))
+    }
+
     pub fn with_timeout(mut self, timeout: Duration) -> Client {
         self.timeout = timeout;
         self

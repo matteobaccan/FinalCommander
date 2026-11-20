@@ -140,6 +140,11 @@ pub enum PickKind {
     StripMeta,
     /// When a service starts (`F4` on the service list): automatic, manual or disabled.
     ServiceStart,
+    /// The AWS profiles an object storage service can sign with (`net.s3.profile`): the
+    /// environment, every profile of the shared files, and no keys at all.
+    S3Profile,
+    /// How long a link to an object stays good (`net.s3.link`): an hour, a day or a week.
+    S3Link,
     /// Options → Plugins configuration: every plugin found, on, off or broken.
     PluginsConfig,
     /// The editor's replacements (`Alt+Shift+F7`): the named ones, then the recent pairs.
@@ -649,6 +654,12 @@ pub fn menus() -> Vec<Menu> {
                     "menu-disconnect",
                     "Alt+Shift+N",
                     Action::Run(Command::NetDisconnect),
+                ),
+                item("menu-s3-profile", "", Action::Run(Command::NetS3Profile)),
+                item(
+                    "menu-s3-link",
+                    "Ctrl+Alt+O",
+                    Action::Run(Command::NetS3Link),
                 ),
                 Entry::Separator,
                 item("menu-user-menu", "F2", Action::Run(Command::ToolUserMenu)),

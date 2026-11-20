@@ -1120,6 +1120,8 @@ fn draw_pick(
         crate::menu::PickKind::AiThreads => "ai-threads-hint",
         crate::menu::PickKind::StripMeta => "strip-hint",
         crate::menu::PickKind::ServiceStart => "svc-start-hint",
+        crate::menu::PickKind::S3Profile => "s3-profile-hint",
+        crate::menu::PickKind::S3Link => "s3-link-hint",
         crate::menu::PickKind::PluginsConfig => "plugins-config-hint",
         crate::menu::PickKind::ReplaceTemplates => "replace-tpl-hint",
         crate::menu::PickKind::EditorMatches => "editor-matches-hint",
@@ -5086,6 +5088,7 @@ mod tests {
         let tree = fcmd_jobs::usage::walk(
             &fcmd_jobs::LocalFs,
             &VPath::local(&usage),
+            &fcmd_jobs::usage::Bounds::none(),
             &cancel,
             &mut |_, _| {},
         )
@@ -6781,8 +6784,14 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         std::fs::write(dir.join("notes.txt"), vec![0u8; 1000]).unwrap();
         let root = VPath::local(dir);
         let cancel = fcmd_core::CancelToken::new();
-        let tree = fcmd_jobs::usage::walk(&fcmd_jobs::LocalFs, &root, &cancel, &mut |_, _| {})
-            .expect("nobody cancelled");
+        let tree = fcmd_jobs::usage::walk(
+            &fcmd_jobs::LocalFs,
+            &root,
+            &fcmd_jobs::usage::Bounds::none(),
+            &cancel,
+            &mut |_, _| {},
+        )
+        .expect("nobody cancelled");
         let mut view = crate::treemap::UsageView::new(1, 0, root, cancel);
         view.arrived(tree);
         view

@@ -215,7 +215,17 @@ impl Server {
         header: &dyn Fn(&str) -> Option<String>,
         body: Vec<u8>,
     ) -> Vec<u8> {
-        if header("authorization").is_none() {
+        let presigned = query
+            .split('&')
+            .any(|pair| pair.starts_with("X-Amz-Signature="));
+        if header("authorization").is_none() && presigned {
+            // The signature came in the URL: a presigned link, followed by somebody with no
+            // keys. It is checked the way the service checks it — and it is good for a read
+            // of the one object it names, for as long as it says.
+            if let Some((code, why)) = self.presign_problem(method, path, query, header) {
+                return error_response(403, code, &why);
+            }
+        } else if header("authorization").is_none() {
             // A public bucket is public to *read*. A policy that let the world write to one
             // would be a mistake nobody makes on purpose, so an unsigned write is refused
             // here as it is there.
@@ -378,6 +388,63 @@ impl Server {
         let mut head = String::from("HTTP/1.1 204 No Content\r\n");
         head.push_str("Content-Length: 0\r\nConnection: close\r\n\r\n");
         head.into_bytes()
+    }
+
+    /// Check a presigned URL: sign the same words again and compare, then look at the clock.
+    /// `None` when the link is good.
+    fn presign_problem(
+        &self,
+        method: &str,
+        path: &str,
+        query: &str,
+        header: &dyn Fn(&str) -> Option<String>,
+    ) -> Option<(&'static str, String)> {
+        let denied = |why: &str| Some(("AccessDenied", why.to_string()));
+        let value = |name: &str| {
+            query
+                .split('&')
+                .filter_map(|pair| pair.split_once('='))
+                .find(|(n, _)| *n == name)
+                .map(|(_, v)| uri::decode(v))
+        };
+        let (Some(date), Some(expires), Some(host)) = (
+            value("X-Amz-Date"),
+            value("X-Amz-Expires").and_then(|e| e.parse::<u64>().ok()),
+            header("host"),
+        ) else {
+            return denied("a presigned request names its date and how long it is good for");
+        };
+        let stamp = Stamp {
+            date: date.get(..8).unwrap_or_default().to_string(),
+            datetime: date.clone(),
+        };
+        let expected = self.signer.presign(method, &host, path, expires, &stamp);
+        if expected != query {
+            return Some((
+                "SignatureDoesNotMatch",
+                format!(
+                    "the signature does not match\n  sent:     {query}\n  expected: {expected}"
+                ),
+            ));
+        }
+        // `20130524T000000Z`, read with the clock this crate already has.
+        let number = |at: std::ops::Range<usize>| date.get(at).and_then(|t| t.parse::<i64>().ok());
+        let signed = (|| {
+            let days = crate::clock::days_from_civil(
+                number(0..4)?,
+                number(4..6)? as u32,
+                number(6..8)? as u32,
+            );
+            Some(days * 86_400 + number(9..11)? * 3_600 + number(11..13)? * 60 + number(13..15)?)
+        })();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        match signed {
+            Some(signed) if now <= signed + expires as i64 => None,
+            _ => denied("Request has expired"),
+        }
     }
 
     /// Recompute the signature from what arrived. `None` when it matches.

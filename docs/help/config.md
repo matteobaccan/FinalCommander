@@ -544,6 +544,20 @@ Russian `descript.ion` into a Latin one. A file that is not there yet, one that 
 UTF-8, and one whose page cannot hold what you typed are all written in UTF-8 anyway: a file
 a DOS tool cannot read beats a line that lost its words.
 
+# Folder sizes and other file systems
+
+```toml
+[panel]
+size_one_filesystem = true    # off by default
+```
+
+Measuring a folder — `Space`, the disk usage list of `Alt+Shift+F3` and its map — normally
+goes into everything under it, a network share or a second disk mounted there included. With
+this on the walk stays on the file system it started from, as `du -x` does, and a mount point
+counts as empty: the figure is what the folder takes on its own disk. Started on the mount
+point itself, the walk measures what is mounted there. It is also a row of `F9 → Options →
+System settings`. On Windows the setting has no effect.
+
 # Breaking a tie
 
 `panel.sort_chain` says what settles two rows the sort key leaves equal:

@@ -325,6 +325,13 @@ pub struct PanelCfg {
     /// `Ctrl+A`-style *select all* and *invert all* include directories whatever this says,
     /// because those keys name no mask and so cannot be meaning files alone.
     pub select_folders: bool,
+    /// Does measuring a folder stop where another file system is mounted, as `du -x` does?
+    ///
+    /// Off by default, which is the walk as it always was. On, a network share, a backup
+    /// disk or `/proc` mounted somewhere under the folder is counted as empty: the figure is
+    /// then what the folder takes on the disk it is on. Unix only — on Windows the walk has
+    /// no cheap way to ask which volume a folder is on, and the setting does nothing.
+    pub size_one_filesystem: bool,
     /// On by default, and deliberately: a file manager that quietly leaves files out is
     /// lying about the directory. `.git` and `.env` are files like any other.
     pub show_hidden: bool,
@@ -383,6 +390,7 @@ impl Default for PanelCfg {
             sort_case: "auto".into(),
             // FAR's default: a mask is about files.
             select_folders: false,
+            size_one_filesystem: false,
             show_hidden: true,
             allow_reverse_sort: true,
             column_titles: true,
@@ -2337,6 +2345,7 @@ impl Config {
                 self.panel.sort_case = value.to_string();
             }
             "panel.select_folders" => self.panel.select_folders = parse_bool(value)?,
+            "panel.size_one_filesystem" => self.panel.size_one_filesystem = parse_bool(value)?,
             "panel.split" => {
                 self.panel.split = value
                     .trim()

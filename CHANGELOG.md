@@ -49,6 +49,27 @@ Notable changes, newest first. The format follows
   comes back on the way out where the terminal keeps one (xterm's title stack). The Linux
   console and a `dumb` terminal are sent nothing. `ui.window_title = false`, or the box in
   *Options → Interface settings*, leaves the title alone.
+- **Folder sizes that stop at other file systems.** `Folder sizes stay on one file system` in
+  *Options → System settings* (`panel.size_one_filesystem`, off by default) keeps the walk
+  that measures a folder — `Space`, the disk usage list and its map — on the file system it
+  started from, as `du -x` does: a network share or another disk mounted under the folder
+  counts as empty instead of being walked. Linux and macOS; on Windows the setting has no
+  effect.
+- **AWS profiles for an object store.** *Commands → AWS profile of an object store*
+  (`net.s3.profile`) lists the profiles of `~/.aws/credentials` and `~/.aws/config` — the
+  `[profile name]` sections of the second included, each with its region — beside
+  *Environment* and *Anonymous*, and signs the service's requests with the one chosen from
+  then on; *Save setup* keeps it as `credentials = "aws:name"`. A service whose block names no
+  region now takes the one its profile has in `~/.aws/config`, after `AWS_REGION` and before
+  `us-east-1`, and keys kept in the configuration file are read as the AWS tools read them.
+  `AWS_SHARED_CREDENTIALS_FILE` and `AWS_CONFIG_FILE` are honoured. Static keys only: a
+  profile that signs through single sign-on or a role is listed, and refused with the reason.
+- **A shared link to an S3 object.** `Ctrl+Alt+O` on an object in a bucket — *Commands →
+  Shared link to an object* (`net.s3.link`) — asks for 1 hour, 24 hours or 7 days and copies
+  to the clipboard a presigned URL that reads the object without keys until then. It is signed
+  on this machine with the service's own key (Signature Version 4 in the query string), and
+  nothing is sent anywhere to make it. A link signed with temporary credentials ends when they
+  do.
 
 ### Changed
 

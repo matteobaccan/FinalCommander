@@ -133,6 +133,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | saved synchronisations | — | — | a list inside the synchronise dialog | **Ctrl+Alt+Y** lists the pairs saved under a name: `Enter` runs one, `F4` changes it, `Del` forgets it |
 | pack / unpack | Shift+F1 / Shift+F2 | — | Alt+Shift+P / Alt+Shift+U | Shift+F1 / Shift+F2 |
 | test archive | — | — | Alt+Shift+E | Commands menu, no default key |
+| a link to an object in a bucket, good for an hour, a day or a week, on the clipboard | — | — | — | **Ctrl+Alt+O** |
 | multi-rename from words (an AI's pattern, previewed) | — | — | — | **Ctrl+Alt+U** |
 | find files from words (an AI fills the find dialog; `OK` is what searches) | — | — | — | **Ctrl+Alt+Q**, in the panels and in the `Alt+F7` dialog |
 | why the last command failed (asked of an AI, after a dialog) | — | — | — | **Ctrl+Alt+X** — the key that explains the block or the screen in the viewer and the editor |

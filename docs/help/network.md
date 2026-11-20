@@ -182,6 +182,20 @@ The keys are never kept in `fcmd.toml`. They come from `AWS_ACCESS_KEY_ID` and
 `AWS_SECRET_ACCESS_KEY`, or from `~/.aws/credentials` — the file the AWS tools share, profiles
 and all. A bucket that anyone may read needs `credentials = "anonymous"` and no keys at all.
 
+**Which profile.** `credentials = "aws:work"` in the block names one, and *Commands → AWS
+profile of an object store* (`net.s3.profile`) chooses one from a list instead: with the panel
+in a bucket of the service, or the cursor on its `s3://name@` row in the sessions panel, it
+shows *Environment* — the `AWS_*` variables, else the `default` profile — then every profile
+found in `~/.aws/credentials` and `~/.aws/config` with its region beside it, then *Anonymous*.
+`Enter` signs the service's requests with that profile from then on, and re-reads a panel that
+is in one of its buckets. The choice is for the session; *Options → Save setup* keeps it.
+
+The region is the block's own `region` when it has one; otherwise `AWS_REGION`, then the
+`region` the profile has in `~/.aws/config`, then `us-east-1`. `AWS_SHARED_CREDENTIALS_FILE`
+and `AWS_CONFIG_FILE` are honoured when the two files live somewhere else. A profile marked
+*no keys* signs in a way of its own — single sign-on, a role — which only the AWS tools speak:
+`aws configure export-credentials --format env` turns it into variables this program reads.
+
 `F3` on an object brings it down to a temporary copy and shows you that, the way it does for a
 file on a server, and `net.fetch_limit_mb` is the ceiling on what it will fetch. `F4` edits
 that copy and saving sends it back as one write.
@@ -191,6 +205,21 @@ same progress bar, the same overwrite question and the same `Esc`. A copy into a
 upload streamed off the disk; a copy out of one is a download written straight to the file; a
 copy from one key to another inside the same service is done by the service, so the bytes never
 come through here, which is what makes copying a large object affordable.
+
+**A link to hand to somebody.** `Ctrl+Alt+O` on an object — *Commands → Shared link to an
+object* — asks how long, **1 hour, 24 hours or 7 days**, and puts on the clipboard a URL that
+reads that object with no keys and no account, in a browser or with `curl`, until the time is
+up. Seven days is the longest the service allows. The link is signed on this machine with the
+service's own key, and nothing is sent anywhere to make it. That is also what it is worth
+knowing before sending one:
+
+* whoever has the link can read the object until it expires — treat it as a password to that
+  one file, with a date on it;
+* it cannot be taken back, short of deleting the object or revoking the key;
+* if the keys are temporary ones — a session token from single sign-on or a role — the link
+  stops working when they do, however long was asked for.
+
+A service without keys cannot sign one, and a folder has none: a link is to one object.
 
 A few things are the nature of object storage rather than gaps:
 

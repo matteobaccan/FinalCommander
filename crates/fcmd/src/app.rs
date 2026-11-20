@@ -136,6 +136,22 @@ pub enum Request {
     Undo {
         undo: crate::undo::Undo,
     },
+    /// Read the AWS profiles there are to choose from for this object storage service: the
+    /// two shared files are on a disk, and a key handler reads no disk.
+    S3Profiles {
+        service: String,
+    },
+    /// Build this `[[s3]]` block again — its keys and its region looked up afresh — and put
+    /// it in the place of the service of its name, for the session that is running.
+    S3Service {
+        block: fcmd_config::S3Cfg,
+    },
+    /// Make a link to this object that reads it without keys for `seconds`: signed with the
+    /// service's keys where they are held, and sent nowhere.
+    S3Link {
+        path: VPath,
+        seconds: u64,
+    },
     /// Take the metadata out of these pictures, each first copied into `backup` for the undo.
     StripMeta {
         files: Vec<PathBuf>,
@@ -1412,6 +1428,26 @@ pub enum Event {
     UndoDone {
         result: Result<usize, String>,
     },
+    /// The profiles the shared AWS files name, for the service whose list was asked for.
+    S3Profiles {
+        service: String,
+        profiles: Vec<fcmd_s3::creds::Profile>,
+    },
+    /// A service is now what its block says: where its keys come from as the block writes
+    /// it (`env`, `aws:work`, `anonymous`), whether any were found, and the region it signs
+    /// for.
+    S3ServiceSet {
+        service: String,
+        source: String,
+        signed: bool,
+        region: String,
+    },
+    /// The link asked for, or why there is none.
+    S3Link {
+        name: String,
+        seconds: u64,
+        result: Result<String, String>,
+    },
     /// What taking the metadata out did: each picture changed with the copy it can be put
     /// back from, how many blocks went, the pictures that had nothing to take out, and the
     /// ones that could not be done.
@@ -2161,6 +2197,14 @@ pub fn trash_answer(side: usize, ask: TrashAsk, basket: &dyn Wastebasket) -> Eve
 }
 
 /// The message id for a service's state, so the panel and the card say the same word.
+/// How long a link to an object may stay good, in seconds, with the message that names each:
+/// an hour, a day, and the seven days that are the most a presigned URL is allowed.
+const S3_LINK_TIMES: [(u64, &str); 3] = [
+    (3_600, "s3-link-hour"),
+    (86_400, "s3-link-day"),
+    (604_800, "s3-link-week"),
+];
+
 fn start_id(start: fcmd_platform::ServiceStart) -> &'static str {
     match start {
         fcmd_platform::ServiceStart::Automatic => "svc-start-automatic",
@@ -3684,6 +3728,11 @@ pub struct App {
     pub rename_undo: Option<(VPath, Vec<(String, String)>)>,
     /// The pictures `file.strip_metadata` was asked about, while its dialog is open.
     pub strip_files: Vec<PathBuf>,
+    /// The object storage service `net.s3.profile` is choosing a profile for, while its list
+    /// is open.
+    pub s3_profile_for: String,
+    /// The object `net.s3.link` is making a link to, while the list of durations is open.
+    pub s3_link_for: Option<VPath>,
     /// The line the viewer had on top when `git blame` was asked for, to open the answer on.
     pub blame_line: Option<usize>,
     /// The day the daily release check last asked, and the release it last offered: see
@@ -4029,6 +4078,8 @@ impl App {
             last_rename: Default::default(),
             rename_undo: None,
             strip_files: Vec::new(),
+            s3_profile_for: String::new(),
+            s3_link_for: None,
             blame_line: None,
             update_checked: 0,
             update_offered: String::new(),
@@ -4302,6 +4353,18 @@ impl App {
                 number,
                 result,
             } => self.film_ended(&key, number, result),
+            Event::S3Profiles { service, profiles } => self.open_s3_profiles(service, profiles),
+            Event::S3ServiceSet {
+                service,
+                source,
+                signed,
+                region,
+            } => self.s3_service_set(&service, &source, signed, &region),
+            Event::S3Link {
+                name,
+                seconds,
+                result,
+            } => self.s3_link_made(&name, seconds, result),
             Event::StripDone {
                 done,
                 removed,
@@ -13221,6 +13284,8 @@ impl App {
                 ));
             }
             Command::NetDisconnect => self.disconnect_active(),
+            Command::NetS3Profile => self.ask_s3_profiles(),
+            Command::NetS3Link => self.open_s3_link(),
 
             Command::ViewerDisasm if self.live_viewer().is_some() => {
                 let name = self
@@ -19711,6 +19776,244 @@ impl App {
         });
     }
 
+    /// The object storage service a command given here is about: the one of the `s3://` row
+    /// under the cursor in a list of sessions, else the one the panel is in, else the only
+    /// one there is.
+    fn s3_service_here(&self) -> Option<String> {
+        let of = |path: &VPath| {
+            (path.scheme() == fcmd_core::Scheme::S3).then(|| {
+                fcmd_s3::vfs::S3Vfs::split_authority(path.authority().unwrap_or(""))
+                    .0
+                    .to_string()
+            })
+        };
+        let panel = self.panel();
+        let here = if panel.temp.is_some() {
+            panel.current().and_then(|e| of(&panel.path_of(e)))
+        } else {
+            of(&panel.cwd)
+        };
+        here.or_else(|| match self.cfg.s3.as_slice() {
+            [only] => Some(only.name.trim().to_string()),
+            _ => None,
+        })
+    }
+
+    /// `net.s3.profile`: which AWS profile this service signs with. The profiles are in two
+    /// files of the user's, so a worker reads them and the list opens when it answers.
+    fn ask_s3_profiles(&mut self) {
+        let known = |name: &str| self.cfg.s3.iter().any(|b| b.name.trim() == name);
+        match self.s3_service_here() {
+            Some(service) if known(&service) => {
+                self.requests.push(Request::S3Profiles { service });
+            }
+            _ => {
+                let m = self.i18n.t(if self.cfg.s3.is_empty() {
+                    "s3-profile-none"
+                } else {
+                    "s3-profile-no-service"
+                });
+                self.set_error(m);
+            }
+        }
+    }
+
+    /// The list itself: the environment, every profile the shared files name with its region
+    /// beside it, and no keys at all. The row in force is marked, and the cursor is on it.
+    fn open_s3_profiles(&mut self, service: String, profiles: Vec<fcmd_s3::creds::Profile>) {
+        use fcmd_s3::creds::Source;
+        let Some(block) = self.cfg.s3.iter().find(|b| b.name.trim() == service) else {
+            return;
+        };
+        let now = Source::parse(&block.credentials).describe();
+        let width = profiles
+            .iter()
+            .map(|p| p.name.chars().count())
+            .max()
+            .unwrap_or(0);
+        let mut rows = vec![PickRow::plain(
+            self.i18n.t("s3-profile-env"),
+            "env",
+            now == "env",
+        )];
+        for profile in &profiles {
+            let mut label = format!(
+                "{:<width$}  {}",
+                profile.name,
+                profile.region.as_deref().unwrap_or("")
+            );
+            // A profile that signs in a way of its own — single sign-on, a role — is a
+            // profile, and is shown; choosing it says why it cannot be used from here.
+            let value = if profile.has_keys {
+                format!("aws:{}", profile.name)
+            } else {
+                label = format!(
+                    "{}  ({})",
+                    label.trim_end(),
+                    self.i18n.t("s3-profile-no-keys")
+                );
+                format!("keyless:{}", profile.name)
+            };
+            let current = now == format!("aws:{}", profile.name);
+            rows.push(PickRow::plain(label.trim_end(), value, current));
+        }
+        // A profile the block names and the files no longer do: still the one in force, and
+        // a list that marked nothing would be saying otherwise.
+        if let Some(name) = now.strip_prefix("aws:") {
+            if !profiles.iter().any(|p| p.name == name) {
+                let label = format!("{name}  ({})", self.i18n.t("s3-profile-no-keys"));
+                rows.push(PickRow::plain(label, format!("keyless:{name}"), true));
+            }
+        }
+        rows.push(PickRow::plain(
+            self.i18n.t("s3-profile-anonymous"),
+            "anonymous",
+            now == "anonymous",
+        ));
+        let title = self.i18n.t_args(
+            "s3-profile-title",
+            &[("service", format!("s3://{service}@").into())],
+        );
+        let mut pick = Pick::new(PickKind::S3Profile, title, rows, self.active);
+        if let Some(at) = pick.rows.iter().position(|r| r.current) {
+            pick.cursor = at;
+        }
+        self.s3_profile_for = service;
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
+    /// The profile chosen: written into the service's block, as `credentials = "aws:work"`
+    /// would be by hand — so *Save setup* keeps it — and handed to a worker, which looks the
+    /// keys and the region up and gives the running session the service as it now is.
+    fn set_s3_profile(&mut self, value: &str) {
+        let service = std::mem::take(&mut self.s3_profile_for);
+        if let Some(profile) = value.strip_prefix("keyless:") {
+            let m = self
+                .i18n
+                .t_args("s3-profile-keyless", &[("profile", profile.into())]);
+            self.set_error(m);
+            return;
+        }
+        let Some(block) = self.cfg.s3.iter_mut().find(|b| b.name.trim() == service) else {
+            return;
+        };
+        block.credentials = value.to_string();
+        let block = block.clone();
+        self.requests.push(Request::S3Service { block });
+    }
+
+    /// The service is what was chosen: say as whom it signs now and for which region, and
+    /// read again any panel that is in one of its buckets — what it may see has changed.
+    fn s3_service_set(&mut self, service: &str, source: &str, signed: bool, region: &str) {
+        let name = format!("s3://{service}@");
+        if source == "anonymous" {
+            let m = self
+                .i18n
+                .t_args("s3-profile-set-anonymous", &[("service", name.into())]);
+            self.set_status(m);
+        } else if signed {
+            let m = self.i18n.t_args(
+                "s3-profile-set",
+                &[
+                    ("service", name.into()),
+                    ("profile", source.into()),
+                    ("region", region.into()),
+                ],
+            );
+            self.set_status(m);
+        } else {
+            let m = self.i18n.t_args(
+                "s3-profile-missing",
+                &[("service", name.into()), ("profile", source.into())],
+            );
+            self.set_error(m);
+        }
+        for side in 0..self.panels.len() {
+            let panel = &self.panels[side];
+            let there = panel.temp.is_none()
+                && panel.cwd.scheme() == fcmd_core::Scheme::S3
+                && fcmd_s3::vfs::S3Vfs::split_authority(panel.cwd.authority().unwrap_or("")).0
+                    == service;
+            if there {
+                self.read_panel(side);
+            }
+        }
+    }
+
+    /// `net.s3.link`: a link to the object under the cursor that anybody can read it through
+    /// for a while. The one question is for how long — an hour, a day, or the week that is
+    /// the most the protocol allows — and the answer is what gets signed.
+    ///
+    /// Only an object in a bucket has one: a prefix is not a thing a `GET` can read, and a
+    /// file anywhere else has no service to check a signature.
+    fn open_s3_link(&mut self) {
+        let panel = self.panel();
+        let object = panel
+            .current()
+            .filter(|e| {
+                panel.temp.is_none()
+                    && panel.cwd.scheme() == fcmd_core::Scheme::S3
+                    && !e.kind.is_dirlike()
+                    && e.kind != fcmd_core::EntryKind::Parent
+            })
+            .map(|e| panel.path_of(e));
+        let Some(object) = object else {
+            let m = self.i18n.t("s3-link-not-here");
+            self.set_error(m);
+            return;
+        };
+        let rows = S3_LINK_TIMES
+            .iter()
+            .map(|(seconds, label)| PickRow::plain(self.i18n.t(label), seconds.to_string(), false))
+            .collect();
+        let title = self
+            .i18n
+            .t_args("s3-link-title", &[("name", object.display_name().into())]);
+        self.s3_link_for = Some(object);
+        self.mode = Mode::Pick(Box::new(Pick::new(
+            PickKind::S3Link,
+            title,
+            rows,
+            self.active,
+        )));
+    }
+
+    /// The duration chosen: the signing is the provider's, which holds the keys.
+    fn make_s3_link(&mut self, value: &str) {
+        let (Some(path), Ok(seconds)) = (self.s3_link_for.take(), value.parse::<u64>()) else {
+            return;
+        };
+        self.requests.push(Request::S3Link { path, seconds });
+    }
+
+    /// The link is made: onto the clipboard with it, and a line that says what it is to and
+    /// how long it is good for — or why there is none.
+    fn s3_link_made(&mut self, name: &str, seconds: u64, result: Result<String, String>) {
+        match result {
+            Ok(link) => {
+                if self.copy_to_clipboard(&link) {
+                    let time = S3_LINK_TIMES
+                        .iter()
+                        .find(|(s, _)| *s == seconds)
+                        .map(|(_, label)| self.i18n.t(label))
+                        .unwrap_or_else(|| format!("{seconds} s"));
+                    let m = self.i18n.t_args(
+                        "s3-link-copied",
+                        &[("name", name.into()), ("time", time.into())],
+                    );
+                    self.set_status(m);
+                }
+            }
+            Err(why) => {
+                let m = self.i18n.t_args(
+                    "s3-link-failed",
+                    &[("name", name.into()), ("why", why.into())],
+                );
+                self.set_error(m);
+            }
+        }
+    }
+
     /// `file.strip_metadata`: the pictures selected (or under the cursor) on this disk, and a
     /// choice of what to take out of them.
     fn open_strip_meta(&mut self) {
@@ -25680,6 +25983,10 @@ impl App {
             PickKind::AiContext | PickKind::AiThreads | PickKind::StripMeta => return,
             // And `open_service_start`, which knows the service under the cursor.
             PickKind::ServiceStart => return,
+            // And `open_s3_profiles`, which has the profiles a worker read.
+            PickKind::S3Profile => return,
+            // And `open_s3_link`, which knows the object under the cursor.
+            PickKind::S3Link => return,
             PickKind::PluginsConfig => return,
             // And `open_settings`, which knows which row the list was left on.
             PickKind::Settings => return,
@@ -26939,6 +27246,14 @@ impl App {
             PickKind::ServiceStart => {
                 let value = row.value.clone();
                 self.set_service_start(&value);
+            }
+            PickKind::S3Profile => {
+                let value = row.value.clone();
+                self.set_s3_profile(&value);
+            }
+            PickKind::S3Link => {
+                let value = row.value.clone();
+                self.make_s3_link(&value);
             }
             PickKind::AiThreads => {
                 let value = row.value.clone();
@@ -38559,7 +38874,13 @@ mod tests {
         });
         assert!(matches!(&app.mode, Mode::Usage(v) if v.progress == (2, 5000)));
         // An answer that is another walk's is not this screen's.
-        let tree = fcmd_jobs::usage::walk(&fcmd_jobs::LocalFs, &root, &cancel, &mut |_, _| {});
+        let tree = fcmd_jobs::usage::walk(
+            &fcmd_jobs::LocalFs,
+            &root,
+            &fcmd_jobs::usage::Bounds::none(),
+            &cancel,
+            &mut |_, _| {},
+        );
         app.handle_event(Event::UsageTree {
             id: id + 1,
             tree: tree.clone(),
@@ -38631,7 +38952,13 @@ mod tests {
         let Some(Request::UsageTree { id, root, cancel }) = app.take_requests().pop() else {
             panic!("no walk was asked for")
         };
-        let tree = fcmd_jobs::usage::walk(&fcmd_jobs::LocalFs, &root, &cancel, &mut |_, _| {});
+        let tree = fcmd_jobs::usage::walk(
+            &fcmd_jobs::LocalFs,
+            &root,
+            &fcmd_jobs::usage::Bounds::none(),
+            &cancel,
+            &mut |_, _| {},
+        );
         app.handle_event(Event::UsageTree { id, tree });
         press(&mut app, "g");
         assert!(matches!(app.mode, Mode::Normal));
@@ -48356,6 +48683,308 @@ abcdefghij
         let viewer = app.mode.viewer_mut().expect("the viewer");
         assert_eq!(viewer.line_at_top(), 12);
         assert!(viewer.rows(80, 1)[0].text.ends_with("line 12"));
+    }
+
+    fn s3_profiles() -> Vec<fcmd_s3::creds::Profile> {
+        let profile = |name: &str, region: Option<&str>, has_keys: bool| fcmd_s3::creds::Profile {
+            name: name.into(),
+            region: region.map(str::to_string),
+            has_keys,
+        };
+        vec![
+            profile("default", Some("eu-south-1"), true),
+            profile("sso", Some("us-west-2"), false),
+            profile("work", Some("eu-west-1"), true),
+        ]
+    }
+
+    /// `net.s3.profile` in a bucket: a worker reads the shared files, the list has the
+    /// environment, every profile and no keys at all, and the one chosen is written into the
+    /// service's block and sent to be put in force.
+    #[test]
+    fn an_aws_profile_is_chosen_for_the_service_the_panel_is_in() {
+        let mut app = app();
+        for name in ["work", "backups"] {
+            app.cfg.s3.push(fcmd_config::S3Cfg {
+                name: name.into(),
+                ..Default::default()
+            });
+        }
+        app.panels[0].cwd = VPath::parse("s3://work@logs/2024/");
+        app.take_requests();
+        app.run(Command::NetS3Profile);
+        assert!(
+            app.mode.is_normal(),
+            "nothing opens before the files are read"
+        );
+        assert_eq!(
+            app.take_requests(),
+            vec![Request::S3Profiles {
+                service: "work".into()
+            }]
+        );
+        app.handle_event(Event::S3Profiles {
+            service: "work".into(),
+            profiles: s3_profiles(),
+        });
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::S3Profile);
+        assert!(pick.title.contains("s3://work@"), "{}", pick.title);
+        let values: Vec<&str> = pick.rows.iter().map(|r| r.value.as_str()).collect();
+        assert_eq!(
+            values,
+            ["env", "aws:default", "keyless:sso", "aws:work", "anonymous"]
+        );
+        // The block says `env` until somebody chooses, and that row is where the cursor is.
+        assert_eq!(pick.cursor, 0);
+        assert!(pick.rows[0].current);
+        let work = &pick.rows[3].label;
+        assert!(
+            work.contains("work") && work.contains("eu-west-1"),
+            "{work}"
+        );
+
+        // A profile with no keys in it cannot sign, and choosing it changes nothing.
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "Enter");
+        assert!(app.take_requests().is_empty());
+        assert_eq!(app.cfg.s3[0].credentials, "env");
+        assert!(app.status.contains("sso"), "{}", app.status);
+
+        app.run(Command::NetS3Profile);
+        app.take_requests();
+        app.handle_event(Event::S3Profiles {
+            service: "work".into(),
+            profiles: s3_profiles(),
+        });
+        press(&mut app, "End");
+        press(&mut app, "Up");
+        press(&mut app, "Enter");
+        assert_eq!(app.cfg.s3[0].credentials, "aws:work");
+        assert_eq!(
+            app.cfg.s3[1].credentials, "env",
+            "the other service is not touched"
+        );
+        let sent = app.take_requests();
+        assert!(
+            matches!(
+                sent.as_slice(),
+                [Request::S3Service { block }]
+                    if block.name == "work" && block.credentials == "aws:work"
+            ),
+            "{sent:?}"
+        );
+
+        // The answer says as whom it signs now, and the panel in that bucket is read again.
+        app.handle_event(Event::S3ServiceSet {
+            service: "work".into(),
+            source: "aws:work".into(),
+            signed: true,
+            region: "eu-west-1".into(),
+        });
+        let said = app.status.clone();
+        assert!(
+            said.contains("aws:work") && said.contains("eu-west-1"),
+            "{said}"
+        );
+        assert!(
+            app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::Read { panel: 0, .. })),
+            "the bucket is listed again with the new keys"
+        );
+
+        // Opened again, the list marks what is now in force.
+        app.run(Command::NetS3Profile);
+        app.handle_event(Event::S3Profiles {
+            service: "work".into(),
+            profiles: s3_profiles(),
+        });
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.rows[pick.cursor].value, "aws:work");
+    }
+
+    /// Where the command has no service to be about it says so, and which of the two
+    /// reasons it is; with one service only, that is the one wherever the panel is.
+    #[test]
+    fn the_profile_list_needs_a_service_to_be_about() {
+        let mut app = app();
+        app.take_requests();
+        app.run(Command::NetS3Profile);
+        assert!(app.take_requests().is_empty());
+        assert!(app.status.contains("[[s3]]"), "{}", app.status);
+
+        app.cfg.s3.push(fcmd_config::S3Cfg::default());
+        app.run(Command::NetS3Profile);
+        assert_eq!(
+            app.take_requests(),
+            vec![Request::S3Profiles {
+                service: String::new()
+            }]
+        );
+
+        app.cfg.s3.push(fcmd_config::S3Cfg {
+            name: "work".into(),
+            ..Default::default()
+        });
+        app.run(Command::NetS3Profile);
+        assert!(
+            app.take_requests().is_empty(),
+            "two services, and the panel in neither"
+        );
+        assert!(app.mode.is_normal());
+
+        // A profile the block names and the files do not is still shown as the one in force,
+        // and a service that found no keys says so as an error.
+        app.cfg.s3[1].credentials = "aws:gone".into();
+        app.handle_event(Event::S3Profiles {
+            service: "work".into(),
+            profiles: s3_profiles(),
+        });
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.rows[pick.cursor].value, "keyless:gone");
+        press(&mut app, "Esc");
+        app.handle_event(Event::S3ServiceSet {
+            service: "work".into(),
+            source: "aws:gone".into(),
+            signed: false,
+            region: "us-east-1".into(),
+        });
+        assert!(app.status.contains("aws:gone"), "{}", app.status);
+    }
+
+    /// A panel in a bucket with one object and one prefix in it, the cursor on the object.
+    fn app_in_a_bucket() -> App {
+        use fcmd_core::{Entry, EntryFlags, EntryId, EntryKind};
+        let mut app = app();
+        let cwd = VPath::parse("s3://work@logs/2024/");
+        let entry = |name: &str, kind: EntryKind, id: u64| Entry {
+            name: name.into(),
+            kind,
+            size: 10,
+            mtime: None,
+            btime: None,
+            atime: None,
+            flags: EntryFlags::empty(),
+            id: EntryId::Name(id),
+            link_target: None,
+        };
+        app.panels[0].cwd = cwd;
+        let generation = app.panels[0].generation;
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation,
+            result: Ok(vec![
+                entry("08", EntryKind::Dir, 1),
+                entry("access.log", EntryKind::File, 2),
+            ]),
+        });
+        let at = (0..app.panels[0].listing.len())
+            .find(|&r| app.panels[0].listing.row(r).unwrap().name_str() == "access.log")
+            .expect("the object is listed");
+        app.panels[0].cursor = at;
+        app.take_requests();
+        app
+    }
+
+    /// `Ctrl+Alt+O` on an object: three durations, and the one chosen goes to be signed with
+    /// the object's path; the link that comes back goes to the clipboard, and the status
+    /// line says what it is to and for how long.
+    #[test]
+    fn a_link_to_an_object_asks_for_how_long_and_lands_on_the_clipboard() {
+        let mut app = app_in_a_bucket();
+        let object = app.panels[0].cwd.join("access.log");
+        press(&mut app, "Ctrl+Alt+O");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::S3Link);
+        assert!(pick.title.contains("access.log"), "{}", pick.title);
+        let values: Vec<&str> = pick.rows.iter().map(|r| r.value.as_str()).collect();
+        assert_eq!(values, ["3600", "86400", "604800"]);
+        press(&mut app, "Down");
+        press(&mut app, "Enter");
+        assert_eq!(
+            app.take_requests(),
+            vec![Request::S3Link {
+                path: object,
+                seconds: 86_400
+            }]
+        );
+
+        let link = "https://logs.s3.amazonaws.com/2024/access.log?X-Amz-Signature=abc";
+        app.handle_event(Event::S3Link {
+            name: "access.log".into(),
+            seconds: 86_400,
+            result: Ok(link.into()),
+        });
+        assert_eq!(
+            app.take_requests(),
+            vec![Request::Clipboard { text: link.into() }]
+        );
+        let day = app.i18n.t("s3-link-day");
+        assert!(
+            app.status.contains("access.log") && app.status.contains(&day),
+            "{}",
+            app.status
+        );
+        assert!(!app.status_error);
+
+        // A service with no keys cannot sign, and the reason is what the line says.
+        app.handle_event(Event::S3Link {
+            name: "access.log".into(),
+            seconds: 3_600,
+            result: Err("this service has none".into()),
+        });
+        assert!(app.take_requests().is_empty(), "nothing is copied");
+        assert!(app.status_error);
+        assert!(
+            app.status.contains("this service has none"),
+            "{}",
+            app.status
+        );
+
+        // With the clipboard switched off the link is not said to have been copied.
+        app.cfg.ui.clipboard = false;
+        app.handle_event(Event::S3Link {
+            name: "access.log".into(),
+            seconds: 3_600,
+            result: Ok(link.into()),
+        });
+        assert!(app.take_requests().is_empty());
+        assert!(app.status_error);
+    }
+
+    /// A link is to an object: a prefix has none, nor has a file that is not in a bucket.
+    #[test]
+    fn a_link_is_offered_for_an_object_in_a_bucket_and_nothing_else() {
+        let mut app = app_in_a_bucket();
+        let prefix = (0..app.panels[0].listing.len())
+            .find(|&r| app.panels[0].listing.row(r).unwrap().name_str() == "08")
+            .unwrap();
+        app.panels[0].cursor = prefix;
+        app.run(Command::NetS3Link);
+        assert!(app.mode.is_normal());
+        assert!(app.status_error);
+        assert!(app.take_requests().is_empty());
+
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("notes.txt"), b"x").unwrap();
+        let mut app = app_on_disk(dir.path());
+        let at = (0..app.panels[0].listing.len())
+            .find(|&r| app.panels[0].listing.row(r).unwrap().name_str() == "notes.txt")
+            .unwrap();
+        app.panels[0].cursor = at;
+        app.run(Command::NetS3Link);
+        assert!(app.mode.is_normal());
+        assert!(app.status_error);
     }
 
     /// `file.strip_metadata` on a picture: three ways to choose from, and the one chosen

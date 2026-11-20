@@ -320,7 +320,8 @@ every key on the screen you are looking at does.
 - **Servers and buckets**: SFTP (and SSH servers with no SFTP, through their shell), SCP, FTP,
   FTPS and WebDAV panels and transfers, IMAP mailboxes read only, a session editor, host-key
   checking against `known_hosts`, a jump host, port forwarding, a speed limit per server, and
-  `s3://` panels with the credentials read from the environment or `~/.aws/credentials`.
+  `s3://` panels with the credentials read from the environment or from an AWS profile
+  chosen from a list.
   Passwords are kept, if you want, in the encrypted secrets file — never in the configuration.
 - **The program itself**: ten themes, fifteen interface languages switchable while it runs, two
   keymap profiles (FAR and mc) and your own on top, macros, the screens list (`F12`), a terminal

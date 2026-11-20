@@ -124,7 +124,8 @@ history, Folders history (§4.4), Frequent folders (§4.4a), Disk usage
 panel, Panels on/off, Compare folders, Synchronise folders, Open a tunnel, Tunnels, Compare by
 content, Panelize a command's output, View through a command, Learn keys, View file
 differences (`Ctrl+Shift+D`, SPEC 05 §3), Compare with options, Find duplicates, Calculator,
-Terminal · Connections, Disconnect · User menu, File associations, Folder shortcuts (§4.4b) ·
+Terminal · Connections, Disconnect, AWS profile of an object store (SPEC 04 §8.5), Shared link to an object (`Ctrl+Alt+O`, SPEC 04
+§8.5b) · User menu, File associations, Folder shortcuts (§4.4b) ·
 Plugin commands, Screens list, Record a macro, Macros, Task list.
 
 *Task list* is the operating system's processes, as FAR's is — the panel the change-drive
@@ -275,6 +276,7 @@ it.
 | Sort by | `panel.sort` | name / ext / size / mtime / none |
 | Quick search | `panel.quick_search` | with Alt / by letters / off |
 | Masks select folders too | `panel.select_folders` | on/off |
+| Folder sizes stay on one file system | `panel.size_one_filesystem` | on/off, off by default (SPEC 02 §3c; no effect on Windows) |
 
 ### 3.3 Interface settings
 

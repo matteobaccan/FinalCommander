@@ -73,6 +73,7 @@ since 0.41.0 also `MU` (muCommander), `NNN`, `RANGER`, `LF`, `BROOT`, `VIFM`, `X
 | 1.17 | Branch view (flat recursive listing of the current tree) | TC | ✓ `Ctrl+Alt+B` |
 | 1.18 | Panelize: fill a panel with the result of a search or an external command | MC | ✓ |
 | 1.19 | Directory sizes computed on demand (`Space`/`F3` on a dir) and in background | FAR/TC | ✓ |
+| 1.19b | Folder sizes that stop at other file systems: the walk does not cross into a mount point, as `du -x` | MC (#5014) | ✓ `panel.size_one_filesystem`, off by default; no effect on Windows |
 | 1.20 | Long-path support (`\\?\` on Windows, >260 chars), UNC paths | FAR/MTN2 | ✓ |
 | 1.21 | Per-panel encoding/codepage for names and previews | MC/FAR | ~ the names, yes; a preview pane has its own page already |
 | 1.22 | Icons / nerd-font glyphs per file type, optional | YAZI/LF/NNN/SPF/BROOT | ✗ M2 |
@@ -138,6 +139,8 @@ since 0.41.0 also `MU` (muCommander), `NNN`, `RANGER`, `LF`, `BROOT`, `VIFM`, `X
 | 4.5b | FTP/FTPS, WebDAV, SMB, NFS, MTP/ADB (Android), rclone bridge | far2l NetRocks/termscp | ~ FTP, FTPS and WebDAV are in, less FTP resume and active mode and WebDAV digest and locking; SMB, NFS, MTP/ADB and an rclone bridge are not there at all |
 | 4.5d | **`fish://`**: a filesystem over a plain ssh shell, for a host where sftp is turned off — mc ships a set of shell snippets it feeds to the remote shell | MC | ✓ another way, since 0.35.0: no scheme of its own, but an `sftp://` session whose server refuses the SFTP subsystem falls back to the shell by itself (SPEC 04 §6.5b) — POSIX `ls`, `cat`, `mkdir`, `mv`, `rm`, `chmod`, `touch -t`, with `ls` read under `LC_ALL=C` |
 | 4.5c | **S3-compatible object storage, read**: prefix as directory, any endpoint, credentials from the environment or `~/.aws/credentials`, a cap on a flat listing of a huge bucket | far2l NetRocks | ✓ |
+| 4.5e | **AWS profiles** for an object storage service: a named profile chosen from `~/.aws/credentials` and `~/.aws/config`, its region read from the configuration file | Captain's Deck | ✓ `net.s3.profile`; static keys only — a profile that signs through SSO or a role is listed and refused |
+| 4.5f | **A shared link to an S3 object**: a presigned URL good for 1 hour, 24 hours or 7 days, copied to the clipboard; signed locally with the session's key, nothing sent | Captain's Deck | ✓ `Ctrl+Alt+O` (`net.s3.link`) |
 | 4.6 | **Connection manager** (`Alt+N`): saved `[[site]]` list with groups, agent / key file / asked password, host-key verification with a trust-on-first-use prompt, one pooled connection per host, one jump host per site (`ssh -J`), explicit disconnect | TC/KRU | ~ the OS keyring, and a code page of its own |
 | 4.7 | **Transfers through the local operation engine**: copy and move up, down, between two servers and inside one, with progress, conflicts and cancellation; a `sftp://` URL in `Ctrl+L` connects | TC | ~ resuming an interrupted transfer; a speed limit per server (`max_kbps`) since 0.34.0 |
 | 4.8 | Temporary panel (collect unrelated files into a virtual panel and act on them) | FAR `tmppanel` | ✓ |

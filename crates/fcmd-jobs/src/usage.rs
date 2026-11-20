@@ -20,6 +20,71 @@ pub const KEPT: usize = 256;
 /// How deep the walk goes before it stops descending, as every other walk here does.
 const DEEPEST: u32 = 64;
 
+/// Where a walk of sizes stops: nowhere, or at the edge of the file system it started on.
+///
+/// `du -x`, and for the same reason: a folder with a network share, a backup disk or `/proc`
+/// mounted somewhere under it does not *hold* what is on them, and a walk that goes in
+/// answers with a figure nobody can free by deleting the folder — after an hour on the share.
+/// With `panel.size_one_filesystem` on, a folder that is on another device than the one the
+/// walk started from is counted as empty and not gone into.
+///
+/// The device is the `st_dev` of the folder itself, links not followed. Only a path on this
+/// machine has one: a server, a bucket and the inside of an archive have no mount points to
+/// speak of, and nothing is ever left out there. Nor on Windows, where the volume a folder
+/// is on cannot be asked without a call this crate may not make; the setting does nothing
+/// there, and the documentation says so.
+#[derive(Debug, Clone, Copy)]
+pub struct Bounds {
+    /// The device the walk started on; `None` when the walk has no edge.
+    home: Option<u64>,
+    device: fn(&VPath) -> Option<u64>,
+}
+
+impl Bounds {
+    /// A walk that goes wherever the folders go.
+    pub fn none() -> Self {
+        Bounds { home: None, device }
+    }
+
+    /// A walk that stays on the file system `root` is on, when `on` says so.
+    pub fn one_file_system(root: &VPath, on: bool) -> Self {
+        Bounds::reading(root, on, device)
+    }
+
+    /// The same with the device read by `device`, so that a test can say where a mount point
+    /// is without mounting anything.
+    pub fn reading(root: &VPath, on: bool, device: fn(&VPath) -> Option<u64>) -> Self {
+        Bounds {
+            home: if on { device(root) } else { None },
+            device,
+        }
+    }
+
+    /// Is this folder past the edge? One that cannot be asked is not: it is gone into, and
+    /// reading it fails or succeeds as it would have.
+    pub fn leaves(&self, dir: &VPath) -> bool {
+        match self.home {
+            None => false,
+            Some(home) => (self.device)(dir).is_some_and(|d| d != home),
+        }
+    }
+}
+
+/// The device a folder of this machine is on.
+#[cfg(unix)]
+fn device(path: &VPath) -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+    if !path.is_local() || path.in_container() {
+        return None;
+    }
+    std::fs::symlink_metadata(path.os()).ok().map(|m| m.dev())
+}
+
+#[cfg(not(unix))]
+fn device(_path: &VPath) -> Option<u64> {
+    None
+}
+
 /// What a row of the tree is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
@@ -85,9 +150,13 @@ impl Tree {
 /// agree about what a folder weighs. `progress` hears the files and bytes seen so far, once
 /// per folder; a cancelled walk answers `None`, because half a tree is a map that lies about
 /// every folder it did not reach.
+///
+/// A folder on another file system, when `bounds` stops there, is a row of the tree like any
+/// other — it is in the folder, and the map shows it — holding nothing.
 pub fn walk(
     fs: &dyn JobFs,
     root: &VPath,
+    bounds: &Bounds,
     cancel: &CancelToken,
     progress: &mut dyn FnMut(u64, u64),
 ) -> Option<Tree> {
@@ -131,7 +200,10 @@ pub fn walk(
                         children: Vec::new(),
                     });
                     tree.nodes[at as usize].children.push(id);
-                    stack.push((id, dir.join(&name), depth + 1));
+                    let child = dir.join(&name);
+                    if !bounds.leaves(&child) {
+                        stack.push((id, child, depth + 1));
+                    }
                 }
                 _ => {
                     seen_files += 1;
@@ -224,6 +296,7 @@ mod tests {
         let tree = walk(
             &LocalFs,
             &VPath::local(dir.path()),
+            &Bounds::none(),
             &CancelToken::new(),
             &mut |files, bytes| heard = (files, bytes),
         )
@@ -259,6 +332,7 @@ mod tests {
         let tree = walk(
             &LocalFs,
             &VPath::local(dir.path()),
+            &Bounds::none(),
             &CancelToken::new(),
             &mut |_, _| {},
         )
@@ -288,10 +362,129 @@ mod tests {
         std::fs::write(dir.path().join("a"), "a").unwrap();
         let cancel = CancelToken::new();
         cancel.cancel();
-        assert!(walk(&LocalFs, &VPath::local(dir.path()), &cancel, &mut |_, _| {}).is_none());
+        assert!(walk(
+            &LocalFs,
+            &VPath::local(dir.path()),
+            &Bounds::none(),
+            &cancel,
+            &mut |_, _| {}
+        )
+        .is_none());
         let gone = VPath::local(dir.path().join("not-there"));
-        let tree = walk(&LocalFs, &gone, &CancelToken::new(), &mut |_, _| {}).unwrap();
+        let tree = walk(
+            &LocalFs,
+            &gone,
+            &Bounds::none(),
+            &CancelToken::new(),
+            &mut |_, _| {},
+        )
+        .unwrap();
         assert_eq!(tree.unreadable, 1);
         assert_eq!(tree.node(Tree::ROOT).size, 0);
+    }
+
+    /// A device for a test: everything is on device 1, but a folder called `elsewhere` and what is
+    /// under it are on device 2 — a mount point without mounting anything.
+    fn mounted(path: &VPath) -> Option<u64> {
+        let other = path.os().components().any(|c| c.as_os_str() == "elsewhere");
+        Some(if other { 2 } else { 1 })
+    }
+
+    fn tree_with_a_mount() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("src")).unwrap();
+        std::fs::create_dir_all(dir.path().join("elsewhere/deep")).unwrap();
+        std::fs::write(dir.path().join("src/a"), vec![0u8; 10]).unwrap();
+        std::fs::write(dir.path().join("elsewhere/big"), vec![0u8; 1000]).unwrap();
+        std::fs::write(dir.path().join("elsewhere/deep/bigger"), vec![0u8; 5000]).unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_walk_kept_on_one_file_system_counts_a_mount_point_as_empty() {
+        let dir = tree_with_a_mount();
+        let root = VPath::local(dir.path());
+        let bounds = Bounds::reading(&root, true, mounted);
+        let tree = walk(
+            &LocalFs,
+            &root,
+            &bounds,
+            &CancelToken::new(),
+            &mut |_, _| {},
+        )
+        .unwrap();
+        let top = tree.node(Tree::ROOT);
+        assert_eq!((top.size, top.files), (10, 1));
+        // The mount point is still a row of its folder: it is there, it holds nothing.
+        assert_eq!(
+            names(&tree, Tree::ROOT),
+            [("src".to_string(), 10), ("elsewhere".to_string(), 0)]
+        );
+        assert_eq!(tree.unreadable, 0);
+    }
+
+    #[test]
+    fn the_same_walk_with_the_setting_off_goes_everywhere() {
+        let dir = tree_with_a_mount();
+        let root = VPath::local(dir.path());
+        for bounds in [Bounds::reading(&root, false, mounted), Bounds::none()] {
+            let tree = walk(
+                &LocalFs,
+                &root,
+                &bounds,
+                &CancelToken::new(),
+                &mut |_, _| {},
+            )
+            .unwrap();
+            assert_eq!(tree.node(Tree::ROOT).size, 6010);
+        }
+    }
+
+    #[test]
+    fn a_walk_started_on_the_mounted_side_stays_there() {
+        let dir = tree_with_a_mount();
+        let root = VPath::local(dir.path().join("elsewhere"));
+        let bounds = Bounds::reading(&root, true, mounted);
+        assert!(!bounds.leaves(&root.join("deep")));
+        assert!(bounds.leaves(&VPath::local(dir.path().join("src"))));
+        let tree = walk(
+            &LocalFs,
+            &root,
+            &bounds,
+            &CancelToken::new(),
+            &mut |_, _| {},
+        )
+        .unwrap();
+        assert_eq!(tree.node(Tree::ROOT).size, 6000);
+    }
+
+    #[test]
+    fn a_folder_whose_device_nobody_can_say_is_gone_into() {
+        let root = VPath::local(std::env::temp_dir());
+        let nowhere: fn(&VPath) -> Option<u64> = |_| None;
+        assert!(!Bounds::reading(&root, true, nowhere).leaves(&root.join("x")));
+        // Half an answer is no edge either: the root has a device, the folder cannot say.
+        let half: fn(&VPath) -> Option<u64> =
+            |p| (p.os().file_name().is_none_or(|n| n != "x")).then_some(1);
+        assert!(!Bounds::reading(&root, true, half).leaves(&root.join("x")));
+    }
+
+    /// On a real disk every folder of a temporary tree is on the device its root is on, so
+    /// the setting changes nothing there — which is all a test can say without a mount.
+    #[test]
+    fn a_tree_on_one_real_file_system_measures_the_same_either_way() {
+        let dir = tree_with_a_mount();
+        let root = VPath::local(dir.path());
+        let bounds = Bounds::one_file_system(&root, true);
+        assert!(!bounds.leaves(&root.join("elsewhere")));
+        let tree = walk(
+            &LocalFs,
+            &root,
+            &bounds,
+            &CancelToken::new(),
+            &mut |_, _| {},
+        )
+        .unwrap();
+        assert_eq!(tree.node(Tree::ROOT).size, 6010);
     }
 }

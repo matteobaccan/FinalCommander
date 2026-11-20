@@ -630,6 +630,84 @@ environment variables, and `~/.aws/credentials` — the file every AWS tool shar
 format they all write, profiles and session tokens included. `credentials = "anonymous"` signs
 nothing, which is how a bucket with a public read policy is browsed.
 
+**The two shared files, read together** (`fcmd_s3::creds::SharedFiles`). Beside
+`~/.aws/credentials` sits `~/.aws/config`, which holds what is not a secret about each profile
+— its region above all. `AWS_SHARED_CREDENTIALS_FILE` and `AWS_CONFIG_FILE` say where they are
+when they are not in `~/.aws/`. The two name their profiles differently and both spellings are
+read: `[work]` in the credentials file is `[profile work]` in the configuration, where only
+`[default]` goes without the word, and `[sso-session …]` and `[services …]` are not profiles at
+all. The keys of a profile come from the credentials file, else from its section of the
+configuration, where the AWS tools accept them too — always both halves from one section. The
+region comes from the configuration.
+
+The files are INI as the AWS tools write it and are read by a few lines of our own
+(`creds::parse_ini`) rather than by a crate: headings, `key = value`, whole-line comments with
+`#` or `;`, a comment after a value when a blank precedes it (a secret may hold either
+character, and never a blank), and the indented lines under a key with nothing after its `=` —
+`s3 =` and its nested settings — skipped rather than taken for keys of the profile. Nothing in
+them is ever an error: a file another tool wrote is read for what can be read in it.
+
+**The region of a service** is its block's `region` when that names one; otherwise
+`AWS_REGION`, then `AWS_DEFAULT_REGION`, then the region its profile has in the configuration
+file, then `us-east-1` — the order the AWS tools keep, so a shell that sets the variable means
+here what it means to them. With the environment as the source the profile asked is the one
+`AWS_PROFILE` names, `default` when it names none.
+
+**Choosing a profile** (`net.s3.profile`, *Commands → AWS profile of an object store*). The
+command is about one service: the one the panel is in, or the `s3://name@` row under the cursor
+in the sessions panel, or the only one configured. A worker reads the two files — a key handler
+reads no disk — and a list opens: *Environment*, every profile either file names (`default`
+first, the others by name) with its region beside it, and *Anonymous*; the row in force is
+marked and the cursor is on it. `Enter` writes the choice into the block as `credentials =
+"aws:work"` would be by hand, so *Save setup* keeps it and without it the choice lasts the
+session, and hands the block to a worker that looks the keys and the region up again and puts
+the service in the place of the one of its name (`S3Vfs::set_service`). The clients kept for
+that service's buckets were built on the old keys and go with them; a panel in one of its
+buckets is read again, since what it may see has changed; the status line says as whom the
+service signs now and for which region, or that no keys were found.
+
+**Only static keys.** A profile that signs another way — single sign-on, an assumed role, a
+`credential_process` — is a profile and is listed, marked *no keys*; choosing it changes
+nothing and says why. Each of those is a protocol of its own, and the AWS command line is the
+tool that speaks them: `aws configure export-credentials --format env` puts the keys it
+obtains where this program reads them.
+
+### 8.5b A link to an object
+
+`net.s3.link` — `Ctrl+Alt+O` in a panel that is in a bucket, *Commands → Shared link to an
+object* — makes a URL that reads the object under the cursor with no keys at all, and copies it
+to the clipboard: what one sends to somebody who has no account. A list asks the one thing
+there is to ask, how long it stays good: **1 hour, 24 hours or 7 days**, the last being the
+most the protocol allows (`sign::PRESIGN_MOST`).
+
+It is a *presigned* `GET`: Signature Version 4 with everything a signed request carries in its
+headers moved into the query — `X-Amz-Algorithm`, `X-Amz-Credential` (the key id and the
+scope), `X-Amz-Date`, `X-Amz-Expires`, `X-Amz-SignedHeaders=host`, the session token when the
+keys are temporary — and `X-Amz-Signature` over all of them. Only `host` is a signed header and
+the body is declared `UNSIGNED-PAYLOAD`, because whoever follows the link is a browser or
+`curl`. `Signer::presign` builds the query, sorted, once, and the URL and the canonical request
+are the same string. The client asked for it is the one the panel has been using, so the host
+is addressed the way the service is (§8.4b) and a bucket that turned out to live in another
+region is signed for the region it answers from.
+
+**Signed here, sent nowhere.** The link is arithmetic on the key this process already holds;
+no request goes out to make it, and the service first hears of it when somebody follows it —
+and checks it by signing the same words with the same key. Three things follow, and the help
+says them:
+
+- whoever has the link can read that one object until it expires, and nobody else's leave is
+  asked: it is a password to one object with a date on it;
+- it cannot be taken back short of deleting the object or revoking the key that signed it;
+- signed with **temporary credentials** (a session token) it stops working when they do,
+  whatever duration was chosen.
+
+It is offered for an object and nothing else: a prefix is not a thing a `GET` reads, a file
+that is not in a bucket has no service to check a signature, and a service configured without
+keys has nothing to sign with — each is refused with its reason, the last by the provider
+(`S3Vfs::presign`) since it is the one that knows. The clipboard is the terminal's (SPEC 06
+§11); with `ui.clipboard` off the link is not made visible any other way, and the line says
+the clipboard is off rather than that something was copied.
+
 ### 8.6 What works, and what is not there yet
 
 Browsing, and reading. A prefix opens as a directory, `F3` brings an object down to a temporary
@@ -667,3 +745,11 @@ two ways that matter:
 The signature itself is tested against `botocore`, the library the AWS command line signs with,
 run against a frozen clock — and one of those vectors is the worked example AWS publishes the
 signature of, so the chain is anchored at both ends.
+
+The presigned link (§8.5b) has both kinds of test as well. `Signer::presign` is compared, whole
+query string, with the worked example of the AWS documentation — *Authenticating Requests:
+Using Query Parameters*, `GET examplebucket/test.txt` on 24 May 2013, good for 86400 seconds,
+signature `aeeed9bb…f604d404`. And the fake checks a presigned request the way the service
+does, signature first and then the clock, so one test follows a link with a bare HTTP client
+that has no keys and reads the object, and sees a link past its time, one with its duration
+rewritten and one pointed at the object beside it all refused.
