@@ -1871,8 +1871,6 @@ pub enum PromptKind {
     /// The name to keep the find dialog's search under (`F2` in `Alt+F7`).
     SearchName,
     EditorSaveAs,
-    /// Name for F7.
-    Mkdir,
     /// The message of a commit, from the git panel.
     GitCommit,
     /// What to call this tab. An empty answer takes the name off again.
@@ -3523,6 +3521,11 @@ pub struct App {
     /// The folder `F7` is making, as the panel and the row name to put the cursor on when
     /// the job ends.
     mkdir_cursor: Option<(usize, String)>,
+    /// The folder `F7` is making and the panel that goes into it once it exists, when the
+    /// dialog's *Enter it* was ticked.
+    mkdir_into: Option<(usize, VPath)>,
+    /// How the *Enter it* box of `F7` was left, which is how it starts the next time.
+    mkdir_enter: bool,
     /// The archive a test is reading, so its end can name it; and, after a test that found
     /// damage, where each row of the list of bad entries is — the list shows the reasons,
     /// and `Enter` wants the path.
@@ -3962,6 +3965,8 @@ impl App {
             tools: Vec::new(),
             plugins: Vec::new(),
             mkdir_cursor: None,
+            mkdir_into: None,
+            mkdir_enter: false,
             testing: None,
             test_bad: Vec::new(),
             git_view: None,
@@ -8397,18 +8402,6 @@ impl App {
                 }
                 self.git_ask(GitAsk::Commit(message));
             }
-            PromptKind::Mkdir => {
-                let raw = prompt.text.trim();
-                if raw.is_empty() {
-                    return;
-                }
-                let target = self.resolve_path(raw);
-                // The cursor goes to the new folder once it exists, as FAR's does: what one
-                // does after making a folder is go into it. For `a/b/c` that is `a`, the part
-                // this panel shows; for a path somewhere else entirely, nothing moves.
-                self.mkdir_cursor = self.row_in_panel(self.active, &target);
-                self.start_job(JobSpec::new(JobKind::Mkdir, vec![], Some(target)));
-            }
             PromptKind::TabName => {
                 let raw = prompt.text.trim().to_string();
                 self.panel_mut().name = (!raw.is_empty()).then_some(raw);
@@ -10015,6 +10008,41 @@ impl App {
             options: Box::new(options),
             cancel,
         });
+    }
+
+    /// The name of the one file being copied or moved, into the destination at the caret:
+    /// after the prefilled folder it makes `folder/name`, which is the line to edit into a
+    /// copy under another name. Several files have no one name, and the key says so rather
+    /// than doing nothing.
+    fn copy_source_name(&mut self) {
+        let [one] = self.copy_sources.as_slice() else {
+            let m = self.i18n.t("copy-name-several");
+            self.set_error(m);
+            return;
+        };
+        let name = one.display_name();
+        if let Mode::Form(form) = &mut self.mode {
+            form.insert_str(&name);
+        }
+    }
+
+    /// OK in the make-folder dialog: the folder, and whether the panel goes into it.
+    fn apply_mkdir_form(&mut self, form: &Form) {
+        let enter = form.toggle_value("mkdir.enter");
+        self.mkdir_enter = enter;
+        let raw = form.text_value("mkdir.name");
+        let raw = raw.trim();
+        if raw.is_empty() {
+            return;
+        }
+        let target = self.resolve_path(raw);
+        // The cursor goes to the new folder once it exists, as FAR's does: what one does
+        // after making a folder is go into it. For `a/b/c` that is `a`, the part this panel
+        // shows; for a path somewhere else entirely, nothing moves. With *Enter it* the
+        // panel goes in instead, all the way down the path that was typed.
+        self.mkdir_cursor = self.row_in_panel(self.active, &target);
+        self.mkdir_into = enter.then(|| (self.active, target.clone()));
+        self.start_job(JobSpec::new(JobKind::Mkdir, vec![], Some(target)));
     }
 
     /// What the dialog asked for: walk both trees and decide.
@@ -11911,9 +11939,19 @@ impl App {
     fn job_done(&mut self, id: u64, kind: JobKind, outcome: Outcome) {
         // A folder made with `F7`: the re-read below lands on it, if it was made.
         if kind == JobKind::Mkdir {
+            let made = outcome.errors.is_empty() && !outcome.cancelled;
+            let into = self.mkdir_into.take();
             if let Some((side, name)) = self.mkdir_cursor.take() {
-                if outcome.errors.is_empty() && !outcome.cancelled {
+                if made && into.is_none() {
                     self.panels[side].want_cursor = Some(name);
+                }
+            }
+            // *Enter it* was ticked: the panel that asked goes into the folder, the whole
+            // path of it, as `mkdir -p a/b && cd a/b` would. Only into a folder that was
+            // made — a refusal leaves the panel where the message about it makes sense.
+            if let Some((side, path)) = into {
+                if made {
+                    self.panel_go(side, path, true);
                 }
             }
         }
@@ -12187,6 +12225,16 @@ impl App {
         // does something behind the user's back. FAR does nothing here either (issue #29). A
         // line with a command on it was taken above, and runs as it always did.
         if self.panels_off && key.code == KeyCode::Enter && key.mods == Mods::NONE {
+            return;
+        }
+        // Nor is `Space` there: it measures the folder under the cursor, and there is no
+        // cursor on screen. It is the line's instead, which is what makes the space in front
+        // of a command that is not to be remembered something one can simply type.
+        if self.panels_off
+            && self.cfg.ui.command_line
+            && key == Key::new(KeyCode::Char(' '), Mods::NONE)
+        {
+            self.cmd.insert(' ');
             return;
         }
         // The quick view with the focus is a reader, so the reader's keys come first: `F4`
@@ -13558,14 +13606,9 @@ impl App {
                 self.open_ai_threads()
             }
             Command::FileMkdir => {
-                let title = self.i18n.t("prompt-mkdir");
-                self.mode = Mode::Prompt(Prompt {
-                    kind: PromptKind::Mkdir,
-                    title,
-                    text: String::new(),
-                    secret: false,
-                    sources: Vec::new(),
-                });
+                // The box starts as it was left the last time: somebody who makes folders to
+                // work in them ticks it once.
+                self.mode = Mode::Form(Box::new(Form::mkdir(self.mkdir_enter, &self.i18n)));
             }
             Command::FileAssoc => self.open_with_list(),
             // In a git panel `F2` is the git menu: push, pull, the other views.
@@ -14789,11 +14832,17 @@ impl App {
         if line.is_empty() {
             return;
         }
-        self.cmd.remember(&line);
-        self.marks
-            .touch(crate::history::COMMANDS, &line, crate::history::now());
-        let locked = self.marks.locked_lines(crate::history::COMMANDS);
-        self.cmd.trim_history(self.cfg.ui.command_history, &locked);
+        // A space in front says "run this and forget it", as bash's `ignorespace` does: the
+        // line is not put in the history, so neither `↑` nor `Alt+F8` nor the state file
+        // ever holds it. A line that was already there from an earlier run stays there.
+        let unkept = self.cfg.cmdline.history_ignore_space && self.cmd.text.starts_with(' ');
+        if !unkept {
+            self.cmd.remember(&line);
+            self.marks
+                .touch(crate::history::COMMANDS, &line, crate::history::now());
+            let locked = self.marks.locked_lines(crate::history::COMMANDS);
+            self.cmd.trim_history(self.cfg.ui.command_history, &locked);
+        }
         self.cmd.clear();
         self.run_line(&line);
     }
@@ -23215,6 +23264,23 @@ impl App {
             self.ai_rename_prompt();
             return;
         }
+        // The destination of a copy or a move takes the key that puts the name under the
+        // cursor on the command line — `Ctrl+Enter` unless the keymap says otherwise — and
+        // it means the name of what is being copied: a copy under another name starts from
+        // the name it has. Anywhere else in the dialog the key is the dialog's own.
+        if matches!(
+            &self.mode,
+            Mode::Form(f)
+                if f.kind == FormKind::Copy && f.button.is_none() && f.on_key("copy.target")
+        ) && self.keymap.resolve(&[Scope::Panel], key)
+            == Some(Command::CmdInsert(
+                fcmd_cmd::Insert::Name,
+                fcmd_cmd::Which::Active,
+            ))
+        {
+            self.copy_source_name();
+            return;
+        }
         // And the find dialog the one that asks for its rows in words, the same way.
         if matches!(&self.mode, Mode::Form(f) if f.kind == FormKind::Find)
             && self.keymap.resolve(&[Scope::Panel], key) == Some(Command::AiFind)
@@ -23657,6 +23723,10 @@ impl App {
         }
         if form.kind == FormKind::Link {
             self.apply_link_form(&form);
+            return;
+        }
+        if form.kind == FormKind::Mkdir {
+            self.apply_mkdir_form(&form);
             return;
         }
         let problems = form.apply(&mut self.cfg);
@@ -32460,6 +32530,38 @@ impl App {
         false
     }
 
+    /// What the terminal's window title should say: the file in the viewer or the editor,
+    /// and otherwise the folder of the panel with the focus — then the program's name, as
+    /// every title ends. `None` with `ui.window_title` off, which leaves the title alone.
+    ///
+    /// A dialog over a viewer or an editor is still about that file, so a screen parked
+    /// under one keeps the title; a dialog over the panels keeps the folder.
+    pub fn window_title(&self) -> Option<String> {
+        if !self.cfg.ui.window_title {
+            return None;
+        }
+        let edited = |path: &Option<VPath>, name: String| match path {
+            Some(path) => path.to_string(),
+            None => name,
+        };
+        let place = if let Some(viewer) = self.viewer_under_prompt.as_deref() {
+            viewer.path.to_string()
+        } else if let Some(editor) = self.editor_parked.as_deref() {
+            edited(&editor.path, editor.name())
+        } else if let Some(hex) = self.hex_parked.as_deref() {
+            edited(&hex.path, hex.name())
+        } else {
+            match &self.mode {
+                Mode::Viewer(viewer) => viewer.path.to_string(),
+                Mode::Editor(editor) => edited(&editor.path, editor.name()),
+                Mode::Hex(hex) => edited(&hex.path, hex.name()),
+                Mode::Diff(diff) => format!("{} ↔ {}", diff.left_name, diff.right_name),
+                _ => self.panel().cwd.to_string(),
+            }
+        };
+        Some(format!("{place} - fcmd"))
+    }
+
     /// Hand the viewer to the renderer (it needs `&mut` to read its windows) and say whether
     /// it was parked under a prompt, so it goes back where it came from.
     pub fn viewer_for_render(&mut self) -> Option<(Box<Viewer>, bool)> {
@@ -36746,6 +36848,57 @@ mod tests {
         );
     }
 
+    /// A line with a space in front runs and is not kept, as bash's `ignorespace` has it;
+    /// the same line without the space is. With the panels on the space is put there with
+    /// `Home`, because `Space` on an empty line measures a folder.
+    #[test]
+    fn a_command_with_a_space_in_front_runs_and_is_not_remembered() {
+        let mut app = app();
+        typed(&mut app, "echo secret");
+        press(&mut app, "Home");
+        press(&mut app, "Space");
+        assert_eq!(app.cmd.text, " echo secret");
+        press(&mut app, "Enter");
+        assert_eq!(shell_requests(&app), ["echo secret"], "it ran");
+        assert!(app.cmd.history().is_empty(), "{:?}", app.cmd.history());
+        assert!(app.cmd.is_empty());
+
+        typed(&mut app, "echo kept");
+        press(&mut app, "Enter");
+        assert_eq!(app.cmd.history(), ["echo kept"]);
+        // Walking back from a new line finds only what was kept.
+        typed(&mut app, "x");
+        press(&mut app, "Up");
+        assert_eq!(app.cmd.text, "echo kept");
+    }
+
+    /// With the panels off there is no folder to measure, so the space is simply typed.
+    #[test]
+    fn with_the_panels_off_the_space_in_front_is_typed_like_any_other() {
+        let mut app = app();
+        app.run(Command::ShellOutputShow);
+        assert!(app.panels_off);
+        typed(&mut app, " echo secret");
+        assert_eq!(app.cmd.text, " echo secret");
+        press(&mut app, "Enter");
+        assert_eq!(shell_requests(&app), ["echo secret"]);
+        assert!(app.cmd.history().is_empty(), "{:?}", app.cmd.history());
+    }
+
+    /// `cmdline.history_ignore_space = false`: every line that runs is kept, as before.
+    #[test]
+    fn the_space_in_front_means_nothing_when_the_setting_is_off() {
+        let mut app = app();
+        app.cfg
+            .set("cmdline.history_ignore_space", "false")
+            .expect("a setting");
+        typed(&mut app, "echo secret");
+        press(&mut app, "Home");
+        press(&mut app, "Space");
+        press(&mut app, "Enter");
+        assert_eq!(app.cmd.history(), ["echo secret"]);
+    }
+
     #[test]
     fn cd_moves_the_panel_and_never_reaches_a_shell() {
         let dir = std::env::temp_dir();
@@ -40984,6 +41137,56 @@ run = ["echo one", "echo two", "echo three"]
         assert_eq!(asked.len(), 1, "it should have been asked to run");
     }
 
+    /// The window title is the folder of the panel with the focus, and follows it: to the
+    /// other panel on `Tab`, into a folder on `Enter`. With the setting off there is none.
+    #[test]
+    fn the_window_title_is_the_folder_of_the_panel_with_the_focus() {
+        let mut app = app();
+        let title = |app: &App| app.window_title().expect("a title");
+        assert_eq!(title(&app), format!("{} - fcmd", app.panels[0].cwd));
+        press(&mut app, "Tab");
+        assert_eq!(title(&app), format!("{} - fcmd", app.panels[1].cwd));
+        press(&mut app, "Tab");
+        let docs = app.panels[0].cwd.join("docs");
+        app.goto(docs.clone());
+        assert_eq!(title(&app), format!("{docs} - fcmd"));
+        // A dialog over the panels is still about that folder.
+        press(&mut app, "F7");
+        assert_eq!(title(&app), format!("{docs} - fcmd"));
+        press(&mut app, "Esc");
+
+        app.cfg.set("ui.window_title", "false").expect("a setting");
+        assert_eq!(app.window_title(), None);
+    }
+
+    /// In the viewer and in the editor the title is the file, and it stays the file while a
+    /// dialog of theirs is open over them; back on the panels it is the folder again.
+    #[test]
+    fn the_window_title_is_the_file_in_the_viewer_and_the_editor() {
+        let dir = tempfile::tempdir().unwrap();
+        let text = dir.path().join("notes.txt");
+        std::fs::write(&text, "one\ntwo\n").unwrap();
+        let shown = VPath::local(&text);
+        let mut app = app();
+        let folder = app.window_title();
+
+        app.open_viewer_on(&text, shown.clone());
+        assert!(app.mode.viewer().is_some());
+        assert_eq!(app.window_title(), Some(format!("{shown} - fcmd")));
+        // The search prompt parks the viewer under itself; the title does not blink.
+        press(&mut app, "F7");
+        assert!(app.mode.viewer().is_none(), "{:?}", app.mode);
+        assert_eq!(app.window_title(), Some(format!("{shown} - fcmd")));
+        press(&mut app, "Esc");
+        press(&mut app, "Esc");
+        assert!(app.mode.is_normal(), "{:?}", app.mode);
+        assert_eq!(app.window_title(), folder);
+
+        app.open_editor_on(&shown);
+        assert!(app.mode.editor().is_some(), "{:?}", app.mode);
+        assert_eq!(app.window_title(), Some(format!("{shown} - fcmd")));
+    }
+
     #[test]
     fn screens_keep_a_viewer_and_an_editor_open_behind_the_panels() {
         let dir = tempfile::tempdir().unwrap();
@@ -43205,6 +43408,91 @@ run = ["echo one", "echo two", "echo three"]
         assert_eq!(on, "new");
     }
 
+    /// `F7` with *Enter it* ticked: the panel goes into the folder once it is made — down
+    /// the whole path that was typed, as `mkdir -p new/deep && cd new/deep` — and the box
+    /// is still ticked the next time the dialog opens.
+    #[test]
+    fn f7_with_enter_it_takes_the_panel_into_the_new_folder() {
+        let mut app = app();
+        let cwd = app.panel().cwd.clone();
+        press(&mut app, "F7");
+        let mut buf = fcmd_ui::Buffer::new(80, 25);
+        crate::render::draw(&mut app, &mut buf);
+        let drawn = buf.to_text();
+        assert!(drawn.contains("[ ] Enter it"), "{drawn}");
+        typed(&mut app, "new/deep");
+        press(&mut app, "Down");
+        press(&mut app, "Space");
+        press(&mut app, "Enter");
+        let (id, spec) = job_request(&mut app);
+        let made = spec.target.clone().expect("a folder to make");
+        assert_eq!(made, cwd.join("new").join("deep"));
+        // Nothing moves until the folder is there.
+        assert_eq!(app.panel().cwd, cwd);
+        app.handle_event(Event::JobDone {
+            id,
+            kind: JobKind::Mkdir,
+            outcome: fcmd_jobs::Outcome {
+                dirs: 2,
+                ..Default::default()
+            },
+        });
+        assert_eq!(app.panel().cwd, made);
+        assert_eq!(app.panels[0].want_cursor, None);
+
+        press(&mut app, "F7");
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        assert_eq!(form.kind, FormKind::Mkdir);
+        assert!(form.toggle_value("mkdir.enter"), "the box is remembered");
+    }
+
+    /// The box left alone is the `F7` there always was, and a folder that could not be made
+    /// is not entered: the panel stays where the message about it makes sense.
+    #[test]
+    fn f7_enters_nothing_unasked_and_nothing_that_was_not_made() {
+        let mut app = app();
+        let cwd = app.panel().cwd.clone();
+        press(&mut app, "F7");
+        typed(&mut app, "plain");
+        press(&mut app, "Enter");
+        let (id, _) = job_request(&mut app);
+        app.handle_event(Event::JobDone {
+            id,
+            kind: JobKind::Mkdir,
+            outcome: fcmd_jobs::Outcome {
+                dirs: 1,
+                ..Default::default()
+            },
+        });
+        assert_eq!(app.panel().cwd, cwd, "the box was not ticked");
+
+        press(&mut app, "F7");
+        typed(&mut app, "refused");
+        press(&mut app, "Down");
+        press(&mut app, "Space");
+        press(&mut app, "Enter");
+        let (id, spec) = job_request(&mut app);
+        app.handle_event(Event::JobDone {
+            id,
+            kind: JobKind::Mkdir,
+            outcome: fcmd_jobs::Outcome {
+                errors: vec![(spec.target.expect("a target"), "denied".into())],
+                ..Default::default()
+            },
+        });
+        assert_eq!(app.panel().cwd, cwd, "a folder that was not made");
+        // An empty name makes nothing, as before.
+        app.mode = Mode::Normal;
+        press(&mut app, "F7");
+        press(&mut app, "Enter");
+        assert!(app
+            .take_requests()
+            .iter()
+            .all(|r| !matches!(r, Request::Job { .. })));
+    }
+
     /// The programs from elsewhere: every one the code runs is a row, the versions arrive
     /// later and fill the rows in, a late answer to a panel opened again is dropped, and `F4`
     /// asks before it installs anything.
@@ -44279,6 +44567,78 @@ run = ["echo one", "echo two", "echo three"]
             }
             other => panic!("expected the copy dialog, got {other:?}"),
         }
+    }
+
+    /// `Ctrl+Enter` in the destination of a copy of one file puts that file's name there,
+    /// after the folder the dialog offered, to be edited into another name; the job then
+    /// goes to that name. Off the destination row the key is the dialog's `Enter` still.
+    #[test]
+    fn ctrl_enter_puts_the_name_of_the_one_file_into_the_destination() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "Down"); // a.txt
+        let name = app.panel().current().expect("a row").name_str().to_string();
+        let source = app.panel().cwd.join(&name);
+        press(&mut app, "F5");
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        let offered = form.text_value("copy.target");
+        press(&mut app, "Ctrl+Enter");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the key answered the dialog: {:?}", app.mode)
+        };
+        assert_eq!(form.text_raw("copy.target"), format!("{offered}{name}"));
+        // The caret is after the name, so what is typed next goes on from it.
+        typed(&mut app, ".bak");
+        press(&mut app, "Enter");
+        let (id, spec) = job_request(&mut app);
+        assert_eq!(spec.kind, JobKind::Copy);
+        assert_eq!(spec.sources, vec![source]);
+        let target = spec.target.expect("a target").to_string();
+        assert!(target.ends_with(&format!("{name}.bak")), "{target}");
+        app.handle_event(Event::JobDone {
+            id,
+            kind: JobKind::Copy,
+            outcome: fcmd_jobs::Outcome {
+                files: 1,
+                ..Default::default()
+            },
+        });
+
+        // `F6` has the same field and the same key.
+        press(&mut app, "F6");
+        press(&mut app, "Ctrl+Enter");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the key answered the dialog: {:?}", app.mode)
+        };
+        assert!(form.text_raw("copy.target").ends_with(&name));
+        // On another row it answers the dialog, as it always did.
+        press(&mut app, "Down");
+        press(&mut app, "Ctrl+Enter");
+        assert!(!matches!(&app.mode, Mode::Form(_)), "{:?}", app.mode);
+    }
+
+    /// Several files have no one name: the key says so and the destination stays as it was.
+    #[test]
+    fn ctrl_enter_names_nothing_when_several_files_are_copied() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "Ins"); // a.txt
+        press(&mut app, "Ins"); // b.rs
+        press(&mut app, "F5");
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        let offered = form.text_raw("copy.target");
+        press(&mut app, "Ctrl+Enter");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the key answered the dialog: {:?}", app.mode)
+        };
+        assert_eq!(form.text_raw("copy.target"), offered);
+        assert!(app.status_error, "{}", app.status);
+        assert_eq!(app.status, app.i18n.t("copy-name-several"));
     }
 
     /// Every row of the copy dialog reaches the job: the engine could already do all of this

@@ -287,6 +287,7 @@ it.
 | Always show the menu bar | `ui.menu_bar` | on/off, off by default as in FAR |
 | Save the setup on exit | `ui.save_setup_on_exit` | on/off, off by default as in FAR |
 | Clock in the corner | `ui.clock` | on/off, off by default |
+| Show where we are in the terminal's window title | `ui.window_title` | on/off, on by default (SPEC 06 §10b) |
 
 *Clock in the corner* draws `HH:MM` in the top right corner, over the panel frame — FAR's own
 spot — or at the end of the menu bar when that is always on. It costs the panels no row. It is

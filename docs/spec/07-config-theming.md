@@ -98,6 +98,7 @@ menu_bar = "auto"               # auto | always | never
 key_bar = true
 syntax = true                   # colour the languages and markups we recognise
 clock = false
+window_title = true             # where we are, in the terminal's window title (SPEC 06 §10b)
 language = "auto"
 clipboard = true                # ask the terminal to carry the clipboard (OSC 52, SPEC 06 §11)
 table = true                    # a .csv, .jsonl or .dbf opens as a table (SPEC 05 §1.11)
@@ -367,6 +368,9 @@ depth = 0                 # how deep when it does; 1 = the two directories, 0 = 
 # The prompt (SPEC 06 §7.0b). FAR's letters, plus `$r` for ` (branch)` in a git repository and
 # `%GITBRANCH%` for the bare branch name.
 prompt = "$p$r$g "
+# A line typed with a space in front runs and is not kept in the command history, as bash's
+# `HISTCONTROL=ignorespace` has it (SPEC 06 §7.0c). `false` keeps every line that runs.
+history_ignore_space = true
 ```
 
 ## 2c-quinquies. `[find]`
@@ -443,7 +447,7 @@ something the file format does not accept:
 | --- | --- |
 | System | `panel.natural_sort`, `panel.sort_case`, `panel.allow_reverse_sort`, `net.fetch_limit_mb`, `net.keepalive_secs` |
 | Panel | `panel.show_hidden`, `panel.dirs_first`, `panel.selected_first`, `panel.reverse`, `panel.view`, `panel.sort`, `panel.quick_search` |
-| Interface | `ui.key_bar`, `ui.status_bar`, `ui.syntax`, `ui.keymap` |
+| Interface | `ui.key_bar`, `ui.status_bar`, `ui.syntax`, `ui.keymap`, `ui.window_title` |
 | Confirmations | `general.confirm_delete`, `general.confirm_overwrite`, `general.confirm_exit` |
 
 `Save setup` (`Shift+F9`) writes the whole configuration back out, themes declared in the file

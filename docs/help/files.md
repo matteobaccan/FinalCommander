@@ -4,9 +4,21 @@
 copy or a move is the other panel, and the dialog says so before anything happens. After `F7`
 the cursor is on the new folder, ready for `Enter`.
 
+The `F7` dialog has a box under the name, *Enter it*: tick it (`↓`, then `Space`) and the
+panel goes into the folder as soon as it is made — `mkdir x && cd x` in one answer, and all
+the way down when the name is a path such as `2026/11/photos`. The box stays as it was left
+until the program is closed, so it is ticked once by somebody who makes folders to work in
+them. A folder that could not be made is not entered.
+
 Every one of them is a job: it runs in the background with a progress bar, `Esc` stops it, and
 what it has already done stays done. A conflict — a file that is already there — stops and
 asks, with "all" and "none" answers so a long copy is not a thousand questions.
+
+To copy or move **one file under another name**, press `Ctrl+Enter` in the destination: the
+file's own name is put there, after the folder the dialog offered, ready to be edited —
+`report.txt` into `report-old.txt` — before `Enter`. It is the key that puts the name under
+the cursor on the command line, and it follows the keymap if that key was moved. With
+several files selected there is no one name to offer, and the status line says so.
 
 The copy dialog has more in it than the destination, and all of it is optional — type a path,
 press `Enter`, and nothing below the first line applies:

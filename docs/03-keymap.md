@@ -168,6 +168,7 @@ indistinguishable in a TTY — see §9.
 | history prev/next | Ctrl+E / Ctrl+X | Alt+P / Alt+N | ↑/↓ (when non-empty), Alt+F8 list |
 | insert current file name | Ctrl+J, Ctrl+Enter | Alt+Enter | Ctrl+Enter |
 | insert name from other panel | Ctrl+Shift+Enter | — | Ctrl+Shift+Enter |
+| in the copy and move dialog: the name of the one file being copied, into the destination | — (the name is part of what the dialog offers) | — | **Ctrl+Enter** |
 | insert the panel's path (this one / the other) | Ctrl+F / Ctrl+; | — | Ctrl+[ / Ctrl+] |
 | completion | — | Tab (also Alt+Tab list) | Tab |
 | run keeping output | — | Ctrl+O after run | Ctrl+O |

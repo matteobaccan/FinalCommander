@@ -91,6 +91,17 @@ is remembered for the next dialog with the others.
 | Size limit | a file over the target filesystem's own limit (FAT: 4 GiB − 1) is refused before it is opened, as that file's error naming the limit and the filesystem, and the job goes on (FAR's issue #532). The filesystem is the one `mount_of` finds for the target |
 | Permissions | target dir not writable → decision point with an "elevate" action (SPEC 06 §7) |
 
+**The source's name in the destination.** The dialog offers the other panel's folder, which
+is where a copy usually goes; a copy *under another name* wants the name it has now, to edit.
+With the cursor on the destination row, the key the keymap gives `cmd.insert.name` —
+`Ctrl+Enter`, FAR's own key for the name under the cursor on the command line (SPEC 06 §7.6)
+— inserts the name of the file being copied or moved at the caret, so `/other/folder/`
+becomes `/other/folder/report.txt` with the caret after it. It is the name alone, with no
+quoting: the row holds a path, not a command. It applies when exactly one file is being
+copied or moved; with several there is no one name, and the key says so on the status line
+and changes nothing. On any other row of the dialog the key is not taken, and answers the
+dialog as `Enter` does.
+
 Move: same-filesystem → `rename`; otherwise copy+verify+delete, and the delete step only runs
 after a successful verify. A cross-device Move that fails halfway leaves every file either at
 the source or fully at the target — never both-partial.
@@ -181,6 +192,22 @@ Three rules keep it from being a second copy engine rather than a faster one:
 
 Every call that needs `unsafe` or a `#[cfg]` is in `fcmd-platform`, which is the rule the
 workspace is built on; the engine asks it one question and takes `None` for an answer.
+
+### 3e. Making a folder (`F7`, `file.mkdir`)
+
+A dialog of two rows: the name, and a box, *Enter it*. The name is a path — `a/b/c` makes all
+three, relative to the panel's folder, and an absolute one is made where it says. `Enter`
+answers the dialog from the name, so the box costs nothing to somebody who never looks at it.
+
+* **Box off** (the default): once the folder exists the cursor is on it — on `a` for `a/b/c`,
+  the part the panel shows — and nothing moves for a path outside the panel's folder.
+* **Box on**: the panel that asked goes *into* the folder, the whole path of it, as
+  `mkdir -p a/b/c && cd a/b/c` would, and the place it left is in the folders history. Only
+  into a folder that was made: a refusal, or `Esc` on the job, leaves the panel where it was.
+
+The box starts as it was last left, for the session — as the copy dialog's choices and the
+link dialog's kind do — and unticked in a new one. In the panels where `F7` means something
+else (the git panel's commit, the wastebasket, the AI panels) there is no dialog to tick it in.
 
 ## 4. Delete, trash, wipe (shipped)
 

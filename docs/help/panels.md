@@ -398,6 +398,12 @@ push it out — `Shift+Del` takes one row out of the history for good, and `Del`
 list of everything you have not pinned, after asking. A line nobody has pinned and nobody has
 used for ninety days goes by itself; *Options → System settings* is where that number lives.
 
+**A command typed with a space in front is not kept in the history** — it runs, and neither
+`↑` nor `Alt+F8` will offer it again: for the line with a password on it, as in bash. With the
+panels on, type the command, then `Home` and `Space`, because `Space` on an empty line measures
+a folder; with the panels off (`Ctrl+O`) the space is simply typed first. To keep every line,
+set `cmdline.history_ignore_space` to `false` in *Options → All settings*.
+
 `Ctrl+Enter` puts the name under the cursor on the line, `Ctrl+Shift+Enter` the other panel's,
 `Ctrl+[` and `Ctrl+]` the two panels' paths, `Ctrl+Shift+[` and `Ctrl+Shift+]` the left and
 right one's whichever has the focus, `Ctrl+F` the full name and `Ctrl+Alt+F` the full name in
@@ -486,6 +492,20 @@ are a layout rather than a window onto something wider. The key bar always shows
 screen has no use for left empty, so `F5` is the fifth box along wherever you are. It is
 clickable (hold `Shift` and click for `Shift+F5`), so
 is the menu bar and a dialog's list. A click outside an open dialog does nothing at all.
+
+# The window's title
+
+The title of the terminal's window — or of its tab — says where you are: the folder of the
+panel with the focus, and in the viewer or the editor the file that is open, followed by
+` - fcmd`. It follows you as you move, so several terminals each running the program can be
+told apart from the row of tabs. On the way out the title you had before comes back, where
+the terminal keeps one to give back (xterm and those that follow it); elsewhere your shell's
+next prompt writes its own.
+
+If you name your tabs yourself and want them left alone, turn off *Show where we are in the
+terminal's window title* in `F9 → Options → Interface settings` — `ui.window_title` in the
+settings file. A name with odd characters in it cannot do anything to the terminal through
+the title: control characters are sent as spaces.
 
 # Copying and pasting text
 

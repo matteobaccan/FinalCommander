@@ -476,6 +476,13 @@ pub struct UiCfg {
     /// minute and not once a second — the clock shows hours and minutes, so a second is
     /// fifty-nine redraws nobody can see.
     pub clock: bool,
+    /// Say where we are in the terminal's window title: the panel's folder, or the file in
+    /// the viewer and the editor.
+    ///
+    /// On by default — a row of terminal tabs all called `fcmd` tells nobody which is which
+    /// — and a setting because the title is the terminal's, and somebody who has given
+    /// their tabs names of their own wants them left alone.
+    pub window_title: bool,
     /// Write the configuration file on the way out, as *Save setup* writes it.
     ///
     /// FAR's *Auto save setup*. Off by default, because a setting changed to see what it does
@@ -522,6 +529,7 @@ impl Default for UiCfg {
             clipboard: true,
             menu_bar: false,
             clock: false,
+            window_title: true,
             save_setup_on_exit: false,
         }
     }
@@ -678,6 +686,11 @@ pub struct CmdLineCfg {
     /// bare branch name, spelled the way the plugin everybody installs spells it. Empty
     /// means the default.
     pub prompt: String,
+    /// A line that starts with a space runs and is not kept in the history: bash's
+    /// `ignorespace`, for the command with a password on it, or the one nobody wants
+    /// offered back for ninety days. On by default — the space has no other meaning in
+    /// front of a command, so nobody types one there by accident and loses a line.
+    pub history_ignore_space: bool,
     /// What the line completes from while one types (SPEC 06 §7.4).
     pub complete: CompleteCfg,
 }
@@ -733,6 +746,7 @@ impl Default for CmdLineCfg {
     fn default() -> Self {
         CmdLineCfg {
             prompt: "$p$r$g ".to_string(),
+            history_ignore_space: true,
             complete: CompleteCfg::default(),
         }
     }
@@ -2241,6 +2255,7 @@ impl Config {
             "ui.clipboard" => self.ui.clipboard = parse_bool(value)?,
             "ui.menu_bar" => self.ui.menu_bar = parse_bool(value)?,
             "ui.clock" => self.ui.clock = parse_bool(value)?,
+            "ui.window_title" => self.ui.window_title = parse_bool(value)?,
             "ui.save_setup_on_exit" => self.ui.save_setup_on_exit = parse_bool(value)?,
             "ui.command_screen" => self.ui.command_screen = parse_bool(value)?,
             "editor.tab_width" => {
@@ -2419,6 +2434,9 @@ impl Config {
             // somebody can change (SPEC 07 §2e): the browser is generated from this file, and
             // a key it shows that `set` refuses would be a setting nobody can reach.
             "cmdline.prompt" => self.cmdline.prompt = value.to_string(),
+            "cmdline.history_ignore_space" => {
+                self.cmdline.history_ignore_space = parse_bool(value)?
+            }
             "ai_guard.redact" => self.ai_guard.redact = parse_bool(value)?,
             "ai_guard.local_only" => self.ai_guard.local_only = parse_bool(value)?,
             "arc.max_entries" => self.arc.max_entries = parse_usize(value)?,

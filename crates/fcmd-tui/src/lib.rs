@@ -4,6 +4,7 @@
 //! input into [`fcmd_cmd::Key`] events. See `docs/spec/01-architecture.md` §3–§4.
 
 use std::io::{self, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
@@ -106,6 +107,11 @@ pub struct Term {
     /// Set by [`Term::invalidate`]: the screen may no longer hold what `shown` says, so the
     /// next frame takes every picture off and puts it on again.
     forget_pictures: bool,
+    /// Whether this terminal is one to send a title to at all ([`title_supported`]).
+    titles: bool,
+    /// The window title as we last set it, or `None` while the title is the one the
+    /// terminal had: nothing was saved, so there is nothing to put back.
+    title: Option<String>,
 }
 
 impl Term {
@@ -144,6 +150,8 @@ impl Term {
             shown: Vec::new(),
             next_image: 1,
             forget_pictures: false,
+            titles: title_supported(std::env::var("TERM").ok().as_deref()),
+            title: None,
         })
     }
 
@@ -159,6 +167,8 @@ impl Term {
             shown: Vec::new(),
             next_image: 1,
             forget_pictures: false,
+            titles: false,
+            title: None,
         }
     }
 
@@ -181,6 +191,8 @@ impl Term {
             shown: Vec::new(),
             next_image: 1,
             forget_pictures: false,
+            titles: true,
+            title: None,
         };
         (term, sink)
     }
@@ -410,6 +422,39 @@ impl Term {
         Ok(())
     }
 
+    /// Say in the terminal's window title where we are, or with `None` give the title back.
+    ///
+    /// `OSC 2` sets the title, and it is sent only when the text is not the one already
+    /// there: this is called every frame, and a title is not something to repaint. Before
+    /// the first one the terminal is asked to keep the title it has (`CSI 22 ; 0 t`, xterm's
+    /// title stack), and `None` — or [`Term::restore`], on the way out and before a program
+    /// is given the terminal — asks for it back (`CSI 23 ; 0 t`), so the shell's own title
+    /// is what the shell finds. A terminal without the stack ignores both and keeps the last
+    /// title it was given, which the next prompt of most shells writes over anyway.
+    ///
+    /// Returns whether anything was sent.
+    pub fn set_title(&mut self, title: Option<&str>) -> io::Result<bool> {
+        if !self.raw || !self.titles || self.title.as_deref() == title {
+            return Ok(false);
+        }
+        match title {
+            Some(text) => {
+                if self.title.is_none() {
+                    self.out.write_all(TITLE_PUSH.as_bytes())?;
+                    TITLE_SAVED.store(true, Ordering::Relaxed);
+                }
+                self.out.write_all(title_request(text).as_bytes())?;
+            }
+            None => {
+                self.out.write_all(TITLE_POP.as_bytes())?;
+                TITLE_SAVED.store(false, Ordering::Relaxed);
+            }
+        }
+        self.out.flush()?;
+        self.title = title.map(str::to_string);
+        Ok(true)
+    }
+
     /// Ask the terminal to put text on the system clipboard.
     ///
     /// This is `OSC 52`, and it is the only way a program in a terminal can reach the
@@ -503,6 +548,12 @@ impl Term {
         if self.enhanced {
             let _ = queue!(self.out, PopKeyboardEnhancementFlags);
         }
+        // The title goes back to what it was before ours. After a hand-over the next frame
+        // finds no title of ours and sets it again, over whatever the program left.
+        if self.title.take().is_some() {
+            let _ = self.out.write_all(TITLE_POP.as_bytes());
+            TITLE_SAVED.store(false, Ordering::Relaxed);
+        }
         // An image kitty was given is kitty's until it is deleted, and the screen it was on
         // is about to be handed back.
         if self.shown.iter().any(|(p, _)| p.protocol == Pixels::Kitty) {
@@ -536,6 +587,51 @@ pub fn window_request(on: bool) -> &'static str {
     } else {
         "\x1b[9;0t"
     }
+}
+
+/// xterm's title stack: keep the window title as it is, and put it back.
+pub const TITLE_PUSH: &str = "\x1b[22;0t";
+pub const TITLE_POP: &str = "\x1b[23;0t";
+
+/// Whether a title of ours is on top of one the terminal was asked to keep, for the panic
+/// hook: it has no `Term` to ask, and a title popped that was never pushed would be somebody
+/// else's.
+static TITLE_SAVED: AtomicBool = AtomicBool::new(false);
+
+/// How long a title may be, in characters. A path can be longer; what is cut is its start,
+/// since the end of a path is the part that says where one is.
+const TITLE_MAX: usize = 240;
+
+/// The `OSC 2` request that sets the window title to `text`, as a string so that it can be
+/// tested without a terminal to send it to.
+///
+/// The text is a path, and a path is whatever somebody named a file: every control
+/// character in it — an escape, the bell that would end the request, a newline, the C1 set
+/// — becomes a space, so a name cannot close the title early and go on to say something
+/// else to the terminal.
+pub fn title_request(text: &str) -> String {
+    let clean: String = text
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    let count = clean.chars().count();
+    let shown: String = if count > TITLE_MAX {
+        std::iter::once('…')
+            .chain(clean.chars().skip(count - (TITLE_MAX - 1)))
+            .collect()
+    } else {
+        clean
+    };
+    format!("\x1b]2;{shown}\x07")
+}
+
+/// Is this a terminal to send a title to, going by its `TERM`?
+///
+/// Everything is, except the ones known to have no title and no habit of ignoring the
+/// request quietly: the Linux console, which has no window, a `dumb` terminal, and the
+/// hardware `vt` family. No `TERM` at all is the Windows console, which has a title.
+pub fn title_supported(term: Option<&str>) -> bool {
+    !matches!(term, Some(t) if t == "linux" || t == "dumb" || t.starts_with("vt"))
 }
 
 /// The `OSC 52` request that puts `text` on the clipboard, as a string so that it can be
@@ -778,6 +874,9 @@ pub fn install_panic_hook() {
             DisableMouseCapture,
             LeaveAlternateScreen
         );
+        if TITLE_SAVED.swap(false, Ordering::Relaxed) {
+            let _ = out.write_all(TITLE_POP.as_bytes());
+        }
         let _ = out.flush();
         let _ = terminal::disable_raw_mode();
         previous(info);
@@ -1193,6 +1292,76 @@ mod tests {
     fn the_window_request_is_xterms_maximise_and_restore() {
         assert_eq!(window_request(true), "\x1b[9;1t");
         assert_eq!(window_request(false), "\x1b[9;0t");
+    }
+
+    /// The title is `OSC 2` ended by a bell, and nothing in the text can end it sooner: a
+    /// name with an escape, a bell or a newline in it arrives as a name with spaces.
+    #[test]
+    fn a_title_request_carries_no_control_character_of_the_text() {
+        assert_eq!(
+            title_request("/home/mb - fcmd"),
+            "\x1b]2;/home/mb - fcmd\x07"
+        );
+        let hostile = title_request("a\x07\x1b]2;owned\x07b\nc\u{9c}d");
+        let body = hostile
+            .strip_prefix("\x1b]2;")
+            .and_then(|rest| rest.strip_suffix('\x07'))
+            .expect("one request");
+        assert!(!body.chars().any(char::is_control), "{body:?}");
+        assert_eq!(body, "a  ]2;owned b c d");
+        // A path longer than a title keeps its end, which is the part that says where.
+        let long = format!("/{}/here", "x".repeat(600));
+        let request = title_request(&long);
+        assert!(request.chars().count() < 260, "{}", request.len());
+        assert!(request.ends_with("/here\x07") && request.contains('…'));
+    }
+
+    /// The title is sent when it changes and not otherwise; the one the terminal had is
+    /// kept before the first of ours and asked back when ours is taken away, and on the way
+    /// out.
+    #[test]
+    fn a_title_is_sent_once_and_the_old_one_is_put_back() {
+        let (mut term, sink) = Term::capturing();
+        let written = |sink: &std::sync::Arc<std::sync::Mutex<Vec<u8>>>| {
+            String::from_utf8(std::mem::take(&mut *sink.lock().unwrap())).unwrap()
+        };
+        assert!(term.set_title(Some("/a - fcmd")).unwrap());
+        assert_eq!(written(&sink), format!("{TITLE_PUSH}\x1b]2;/a - fcmd\x07"));
+        // The same again is nothing at all.
+        assert!(!term.set_title(Some("/a - fcmd")).unwrap());
+        assert_eq!(written(&sink), "");
+        // Another is the title alone: the one to go back to is already kept.
+        assert!(term.set_title(Some("/b - fcmd")).unwrap());
+        assert_eq!(written(&sink), "\x1b]2;/b - fcmd\x07");
+        // Turned off: the old one back, once.
+        assert!(term.set_title(None).unwrap());
+        assert_eq!(written(&sink), TITLE_POP);
+        assert!(!term.set_title(None).unwrap());
+        // And on the way out, when there is one of ours to take away.
+        term.set_title(Some("/c - fcmd")).unwrap();
+        written(&sink);
+        term.restore();
+        let out = written(&sink);
+        assert_eq!(out.matches(TITLE_POP).count(), 1, "{out:?}");
+    }
+
+    /// A terminal that was never given a title is not asked for the old one back.
+    #[test]
+    fn leaving_without_a_title_pops_nothing() {
+        let (mut term, sink) = Term::capturing();
+        term.restore();
+        let out = String::from_utf8(sink.lock().unwrap().clone()).unwrap();
+        assert!(!out.contains(TITLE_POP), "{out:?}");
+    }
+
+    #[test]
+    fn the_consoles_without_a_window_are_sent_no_title() {
+        assert!(title_supported(Some("xterm-256color")));
+        assert!(title_supported(Some("tmux-256color")));
+        assert!(title_supported(None), "the Windows console has a title");
+        assert!(!title_supported(Some("linux")));
+        assert!(!title_supported(Some("dumb")));
+        assert!(!title_supported(Some("vt100")));
     }
 
     /// Base64 against the three cases that matter: a length that is a multiple of three, and

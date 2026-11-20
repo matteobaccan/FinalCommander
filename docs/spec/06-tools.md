@@ -594,6 +594,25 @@ reads one small file (`HEAD`, or the `gitdir:` line of a worktree's `.git` file 
 looked up when the panel's directory changes rather than on every frame, and not at all for a
 directory on a server or inside an archive, which has no `.git` to read.
 
+### 7.0c A line that is not remembered (`cmdline.history_ignore_space`)
+
+A command line that **starts with a space** runs like any other and is not kept: it is not
+added to the command history, so `↑`, `Ctrl+E`, `Alt+F8` and the state file never hold it.
+This is bash's `HISTCONTROL=ignorespace`, and it is for the same lines: the one with a
+password or a token on it, and the one-off nobody wants offered back by the completion for
+the next ninety days. The line runs trimmed, so the space changes nothing about what the
+command is.
+
+* It decides only whether *this* run is recorded. The same line already in the history from
+  an earlier run stays there, with its place and its pin.
+* The space is typed where the line takes it. With the panels on, `Space` on an **empty** line
+  is the panel's key (it measures a folder), so the space is put in front afterwards — `Home`,
+  `Space` — or arrives with a paste. With the panels off (`Ctrl+O`) there is no cursor to
+  measure anything under, and `Space` on an empty line is typed like any other character.
+* On by default: a space has no other meaning in front of a command. `false` keeps every line.
+* Only the command line. The histories of the dialogs' fields are not touched by it, and a
+  kept shell's own history file is that shell's business.
+
 ### 7.4 Autocomplete (`Ctrl+Space`, and while one types)
 
 Four sources, each one a setting with three states — `on`, `off`, or `asked` for only when
@@ -756,6 +775,41 @@ and the keymap pages are generated from the live keymap (never hand-written).
 `fcmd-state.toml` holds panels, tabs, paths, view modes, sorts, filters, selection (optional),
 viewer/editor positions, and the job journal pointer. `--no-session` starts clean;
 `fcmd path1 path2` opens the two panels at those paths; `fcmd --goto file:line` opens the editor.
+
+## 10b. The terminal's window title (`ui.window_title`)
+
+A terminal with five tabs all called `fcmd` tells nobody which is which, so the title says
+where the program is:
+
+| Where | The title |
+| --- | --- |
+| the panels, and any dialog over them | the folder of the panel with the focus, as the panel's own frame writes it (a server's or an archive's path included) |
+| the viewer, the editor, the hex editor — and a dialog of theirs | the file, with its whole path; an editor on a file not saved yet says the name it shows |
+| the comparison | the two names, `left ↔ right` |
+
+followed by ` - fcmd`, as every program ends its title.
+
+* **How.** `OSC 2` (`ESC ] 2 ; text BEL`), which sets the window's title and leaves the icon's
+  alone. It is written by the terminal backend (`fcmd-tui`, `Term::set_title`), asked every
+  frame and **sent only when the text changes** — a title is not something to repaint.
+* **What goes into it is cleaned.** The text is a path, and a path is whatever somebody named
+  a file: every control character — an escape, the bell that would end the request, a
+  newline, the C1 set — is sent as a space, so a name cannot close the title early and say
+  something else to the terminal. A title longer than 240 characters keeps its end.
+* **The title that was there comes back.** Before the first title the terminal is asked to
+  keep the one it has (xterm's title stack, `CSI 22 ; 0 t`), and it is asked back
+  (`CSI 23 ; 0 t`) on the way out, when the setting is turned off, when a full-screen program
+  is given the terminal — it may set a title of its own, and ours is written again when it
+  ends — and from the panic hook. A terminal without the stack keeps the last title until
+  the shell's next prompt writes its own.
+* **Where not.** A `TERM` of `linux`, `dumb` or `vt…` has no window to name and is sent
+  nothing. A terminal that does not know the sequences ignores them, and none of them is
+  answered, so nothing waits on the terminal.
+* **The setting.** `ui.window_title`, on by default; *Options → Interface settings* has the
+  box. Off, nothing is sent and a title of ours already there is taken back at once.
+
+FAR's title variables (`%Ver`, `%Platform`, `%Admin`, `%PID`) are not built: the title has
+one shape.
 
 ## 11. The clipboard
 

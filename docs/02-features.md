@@ -103,9 +103,9 @@ since 0.41.0 also `MU` (muCommander), `NNN`, `RANGER`, `LF`, `BROOT`, `VIFM`, `X
 
 | # | Feature | Origin | State |
 | --- | --- | --- | --- |
-| 3.1 | Copy / move / rename (`F5`/`F6`), same-panel copy (`Shift+F5`), rename in place (`Shift+F6`) | all | ✓ |
+| 3.1 | Copy / move / rename (`F5`/`F6`), same-panel copy (`Shift+F5`), rename in place (`Shift+F6`); the source's name put into the destination to edit (`Ctrl+Enter`) | all | ✓ |
 | 3.2 | Delete to trash and permanent delete; wipe (overwrite then delete) | FAR | ✓ |
-| 3.3 | Create directory (`F7`), create file (`Shift+F4`), create nested path `a/b/c` in one go | all | ✓ |
+| 3.3 | Create directory (`F7`), create file (`Shift+F4`), create nested path `a/b/c` in one go; make a folder and go into it (a box in the `F7` dialog) | all | ✓ |
 | 3.4 | Hard links, symlinks (absolute/relative), junctions/reparse points, link targets shown and followed | FAR/MC | ✓ |
 | 3.5 | Attributes/permissions dialog: chmod (numeric + rwx matrix), timestamps, recursive apply; chown, the Windows compressed and encrypted attributes | FAR/MC | ~ the shell's own property sheet, the NTFS compressed and encrypted bits, and the owner on Windows |
 | 3.6 | Extended attributes / ADS (NTFS streams), xattr on Linux/macOS, resource forks | FAR | ~ a copy carries them on Linux and macOS (`operations.preserve`), the resource fork among them; nothing lists or edits them, and NTFS streams are decided against |
@@ -285,6 +285,7 @@ something readable rather than only into instructions.
 | 8.7 | Output search (`Ctrl+Shift+F`) and output capture into a panel | MTN2 | ✓ `Ctrl+Shift+F` searches the output; capture into a panel is *Commands → Panelize a command's output* |
 | 8.8 | Open OS file manager / terminal / shell menu for the current item | TC/KRU | ~ a file with no association goes to the desktop's opener (`xdg-open`, `open`); showing the item in the desktop's file manager and opening the desktop's terminal there are not |
 | 8.10 | **The shell is left where the panel was**: quitting leaves the shell that started it in the directory the active panel ended in — the gesture `mc` is used with. A process cannot change its parent's working directory, so it takes two halves: `-P FILE` (`--printwd`, mc's own spelling) writes it, and a shell function reads it and goes there. `fcmd --shell-init bash|zsh|fish|powershell` prints the function, so nothing is installed anywhere (SPEC 11 §1) and it cannot be out of step with the binary | MC (`mc-wrapper.sh`) | ✓ and better on one point: quitting inside an archive leaves the shell in the folder holding it, where mc writes the archive's own path and its wrapper refuses it without saying why |
+| 8.11 | A command typed with a space in front is run and not kept in the history (bash's `ignorespace`) | MC (asked for) | ✓ `cmdline.history_ignore_space`, on by default |
 | 8.9 | **Called from outside instead of opened**: the viewer, the editor and the comparison reachable from the command line, so the program can be `$VISUAL`, a `git difftool` or a pager in a script | MC (`mcview`, `mcedit`, `mcdiff`) | ✓ `--view FILE`, `--edit FILE`, `--diff A B`; leaving that screen ends the run, and a name that is not there opens an empty editor under it |
 
 ## 9. Configuration, UI, i18n
@@ -303,6 +304,7 @@ something readable rather than only into instructions.
 | 9.10 | Menu bar (`F9`) with FAR's five menus; every entry is a command from the vocabulary, the shortcut shown is read from the keymap in force, and an entry whose feature is missing is drawn dim and says so (SPEC 10 §2) | FAR | ✓ |
 | 9.14 | Screens (`F12`, `Ctrl+Tab`): a viewer or an editor one steps away from and comes back to, keeping its position and its unsaved changes, with the panels as screen zero of the ring and a count of what is behind them in the corner. `F10` from the panels names every background screen with unwritten changes (SPEC 02 §10) | FAR | ✓ |
 | 9.15 | Help (`F1`) as a book: written chapters compiled into the binary, and the keys, the commands and the settings generated from the keymap and configuration in force so they cannot drift. A manual page generated from the command line's own options, with a test that fails when the two disagree | FAR / Unix | ✓ |
+| 9.16 | The terminal's window title says where we are: the panel's folder, or the file in the viewer and the editor; the title that was there comes back on exit | MC | ✓ `ui.window_title`, on by default |
 | 9.11 | `Save setup` (`Shift+F9`) writes the configuration as it stands, including themes that came from the file | FAR | ✓ |
 | 9.13 | Session editor for stored connections (`Alt+N` → `Ins`/`F4`): name, host, port, user, authentication, key file, remote folder, group, keep-alive, compression — validated before it is stored, `Shift+F9` makes it permanent (SPEC 10 §3.5) | FAR (NetBox) | ✓ |
 | 9.12 | Choose-one lists: languages, themes, drives and open connections (`Alt+F1`/`Alt+F2`), folder history (`Alt+F12`), sort modes (`Ctrl+F12`, where re-choosing the current order reverses it) (SPEC 10 §4) | FAR | ✓ |

@@ -20,13 +20,35 @@ Notable changes, newest first. The format follows
 - **FinalCommander in a browser tab**, on the site at `/try/`: the ARM 64-bit build, unchanged,
   on a Linux kernel compiled to WebAssembly, with a folder of its own documents to work on in
   the tab's memory. Nothing to install; Chrome or Edge 137+, Firefox 153+ or Safari 27+.
-
 - **The quick view inside a container**: `Ctrl+Q` beside an archive, a JSON document, a mail
   or any other container on this disk shows the entry under the cursor, as it does a file,
   instead of *the bytes are not here*. Entries up to 4 MiB are read on a worker and shown if
   the cursor is still there; a compressed tar, a solid 7z and the like only when the whole
   container is small, because reaching an entry means unpacking everything before it. A
   server, a bucket, a larger entry and an archive inside an archive still wait for `F3`.
+- **Make a folder and enter it.** `F7` is now a small dialog: the name, and a box, *Enter it*.
+  Ticked, the panel goes into the folder as soon as it is made — `mkdir x && cd x` in one
+  answer, down the whole path when the name is `a/b/c`. The box stays as it was left for the
+  session, and a folder that could not be made is not entered. Left alone it is the `F7`
+  there always was: the cursor lands on the new folder.
+- **The source's name in the copy and move dialog.** `Ctrl+Enter` in the destination of `F5`
+  or `F6` puts the name of the file being copied there, after the folder the dialog offered,
+  to be edited into the new name: a copy under another name no longer means typing the old
+  one again. It is the key that puts the name under the cursor on the command line, and it
+  follows the keymap; with several files selected it says there is no one name to offer.
+- **A command typed with a space in front is not kept in the history**, as bash's
+  `ignorespace` has it: the line runs, and neither `↑` nor `Alt+F8` nor the state file holds
+  it — for the command with a password on it. With the panels on the space goes in front
+  with `Home`, `Space`, since `Space` on an empty line measures a folder; with the panels off
+  (`Ctrl+O`) `Space` on an empty line is now typed like any other character.
+  `cmdline.history_ignore_space = false` keeps every line, as before.
+- **The terminal's window title says where we are**: the folder of the panel with the focus,
+  and in the viewer and the editor the file that is open, followed by ` - fcmd` — so several
+  terminals each running the program can be told apart from their tabs. It is sent only when
+  it changes, control characters in a name are sent as spaces, and the title that was there
+  comes back on the way out where the terminal keeps one (xterm's title stack). The Linux
+  console and a `dumb` terminal are sent nothing. `ui.window_title = false`, or the box in
+  *Options → Interface settings*, leaves the title alone.
 
 ### Changed
 

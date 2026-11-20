@@ -4,9 +4,21 @@
 una copia o di uno spostamento è l'altro pannello, e il dialogo lo dice prima che accada
 qualcosa. Dopo `F7` il cursore è sulla cartella nuova, pronto per `Invio`.
 
+Il dialogo di `F7` ha una casella sotto il nome, *Entra nella cartella*: spuntala (`↓`, poi
+`Spazio`) e il pannello entra nella cartella appena è stata creata — `mkdir x && cd x` in una
+risposta sola, e fino in fondo quando il nome è un percorso come `2026/11/foto`. La casella
+resta come è stata lasciata finché il programma è aperto, così chi crea cartelle per lavorarci
+dentro la spunta una volta. In una cartella che non è stato possibile creare non si entra.
+
 Ognuna di queste è un lavoro: gira in sottofondo con una barra di avanzamento, `Esc` la ferma, e
 quello che ha già fatto resta fatto. Un conflitto — un file che è già là — si ferma e chiede,
 con le risposte "tutti" e "nessuno" perché una copia lunga non sia mille domande.
+
+Per copiare o spostare **un file con un altro nome**, premi `Ctrl+Invio` nella destinazione:
+il nome del file viene messo lì, dopo la cartella proposta dal dialogo, pronto da correggere —
+`relazione.txt` in `relazione-vecchia.txt` — prima di `Invio`. È il tasto che mette sulla riga
+di comando il nome sotto il cursore, e segue la mappa dei tasti se quel tasto è stato spostato.
+Con più file selezionati non c'è un solo nome da proporre, e la riga di stato lo dice.
 
 Il dialogo di copia ha dentro più della destinazione, e tutto il resto è opzionale: scrivi un
 percorso, premi `Enter`, e niente sotto la prima riga si applica.

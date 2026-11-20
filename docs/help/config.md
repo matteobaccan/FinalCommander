@@ -313,7 +313,8 @@ edited** (`Alt+F11`), the folders you keep to hand, the tabs of both panels and 
 were. `ui.command_history` and `ui.file_history` say how many of the first and third to keep,
 and `ui.history_lifetime` how many days a line nobody has pinned is kept after it was last
 used — ninety by default, `0` to keep them for ever. `Ins` in any of the three lists pins the
-row under the cursor, and nothing pushes a pinned row out.
+row under the cursor, and nothing pushes a pinned row out. A command typed with a space in
+front is run and not kept at all (`cmdline.history_ignore_space`, on unless you turn it off).
 
 A file you have read before opens where you left it — the position, the code page, the mode,
 the wrap and the ten bookmarks — unless you turn *Remember where a file was left* off in
