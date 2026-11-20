@@ -27,6 +27,14 @@ Notable changes, newest first. The format follows
   (`Ctrl+O`) `Space` on an empty line is now typed like any other character.
   `cmdline.history_ignore_space = false` keeps every line, as before.
 
+- **The terminal's window title says where we are**: the folder of the panel with the focus,
+  and in the viewer and the editor the file that is open, followed by ` - fcmd` — so several
+  terminals each running the program can be told apart from their tabs. It is sent only when
+  it changes, control characters in a name are sent as spaces, and the title that was there
+  comes back on the way out where the terminal keeps one (xterm's title stack). The Linux
+  console and a `dumb` terminal are sent nothing. `ui.window_title = false`, or the box in
+  *Options → Interface settings*, leaves the title alone.
+
 ### Changed
 
 - Dates — the panels' columns, the clock, the attributes dialog — are read and written through

@@ -600,6 +600,7 @@ opt-markdown = 排版后的 Markdown
 opt-table = 将 .csv 或 .jsonl 作为表格打开
 opt-keymap = 键位表
 opt-clock = 角落显示时钟
+opt-window-title = 在终端窗口标题中显示当前位置
 opt-mouse = 鼠标支持
 opt-clipboard = 通过终端使用剪贴板 (OSC 52)
 opt-command-screen = 命令运行时显示它的输出

@@ -32416,6 +32416,38 @@ impl App {
         false
     }
 
+    /// What the terminal's window title should say: the file in the viewer or the editor,
+    /// and otherwise the folder of the panel with the focus — then the program's name, as
+    /// every title ends. `None` with `ui.window_title` off, which leaves the title alone.
+    ///
+    /// A dialog over a viewer or an editor is still about that file, so a screen parked
+    /// under one keeps the title; a dialog over the panels keeps the folder.
+    pub fn window_title(&self) -> Option<String> {
+        if !self.cfg.ui.window_title {
+            return None;
+        }
+        let edited = |path: &Option<VPath>, name: String| match path {
+            Some(path) => path.to_string(),
+            None => name,
+        };
+        let place = if let Some(viewer) = self.viewer_under_prompt.as_deref() {
+            viewer.path.to_string()
+        } else if let Some(editor) = self.editor_parked.as_deref() {
+            edited(&editor.path, editor.name())
+        } else if let Some(hex) = self.hex_parked.as_deref() {
+            edited(&hex.path, hex.name())
+        } else {
+            match &self.mode {
+                Mode::Viewer(viewer) => viewer.path.to_string(),
+                Mode::Editor(editor) => edited(&editor.path, editor.name()),
+                Mode::Hex(hex) => edited(&hex.path, hex.name()),
+                Mode::Diff(diff) => format!("{} ↔ {}", diff.left_name, diff.right_name),
+                _ => self.panel().cwd.to_string(),
+            }
+        };
+        Some(format!("{place} - fcmd"))
+    }
+
     /// Hand the viewer to the renderer (it needs `&mut` to read its windows) and say whether
     /// it was parked under a prompt, so it goes back where it came from.
     pub fn viewer_for_render(&mut self) -> Option<(Box<Viewer>, bool)> {
@@ -40964,6 +40996,56 @@ run = ["echo one", "echo two", "echo three"]
             .filter(|r| matches!(r, Request::Plugin { .. }))
             .collect();
         assert_eq!(asked.len(), 1, "it should have been asked to run");
+    }
+
+    /// The window title is the folder of the panel with the focus, and follows it: to the
+    /// other panel on `Tab`, into a folder on `Enter`. With the setting off there is none.
+    #[test]
+    fn the_window_title_is_the_folder_of_the_panel_with_the_focus() {
+        let mut app = app();
+        let title = |app: &App| app.window_title().expect("a title");
+        assert_eq!(title(&app), format!("{} - fcmd", app.panels[0].cwd));
+        press(&mut app, "Tab");
+        assert_eq!(title(&app), format!("{} - fcmd", app.panels[1].cwd));
+        press(&mut app, "Tab");
+        let docs = app.panels[0].cwd.join("docs");
+        app.goto(docs.clone());
+        assert_eq!(title(&app), format!("{docs} - fcmd"));
+        // A dialog over the panels is still about that folder.
+        press(&mut app, "F7");
+        assert_eq!(title(&app), format!("{docs} - fcmd"));
+        press(&mut app, "Esc");
+
+        app.cfg.set("ui.window_title", "false").expect("a setting");
+        assert_eq!(app.window_title(), None);
+    }
+
+    /// In the viewer and in the editor the title is the file, and it stays the file while a
+    /// dialog of theirs is open over them; back on the panels it is the folder again.
+    #[test]
+    fn the_window_title_is_the_file_in_the_viewer_and_the_editor() {
+        let dir = tempfile::tempdir().unwrap();
+        let text = dir.path().join("notes.txt");
+        std::fs::write(&text, "one\ntwo\n").unwrap();
+        let shown = VPath::local(&text);
+        let mut app = app();
+        let folder = app.window_title();
+
+        app.open_viewer_on(&text, shown.clone());
+        assert!(app.mode.viewer().is_some());
+        assert_eq!(app.window_title(), Some(format!("{shown} - fcmd")));
+        // The search prompt parks the viewer under itself; the title does not blink.
+        press(&mut app, "F7");
+        assert!(app.mode.viewer().is_none(), "{:?}", app.mode);
+        assert_eq!(app.window_title(), Some(format!("{shown} - fcmd")));
+        press(&mut app, "Esc");
+        press(&mut app, "Esc");
+        assert!(app.mode.is_normal(), "{:?}", app.mode);
+        assert_eq!(app.window_title(), folder);
+
+        app.open_editor_on(&shown);
+        assert!(app.mode.editor().is_some(), "{:?}", app.mode);
+        assert_eq!(app.window_title(), Some(format!("{shown} - fcmd")));
     }
 
     #[test]

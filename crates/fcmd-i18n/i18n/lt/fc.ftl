@@ -614,6 +614,7 @@ opt-markdown = Markdown išdėstytas skaitymui
 opt-table = Atverti .csv ar .jsonl kaip lentelę
 opt-keymap = Klavišų išdėstymas
 opt-clock = Laikrodis kampe
+opt-window-title = Rodyti dabartinę vietą terminalo lango antraštėje
 opt-mouse = Pelė
 opt-clipboard = Leisti terminalui perduoti iškarpinę (OSC 52)
 opt-command-screen = Rodyti komandos išvestį, kol ji vykdoma

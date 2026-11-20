@@ -1316,6 +1316,10 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
         app.pixels.configure(protocol, size);
         let cursor = render::draw(&mut app, &mut buf);
         term.draw_with(&buf, cursor, app.pixels.placements())?;
+        // Where we are, in the window's title. Asked every frame and sent only when the
+        // answer is a new one; `ui.window_title = false` is `None`, which gives the title
+        // back to the terminal.
+        let _ = term.set_title(app.window_title().as_deref());
 
         // The shell a command line runs in is the configured one, read again each time round
         // so a change in the settings counts from the next command.

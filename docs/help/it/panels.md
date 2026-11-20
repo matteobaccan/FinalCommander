@@ -512,6 +512,21 @@ dovunque ti trovi. È cliccabile (tieni `Shift` e clicca per `Shift+F5`), e cos�
 dei menu e l'elenco di un dialogo. Un clic fuori da un dialogo aperto non fa assolutamente
 niente.
 
+# Il titolo della finestra
+
+Il titolo della finestra del terminale — o della sua linguetta — dice dove sei: la cartella del
+pannello che ha il fuoco, e nel visualizzatore o nell'editor il file aperto, seguito da
+` - fcmd`. Ti segue mentre ti sposti, così più terminali con dentro il programma si
+distinguono dalla fila delle linguette. All'uscita torna il titolo che avevi prima, dove il
+terminale ne conserva uno da restituire (xterm e quelli che lo seguono); altrove lo riscrive
+il prossimo prompt della tua shell.
+
+Se dai tu un nome alle linguette e vuoi che restino come sono, spegni *Mostra dove siamo nel
+titolo della finestra del terminale* in `F9 → Opzioni → Impostazioni dell'interfaccia` —
+`ui.window_title` nel file delle impostazioni. Un nome con dentro caratteri strani non può
+fare niente al terminale attraverso il titolo: i caratteri di controllo sono inviati come
+spazi.
+
 # Copiare e incollare testo
 
 `Ctrl+Ins` copia i nomi di quello che è selezionato — uno per riga — e `Alt+Shift+Ins` li copia

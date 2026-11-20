@@ -600,6 +600,7 @@ opt-markdown = Markdown, свёрстанный для чтения
 opt-table = Открывать .csv и .jsonl как таблицу
 opt-keymap = Раскладка клавиш
 opt-clock = Часы в углу
+opt-window-title = Показывать текущее место в заголовке окна терминала
 opt-mouse = Поддержка мыши
 opt-clipboard = Буфер обмена через терминал (OSC 52)
 opt-command-screen = Показывать вывод команды, пока она выполняется

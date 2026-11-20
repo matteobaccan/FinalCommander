@@ -600,6 +600,7 @@ opt-markdown = Markdown impaginato per la lettura
 opt-table = Apri .csv e .jsonl come tabella
 opt-keymap = Mappa dei tasti
 opt-clock = Orologio nell'angolo
+opt-window-title = Mostra dove siamo nel titolo della finestra del terminale
 opt-mouse = Supporto del mouse
 opt-clipboard = Appunti attraverso il terminale (OSC 52)
 opt-command-screen = Mostra l'output del comando mentre gira

@@ -608,6 +608,7 @@ opt-markdown = Markdown olvasásra tördelve
 opt-table = .csv és .jsonl megnyitása táblázatként
 opt-keymap = Billentyűkiosztás
 opt-clock = Óra a sarokban
+opt-window-title = Az aktuális hely megjelenítése a terminálablak címsorában
 opt-mouse = Egér kezelése
 opt-clipboard = A terminál vigye a vágólapot (OSC 52)
 opt-command-screen = A parancs kimenete látszik futás közben

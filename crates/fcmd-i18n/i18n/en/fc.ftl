@@ -608,6 +608,7 @@ opt-markdown = Markdown laid out to be read
 opt-table = Open a .csv or a .jsonl as a table
 opt-keymap = Keymap
 opt-clock = Clock in the corner
+opt-window-title = Show where we are in the terminal's window title
 opt-mouse = Mouse support
 opt-clipboard = Let the terminal carry the clipboard (OSC 52)
 opt-command-screen = Show a command's output while it runs

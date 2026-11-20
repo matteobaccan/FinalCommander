@@ -480,6 +480,20 @@ screen has no use for left empty, so `F5` is the fifth box along wherever you ar
 clickable (hold `Shift` and click for `Shift+F5`), so
 is the menu bar and a dialog's list. A click outside an open dialog does nothing at all.
 
+# The window's title
+
+The title of the terminal's window — or of its tab — says where you are: the folder of the
+panel with the focus, and in the viewer or the editor the file that is open, followed by
+` - fcmd`. It follows you as you move, so several terminals each running the program can be
+told apart from the row of tabs. On the way out the title you had before comes back, where
+the terminal keeps one to give back (xterm and those that follow it); elsewhere your shell's
+next prompt writes its own.
+
+If you name your tabs yourself and want them left alone, turn off *Show where we are in the
+terminal's window title* in `F9 → Options → Interface settings` — `ui.window_title` in the
+settings file. A name with odd characters in it cannot do anything to the terminal through
+the title: control characters are sent as spaces.
+
 # Copying and pasting text
 
 `Ctrl+Ins` copies the names of what is selected — one per line — and `Alt+Shift+Ins` copies

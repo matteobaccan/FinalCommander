@@ -627,6 +627,11 @@ impl Form {
                     cfg.ui.save_setup_on_exit,
                 ),
                 Field::toggle("ui.clock", t("opt-clock"), cfg.ui.clock),
+                Field::toggle(
+                    "ui.window_title",
+                    t("opt-window-title"),
+                    cfg.ui.window_title,
+                ),
             ],
             FormKind::Confirmations => vec![
                 Field::toggle(

@@ -476,6 +476,13 @@ pub struct UiCfg {
     /// minute and not once a second — the clock shows hours and minutes, so a second is
     /// fifty-nine redraws nobody can see.
     pub clock: bool,
+    /// Say where we are in the terminal's window title: the panel's folder, or the file in
+    /// the viewer and the editor.
+    ///
+    /// On by default — a row of terminal tabs all called `fcmd` tells nobody which is which
+    /// — and a setting because the title is the terminal's, and somebody who has given
+    /// their tabs names of their own wants them left alone.
+    pub window_title: bool,
     /// Write the configuration file on the way out, as *Save setup* writes it.
     ///
     /// FAR's *Auto save setup*. Off by default, because a setting changed to see what it does
@@ -522,6 +529,7 @@ impl Default for UiCfg {
             clipboard: true,
             menu_bar: false,
             clock: false,
+            window_title: true,
             save_setup_on_exit: false,
         }
     }
@@ -2247,6 +2255,7 @@ impl Config {
             "ui.clipboard" => self.ui.clipboard = parse_bool(value)?,
             "ui.menu_bar" => self.ui.menu_bar = parse_bool(value)?,
             "ui.clock" => self.ui.clock = parse_bool(value)?,
+            "ui.window_title" => self.ui.window_title = parse_bool(value)?,
             "ui.save_setup_on_exit" => self.ui.save_setup_on_exit = parse_bool(value)?,
             "ui.command_screen" => self.ui.command_screen = parse_bool(value)?,
             "editor.tab_width" => {

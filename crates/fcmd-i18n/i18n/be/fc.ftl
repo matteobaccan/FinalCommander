@@ -614,6 +614,7 @@ opt-markdown = Markdown, звярстаны для чытання
 opt-table = Адкрываць .csv і .jsonl як табліцу
 opt-keymap = Раскладка клавішаў
 opt-clock = Гадзіннік у куце
+opt-window-title = Паказваць бягучае месца ў загалоўку акна тэрмінала
 opt-mouse = Падтрымка мышы
 opt-clipboard = Дазволіць тэрміналу перадаваць буфер абмену (OSC 52)
 opt-command-screen = Паказваць вывад каманды падчас яе працы

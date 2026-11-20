@@ -611,6 +611,7 @@ opt-markdown = Markdown vysázený ke čtení
 opt-table = Otevírat .csv a .jsonl jako tabulku
 opt-keymap = Rozložení kláves
 opt-clock = Hodiny v rohu
+opt-window-title = Zobrazovat aktuální místo v titulku okna terminálu
 opt-mouse = Podpora myši
 opt-clipboard = Nechat terminál přenášet schránku (OSC 52)
 opt-command-screen = Zobrazovat výstup příkazu, dokud běží
