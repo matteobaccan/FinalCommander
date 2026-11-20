@@ -10,6 +10,11 @@
 //! library the AWS command line itself signs with, run against a frozen clock — and one of
 //! them, the ranged `GET` of `examplebucket/test.txt` on 24 May 2013, is the worked example
 //! AWS publishes with the signature spelled out, so the chain is anchored at both ends.
+//!
+//! The same signature can travel in the URL instead of in the headers, and then the URL is
+//! its own authorisation for as long as it says: a *presigned* URL ([`Signer::presign`]),
+//! which is how an object is shared with somebody who has no keys. Its test is the worked
+//! example of the AWS documentation too — the same object, the same day, good for a day.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -75,6 +80,10 @@ pub struct Signable<'a> {
     pub payload_sha256: &'a str,
 }
 
+/// The longest a presigned URL may stay good: seven days, which is the protocol's own limit
+/// and not a choice made here.
+pub const PRESIGN_MOST: u64 = 604_800;
+
 /// The empty body every read request has, hashed once.
 pub const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
@@ -138,19 +147,8 @@ impl Signer {
         canonical.push('\n');
         canonical.push_str(req.payload_sha256);
 
-        let scope = format!(
-            "{}/{}/{}/aws4_request",
-            stamp.date, self.region, self.service
-        );
-        let to_sign = format!(
-            "AWS4-HMAC-SHA256\n{}\n{}\n{}",
-            stamp.datetime,
-            scope,
-            hex(digest::digest(&digest::SHA256, canonical.as_bytes()).as_ref())
-        );
-
-        let key = self.signing_key(&stamp.date);
-        let signature = hex(hmac::sign(&key, to_sign.as_bytes()).as_ref());
+        let scope = self.scope(&stamp);
+        let signature = self.seal(&canonical, &stamp, &scope);
         let authorization = format!(
             "AWS4-HMAC-SHA256 Credential={}/{}, SignedHeaders={}, Signature={}",
             self.credentials.access_key_id, scope, signed_headers, signature
@@ -168,6 +166,77 @@ impl Signer {
             out.push(("x-amz-security-token".to_string(), token.clone()));
         }
         out
+    }
+
+    /// The query string that makes a URL its own authorisation until it expires.
+    ///
+    /// SigV4 again, with everything a signed request carries in its headers moved into the
+    /// query: the algorithm, the credential scope, the time, how many seconds it is good for
+    /// and — for temporary credentials — the session token, then the signature over all of
+    /// them. Only `host` is a signed header, and the body is declared unsigned, because the
+    /// one who follows the link is a browser or `curl` and sends nothing we could have
+    /// hashed. `path` is the encoded path as it will be fetched.
+    ///
+    /// Nothing is sent to anyone to make it: the service learns of the link when somebody
+    /// uses it, and checks it by signing the same words with the same key. So it cannot be
+    /// taken back short of revoking the key, and a link signed with temporary credentials
+    /// stops working when they do, whatever `expires` says.
+    ///
+    /// `expires` is kept between one second and [`PRESIGN_MOST`].
+    pub fn presign(
+        &self,
+        method: &str,
+        host: &str,
+        path: &str,
+        expires: u64,
+        stamp: &Stamp,
+    ) -> String {
+        let scope = self.scope(stamp);
+        let mut query: Vec<(&str, String)> = vec![
+            ("X-Amz-Algorithm", "AWS4-HMAC-SHA256".into()),
+            (
+                "X-Amz-Credential",
+                format!("{}/{scope}", self.credentials.access_key_id),
+            ),
+            ("X-Amz-Date", stamp.datetime.clone()),
+            ("X-Amz-Expires", expires.clamp(1, PRESIGN_MOST).to_string()),
+            ("X-Amz-SignedHeaders", "host".into()),
+        ];
+        if let Some(token) = &self.credentials.session_token {
+            query.push(("X-Amz-Security-Token", token.clone()));
+        }
+        // The canonical query is sorted by name, and the URL carries it in the same order:
+        // one string, so the two cannot differ by a byte.
+        query.sort_by(|a, b| a.0.cmp(b.0));
+        let query = query
+            .iter()
+            .map(|(name, value)| format!("{name}={}", crate::uri::encode_query(value)))
+            .collect::<Vec<_>>()
+            .join("&");
+        let canonical = format!("{method}\n{path}\n{query}\nhost:{host}\n\nhost\nUNSIGNED-PAYLOAD");
+        let signature = self.seal(&canonical, stamp, &scope);
+        format!("{query}&X-Amz-Signature={signature}")
+    }
+
+    /// `20130524/us-east-1/s3/aws4_request`: what a signature is good for.
+    fn scope(&self, stamp: &Stamp) -> String {
+        format!(
+            "{}/{}/{}/aws4_request",
+            stamp.date, self.region, self.service
+        )
+    }
+
+    /// The signature of a canonical request: its hash, wrapped in the time and the scope,
+    /// signed with the key derived for that day.
+    fn seal(&self, canonical: &str, stamp: &Stamp, scope: &str) -> String {
+        let to_sign = format!(
+            "AWS4-HMAC-SHA256\n{}\n{}\n{}",
+            stamp.datetime,
+            scope,
+            hex(digest::digest(&digest::SHA256, canonical.as_bytes()).as_ref())
+        );
+        let key = self.signing_key(&stamp.date);
+        hex(hmac::sign(&key, to_sign.as_bytes()).as_ref())
     }
 
     /// `HMAC(HMAC(HMAC(HMAC("AWS4" + secret, date), region), service), "aws4_request")` — the
@@ -292,6 +361,84 @@ mod tests {
             .nth(1)
             .expect("a signature in it")
             .to_string()
+    }
+
+    /// The worked example of the AWS documentation ("Authenticating Requests: Using Query
+    /// Parameters"): `GET examplebucket/test.txt`, signed on 24 May 2013 with the example
+    /// keys, good for 86400 seconds. The whole query string is compared, not the signature
+    /// alone: the order and the encoding of the parameters are part of what is published.
+    #[test]
+    fn a_presigned_url_is_the_one_the_aws_documentation_works_out() {
+        let query = signer("us-east-1").presign(
+            "GET",
+            "examplebucket.s3.amazonaws.com",
+            "/test.txt",
+            86_400,
+            &Stamp::at(at(WHEN)),
+        );
+        assert_eq!(
+            query,
+            "X-Amz-Algorithm=AWS4-HMAC-SHA256\
+             &X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20130524%2Fus-east-1%2Fs3%2Faws4_request\
+             &X-Amz-Date=20130524T000000Z\
+             &X-Amz-Expires=86400\
+             &X-Amz-SignedHeaders=host\
+             &X-Amz-Signature=aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404"
+        );
+    }
+
+    /// The time a link is good for is part of what is signed, and it has the protocol's
+    /// limits whatever is asked: never nothing, never more than seven days.
+    #[test]
+    fn a_presigned_url_says_how_long_and_no_longer_than_a_week() {
+        let stamp = Stamp::at(at(WHEN));
+        let sign = |expires| {
+            signer("us-east-1").presign(
+                "GET",
+                "examplebucket.s3.amazonaws.com",
+                "/a",
+                expires,
+                &stamp,
+            )
+        };
+        let signature = |q: &str| q.rsplit("X-Amz-Signature=").next().unwrap().to_string();
+        assert!(sign(3_600).contains("&X-Amz-Expires=3600&"));
+        assert!(sign(604_800).contains("&X-Amz-Expires=604800&"));
+        assert!(sign(u64::MAX).contains("&X-Amz-Expires=604800&"));
+        assert!(sign(0).contains("&X-Amz-Expires=1&"));
+        assert_ne!(signature(&sign(3_600)), signature(&sign(86_400)));
+        assert_eq!(signature(&sign(3_600)).len(), 64);
+    }
+
+    /// Temporary credentials put their token in the query, encoded, in its sorted place —
+    /// and under the signature, so a link cannot be passed off with another token.
+    #[test]
+    fn a_presigned_url_carries_the_session_token_of_temporary_credentials() {
+        let stamp = Stamp::at(at(WHEN));
+        let with = |token: &str| {
+            Signer::new(
+                Credentials::new(KEY, SECRET).with_session_token(token),
+                "eu-west-1",
+            )
+            .presign(
+                "GET",
+                "examplebucket.s3.amazonaws.com",
+                "/test.txt",
+                3_600,
+                &stamp,
+            )
+        };
+        let query = with("Fwo/GZX+Ivs=");
+        assert!(
+            query.contains("&X-Amz-Expires=3600&X-Amz-Security-Token=Fwo%2FGZX%2BIvs%3D&X-Amz-SignedHeaders=host&"),
+            "{query}"
+        );
+        assert!(
+            query.contains("%2Feu-west-1%2Fs3%2Faws4_request&"),
+            "{query}"
+        );
+        let signature = |q: &str| q.rsplit("X-Amz-Signature=").next().unwrap().to_string();
+        assert_ne!(signature(&query), signature(&with("another")));
     }
 
     /// Every one of these is `botocore` signing the same request against a frozen clock, and

@@ -2466,6 +2466,19 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         let _ = tx.send(Event::UsageTree { id, tree });
                     });
                 }
+                Request::S3Link { path, seconds } => {
+                    // Answered here, like the clipboard it is on its way to: a signature is
+                    // arithmetic on a key this process already holds, and nothing is asked
+                    // of the disk or of the network to make one.
+                    let result = objects
+                        .presign(&path, seconds, std::time::SystemTime::now())
+                        .map_err(|e| e.to_string());
+                    let _ = tx.send(Event::S3Link {
+                        name: path.display_name(),
+                        seconds,
+                        result,
+                    });
+                }
                 Request::S3Profiles { service } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || {
@@ -7881,6 +7894,7 @@ dir_attr = "D"
                 | Request::StripMeta { .. }
                 // The shared AWS files are the user's own: a test hands the profiles in.
                 | Request::S3Profiles { .. }
+                | Request::S3Link { .. }
                 | Request::S3Service { .. }
                 | Request::OpenUrl { .. }
                 // Nor a printer: the tests look at the line the request carries.

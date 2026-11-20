@@ -381,6 +381,9 @@ pub enum Command {
     /// Choose the AWS profile an object storage service signs with, from the profiles of
     /// `~/.aws/credentials` and `~/.aws/config`.
     NetS3Profile,
+    /// A link to the object under the cursor that reads it without keys for a while — a
+    /// presigned URL — copied to the clipboard.
+    NetS3Link,
     ToolUserMenu,
     /// The user menu again, with the cursor on the row taken last (FAR's `Shift+F10`).
     ToolUserMenuLast,
@@ -853,6 +856,7 @@ impl Command {
             Command::NetTunnel,
             Command::NetTunnels,
             Command::NetS3Profile,
+            Command::NetS3Link,
             Command::ToolUserMenu,
             Command::ToolUserMenuLast,
             Command::ToolCompareDirs,
@@ -1202,6 +1206,7 @@ impl Command {
             Command::NetTunnel => "net.tunnel".into(),
             Command::NetTunnels => "net.tunnels".into(),
             Command::NetS3Profile => "net.s3.profile".into(),
+            Command::NetS3Link => "net.s3.link".into(),
             Command::ToolUserMenu => "tool.usermenu".into(),
             Command::ToolUserMenuLast => "tool.usermenu.last".into(),
             Command::ToolCompareDirs => "tool.compare.dirs".into(),
@@ -1551,6 +1556,7 @@ impl Command {
             ("net.tunnel", _) => Command::NetTunnel,
             ("net.tunnels", _) => Command::NetTunnels,
             ("net.s3.profile", _) => Command::NetS3Profile,
+            ("net.s3.link", _) => Command::NetS3Link,
             ("tool.usermenu", _) => Command::ToolUserMenu,
             ("tool.usermenu.last", _) => Command::ToolUserMenuLast,
             ("tool.find", _) => Command::ToolFind,

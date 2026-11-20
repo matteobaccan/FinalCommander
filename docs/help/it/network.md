@@ -219,6 +219,22 @@ scaricamento scritto direttamente nel file; una copia da una chiave a un'altra d
 servizio la fa il servizio, quindi i byte non passano da qui, ed è questo che rende
 sostenibile copiare un oggetto grande.
 
+**Un link da dare a qualcuno.** `Ctrl+Alt+O` su un oggetto — *Comandi → Link condiviso a un
+oggetto* — chiede per quanto tempo, **1 ora, 24 ore o 7 giorni**, e mette negli appunti un URL
+che legge quell'oggetto senza chiavi e senza account, in un browser o con `curl`, finché il
+tempo non scade. Sette giorni è il massimo che il servizio concede. Il link è firmato su questa
+macchina con la chiave del servizio, e per farlo non viene mandato niente a nessuno. È anche
+quello che conviene sapere prima di mandarne uno:
+
+* chi ha il link può leggere l'oggetto finché non scade — trattalo come una password per quel
+  solo file, con una data sopra;
+* non si può ritirare, se non cancellando l'oggetto o revocando la chiave;
+* se le chiavi sono temporanee — un token di sessione da single sign-on o da un ruolo — il
+  link smette di funzionare quando smettono loro, qualunque durata sia stata chiesta.
+
+Un servizio senza chiavi non può firmarne uno, e una cartella non ne ha: un link è a un solo
+oggetto.
+
 Alcune cose sono la natura dell'object storage, non lacune:
 
 * **Non ci sono cartelle.** `a/b/c.txt` è una chiave, e la `a/` che un pannello mostra è

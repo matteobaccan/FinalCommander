@@ -23,6 +23,12 @@ Notable changes, newest first. The format follows
   `us-east-1`, and keys kept in the configuration file are read as the AWS tools read them.
   `AWS_SHARED_CREDENTIALS_FILE` and `AWS_CONFIG_FILE` are honoured. Static keys only: a
   profile that signs through single sign-on or a role is listed, and refused with the reason.
+- **A shared link to an S3 object.** `Ctrl+Alt+O` on an object in a bucket — *Commands →
+  Shared link to an object* (`net.s3.link`) — asks for 1 hour, 24 hours or 7 days and copies
+  to the clipboard a presigned URL that reads the object without keys until then. It is signed
+  on this machine with the service's own key (Signature Version 4 in the query string), and
+  nothing is sent anywhere to make it. A link signed with temporary credentials ends when they
+  do.
 
 ### Changed
 

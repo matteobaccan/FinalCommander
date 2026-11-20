@@ -206,6 +206,21 @@ upload streamed off the disk; a copy out of one is a download written straight t
 copy from one key to another inside the same service is done by the service, so the bytes never
 come through here, which is what makes copying a large object affordable.
 
+**A link to hand to somebody.** `Ctrl+Alt+O` on an object — *Commands → Shared link to an
+object* — asks how long, **1 hour, 24 hours or 7 days**, and puts on the clipboard a URL that
+reads that object with no keys and no account, in a browser or with `curl`, until the time is
+up. Seven days is the longest the service allows. The link is signed on this machine with the
+service's own key, and nothing is sent anywhere to make it. That is also what it is worth
+knowing before sending one:
+
+* whoever has the link can read the object until it expires — treat it as a password to that
+  one file, with a date on it;
+* it cannot be taken back, short of deleting the object or revoking the key;
+* if the keys are temporary ones — a session token from single sign-on or a role — the link
+  stops working when they do, however long was asked for.
+
+A service without keys cannot sign one, and a folder has none: a link is to one object.
+
 A few things are the nature of object storage rather than gaps:
 
 * **There are no directories.** `a/b/c.txt` is one key, and the `a/` a panel shows is read out

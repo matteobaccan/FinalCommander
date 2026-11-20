@@ -461,6 +461,22 @@ impl S3Vfs {
         Ok(())
     }
 
+    /// A link to an object that anybody can read it through until it expires: a presigned
+    /// `GET`, signed here with the service's own keys and sent nowhere (SPEC 04 §8.5b).
+    ///
+    /// The client asked is the one the panel has been using, so a bucket that turned out to
+    /// live in another region is signed for the region it answers from.
+    pub fn presign(
+        &self,
+        path: &VPath,
+        expires: u64,
+        now: std::time::SystemTime,
+    ) -> Result<String> {
+        let (profile, bucket, key) = Self::parts_of(path)?;
+        self.client(&profile, &bucket)?
+            .presigned_get(&bucket, &key, expires, now)
+    }
+
     /// Can this path be written to at all? A service configured without credentials can only
     /// read, and saying so before the attempt is better than a 403 from far away.
     pub fn writable(&self, path: &VPath) -> bool {
@@ -778,6 +794,63 @@ mod tests {
             .await
             .expect("the good keys again");
         assert_eq!(vfs.names(), ["", "work"]);
+    }
+
+    /// The whole point of a presigned link, end to end: somebody with no keys — a bare
+    /// HTTP client here — follows it and gets the object, and the service is the one that
+    /// checks the signature. A link past its time, one tampered with, and one to a bucket
+    /// rather than an object are all refused.
+    #[tokio::test]
+    async fn a_presigned_link_reads_the_object_with_no_keys_until_it_expires() {
+        let (fake, vfs) = provider().await;
+        let path = VPath::parse("s3://logs/2024/08/13/access.log");
+        let now = std::time::SystemTime::now();
+        let http = reqwest::Client::new();
+
+        let link = vfs
+            .presign(&path, 3_600, now)
+            .expect("the service has keys");
+        assert!(
+            link.contains("/logs/2024/08/13/access.log?X-Amz-Algorithm="),
+            "{link}"
+        );
+        let answer = http.get(&link).send().await.unwrap();
+        assert_eq!(answer.status(), 200, "{link}");
+        assert_eq!(
+            answer.text().await.unwrap(),
+            "contents of 2024/08/13/access.log"
+        );
+        // The same object without the link is not the world's to read.
+        let bare = link.split('?').next().unwrap();
+        assert_eq!(http.get(bare).send().await.unwrap().status(), 403);
+
+        // Signed two hours ago for one hour: the service says it is over.
+        let stale = vfs
+            .presign(&path, 3_600, now - std::time::Duration::from_secs(7_200))
+            .unwrap();
+        let answer = http.get(&stale).send().await.unwrap();
+        assert_eq!(answer.status(), 403);
+        assert!(answer.text().await.unwrap().contains("expired"));
+
+        // A longer life written into a link that was signed for a short one is a forgery.
+        let stretched = link.replace("X-Amz-Expires=3600", "X-Amz-Expires=604800");
+        assert_eq!(http.get(&stretched).send().await.unwrap().status(), 403);
+        // And a link is to one object: it does not open the one beside it.
+        let other = link.replace("access.log", "error.log");
+        assert_eq!(http.get(&other).send().await.unwrap().status(), 403);
+
+        // No object, no link; no keys, no link — said here, with no request made.
+        let before = fake.requests().len();
+        let error = vfs.presign(&VPath::parse("s3://logs/"), 3_600, now);
+        assert!(error.unwrap_err().to_string().contains("bucket itself"));
+        vfs.set_service(Service::new("", fake.endpoint()));
+        let error = vfs.presign(&path, 3_600, now).unwrap_err();
+        assert!(matches!(error, S3Error::NoCredentials(_)), "{error}");
+        assert_eq!(
+            fake.requests().len(),
+            before,
+            "a link is made without asking anyone"
+        );
     }
 
     /// A path that names a bucket, or the list of them, is not an object — and the refusal

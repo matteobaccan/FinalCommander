@@ -139,6 +139,12 @@ pub enum Request {
     S3Service {
         block: fcmd_config::S3Cfg,
     },
+    /// Make a link to this object that reads it without keys for `seconds`: signed with the
+    /// service's keys where they are held, and sent nowhere.
+    S3Link {
+        path: VPath,
+        seconds: u64,
+    },
     /// Take the metadata out of these pictures, each first copied into `backup` for the undo.
     StripMeta {
         files: Vec<PathBuf>,
@@ -1404,6 +1410,12 @@ pub enum Event {
         signed: bool,
         region: String,
     },
+    /// The link asked for, or why there is none.
+    S3Link {
+        name: String,
+        seconds: u64,
+        result: Result<String, String>,
+    },
     /// What taking the metadata out did: each picture changed with the copy it can be put
     /// back from, how many blocks went, the pictures that had nothing to take out, and the
     /// ones that could not be done.
@@ -2155,6 +2167,14 @@ pub fn trash_answer(side: usize, ask: TrashAsk, basket: &dyn Wastebasket) -> Eve
 }
 
 /// The message id for a service's state, so the panel and the card say the same word.
+/// How long a link to an object may stay good, in seconds, with the message that names each:
+/// an hour, a day, and the seven days that are the most a presigned URL is allowed.
+const S3_LINK_TIMES: [(u64, &str); 3] = [
+    (3_600, "s3-link-hour"),
+    (86_400, "s3-link-day"),
+    (604_800, "s3-link-week"),
+];
+
 fn start_id(start: fcmd_platform::ServiceStart) -> &'static str {
     match start {
         fcmd_platform::ServiceStart::Automatic => "svc-start-automatic",
@@ -3670,6 +3690,8 @@ pub struct App {
     /// The object storage service `net.s3.profile` is choosing a profile for, while its list
     /// is open.
     pub s3_profile_for: String,
+    /// The object `net.s3.link` is making a link to, while the list of durations is open.
+    pub s3_link_for: Option<VPath>,
     /// The line the viewer had on top when `git blame` was asked for, to open the answer on.
     pub blame_line: Option<usize>,
     /// The day the daily release check last asked, and the release it last offered: see
@@ -4012,6 +4034,7 @@ impl App {
             rename_undo: None,
             strip_files: Vec::new(),
             s3_profile_for: String::new(),
+            s3_link_for: None,
             blame_line: None,
             update_checked: 0,
             update_offered: String::new(),
@@ -4292,6 +4315,11 @@ impl App {
                 signed,
                 region,
             } => self.s3_service_set(&service, &source, signed, &region),
+            Event::S3Link {
+                name,
+                seconds,
+                result,
+            } => self.s3_link_made(&name, seconds, result),
             Event::StripDone {
                 done,
                 removed,
@@ -13131,6 +13159,7 @@ impl App {
             }
             Command::NetDisconnect => self.disconnect_active(),
             Command::NetS3Profile => self.ask_s3_profiles(),
+            Command::NetS3Link => self.open_s3_link(),
 
             Command::ViewerDisasm if self.live_viewer().is_some() => {
                 let name = self
@@ -19784,6 +19813,80 @@ impl App {
         }
     }
 
+    /// `net.s3.link`: a link to the object under the cursor that anybody can read it through
+    /// for a while. The one question is for how long — an hour, a day, or the week that is
+    /// the most the protocol allows — and the answer is what gets signed.
+    ///
+    /// Only an object in a bucket has one: a prefix is not a thing a `GET` can read, and a
+    /// file anywhere else has no service to check a signature.
+    fn open_s3_link(&mut self) {
+        let panel = self.panel();
+        let object = panel
+            .current()
+            .filter(|e| {
+                panel.temp.is_none()
+                    && panel.cwd.scheme() == fcmd_core::Scheme::S3
+                    && !e.kind.is_dirlike()
+                    && e.kind != fcmd_core::EntryKind::Parent
+            })
+            .map(|e| panel.path_of(e));
+        let Some(object) = object else {
+            let m = self.i18n.t("s3-link-not-here");
+            self.set_error(m);
+            return;
+        };
+        let rows = S3_LINK_TIMES
+            .iter()
+            .map(|(seconds, label)| PickRow::plain(self.i18n.t(label), seconds.to_string(), false))
+            .collect();
+        let title = self
+            .i18n
+            .t_args("s3-link-title", &[("name", object.display_name().into())]);
+        self.s3_link_for = Some(object);
+        self.mode = Mode::Pick(Box::new(Pick::new(
+            PickKind::S3Link,
+            title,
+            rows,
+            self.active,
+        )));
+    }
+
+    /// The duration chosen: the signing is the provider's, which holds the keys.
+    fn make_s3_link(&mut self, value: &str) {
+        let (Some(path), Ok(seconds)) = (self.s3_link_for.take(), value.parse::<u64>()) else {
+            return;
+        };
+        self.requests.push(Request::S3Link { path, seconds });
+    }
+
+    /// The link is made: onto the clipboard with it, and a line that says what it is to and
+    /// how long it is good for — or why there is none.
+    fn s3_link_made(&mut self, name: &str, seconds: u64, result: Result<String, String>) {
+        match result {
+            Ok(link) => {
+                if self.copy_to_clipboard(&link) {
+                    let time = S3_LINK_TIMES
+                        .iter()
+                        .find(|(s, _)| *s == seconds)
+                        .map(|(_, label)| self.i18n.t(label))
+                        .unwrap_or_else(|| format!("{seconds} s"));
+                    let m = self.i18n.t_args(
+                        "s3-link-copied",
+                        &[("name", name.into()), ("time", time.into())],
+                    );
+                    self.set_status(m);
+                }
+            }
+            Err(why) => {
+                let m = self.i18n.t_args(
+                    "s3-link-failed",
+                    &[("name", name.into()), ("why", why.into())],
+                );
+                self.set_error(m);
+            }
+        }
+    }
+
     /// `file.strip_metadata`: the pictures selected (or under the cursor) on this disk, and a
     /// choice of what to take out of them.
     fn open_strip_meta(&mut self) {
@@ -25734,6 +25837,8 @@ impl App {
             PickKind::ServiceStart => return,
             // And `open_s3_profiles`, which has the profiles a worker read.
             PickKind::S3Profile => return,
+            // And `open_s3_link`, which knows the object under the cursor.
+            PickKind::S3Link => return,
             PickKind::PluginsConfig => return,
             // And `open_settings`, which knows which row the list was left on.
             PickKind::Settings => return,
@@ -26997,6 +27102,10 @@ impl App {
             PickKind::S3Profile => {
                 let value = row.value.clone();
                 self.set_s3_profile(&value);
+            }
+            PickKind::S3Link => {
+                let value = row.value.clone();
+                self.make_s3_link(&value);
             }
             PickKind::AiThreads => {
                 let value = row.value.clone();
@@ -48147,6 +48256,133 @@ abcdefghij
             region: "us-east-1".into(),
         });
         assert!(app.status.contains("aws:gone"), "{}", app.status);
+    }
+
+    /// A panel in a bucket with one object and one prefix in it, the cursor on the object.
+    fn app_in_a_bucket() -> App {
+        use fcmd_core::{Entry, EntryFlags, EntryId, EntryKind};
+        let mut app = app();
+        let cwd = VPath::parse("s3://work@logs/2024/");
+        let entry = |name: &str, kind: EntryKind, id: u64| Entry {
+            name: name.into(),
+            kind,
+            size: 10,
+            mtime: None,
+            btime: None,
+            atime: None,
+            flags: EntryFlags::empty(),
+            id: EntryId::Name(id),
+            link_target: None,
+        };
+        app.panels[0].cwd = cwd;
+        let generation = app.panels[0].generation;
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation,
+            result: Ok(vec![
+                entry("08", EntryKind::Dir, 1),
+                entry("access.log", EntryKind::File, 2),
+            ]),
+        });
+        let at = (0..app.panels[0].listing.len())
+            .find(|&r| app.panels[0].listing.row(r).unwrap().name_str() == "access.log")
+            .expect("the object is listed");
+        app.panels[0].cursor = at;
+        app.take_requests();
+        app
+    }
+
+    /// `Ctrl+Alt+O` on an object: three durations, and the one chosen goes to be signed with
+    /// the object's path; the link that comes back goes to the clipboard, and the status
+    /// line says what it is to and for how long.
+    #[test]
+    fn a_link_to_an_object_asks_for_how_long_and_lands_on_the_clipboard() {
+        let mut app = app_in_a_bucket();
+        let object = app.panels[0].cwd.join("access.log");
+        press(&mut app, "Ctrl+Alt+O");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::S3Link);
+        assert!(pick.title.contains("access.log"), "{}", pick.title);
+        let values: Vec<&str> = pick.rows.iter().map(|r| r.value.as_str()).collect();
+        assert_eq!(values, ["3600", "86400", "604800"]);
+        press(&mut app, "Down");
+        press(&mut app, "Enter");
+        assert_eq!(
+            app.take_requests(),
+            vec![Request::S3Link {
+                path: object,
+                seconds: 86_400
+            }]
+        );
+
+        let link = "https://logs.s3.amazonaws.com/2024/access.log?X-Amz-Signature=abc";
+        app.handle_event(Event::S3Link {
+            name: "access.log".into(),
+            seconds: 86_400,
+            result: Ok(link.into()),
+        });
+        assert_eq!(
+            app.take_requests(),
+            vec![Request::Clipboard { text: link.into() }]
+        );
+        let day = app.i18n.t("s3-link-day");
+        assert!(
+            app.status.contains("access.log") && app.status.contains(&day),
+            "{}",
+            app.status
+        );
+        assert!(!app.status_error);
+
+        // A service with no keys cannot sign, and the reason is what the line says.
+        app.handle_event(Event::S3Link {
+            name: "access.log".into(),
+            seconds: 3_600,
+            result: Err("this service has none".into()),
+        });
+        assert!(app.take_requests().is_empty(), "nothing is copied");
+        assert!(app.status_error);
+        assert!(
+            app.status.contains("this service has none"),
+            "{}",
+            app.status
+        );
+
+        // With the clipboard switched off the link is not said to have been copied.
+        app.cfg.ui.clipboard = false;
+        app.handle_event(Event::S3Link {
+            name: "access.log".into(),
+            seconds: 3_600,
+            result: Ok(link.into()),
+        });
+        assert!(app.take_requests().is_empty());
+        assert!(app.status_error);
+    }
+
+    /// A link is to an object: a prefix has none, nor has a file that is not in a bucket.
+    #[test]
+    fn a_link_is_offered_for_an_object_in_a_bucket_and_nothing_else() {
+        let mut app = app_in_a_bucket();
+        let prefix = (0..app.panels[0].listing.len())
+            .find(|&r| app.panels[0].listing.row(r).unwrap().name_str() == "08")
+            .unwrap();
+        app.panels[0].cursor = prefix;
+        app.run(Command::NetS3Link);
+        assert!(app.mode.is_normal());
+        assert!(app.status_error);
+        assert!(app.take_requests().is_empty());
+
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("notes.txt"), b"x").unwrap();
+        let mut app = app_on_disk(dir.path());
+        let at = (0..app.panels[0].listing.len())
+            .find(|&r| app.panels[0].listing.row(r).unwrap().name_str() == "notes.txt")
+            .unwrap();
+        app.panels[0].cursor = at;
+        app.run(Command::NetS3Link);
+        assert!(app.mode.is_normal());
+        assert!(app.status_error);
     }
 
     /// `file.strip_metadata` on a picture: three ways to choose from, and the one chosen

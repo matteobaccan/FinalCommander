@@ -248,6 +248,9 @@ impl Command {
             Command::NetS3Profile => {
                 "choose the AWS profile an object storage service signs its requests with"
             }
+            Command::NetS3Link => {
+                "copy a link that reads this object without keys for an hour, a day or a week"
+            }
             Command::ToolUserMenu => "your own menu of commands",
             Command::ToolUserMenuLast => "your own menu, on the row you took last",
             Command::ToolCompareDirs => "compare the two panels by name, size and time",
