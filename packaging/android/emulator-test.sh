@@ -31,9 +31,9 @@ fail() {
 check_page() {
     url=$1
     token=${url#*\?t=}
-    curl -fsS "http://127.0.0.1:$local_port/?t=$token" > page.html || fail "GET / failed"
+    curl -fsS --max-time 10 "http://127.0.0.1:$local_port/?t=$token" > page.html || fail "GET / failed"
     grep -q 'xterm.js' page.html || fail "GET / is not the terminal's page"
-    code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$local_port/?t=wrong")
+    code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$local_port/?t=wrong")
     [ "$code" = 403 ] || fail "GET / without the token answered $code, not 403"
     head=$(curl -s -i --max-time 3 -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
         -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
@@ -53,7 +53,9 @@ adb shell 'HOME=/data/local/tmp /data/local/tmp/fcmd --version; echo "exit=$?"' 
 cat version.txt
 grep -q '^exit=0' version.txt || fail "fcmd --version did not exit 0"
 grep -q '^fcmd ' version.txt || fail "fcmd --version said no version"
-adb shell 'cd /data/local/tmp && HOME=/data/local/tmp nohup ./fcmd --web-terminal 0 > wt.txt 2>&1 &'
+# Started in a session of its own, with no terminal: `adb shell` waits for every process
+# holding its terminal, and would never come back. `timeout` is there should it still wait.
+timeout 20 adb shell 'cd /data/local/tmp && HOME=/data/local/tmp setsid nohup ./fcmd --web-terminal 0 > wt.txt 2>&1 < /dev/null &' || true
 url=
 i=0
 while [ $i -lt 30 ]; do
