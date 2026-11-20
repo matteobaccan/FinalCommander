@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+FinalCommander - an orthodox file manager for the terminal.
+Copyright (c) Matteo Baccan - https://github.com/matteobaccan/FinalCommander
+SPDX-License-Identifier: MIT
+
+The launcher icon: assets/icon.svg as an Android vector drawable, rectangle for rectangle.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="256"
+    android:viewportHeight="256">
+    <path
+        android:pathData="M40,0 H216 A40,40 0 0 1 256,40 V216 A40,40 0 0 1 216,256 H40 A40,40 0 0 1 0,216 V40 A40,40 0 0 1 40,0 Z"
+        android:fillColor="#000080" />
+    <path
+        android:pathData="M40,4 H216 A36,36 0 0 1 252,40 V216 A36,36 0 0 1 216,252 H40 A36,36 0 0 1 4,216 V40 A36,36 0 0 1 40,4 Z"
+        android:strokeColor="#000000"
+        android:strokeWidth="8"
+        android:strokeAlpha="0.35" />
+    <path
+        android:pathData="M26,34 H121 V184 H26 Z"
+        android:strokeColor="#00FFFF"
+        android:strokeWidth="9" />
+    <path
+        android:pathData="M135,34 H230 V184 H135 Z"
+        android:strokeColor="#00FFFF"
+        android:strokeWidth="9" />
+    <path
+        android:pathData="M44,52 H99 V61 H44 Z"
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.9" />
+    <path
+        android:pathData="M35,74 H112 V98 H35 Z"
+        android:fillColor="#FFFF00" />
+    <path
+        android:pathData="M44,110 H99 V119 H44 Z"
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.9" />
+    <path
+        android:pathData="M44,139 H99 V148 H44 Z"
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.9" />
+    <path
+        android:pathData="M153,52 H196 V61 H153 Z"
+        android:fillColor="#00FFFF"
+        android:fillAlpha="0.85" />
+    <path
+        android:pathData="M153,81 H196 V90 H153 Z"
+        android:fillColor="#00FFFF"
+        android:fillAlpha="0.85" />
+    <path
+        android:pathData="M153,110 H196 V119 H153 Z"
+        android:fillColor="#00FFFF"
+        android:fillAlpha="0.85" />
+    <path
+        android:pathData="M26,202 H230 V230 H26 Z"
+        android:fillColor="#008080" />
+    <path
+        android:pathData="M36,211 H48 V221 H36 Z"
+        android:fillColor="#000000" />
+    <path
+        android:pathData="M76,211 H88 V221 H76 Z"
+        android:fillColor="#000000" />
+    <path
+        android:pathData="M116,211 H128 V221 H116 Z"
+        android:fillColor="#000000" />
+    <path
+        android:pathData="M156,211 H168 V221 H156 Z"
+        android:fillColor="#000000" />
+    <path
+        android:pathData="M196,211 H208 V221 H196 Z"
+        android:fillColor="#000000" />
+</vector>

@@ -40,6 +40,9 @@ serde_json = "1.0.154"
 # FSEvents on macOS, `ReadDirectoryChangesW` on Windows, which is three platform APIs we
 # are not going to write three times. CC0-1.0, no runtime of its own.
 notify = { version = "8.2.1", default-features = false, features = ["macos_fsevent"] }
+# SHA-1, for the one thing that still asks for it: the answer to a WebSocket's handshake
+# (`--web-terminal`, RFC 6455 §4.2.2). The same crate `fcmd-jobs` hashes `.sha1` files with.
+sha1 = "0.11"
 
 # Free space in the panel frame needs `statvfs`, which `std` does not expose. Unix only:
 # Windows wants `GetDiskFreeSpaceEx` and gets its own answer when it gets its own crate.

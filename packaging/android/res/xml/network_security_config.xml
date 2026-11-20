@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+FinalCommander - an orthodox file manager for the terminal.
+Copyright (c) Matteo Baccan - https://github.com/matteobaccan/FinalCommander
+SPDX-License-Identifier: MIT
+
+Plain HTTP only to the program on this phone (the page and its WebSocket); everything the
+web view would load from elsewhere must be HTTPS. fcmd makes its own connections.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>

@@ -1,0 +1,122 @@
+# FinalCommander on Android (packaging/android/README.md):
+# - `apk`: `fcmd` built for aarch64-linux-android with the NDK of GitHub's Ubuntu runner
+#   (its linker and sysroot only), the app around it (aapt2, javac, d8: no Gradle), signed
+#   with a debug key made for the run (no secret): FinalCommander-android-aarch64-<v>.tar.gz
+#   and FinalCommander-android-aarch64-<v>.apk, uploaded as the artifact `android-aarch64`;
+# - `emulator`: the same for x86_64, run on Android's x86_64 emulator (KVM):
+#   packaging/android/emulator-test.sh — `fcmd --version` and `fcmd --web-terminal` from
+#   `adb shell`, the app started, its page and WebSocket reached, the app stopped.
+# When: a pull request or push that touches the app, the web terminal or this workflow; a
+# manual run; and, called by release.yml on a tag, `apk` alone (`release: true`).
+name: Android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/android/**"
+      - "crates/fcmd/src/webterm.rs"
+      - "crates/fcmd/assets/webterm/**"
+      - ".github/workflows/android.yml"
+  pull_request:
+    paths:
+      - "packaging/android/**"
+      - "crates/fcmd/src/webterm.rs"
+      - "crates/fcmd/assets/webterm/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      release:
+        description: "The release's build: the aarch64 assets alone, no emulator"
+        type: boolean
+        default: false
+      ref:
+        description: "The commit or tag to build"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  apk:
+    name: Android aarch64 (executable and APK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || '' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android-aarch64
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Build fcmd for Android and its APK
+        run: sh packaging/android/build.sh --abi arm64-v8a --out dist
+      - name: Sizes
+        run: |
+          {
+            echo "### Sizes (Android aarch64)"
+            echo
+            echo "| File | Bytes |"
+            echo "|---|---|"
+            for f in target/android-arm64-v8a/stage/fcmd dist/*; do
+              [ -f "$f" ] && echo "| $(basename "$f") | $(wc -c < "$f" | tr -d ' ') |"
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android-aarch64
+          path: dist/*
+          if-no-files-found: error
+
+  emulator:
+    name: Android x86_64 emulator
+    if: ${{ !inputs.release }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android-x86_64
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Build fcmd for the emulator and its APK
+        run: sh packaging/android/build.sh --abi x86_64 --out dist
+      # The emulator needs KVM: GitHub's Ubuntu runners have it, open to the runner's user
+      # once this rule allows it.
+      - name: Allow KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      # The emulator's userdata partition is about 7.4 GB; tools nothing here uses make
+      # room for it.
+      - name: Room for the emulator's disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift
+          df -h "$HOME" | tail -1
+      - name: The executable and the app on the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: sh packaging/android/emulator-test.sh "$(ls dist/FinalCommander-android-x86_64-*.apk)" target/android-x86_64/stage/fcmd

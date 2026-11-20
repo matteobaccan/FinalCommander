@@ -4,7 +4,7 @@
 .SH NAME
 fcmd \- FinalCommander — orthodox file manager for the terminal
 .SH SYNOPSIS
-\fBfcmd\fR [\fB\-\-config\fR] [\fB\-\-plugins\fR] [\fB\-\-theme\fR] [\fB\-\-keymap\fR] [\fB\-\-lang\fR] [\fB\-\-set\fR] [\fB\-\-view\fR] [\fB\-\-edit\fR] [\fB\-\-diff\fR] [\fB\-P\fR|\fB\-\-printwd\fR] [\fB\-\-no\-save\fR] [\fB\-\-shell\-init\fR] [\fB\-\-list\-themes\fR] [\fB\-\-list\-commands\fR] [\fB\-\-list\-languages\fR] [\fB\-\-check\-keymap\fR] [\fB\-\-export\-theme\fR] [\fB\-\-dump\-config\fR] [\fB\-\-paths\fR] [\fB\-\-list\-plugins\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] 
+\fBfcmd\fR [\fB\-\-config\fR] [\fB\-\-plugins\fR] [\fB\-\-theme\fR] [\fB\-\-keymap\fR] [\fB\-\-lang\fR] [\fB\-\-set\fR] [\fB\-\-view\fR] [\fB\-\-edit\fR] [\fB\-\-diff\fR] [\fB\-P\fR|\fB\-\-printwd\fR] [\fB\-\-no\-save\fR] [\fB\-\-shell\-init\fR] [\fB\-\-list\-themes\fR] [\fB\-\-list\-commands\fR] [\fB\-\-list\-languages\fR] [\fB\-\-check\-keymap\fR] [\fB\-\-export\-theme\fR] [\fB\-\-dump\-config\fR] [\fB\-\-paths\fR] [\fB\-\-list\-plugins\fR] [\fB\-\-web\-terminal\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] 
 .SH DESCRIPTION
 FinalCommander is a two\-panel file manager for the terminal that works the same way on Linux, macOS and Windows: one program, one set of keys, one configuration file.
 .PP
@@ -92,6 +92,11 @@ Print where the config file, the state file and the plugins directory are
 .TP
 \fB\-\-list\-plugins\fR
 List the plugins found in the plugins directory
+.TP
+\fB\-\-web\-terminal\fR \fI<ADDR>\fR
+Serve the program in a browser page on this machine, at a loopback address or port.
+
+Prints the address to open, with a token chosen for the run that the page needs; each page that opens it runs its own fcmd on a pseudo\-terminal, with the other options given here. Only 127.0.0.1 and ::1 are listened on. The Android app is this, in a web view.
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help (see a summary with \*(Aq\-h\*(Aq)

@@ -79,6 +79,11 @@ Options:
       --list-plugins
           List the plugins found in the plugins directory
 
+      --web-terminal <ADDR>
+          Serve the program in a browser page on this machine, at a loopback address or port.
+          
+          Prints the address to open, with a token chosen for the run that the page needs; each page that opens it runs its own fcmd on a pseudo-terminal, with the other options given here. Only 127.0.0.1 and ::1 are listened on. The Android app is this, in a web view.
+
   -h, --help
           Print help (see a summary with '-h')
 

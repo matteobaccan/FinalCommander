@@ -52,6 +52,7 @@ pub struct Cli {
     pub show_paths: bool,
     pub list_plugins: bool,
     pub man: bool,
+    pub web_terminal: Option<String>,
 }
 
 /// One option: its names, the names of the values it takes (none for a switch), what it
@@ -215,6 +216,15 @@ const OPTS: &[Opt] = &[
         "list-plugins",
         &[],
         "List the plugins found in the plugins directory.",
+    ),
+    opt(
+        "web-terminal",
+        &["ADDR"],
+        "Serve the program in a browser page on this machine, at a loopback address or port.\n\n\
+         Prints the address to open, with a token chosen for the run that the page needs; \
+         each page that opens it runs its own fcmd on a pseudo-terminal, with the other \
+         options given here. Only 127.0.0.1 and ::1 are listened on. The Android app is this, \
+         in a web view.",
     ),
     Opt {
         hidden: true,
@@ -687,6 +697,7 @@ impl Parser {
             show_paths: on("paths"),
             list_plugins: on("list-plugins"),
             man: on("man"),
+            web_terminal: one("web-terminal").map(text),
         }
     }
 }

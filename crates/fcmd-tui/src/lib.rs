@@ -641,8 +641,8 @@ pub fn clipboard_request(text: &str) -> String {
 }
 
 /// Standard base64, which is what `OSC 52` carries, and what kitty and iTerm2 take a picture
-/// in. Twenty lines rather than a dependency.
-fn base64(bytes: &[u8]) -> String {
+/// in — and what a WebSocket's handshake answers with. Twenty lines rather than a dependency.
+pub fn base64(bytes: &[u8]) -> String {
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
     for group in bytes.chunks(3) {

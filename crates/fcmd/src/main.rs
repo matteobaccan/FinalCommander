@@ -35,6 +35,7 @@ mod undo;
 mod vault;
 mod video;
 mod watch;
+mod webterm;
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -617,6 +618,22 @@ fn run(cli: Cli) -> Result<()> {
         }
     };
     warnings.extend(theme.warnings().iter().cloned());
+
+    // ── the program in a browser page: this process serves, each page runs its own fcmd
+    if let Some(addr) = &cli.web_terminal {
+        let path = std::env::current_exe().context("where this program is")?;
+        let args = webterm::passed_on(std::env::args().skip(1));
+        webterm::run(
+            addr,
+            webterm::Program {
+                path,
+                args,
+                env: Vec::new(),
+            },
+        )
+        .with_context(|| format!("--web-terminal {addr}"))?;
+        return Ok(());
+    }
 
     // ── informational modes: print and exit, no terminal takeover
     //

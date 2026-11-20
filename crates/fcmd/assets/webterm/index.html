@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content">
+<title>FinalCommander</title>
+<!--
+  The page `fcmd --web-terminal` serves (SPEC 11 §2a): a terminal (xterm.js, MIT, served
+  from the binary itself, nothing fetched from anywhere else) joined over a WebSocket to a
+  pseudo-terminal on which fcmd runs. Binary frames carry the bytes both ways; a text frame
+  `r COLS ROWS` says the window changed size. Above the keyboard a row of the keys a phone's
+  keyboard has not got: Esc, Tab, the function keys, the arrows, and Ctrl, Alt and Shift,
+  which hold until the next key.
+-->
+<link rel="stylesheet" href="xterm.css">
+<style>
+  :root { --bar: #1d2330; --key: #2c3446; --key-fg: #e3e7ee; --on: #1b5fc1; --screen: #000080; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--screen); overflow: hidden; }
+  body { display: flex; flex-direction: column; font: 14px system-ui, sans-serif; }
+  #screen { flex: 1; min-height: 0; padding: 2px; }
+  #keys {
+    display: flex; gap: 4px; padding: 4px; background: var(--bar);
+    overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  #keys::-webkit-scrollbar { display: none; }
+  #keys button {
+    flex: 0 0 auto; min-width: 42px; height: 36px; padding: 0 8px; border: 0; border-radius: 5px;
+    background: var(--key); color: var(--key-fg); font: inherit; touch-action: manipulation;
+  }
+  #keys button.on { background: var(--on); }
+  #ended {
+    display: none; position: fixed; inset: 0; align-items: center; justify-content: center;
+    flex-direction: column; gap: 14px; background: rgba(0, 0, 40, .85); color: #fff;
+  }
+  #ended button {
+    font: inherit; padding: 8px 18px; border-radius: 6px; border: 0; background: var(--on);
+    color: #fff;
+  }
+</style>
+</head>
+<body>
+<div id="screen"></div>
+<div id="keys"></div>
+<div id="ended"><span id="why">FinalCommander has ended.</span><button id="again">Start again</button></div>
+<script src="xterm.js"></script>
+<script src="addon-fit.js"></script>
+<script>
+(function () {
+  "use strict";
+  var token = new URLSearchParams(location.search).get("t") || "";
+  var term = new Terminal({
+    fontFamily: 'ui-monospace, "Cascadia Mono", "Droid Sans Mono", Menlo, Consolas, monospace',
+    fontSize: 14, cursorBlink: true, theme: { background: "#000080" }
+  });
+  var fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(document.getElementById("screen"));
+  fit.fit();
+
+  var socket = null;
+  var held = { ctrl: false, alt: false, shift: false };
+  var encoder = new TextEncoder();
+
+  function send(text) {
+    if (socket && socket.readyState === WebSocket.OPEN) socket.send(encoder.encode(text));
+  }
+
+  // xterm's modifier number: 1 + Shift 1 + Alt 2 + Ctrl 4.
+  function modifier() {
+    return 1 + (held.shift ? 1 : 0) + (held.alt ? 2 : 0) + (held.ctrl ? 4 : 0);
+  }
+
+  function release() {
+    held.ctrl = held.alt = held.shift = false;
+    Array.prototype.forEach.call(document.querySelectorAll("#keys .mod"), function (b) {
+      b.classList.remove("on");
+    });
+  }
+
+  // What a typed character becomes with the held modifiers: Ctrl turns a letter into its
+  // control code, Alt puts an escape in front.
+  function typed(data) {
+    if (!held.ctrl && !held.alt) return data;
+    var out = data;
+    if (held.ctrl && data.length === 1) {
+      var c = data.toUpperCase().charCodeAt(0);
+      if (c >= 64 && c <= 95) out = String.fromCharCode(c - 64);
+      else if (data === " ") out = "\x00";
+    }
+    if (held.alt) out = "\x1b" + out;
+    release();
+    return out;
+  }
+
+  // The function keys and the cursor keys, as xterm sends them, with the modifiers held.
+  var tilde = { F5: 15, F6: 17, F7: 18, F8: 19, F9: 20, F10: 21, F11: 23, F12: 24,
+                PgUp: 5, PgDn: 6, Ins: 2, Del: 3 };
+  var ss3 = { F1: "P", F2: "Q", F3: "R", F4: "S" };
+  var csi = { "↑": "A", "↓": "B", "→": "C", "←": "D", Home: "H", End: "F" };
+  function special(name) {
+    var m = modifier();
+    var out;
+    if (name === "Esc") out = (held.alt ? "\x1b" : "") + "\x1b";
+    else if (name === "Tab") out = held.shift ? "\x1b[Z" : (held.alt ? "\x1b\t" : "\t");
+    else if (ss3[name]) out = m > 1 ? "\x1b[1;" + m + ss3[name] : "\x1bO" + ss3[name];
+    else if (tilde[name]) out = "\x1b[" + tilde[name] + (m > 1 ? ";" + m : "") + "~";
+    else if (csi[name]) out = m > 1 ? "\x1b[1;" + m + csi[name] : "\x1b[" + csi[name];
+    release();
+    send(out);
+  }
+
+  var keys = document.getElementById("keys");
+  ["Esc", "Tab", "Ctrl", "Alt", "Shift",
+   "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+   "↑", "↓", "←", "→", "PgUp", "PgDn", "Home", "End", "Ins", "Del"].forEach(function (name) {
+    var b = document.createElement("button");
+    b.textContent = name;
+    var mod = { Ctrl: "ctrl", Alt: "alt", Shift: "shift" }[name];
+    if (mod) b.className = "mod";
+    // A tap on a key must not take the focus from the terminal, or the phone's keyboard
+    // goes away under the finger.
+    b.addEventListener("mousedown", function (e) { e.preventDefault(); });
+    b.addEventListener("click", function (e) {
+      e.preventDefault();
+      if (mod) {
+        held[mod] = !held[mod];
+        b.classList.toggle("on", held[mod]);
+      } else {
+        special(name);
+      }
+      term.focus();
+    });
+    keys.appendChild(b);
+  });
+
+  function resized() {
+    fit.fit();
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send("r " + term.cols + " " + term.rows);
+    }
+  }
+  window.addEventListener("resize", resized);
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", resized);
+
+  term.onData(function (data) { send(typed(data)); });
+  term.onBinary(function (data) {
+    var bytes = new Uint8Array(data.length);
+    for (var i = 0; i < data.length; i++) bytes[i] = data.charCodeAt(i) & 255;
+    if (socket && socket.readyState === WebSocket.OPEN) socket.send(bytes);
+  });
+
+  function connect() {
+    document.getElementById("ended").style.display = "none";
+    term.reset();
+    fit.fit();
+    var url = (location.protocol === "https:" ? "wss://" : "ws://") + location.host +
+      "/ws?t=" + encodeURIComponent(token) + "&c=" + term.cols + "&r=" + term.rows;
+    socket = new WebSocket(url);
+    socket.binaryType = "arraybuffer";
+    socket.onmessage = function (e) {
+      if (typeof e.data !== "string") term.write(new Uint8Array(e.data));
+    };
+    socket.onclose = function (e) {
+      document.getElementById("why").textContent = e.reason || "FinalCommander has ended.";
+      document.getElementById("ended").style.display = "flex";
+    };
+    term.focus();
+  }
+  // For the page's host: the Android app sends its Back button here, as Esc.
+  window.fcmdKey = function (name) { special(name); term.focus(); };
+  document.getElementById("again").addEventListener("click", connect);
+  connect();
+})();
+</script>
+</body>
+</html>

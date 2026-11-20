@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+FinalCommander - an orthodox file manager for the terminal.
+Copyright (c) Matteo Baccan - https://github.com/matteobaccan/FinalCommander
+SPDX-License-Identifier: MIT
+
+The app's own few words. Everything else on the screen is fcmd's, in its own languages.
+-->
+<resources>
+    <string name="app_name" translatable="false">FinalCommander</string>
+    <string name="starting">Starting FinalCommander…</string>
+    <string name="files_why">FinalCommander is a file manager: to show the files on this phone it needs the permission to see all of them, which Android gives in its settings.\n\nWithout it, it works in a folder of its own.</string>
+    <string name="allow_files">Allow access to all files</string>
+    <string name="without_files">Go on without it</string>
+    <string name="stopped">FinalCommander stopped (exit code %1$d). Its last lines:</string>
+    <string name="no_answer">FinalCommander did not answer within %1$d seconds. Its last lines:</string>
+    <string name="not_started">FinalCommander could not be started: %1$s</string>
+    <string name="retry">Try again</string>
+</resources>
