@@ -191,8 +191,8 @@ Nothing needed to continue lives outside the repository; this section is the mem
    and those are fixed in the test (`File::set_modified`, a fixed title, a fixed drive list).
 7. **How the author works**: one change at a time, in sequence, each one finished — tests,
    help in English and Italian, spec, `CHANGELOG.md`, the feature table, the screenshots —
-   before the next is started. Releases are cut when the author asks for one, or when a set
-   of finished work is worth shipping; ask if in doubt.
+   before the next is started. Releases are cut once a week, on Wednesday morning (see
+   *How it is worked* below), or when the author asks for one.
 
 ## Where the work is right now
 
@@ -388,13 +388,14 @@ anything.
 
 - **Continuously, and released by what is ready, not by theme.** The list below is an order
   of priority. A feature reaches `main` only finished (tests, help in both languages, spec,
-  `CHANGELOG.md`); a release is cut when at least one is in and CI is green on that commit —
-  a minor number for a feature, a patch for fixes alone — without asking first, and the
-  author is told afterwards. Renovate's merges alone still never make one.
-- **At least 24 hours between two releases**, counted from the previous one's publication.
-- **A cut-off before each release** (the author, 11 November 2026): what is integrated with
-  green CI by 09:00 UTC on the day of the release goes in; what arrives later waits for the
-  next one, and only fixes land in between.
+  `CHANGELOG.md`).
+- **One release a week, on Wednesday morning** (the author, 21 November 2026). That morning
+  the open issues, Renovate's and Dependabot's pull requests and CI on `main` are gone
+  through first; then the release is cut, without asking, if at least one feature or fix is
+  in and CI is green — a minor number for a feature, a patch for fixes alone — and the author
+  is told afterwards. Renovate's merges alone still never make one; a week with nothing of
+  its own in it has no release. What is integrated with green CI by then goes in; what
+  arrives later waits for the next Wednesday.
 - **1.0 is the goal, and then a stop.** Once 1.0 is out, no new feature is started: only pull
   requests and issues, to make it stable, before any release after it.
 - **Sub-agents in parallel, only until 1.0.** At most two at a time — a compiled working copy
