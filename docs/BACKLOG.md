@@ -33,6 +33,13 @@ anybody who reaches the port. Ours is the same idea the way a remote-desktop pro
   whole disk by default — and the panels' operations (`F3`–`F8`, copy both ways) work on it as
   on any other VFS. The called side keeps an indicator on screen while a session is open and
   can end it at any time.
+- **Read only, or read and write: the called side decides.** Each shared folder is offered
+  read only or read and write; the question that authorises a call says which and lets the
+  person narrow it for that call (a read-and-write share accepted as read only), and the
+  caller's panel shows the session's mode. A read-only session refuses every write at the
+  called end — copy into it, move, rename, delete, make a folder, attributes — whatever the
+  caller sends, and the caller's panel greys those keys out. A PIN carries the mode it was
+  set with.
 - **A PIN makes it permanent.** The called side can set a PIN; a caller that gives the ID and
   the PIN gets in without the question — for one's own machines. A PIN is checked with a
   password-authenticated key exchange (SPAKE2 or OPAQUE), so neither a listener nor a fake
@@ -42,8 +49,7 @@ anybody who reaches the port. Ours is the same idea the way a remote-desktop pro
   first time, without a PIN), so a machine in the middle cannot pass itself off as the other.
 - To settle before the code: the protocol (Noise with `snow`, or TLS with `rustls` and
   self-signed certificates pinned to the ID), the discovery (UDP broadcast on a fixed port, or
-  mDNS), which crates and what they cost in the binary, how a read-only share is offered, and
-  where the shared folders and the PIN (hashed) are kept. A spec section (SPEC 04, a provider
+  mDNS), which crates and what they cost in the binary, and where the shared folders and the PIN (hashed) are kept. A spec section (SPEC 04, a provider
   like SFTP's) comes first. **L.**
 
 ## From hwBro
