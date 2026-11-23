@@ -129,8 +129,10 @@ cp "$apk/base.apk" "$apk/unaligned.apk"
 keytool -genkeypair -keystore "$apk/debug.keystore" -storepass android -keypass android \
     -alias fcmd-debug -keyalg RSA -keysize 2048 -validity 10000 \
     -dname "CN=FinalCommander debug build, O=FinalCommander" > /dev/null 2>&1
+# No v4 signature: it is a file of its own (.apk.idsig) that only `adb install --incremental`
+# reads, and the release would carry it beside the APK.
 "$bt/apksigner" sign --ks "$apk/debug.keystore" --ks-pass pass:android \
-    --key-pass pass:android --ks-key-alias fcmd-debug \
+    --key-pass pass:android --ks-key-alias fcmd-debug --v4-signing-enabled false \
     --out "$out/$asset.apk" "$apk/aligned.apk"
 "$bt/apksigner" verify --print-certs "$out/$asset.apk" | head -n 3
 ls -la "$out"
