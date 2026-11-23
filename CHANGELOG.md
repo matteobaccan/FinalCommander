@@ -22,6 +22,10 @@ Notable changes, newest first. The format follows
   not this machine's, is refused. The Android app is this, in a web view.
 - On Android the process list, the sockets, the mounts and the memory figures read `/proc`
   as they do on Linux.
+- **32-bit ARM**: `FinalCommander-linux-armv7-static-<v>.tar.gz`, statically linked, for ARMv7
+  with hardware floating point (an older Raspberry Pi, a board or a router with a 32-bit
+  Linux), and `FinalCommander-android-armv7-<v>.apk` with its `.tar.gz` for the phones with a
+  32-bit processor.
 
 ## [0.45.0] — 2026-11-20
 

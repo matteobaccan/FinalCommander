@@ -1,6 +1,8 @@
 # FinalCommander on Android
 
-Two things come out of `packaging/android/build.sh`, and both are on every release page:
+Two things come out of `packaging/android/build.sh`, and both are on every release page, for
+the phones with a 64-bit ARM processor (`aarch64`, nearly all of today's) and for those with a
+32-bit one (`armv7`; Android's Settings → About phone, or an app such as CPU-Z, says which):
 
 - **`FinalCommander-android-aarch64-<version>.apk`** — the app. Install it (Android asks to
   allow installs from the browser or the file manager the first time), open it, and say

@@ -38,13 +38,14 @@ script.** Nothing to run, nothing to configure, nothing to register.
 
 ## 2. What exists today
 
-Roadmap item 18, shipped. A tag builds five archives and publishes them:
+Roadmap item 18, shipped. A tag builds six archives and publishes them:
 
 | Archive | What is in it |
 | --- | --- |
 | `FinalCommander-linux-x86_64-<v>.tar.gz` | glibc build |
 | `FinalCommander-linux-x86_64-static-<v>.tar.gz` | musl, static — runs on any distribution |
 | `FinalCommander-linux-aarch64-static-<v>.tar.gz` | musl, static, for ARM 64-bit, built on an ARM runner |
+| `FinalCommander-linux-armv7-static-<v>.tar.gz` | musl, static, for 32-bit ARM (ARMv7, hard float), cross-compiled with Zig and tried under QEMU |
 | `FinalCommander-macos-universal-<v>.tar.gz` | one binary for Intel and Apple Silicon |
 | `FinalCommander-windows-x86_64-<v>.zip` | msvc build |
 | `SHA256SUMS` | a checksum per archive |
@@ -53,7 +54,8 @@ The executable sits at the root of the archive, so unpacking leaves `fcmd` where
 than one directory down. There is no installer and nothing asks for privileges.
 
 **Android.** `FinalCommander-android-aarch64-<v>.apk` is the app and
-`FinalCommander-android-aarch64-<v>.tar.gz` the executable for Termux, both built by
+`FinalCommander-android-aarch64-<v>.tar.gz` the executable for Termux, and the same two as
+`-android-armv7-` for the phones with a 32-bit ARM processor, all built by
 `packaging/android/build.sh` with the NDK against Android's own C library (a static musl
 build would find no `/etc/resolv.conf` there, and resolve no name). A phone has no terminal,
 so the app brings one through §2a; how it is put together is in `packaging/android/README.md`.

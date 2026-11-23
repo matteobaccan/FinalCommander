@@ -183,7 +183,9 @@ One file, nothing to install beside it. Download the archive for your machine fr
 | --- | --- |
 | Linux (x86-64) | `FinalCommander-linux-x86_64-<version>.tar.gz`, or `FinalCommander-linux-x86_64-static-<version>.tar.gz` for a statically linked build that runs on any distribution |
 | Linux (ARM 64-bit) | `FinalCommander-linux-aarch64-static-<version>.tar.gz`, statically linked: a Raspberry Pi, an ARM server, or a Linux that runs in a browser tab such as [unkernel](https://github.com/pithings/unkernel) |
+| Linux (ARM 32-bit) | `FinalCommander-linux-armv7-static-<version>.tar.gz`, statically linked, for ARMv7 with hardware floating point: an older Raspberry Pi, a board or a router running a 32-bit Linux |
 | Android (ARM 64-bit) | `FinalCommander-android-aarch64-<version>.apk`, the app — a terminal in a web view with a row of the keys a phone lacks — or `FinalCommander-android-aarch64-<version>.tar.gz` for Termux. The app's signing key changes with each build: uninstall an earlier version first |
+| Android (ARM 32-bit) | `FinalCommander-android-armv7-<version>.apk` and `FinalCommander-android-armv7-<version>.tar.gz`, the same for the phones with a 32-bit ARM processor |
 | macOS (Intel and Apple Silicon) | `FinalCommander-macos-universal-<version>.tar.gz` — one binary for both |
 | Windows (x86-64) | `FinalCommander-windows-x86_64-<version>.zip` |
 

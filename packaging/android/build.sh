@@ -3,11 +3,11 @@
 # Copyright (c) Matteo Baccan -- https://github.com/matteobaccan/FinalCommander
 # SPDX-License-Identifier: MIT
 #
-# packaging/android/build.sh [--abi arm64-v8a|x86_64] [--out DIR]
+# packaging/android/build.sh [--abi arm64-v8a|armeabi-v7a|x86_64] [--out DIR]
 #
 # Builds fcmd for Android and its app (packaging/android/README.md):
-# 1. `fcmd` for the ABI's Rust target (aarch64-linux-android, or x86_64-linux-android for
-#    the emulator of the tests), linked by the Android NDK's clang against the phone's own
+# 1. `fcmd` for the ABI's Rust target (aarch64-linux-android; armv7-linux-androideabi for
+#    the 32-bit phones; x86_64-linux-android for the emulator of the tests), linked by the Android NDK's clang against the phone's own
 #    libc, which every Android has: no runtime dependency, and the phone's DNS;
 # 2. DIR/FinalCommander-android-<arch>-<version>.tar.gz: the executable, for Termux or
 #    `adb shell`, with the documents every archive carries;
@@ -28,13 +28,15 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --abi) abi=$2; shift 2 ;;
         --out) out=$2; shift 2 ;;
-        *) echo "usage: packaging/android/build.sh [--abi arm64-v8a|x86_64] [--out DIR]" >&2; exit 2 ;;
+        *) echo "usage: packaging/android/build.sh [--abi arm64-v8a|armeabi-v7a|x86_64] [--out DIR]" >&2; exit 2 ;;
     esac
 done
+# `cc` is the NDK's name for the compiler, which for 32-bit ARM is not the Rust target's.
 case "$abi" in
-    arm64-v8a) triple=aarch64-linux-android arch=aarch64 ;;
-    x86_64) triple=x86_64-linux-android arch=x86_64 ;;
-    *) echo "error: unknown ABI $abi (arm64-v8a or x86_64)" >&2; exit 2 ;;
+    arm64-v8a) triple=aarch64-linux-android cc=aarch64-linux-android arch=aarch64 ;;
+    armeabi-v7a) triple=armv7-linux-androideabi cc=armv7a-linux-androideabi arch=armv7 ;;
+    x86_64) triple=x86_64-linux-android cc=x86_64-linux-android arch=x86_64 ;;
+    *) echo "error: unknown ABI $abi (arm64-v8a, armeabi-v7a or x86_64)" >&2; exit 2 ;;
 esac
 # The oldest Android the app runs on: 8.0 (API 26), the first with Process.isAlive.
 API=26
@@ -74,7 +76,7 @@ echo "NDK r$rev ($ndk), build-tools $(basename "$bt"), $(basename "$(dirname "$j
 # --- 1. The executable -------------------------------------------------------------
 upper=$(echo "$triple" | tr 'a-z-' 'A-Z_')
 under=$(echo "$triple" | tr '-' '_')
-clang="$tc/$triple$API-clang"
+clang="$tc/$cc$API-clang"
 export "CARGO_TARGET_${upper}_LINKER=$clang"
 # 16 KiB pages: Android 15 phones may use them, and an executable must be aligned to the
 # page size to load.

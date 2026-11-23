@@ -38,7 +38,9 @@ cat <<EOF
 | **Windows** x86-64 | [ZIP]($(archive windows-x86_64 zip)) |
 | **Linux** x86-64 | [tar.gz]($(archive linux-x86_64 tar.gz)) · [static, for any distribution]($(archive linux-x86_64-static tar.gz)) |
 | **Linux** ARM 64-bit | [static, for any distribution]($(archive linux-aarch64-static tar.gz)) |
-| **Android** ARM 64-bit | [APK, the app](https://github.com/${repo}/releases/download/v${version}/FinalCommander-android-aarch64-${version}.apk) · [tar.gz, for Termux]($(archive android-aarch64 tar.gz)) |
+| **Linux** ARM 32-bit (ARMv7) | [static, for any distribution]($(archive linux-armv7-static tar.gz)) |
+| **Android** ARM 64-bit | [APK, the app]($(archive android-aarch64 apk)) · [tar.gz, for Termux]($(archive android-aarch64 tar.gz)) |
+| **Android** ARM 32-bit (ARMv7) | [APK, the app]($(archive android-armv7 apk)) · [tar.gz, for Termux]($(archive android-armv7 tar.gz)) |
 | **macOS** Intel and Apple Silicon | [tar.gz]($(archive macos-universal tar.gz)) |
 
 Each archive holds the \`fcmd\` executable, \`README.md\`, \`LICENSE\`, \`THIRD-PARTY.md\` and

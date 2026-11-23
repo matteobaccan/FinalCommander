@@ -51,6 +51,14 @@ jobs:
           - name: linux-aarch64-static
             os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
+          # 32-bit ARM (ARMv7 with hardware floating point): the older Raspberry Pi and
+          # the boards and routers that run a 32-bit Linux. GitHub has no such runner, so
+          # this one is cross-compiled with Zig's C compiler and linker (for `ring`'s C),
+          # and tried under QEMU.
+          - name: linux-armv7-static
+            os: ubuntu-latest
+            target: armv7-unknown-linux-musleabihf
+            zig: true
           # One binary for both Intel and Apple Silicon.
           - name: macos-universal
             os: macos-latest
@@ -76,8 +84,20 @@ jobs:
           sudo apt-get install -y musl-tools
           rustup target add ${{ matrix.target }}
 
+      - name: Install Zig, cargo-zigbuild and QEMU
+        if: matrix.zig
+        run: |
+          rustup target add ${{ matrix.target }}
+          pip install ziglang cargo-zigbuild
+          sudo apt-get update
+          sudo apt-get install -y qemu-user
+
+      - name: Build with Zig
+        if: matrix.zig
+        run: cargo zigbuild --release --locked --target ${{ matrix.target }} -p fcmd
+
       - name: Build
-        if: matrix.name != 'macos-universal'
+        if: matrix.name != 'macos-universal' && !matrix.zig
         shell: bash
         env:
           # `ring` compiles C, and the musl target needs its own compiler.
@@ -130,9 +150,11 @@ jobs:
             windows-*) ;;
             *) cp docs/fcmd.1 "$dir/" ;;
           esac
-          # The binary must at least run on the machine that built it.
+          # The binary must at least run on the machine that built it, or under QEMU for
+          # the one built for another processor.
           case "${{ matrix.name }}" in
             windows-*) "$dir/fcmd.exe" --version ;;
+            linux-armv7-*) qemu-arm "$dir/fcmd" --version ;;
             *) "$dir/fcmd" --version ;;
           esac
           # And on Windows it must not need the Visual C++ Redistributable: the C runtime is
@@ -182,10 +204,11 @@ jobs:
           path: ${{ steps.package.outputs.archive }}
           if-no-files-found: error
 
-  # Android: the executable for Termux and the app, built by android.yml (its `apk` job,
-  # whose artifact the publish step merges with the others).
+  # Android: the executable for Termux and the app, for 64-bit and 32-bit ARM phones,
+  # built by android.yml (its `apk` job, whose artifacts the publish step merges with the
+  # others).
   android:
-    name: Android aarch64
+    name: Android
     uses: ./.github/workflows/android.yml
     with:
       release: true
