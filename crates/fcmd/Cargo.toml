@@ -39,7 +39,7 @@ serde_json = "1.0.154"
 # The filesystem watch behind `panel.auto_refresh` (feature 1.25): inotify on Linux,
 # FSEvents on macOS, `ReadDirectoryChangesW` on Windows, which is three platform APIs we
 # are not going to write three times. CC0-1.0, no runtime of its own.
-notify = { version = "8.2.1", default-features = false, features = ["macos_fsevent"] }
+notify = { version = "9.0.0", default-features = false, features = ["macos_fsevent"] }
 # SHA-1, for the one thing that still asks for it: the answer to a WebSocket's handshake
 # (`--web-terminal`, RFC 6455 §4.2.2). The same crate `fcmd-jobs` hashes `.sha1` files with.
 sha1 = "0.11"
