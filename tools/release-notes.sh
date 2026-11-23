@@ -33,10 +33,18 @@ archive() { echo "${base}/FinalCommander-$1-${version}.$2"; }
 cat <<EOF
 ## Downloads
 
+On Linux, macOS, Termux or iSH, \`install.sh\` picks the archive for the machine, checks it
+and installs \`fcmd\`:
+
+\`\`\`sh
+curl -fsSL https://github.com/${repo}/releases/latest/download/install.sh | sh
+\`\`\`
+
 | System | Download |
 |---|---|
 | **Windows** x86-64 | [ZIP]($(archive windows-x86_64 zip)) |
 | **Linux** x86-64 | [tar.gz]($(archive linux-x86_64 tar.gz)) · [static, for any distribution]($(archive linux-x86_64-static tar.gz)) |
+| **Linux** x86 32-bit, and iSH on iPad and iPhone | [static, for any distribution]($(archive linux-i686-static tar.gz)) |
 | **Linux** ARM 64-bit | [static, for any distribution]($(archive linux-aarch64-static tar.gz)) |
 | **Linux** ARM 32-bit (ARMv7) | [static, for any distribution]($(archive linux-armv7-static tar.gz)) |
 | **Android** ARM 64-bit | [APK, the app]($(archive android-aarch64 apk)) · [tar.gz, for Termux]($(archive android-aarch64 tar.gz)) |

@@ -175,13 +175,25 @@ without a dialog saying which files and to which host.
 
 ## Install
 
-One file, nothing to install beside it. Download the archive for your machine from the
+One file, nothing to install beside it. On Linux, macOS, Termux on Android or iSH on an iPad
+or iPhone, the installer picks the archive for the machine, checks it against the release's
+`SHA256SUMS`, and puts `fcmd` in `/usr/local/bin` (or `~/.local/bin` when that is not
+writable, or `FCMD_INSTALL_DIR`):
+
+```sh
+curl -fsSL https://github.com/matteobaccan/FinalCommander/releases/latest/download/install.sh | sh
+# or, where there is no curl (iSH):
+wget -qO- https://github.com/matteobaccan/FinalCommander/releases/latest/download/install.sh | sh
+```
+
+Or download the archive for your machine from the
 [releases page](https://github.com/matteobaccan/FinalCommander/releases), unpack it, and put
 `fcmd` somewhere on your `PATH`.
 
 | Platform | Archive |
 | --- | --- |
 | Linux (x86-64) | `FinalCommander-linux-x86_64-<version>.tar.gz`, or `FinalCommander-linux-x86_64-static-<version>.tar.gz` for a statically linked build that runs on any distribution |
+| Linux (x86 32-bit) | `FinalCommander-linux-i686-static-<version>.tar.gz`, statically linked: an old PC, or [iSH](https://ish.app), the Alpine Linux that runs on an iPad or an iPhone (`mount -t ios . /mnt` there shows a folder of the Files app to fcmd) |
 | Linux (ARM 64-bit) | `FinalCommander-linux-aarch64-static-<version>.tar.gz`, statically linked: a Raspberry Pi, an ARM server, or a Linux that runs in a browser tab such as [unkernel](https://github.com/pithings/unkernel) |
 | Linux (ARM 32-bit) | `FinalCommander-linux-armv7-static-<version>.tar.gz`, statically linked, for ARMv7 with hardware floating point: an older Raspberry Pi, a board or a router running a 32-bit Linux |
 | Android (ARM 64-bit) | `FinalCommander-android-aarch64-<version>.apk`, the app — a terminal in a web view with a row of the keys a phone lacks — or `FinalCommander-android-aarch64-<version>.tar.gz` for Termux. The app's signing key changes with each build: uninstall an earlier version first |

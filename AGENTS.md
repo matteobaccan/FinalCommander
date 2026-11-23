@@ -196,13 +196,15 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.46.0 is the version in `main`**, tagged and released with six archives, the Android app
-and its Termux archive for 64-bit and 32-bit ARM, and `SHA256SUMS`. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
+**0.46.1 is the version in `main`**, tagged and released with seven archives, the Android
+app and its Termux archive for 64-bit and 32-bit ARM, `install.sh` and `SHA256SUMS`. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.46.1** — the same day: `linux-i686-static` (Zig, like armv7) for iSH on iPad and
+  iPhone, and `install.sh` at the root, published with each release.
 - **0.46.0** — Android: `packaging/android/` (an activity with a web view on
   `fcmd --web-terminal`, `Files.java` to open a file with the phone's apps, no Gradle) built
   by `android.yml` for arm64-v8a and armeabi-v7a and tried on Android's x86_64 emulator; the

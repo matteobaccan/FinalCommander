@@ -59,6 +59,13 @@ jobs:
             os: ubuntu-latest
             target: armv7-unknown-linux-musleabihf
             zig: true
+          # 32-bit x86: old PCs, and iSH, which runs Alpine Linux on an iPad or an iPhone by
+          # emulating a 32-bit Intel processor. Cross-compiled with Zig like the one above;
+          # the runner's kernel runs it as it is.
+          - name: linux-i686-static
+            os: ubuntu-latest
+            target: i686-unknown-linux-musl
+            zig: true
           # One binary for both Intel and Apple Silicon.
           - name: macos-universal
             os: macos-latest
@@ -230,6 +237,11 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+
+      # The installer, beside the archives it downloads, so that
+      # releases/latest/download/install.sh is always the latest one.
+      - name: The installer
+        run: cp install.sh dist/
 
       - name: Checksums
         run: |

@@ -6,6 +6,29 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.46.1] — 2026-11-23
+
+FinalCommander on an iPad or an iPhone, through iSH, and one line to install it anywhere.
+iSH runs Alpine Linux on iOS by emulating a 32-bit Intel processor, so there is now a static
+archive for 32-bit x86, which runs there on the files of the Files app. And `install.sh`,
+published with every release, picks the archive for the machine — Linux of any processor,
+macOS, Termux, iSH —, checks it against `SHA256SUMS`, and installs `fcmd`.
+
+### Added
+
+- `FinalCommander-linux-i686-static-<v>.tar.gz`: statically linked, for 32-bit x86 — an old
+  PC, or iSH on an iPad or an iPhone, where `mount -t ios . /mnt` shows a folder of the Files
+  app to fcmd.
+- `install.sh`, beside the archives of each release:
+  `curl -fsSL https://github.com/matteobaccan/FinalCommander/releases/latest/download/install.sh | sh`
+  (or `wget -qO- … | sh`). It installs in `/usr/local/bin`, `~/.local/bin`, Termux's
+  `$PREFIX/bin` or `FCMD_INSTALL_DIR`; `FCMD_VERSION` picks a version.
+
+### Fixed
+
+- The Android build no longer leaves a `.apk.idsig` file (a signature only
+  `adb install --incremental` reads) beside the APK on the release page.
+
 ## [0.46.0] — 2026-11-23
 
 FinalCommander on Android: an app that starts the program and shows it on the phone, with a
