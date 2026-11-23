@@ -6,6 +6,16 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.46.0] — 2026-11-23
+
+FinalCommander on Android: an app that starts the program and shows it on the phone, with a
+row of the keys a phone's keyboard lacks above it, the phone's files to work on, its
+clipboard for what is copied, and its apps for opening a file — and the executable alone for
+Termux. Both come for 64-bit and for 32-bit ARM phones, and there is a new static Linux
+archive for 32-bit ARM too (an older Raspberry Pi, a board, a router). Underneath the app is
+a new mode any machine has: `fcmd --web-terminal`, the program in a browser page. And `url`
+is updated for a security advisory.
+
 ### Added
 
 - **FinalCommander on Android**: `FinalCommander-android-aarch64-<v>.apk`, an app that starts

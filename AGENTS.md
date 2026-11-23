@@ -196,13 +196,19 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.45.0 is the version in `main`**, tagged and released with five archives and `SHA256SUMS`
-(ARM 64-bit Linux joined with this one). A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
+**0.46.0 is the version in `main`**, tagged and released with six archives, the Android app
+and its Termux archive for 64-bit and 32-bit ARM, and `SHA256SUMS`. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.46.0** — Android: `packaging/android/` (an activity with a web view on
+  `fcmd --web-terminal`, `Files.java` to open a file with the phone's apps, no Gradle) built
+  by `android.yml` for arm64-v8a and armeabi-v7a and tried on Android's x86_64 emulator; the
+  web terminal itself (`webterm.rs`, xterm.js compiled in, `OSC 52` and `OSC 7770` to the
+  page); `linux-armv7-static`, cross-compiled with Zig and tried under QEMU; `url` 2.5.9 for
+  RUSTSEC-2026-0592. Releases from here on: one a week, on Wednesday morning.
 - **0.45.0** — the eight small items decided on 19 November (`F7` make-and-enter, the
   source's name in the copy dialog, the window title, `ignorespace` for the history, folder
   sizes on one file system, AWS profiles, presigned S3 links, the quick view inside a
