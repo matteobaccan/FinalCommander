@@ -78,7 +78,13 @@ port alone means `127.0.0.1` — prints `http://ADDR/?t=TOKEN`, and serves until
 - the token is 128 random bits per run, compared in constant time; an address that is not
   loopback is refused at start, a request whose `Host` is not a loopback name is refused, so
   neither another machine nor a page elsewhere that resolves a name of its own here can
-  reach it. A closed page kills the program it was showing.
+  reach it. A closed page kills the program it was showing;
+- two requests travel from the program to the page as terminal sequences: `OSC 52 ; c ;
+  BASE64`, what fcmd copies, put on the clipboard (the phone's through the Android app,
+  else the browser's), and `OSC 7770 ; open ; PATH`, sent instead of running the desktop's
+  opener when the environment has `FCMD_OPEN_VIA_TERMINAL=1` — as the Android app starts
+  fcmd — for the app to open the file with the phone's app for its type. A path with a
+  control character in it is not sent.
 
 The ARM 64-bit archive also runs in a browser tab: `web/try/index.html` starts a Linux kernel
 compiled to WebAssembly ([unkernel](https://github.com/pithings/unkernel), loaded from a CDN

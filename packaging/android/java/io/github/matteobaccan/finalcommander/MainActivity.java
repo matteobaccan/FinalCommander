@@ -6,6 +6,8 @@ package io.github.matteobaccan.finalcommander;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -18,6 +20,7 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.util.Log;
 import android.util.TypedValue;
+import android.webkit.JavascriptInterface;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebResourceRequest;
@@ -29,6 +32,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -43,7 +47,9 @@ import java.util.Map;
  * {@code fcmd --web-terminal 0} and shows the page it serves, on 127.0.0.1 with a token, in
  * a web view. The page is a terminal joined to a pseudo-terminal on which fcmd runs; the app
  * adds nothing to the program but a place to show it, the permission to see the phone's
- * files, and the Back button sent as Esc.
+ * files, the Back button sent as Esc, and two things the page asks of the phone through
+ * {@link Bridge}: putting on its clipboard what fcmd copies, and opening a file with the
+ * phone's app for its type.
  *
  * <p>The executable travels as lib/&lt;abi&gt;/libfcmd.so, the one place Android lets an
  * app run a file it ships. Its first line on standard output is the address to open.
@@ -92,6 +98,7 @@ public final class MainActivity extends Activity {
                 return true;
             }
         });
+        web.addJavascriptInterface(new Bridge(), "FcmdAndroid");
         web.setVisibility(View.GONE);
 
         int pad = dp(16);
@@ -230,6 +237,9 @@ public final class MainActivity extends Activity {
             env.put("HOME", home.getAbsolutePath());
             env.put("TMPDIR", tmp.getAbsolutePath());
             env.put("SHELL", "/system/bin/sh");
+            // Enter on a file with no association of its own: fcmd asks the page to open it
+            // (OSC 7770), and the page asks this activity (Bridge.open).
+            env.put("FCMD_OPEN_VIA_TERMINAL", "1");
             // fcmd's language follows LANG, in the POSIX spelling: it_IT.UTF-8.
             Locale l = Locale.getDefault();
             env.put("LANG", l.getLanguage() + (l.getCountry().isEmpty() ? "" : "_" + l.getCountry())
@@ -322,6 +332,53 @@ public final class MainActivity extends Activity {
                 retry.setVisibility(View.VISIBLE);
             }
         });
+    }
+
+    /**
+     * What the page asks of the phone. Only fcmd's own page is ever shown in the view (every
+     * other address goes to the browser), so only it can call these.
+     */
+    private final class Bridge {
+        /** fcmd's `OSC 52`: the text on the phone's clipboard. */
+        @JavascriptInterface
+        public void copy(String text) {
+            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (cm != null) {
+                cm.setPrimaryClip(ClipData.newPlainText("FinalCommander", text));
+            }
+        }
+
+        /** fcmd's `OSC 7770 ; open`: the file shown by the app the phone has for its type. */
+        @JavascriptInterface
+        public void open(final String path) {
+            main.post(new Runnable() {
+                @Override
+                public void run() {
+                    openFile(new File(path));
+                }
+            });
+        }
+    }
+
+    private void openFile(File file) {
+        if (!file.isFile()) {
+            Toast.makeText(this, getString(R.string.cannot_open, file.getName()),
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+        // Other apps cannot read a path of ours, only a content: address this app answers
+        // for (Files), with the permission to read that one file.
+        Uri uri = Files.uriFor(this, file);
+        String type = Files.typeOf(file.getName());
+        Intent view = new Intent(Intent.ACTION_VIEW);
+        view.setDataAndType(uri, type);
+        view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            startActivity(Intent.createChooser(view, file.getName()));
+        } catch (ActivityNotFoundException e) {
+            Toast.makeText(this, getString(R.string.no_app, file.getName()), Toast.LENGTH_LONG)
+                    .show();
+        }
     }
 
     /** Back is Esc: it closes what is open in fcmd, as it would on a keyboard. */

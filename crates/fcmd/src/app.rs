@@ -326,6 +326,11 @@ pub enum Request {
     Clipboard {
         text: String,
     },
+    /// Ask the terminal to open a file with the system's app for it: the Android app's page,
+    /// where the terminal is the only way back to the phone (`OSC 7770`, SPEC 11 §2a).
+    OpenOnHost {
+        path: std::path::PathBuf,
+    },
     /// Who the files of one directory belong to, for the owners view. A lookup per file, and
     /// on Windows a call into the security API, so it happens in a worker and only while that
     /// view is the one on screen (SPEC 02 §3).
@@ -9822,6 +9827,16 @@ impl App {
             return;
         }
         if self.cfg.general.desktop_open && local {
+            // The FinalCommander app on Android opens the file itself, asked through the
+            // terminal: there is no program to run for it.
+            if open_via_terminal() {
+                if let Some(path) = self.panel().current_path() {
+                    self.requests.push(Request::OpenOnHost {
+                        path: path.as_path().to_path_buf(),
+                    });
+                }
+                return;
+            }
             self.run_line(fcmd_config::desktop_open_command());
             return;
         }
@@ -34267,6 +34282,12 @@ where
     rx.recv_timeout(wait).ok()
 }
 
+/// Whether the terminal fcmd runs in is the FinalCommander app's page, which opens a file
+/// with the phone's app when asked by `OSC 7770` (SPEC 11 §2a): the app says so in the
+/// environment it starts fcmd with, `FCMD_OPEN_VIA_TERMINAL=1`.
+fn open_via_terminal() -> bool {
+    std::env::var_os("FCMD_OPEN_VIA_TERMINAL").is_some_and(|v| v == "1")
+}
 #[cfg(test)]
 mod tests {
     use super::*;

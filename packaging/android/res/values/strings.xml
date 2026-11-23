@@ -16,4 +16,6 @@ The app's own few words. Everything else on the screen is fcmd's, in its own lan
     <string name="no_answer">FinalCommander did not answer within %1$d seconds. Its last lines:</string>
     <string name="not_started">FinalCommander could not be started: %1$s</string>
     <string name="retry">Try again</string>
+    <string name="cannot_open">%1$s is not a file that can be opened.</string>
+    <string name="no_app">No app on this phone opens %1$s.</string>
 </resources>

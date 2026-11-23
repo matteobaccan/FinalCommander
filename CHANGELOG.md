@@ -15,17 +15,25 @@ Notable changes, newest first. The format follows
   them; without it, in a folder of its own. Beside it, `FinalCommander-android-aarch64-<v>.tar.gz`
   is the executable for Termux. Both are built with the NDK against Android's own C library.
   The app is signed with a key made for each build: uninstall an earlier version first.
+  What fcmd copies goes on the phone's clipboard, and `Enter` on a file opens it with the
+  phone's app for its type — a photo in the gallery, a PDF in the reader.
 - **`fcmd --web-terminal ADDR`**: the program in a browser page on this machine. It prints an
   address with a token, and each page that opens it runs its own `fcmd` on a pseudo-terminal,
   over a WebSocket; the terminal in the page is xterm.js, compiled into the binary. Only a
   loopback address is listened on, and a page without the token, or reached by a name that is
-  not this machine's, is refused. The Android app is this, in a web view.
+  not this machine's, is refused. The Android app is this, in a web view. What fcmd copies
+  reaches the browser's clipboard.
 - On Android the process list, the sockets, the mounts and the memory figures read `/proc`
   as they do on Linux.
 - **32-bit ARM**: `FinalCommander-linux-armv7-static-<v>.tar.gz`, statically linked, for ARMv7
   with hardware floating point (an older Raspberry Pi, a board or a router with a 32-bit
   Linux), and `FinalCommander-android-armv7-<v>.apk` with its `.tar.gz` for the phones with a
   32-bit processor.
+
+### Fixed
+
+- `url` 2.5.9, for RUSTSEC-2026-0592: a stack overflow in `Url::origin` on nested `blob:`
+  addresses.
 
 ## [0.45.0] — 2026-11-20
 

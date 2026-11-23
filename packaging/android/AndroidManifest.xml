@@ -46,5 +46,12 @@ version and the SDK levels are set by build.sh (aapt2 link).
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- The files fcmd opens with another app, read only, one file at a time to the app
+             given the right to it (Files.java). -->
+        <provider
+            android:name=".Files"
+            android:authorities="io.github.matteobaccan.finalcommander.files"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

@@ -22,6 +22,12 @@ a web view on that page, and nothing else:
 - `java/…/MainActivity.java` starts the executable, reads the address from its first line
   of output, shows the page, sends the Back button as `Esc`, and stops fcmd when it is
   closed;
+- what fcmd copies reaches the phone's clipboard, and `Enter` on a file with no association
+  of its own opens it with the phone's app for its type — a photo in the gallery, a PDF in
+  the reader. fcmd asks the page through the terminal (`OSC 52`, `OSC 7770`), the page asks
+  the activity (`FcmdAndroid`, a JavaScript interface of fcmd's page only), and
+  `java/…/Files.java` hands the file to the other app as a `content:` address it may read
+  once, since Android does not let an app pass another a path;
 - the page puts a row of keys above the phone's keyboard: `Esc`, `Tab`, `F1`–`F12`, the
   arrows, `PgUp`/`PgDn`, `Home`/`End`, `Ins`/`Del`, and `Ctrl`, `Alt` and `Shift`, which
   hold until the next key — so `Alt` then `F7` is FAR's search;

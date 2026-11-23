@@ -1771,6 +1771,9 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                     // does not understand the request ignores it.
                     let _ = term.set_clipboard(&text);
                 }
+                Request::OpenOnHost { path } => {
+                    let _ = term.open_on_host(&path.to_string_lossy());
+                }
                 Request::Owners {
                     panel,
                     generation,
@@ -7758,6 +7761,7 @@ dir_attr = "D"
                 | Request::WindowSize { .. }
                 | Request::Mouse { .. }
                 | Request::Clipboard { .. }
+                | Request::OpenOnHost { .. }
                 | Request::Owners { .. }
                 | Request::PluginColumn { .. }
                 | Request::GitColumn { .. } => {}

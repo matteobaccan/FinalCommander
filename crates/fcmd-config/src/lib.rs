@@ -1946,7 +1946,14 @@ pub fn desktop_open_command() -> &'static str {
     {
         "cmd /c start \"\" {file}"
     }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    // Android has no opener of its own: Termux's `termux-open` is the one there is. The
+    // FinalCommander app opens files itself, asked through the terminal (`OSC 7770`), and
+    // never runs this.
+    #[cfg(target_os = "android")]
+    {
+        "termux-open {file}"
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
     {
         "xdg-open {file}"
     }

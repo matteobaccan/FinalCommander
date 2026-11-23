@@ -167,6 +167,33 @@
     };
     term.focus();
   }
+  // What fcmd copies (`Ctrl+Ins`, `Shift+Ctrl+Enter`, the screen grabber) arrives as
+  // `OSC 52 ; c ; BASE64`, the request a terminal answers by putting the text on the
+  // clipboard: the phone's, through the Android app, else the browser's. A query (`?`) is
+  // not answered: the page does not hand the clipboard back to the program.
+  var bridge = window.FcmdAndroid;
+  term.parser.registerOscHandler(52, function (data) {
+    var b64 = data.slice(data.indexOf(";") + 1);
+    if (b64 === "?" || b64 === data) return true;
+    var text;
+    try {
+      var bin = atob(b64), bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      text = new TextDecoder().decode(bytes);
+    } catch (e) {
+      return true;
+    }
+    if (bridge && bridge.copy) bridge.copy(text);
+    else if (navigator.clipboard) navigator.clipboard.writeText(text).catch(function () {});
+    return true;
+  });
+  // `OSC 7770 ; open ; PATH`: what fcmd's `Enter` on a file with no association of its own
+  // sends on Android, for the app to open the file with the phone's app for its type.
+  term.parser.registerOscHandler(7770, function (data) {
+    if (data.indexOf("open;") === 0 && bridge && bridge.open) bridge.open(data.slice(5));
+    return true;
+  });
+
   // For the page's host: the Android app sends its Back button here, as Esc.
   window.fcmdKey = function (name) { special(name); term.focus(); };
   document.getElementById("again").addEventListener("click", connect);

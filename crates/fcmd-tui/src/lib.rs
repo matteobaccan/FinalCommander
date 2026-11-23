@@ -476,6 +476,14 @@ impl Term {
         self.out.flush()
     }
 
+    /// Ask the terminal to open a file with the system's app for it: `OSC 7770`, which only
+    /// the page `fcmd --web-terminal` serves understands, and only inside the Android app
+    /// (SPEC 11 §2a). Any other terminal ignores it.
+    pub fn open_on_host(&mut self, path: &str) -> io::Result<()> {
+        self.out.write_all(open_request(path).as_bytes())?;
+        self.out.flush()
+    }
+
     /// Turn mouse reporting on or off. Returns whether anything changed.
     ///
     /// It is a setting rather than a fact about the terminal: while it is on, the terminal
@@ -632,6 +640,15 @@ pub fn title_request(text: &str) -> String {
 /// hardware `vt` family. No `TERM` at all is the Windows console, which has a title.
 pub fn title_supported(term: Option<&str>) -> bool {
     !matches!(term, Some(t) if t == "linux" || t == "dumb" || t.starts_with("vt"))
+}
+
+/// The `OSC 7770` request that asks the page of the Android app to open `path`. A control
+/// character would end the sequence early, so a path with one is not sent.
+pub fn open_request(path: &str) -> String {
+    if path.chars().any(char::is_control) {
+        return String::new();
+    }
+    format!("\x1b]7770;open;{path}\x07")
 }
 
 /// The `OSC 52` request that puts `text` on the clipboard, as a string so that it can be
@@ -1366,6 +1383,15 @@ mod tests {
 
     /// Base64 against the three cases that matter: a length that is a multiple of three, and
     /// the two that need padding.
+    #[test]
+    fn the_open_request_carries_the_path_and_nothing_that_would_end_it() {
+        assert_eq!(
+            open_request("/sdcard/a b;c.pdf"),
+            "\x1b]7770;open;/sdcard/a b;c.pdf\x07"
+        );
+        assert_eq!(open_request("/sdcard/a\x07b"), "");
+    }
+
     #[test]
     fn the_clipboard_request_is_osc_52_with_standard_base64() {
         assert_eq!(base64(b""), "");
