@@ -13,6 +13,57 @@ Still in the order the menus mention things, with the sections after them taken 
 have. **Open question** marks the rows where a decision comes before the code, and the row
 says what the decision stands on.
 
+## FinalCommander Link: another machine's disk in a panel, on the LAN
+
+Decided with the author on 23 November 2026, after reading hwBro's *Commander Link* (below),
+which has the idea and none of the safety: no authentication, no encryption, a whole disk to
+anybody who reaches the port. Ours is the same idea the way a remote-desktop program does it.
+
+- **Every installation has an ID**: nine digits, made at random the first time and kept in
+  the state file, shown as `123 456 789` — a number one reads out over the phone. It names a
+  machine, it is not a secret.
+- **LAN only.** Machines find one another by broadcast or multicast on the local network and
+  connect directly; nothing goes through a server, and an address outside the private ranges
+  (RFC 1918, link-local, IPv6 ULA) is refused at both ends. Reaching a machine elsewhere is
+  what SFTP is for.
+- **A call is authorised by a person.** *Connect to…* takes an ID; the called FinalCommander
+  shows who is asking (the caller's ID and its machine name) and what it asks for, and the
+  person at it says yes or no. Only then does the caller's panel open on the called machine's
+  folder — the one it chose to share (*this panel's folder*, or a list of folders), never the
+  whole disk by default — and the panels' operations (`F3`–`F8`, copy both ways) work on it as
+  on any other VFS. The called side keeps an indicator on screen while a session is open and
+  can end it at any time.
+- **A PIN makes it permanent.** The called side can set a PIN; a caller that gives the ID and
+  the PIN gets in without the question — for one's own machines. A PIN is checked with a
+  password-authenticated key exchange (SPAKE2 or OPAQUE), so neither a listener nor a fake
+  peer learns it, and attempts are rate-limited.
+- **Always encrypted**: every session is a Noise or TLS 1.3 channel whose key comes from that
+  exchange (with the PIN) or from a short code both screens show and the person compares (the
+  first time, without a PIN), so a machine in the middle cannot pass itself off as the other.
+- To settle before the code: the protocol (Noise with `snow`, or TLS with `rustls` and
+  self-signed certificates pinned to the ID), the discovery (UDP broadcast on a fixed port, or
+  mDNS), which crates and what they cost in the binary, how a read-only share is offered, and
+  where the shared folders and the PIN (hashed) are kept. A spec section (SPEC 04, a provider
+  like SFTP's) comes first. **L.**
+
+## From hwBro
+
+Read on 23 November 2026: [hwBro](https://github.com/diegofazio/hwBro-core) (MIT, Harbour,
+Windows only), a two-panel commander joined to a reconstruction of BroPlus 3.00, a DOS xBase
+database manager. What it has and we do not, from its README; the Link is the section above.
+
+| Item | Work | Note |
+| --- | --- | --- |
+| **DBF written**: edit a cell in place, append, delete and recall, `Pack` | M | Today a DBF is read only, in table mode (5.19); the memo files and the record layout are already read |
+| **DBF indexes**: CDX and NTX read, an order chosen, scope and seek; rebuilt when written | L | The SIx Driver's CDX included; without them a written DBF leaves its indexes stale |
+| **DBF structure editor**: add, remove and retype fields, the data copied by name, only the indexes whose key changed rebuilt | M | After writing |
+| **xBase commands on a table**: `Append From`, `Copy To`, `Replace`, `Count`, `Sum/Average`, `Reindex`, `Zap`; filters, relations, work areas | L | **Open question**: how much of BroPlus is a file manager's job |
+| **An xBase dot prompt** (`USE`, `INDEX ON`, `SKIP`, `REPLACE`…) | L | **Open question**, as above |
+| **Find files that do *not* contain the text** | S | A check box in the `Alt+F7` dialog |
+| **Pretty-print JSON and XML in the editor and the viewer** (`Alt+P`): a view in the viewer, an undoable edit in the editor | S | JSON is pretty-printed today only in some derived views; XML not at all |
+| **Tabs in the editor**: several files open as tabs, a changed one marked | M | We have the screens (`F12`), FAR's model; tabs would be a second way |
+| **Files on the clipboard on Windows** (`CF_HDROP`): `Ctrl+C` in a panel puts the files there, so Explorer's `Ctrl+V` copies them, and back | M | Through `fcmd-platform`'s Windows code; on Linux and macOS a terminal has no such clipboard |
+
 ## Candidates for a later release
 
 Gathered on 17 November 2026 from three readings, to be discussed with the author before
