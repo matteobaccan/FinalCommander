@@ -119,8 +119,8 @@ FinalCommander contributors").
 
 Consequences of that choice, recorded so nobody has to re-derive them:
 
-- Inbound compatibility: we may use MIT, BSD-2/3, Apache-2.0, ISC, Zlib and MPL-2.0 (file-level)
-  dependencies. FAR Manager fragments (BSD-3) may be reused, keeping their notice in
+- Inbound compatibility: we may use MIT, BSD-2/3, Apache-2.0, ISC, Zlib, BSL-1.0 (Boost) and
+  MPL-2.0 (file-level) dependencies. FAR Manager fragments (BSD-3) may be reused, keeping their notice in
   `THIRD-PARTY.md`.
 - **No GPL/LGPL/AGPL code in the shipped binary's default feature set.** An LGPL component is
   acceptable only as a *dynamically loaded, optional* library (e.g. a system `7z.dll`/
