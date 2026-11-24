@@ -16,7 +16,8 @@ use fcmd_net::{HostKeyPolicy, Site};
 use russh::server::{Auth, ChannelOpenHandle, Msg, Server as _, Session};
 use russh::{Channel, ChannelId};
 use russh_sftp::protocol::{
-    Attrs, Data, File, FileAttributes, Handle, Name, OpenFlags, Status, StatusCode, Version,
+    Attrs, Data, File, FileAttributes, Handle, Name, OpenFlags, SftpHandle, Status, StatusCode,
+    Version,
 };
 use tokio::sync::Mutex;
 
@@ -130,9 +131,9 @@ impl russh::server::Handler for SshSession {
 struct SftpServer {
     root: PathBuf,
     /// Open directory handles: the names still to send, so the second `readdir` can say EOF.
-    dirs: HashMap<String, Vec<File>>,
+    dirs: HashMap<SftpHandle, Vec<File>>,
     /// Open file handles: the real path, and whether it was opened for writing.
-    files: HashMap<String, (PathBuf, bool)>,
+    files: HashMap<SftpHandle, (PathBuf, bool)>,
     next: u64,
 }
 
@@ -150,9 +151,9 @@ impl SftpServer {
         Ok(out)
     }
 
-    fn handle(&mut self, prefix: &str) -> String {
+    fn handle(&mut self, prefix: &str) -> SftpHandle {
         self.next += 1;
-        format!("{prefix}{}", self.next)
+        format!("{prefix}{}", self.next).into()
     }
 
     fn ok(id: u32) -> Status {
@@ -255,7 +256,7 @@ impl russh_sftp::server::Handler for SftpServer {
         Ok(Handle { id, handle })
     }
 
-    async fn readdir(&mut self, id: u32, handle: String) -> Result<Name, StatusCode> {
+    async fn readdir(&mut self, id: u32, handle: SftpHandle) -> Result<Name, StatusCode> {
         match self.dirs.get_mut(&handle) {
             // The whole directory in one packet, then EOF, which is what the protocol expects.
             Some(files) if !files.is_empty() => Ok(Name {
@@ -294,7 +295,7 @@ impl russh_sftp::server::Handler for SftpServer {
     async fn read(
         &mut self,
         id: u32,
-        handle: String,
+        handle: SftpHandle,
         offset: u64,
         len: u32,
     ) -> Result<Data, StatusCode> {
@@ -314,7 +315,7 @@ impl russh_sftp::server::Handler for SftpServer {
     async fn write(
         &mut self,
         id: u32,
-        handle: String,
+        handle: SftpHandle,
         offset: u64,
         data: Vec<u8>,
     ) -> Result<Status, StatusCode> {
@@ -330,7 +331,7 @@ impl russh_sftp::server::Handler for SftpServer {
         Ok(SftpServer::ok(id))
     }
 
-    async fn close(&mut self, id: u32, handle: String) -> Result<Status, StatusCode> {
+    async fn close(&mut self, id: u32, handle: SftpHandle) -> Result<Status, StatusCode> {
         self.dirs.remove(&handle);
         self.files.remove(&handle);
         Ok(SftpServer::ok(id))
