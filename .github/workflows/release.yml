@@ -79,7 +79,8 @@ jobs:
           # `env.TAG` is not available to `with:`, so the expression is repeated; with no tag
           # the run builds whatever it was started on.
           ref: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || github.sha }}
-      - uses: dtolnay/rust-toolchain@stable
+      # The Rust of rust-toolchain.toml, installed as that file says.
+      - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.name }}

@@ -66,9 +66,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || '' }}
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+      # The Rust of rust-toolchain.toml, installed as that file says.
+      - run: rustup toolchain install
+      - run: rustup target add ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
           key: android-${{ matrix.arch }}
@@ -102,9 +102,9 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-linux-android
+      # The Rust of rust-toolchain.toml, installed as that file says.
+      - run: rustup toolchain install
+      - run: rustup target add x86_64-linux-android
       - uses: Swatinem/rust-cache@v2
         with:
           key: android-x86_64

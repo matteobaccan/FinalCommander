@@ -64,7 +64,8 @@ jobs:
         with:
           # A release builds the tag it is publishing; anything else, its own commit.
           ref: ${{ inputs.ref || '' }}
-      - uses: dtolnay/rust-toolchain@stable
+      # The Rust of rust-toolchain.toml, installed as that file says.
+      - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       - run: cargo run --quiet -p fcmd-site -- --out site
       # The page that runs the program in the browser (`web/try/`), and next to it, under a
