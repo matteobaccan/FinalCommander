@@ -10,7 +10,7 @@ Notable changes, newest first. The format follows
 
 - `FinalCommander-linux-mipsel-static-<v>.tar.gz`: statically linked, for 32-bit
   little-endian MIPS with soft floating point — routers and boards on a MediaTek MT7621 or
-  its kin, OpenWrt included — built for size, about 21 MB (8.6 MB compressed).
+  its kin, OpenWrt included — built for size, about 19 MB (7.6 MB compressed; the compact build below 13 MB, 5.5 MB compressed).
   `install.sh` picks it on such a machine.
 - `FinalCommander-linux-mips-static-<v>.tar.gz`, the same for big-endian MIPS: the older
   routers on Atheros and Qualcomm chips.
