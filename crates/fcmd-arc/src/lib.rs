@@ -32,6 +32,10 @@ pub mod msg;
 mod nest;
 mod rebuild;
 pub mod rtf;
+#[cfg(feature = "sqlite")]
+pub mod sqlite;
+#[cfg(not(feature = "sqlite"))]
+#[path = "sqlite_none.rs"]
 pub mod sqlite;
 mod tar;
 mod write;

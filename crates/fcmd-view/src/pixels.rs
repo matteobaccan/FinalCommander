@@ -96,6 +96,13 @@ fn canvas(picture: &Picture, fit: Fit, cell: (u16, u16), under: Option<[u8; 3]>)
 /// Compressed quickly rather than well: the bytes go down a pipe to a terminal on the same
 /// machine, or down an `ssh` connection that compresses for itself, and are thrown away the
 /// moment they are drawn.
+#[cfg(not(feature = "pictures"))]
+pub fn png(_picture: &Picture, _fit: Fit, _cell: (u16, u16)) -> Result<Vec<u8>, String> {
+    Err("pictures are not in this build of FinalCommander".into())
+}
+
+/// The picture as PNG bytes (see the one above).
+#[cfg(feature = "pictures")]
 pub fn png(picture: &Picture, fit: Fit, cell: (u16, u16)) -> Result<Vec<u8>, String> {
     use image::ImageEncoder as _;
     let rgba = canvas(picture, fit, cell, None);

@@ -21,6 +21,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      # The compact build (MIPS routers): what it leaves out must leave it compiling.
+      - run: cargo clippy -p fcmd --no-default-features -- -D warnings
 
   test:
     name: test (${{ matrix.os }})

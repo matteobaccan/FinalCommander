@@ -35,6 +35,10 @@ mod undo;
 mod vault;
 mod video;
 mod watch;
+#[cfg(feature = "webterm")]
+mod webterm;
+#[cfg(not(feature = "webterm"))]
+#[path = "webterm_none.rs"]
 mod webterm;
 
 use std::path::{Path, PathBuf};

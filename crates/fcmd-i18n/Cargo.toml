@@ -7,3 +7,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+
+[features]
+# Every language's catalogue; without it (the compact build) English alone.
+all-languages = []

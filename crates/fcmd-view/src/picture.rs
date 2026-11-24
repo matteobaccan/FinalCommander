@@ -12,6 +12,7 @@
 //! worth having, but each works in some terminals and not others, and a picture one cannot
 //! see at all is worse than one made of blocks.
 
+#[cfg(feature = "pictures")]
 use std::io::Cursor;
 
 /// What a decoded picture is while it is being looked at: straight RGBA, no stride tricks,
@@ -54,6 +55,13 @@ fn format_of(head: &[u8]) -> Option<&'static str> {
 /// The error is a sentence rather than a type: there is one caller, it puts the words on the
 /// status line, and a reader who opened a damaged JPEG wants to be told that and not handed
 /// a hex dump without a word.
+#[cfg(not(feature = "pictures"))]
+pub fn read(_bytes: &[u8]) -> Result<Picture, String> {
+    Err("pictures are not in this build of FinalCommander".into())
+}
+
+/// Decode a whole file into a picture.
+#[cfg(feature = "pictures")]
 pub fn read(bytes: &[u8]) -> Result<Picture, String> {
     let format = format_of(bytes).ok_or("not a picture this can read")?;
     let mut reader = image::ImageReader::new(Cursor::new(bytes));
@@ -209,9 +217,10 @@ impl Picture {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "pictures"))]
 mod tests {
     use super::*;
+    use std::io::Cursor;
 
     /// A tiny PNG written here, so the test does not depend on a file in the tree.
     fn png(width: u32, height: u32, pixel: impl Fn(u32, u32) -> [u8; 4]) -> Vec<u8> {

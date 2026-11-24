@@ -45,12 +45,29 @@ serde_json = "1.0.154"
 notify = { version = "9.0.0", default-features = false, features = ["macos_fsevent"] }
 # SHA-1, for the one thing that still asks for it: the answer to a WebSocket's handshake
 # (`--web-terminal`, RFC 6455 §4.2.2). The same crate `fcmd-jobs` hashes `.sha1` files with.
-sha1 = "0.11"
+sha1 = { version = "0.11", optional = true }
 
 # Free space in the panel frame needs `statvfs`, which `std` does not expose. Unix only:
 # Windows wants `GetDiskFreeSpaceEx` and gets its own answer when it gets its own crate.
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.32.0", features = ["fs"] }
+
+[features]
+# Everything, which is what every build but one has. The compact build for small machines —
+# a router's few megabytes of flash — is `--no-default-features`: English alone, and none of
+# WebAssembly, pictures, the x86 disassembler, SQLite or the web terminal; each of those, left
+# out, says so where it would have been.
+default = ["full"]
+full = [
+  "webterm",
+  "all-languages",
+  "fcmd-view/wasm",
+  "fcmd-view/pictures",
+  "fcmd-view/disasm-x86",
+  "fcmd-arc/sqlite",
+]
+webterm = ["dep:sha1"]
+all-languages = ["fcmd-i18n/all-languages"]
 
 [dev-dependencies]
 # The same crate again, with the in-process S3 service switched on: an object the viewer

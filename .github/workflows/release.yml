@@ -78,6 +78,30 @@ jobs:
             zig: true
             build_std: true
             qemu: qemu-mipsel
+          # The same, compact, for a router with little flash: English alone, and none of
+          # WebAssembly, pictures, the x86 disassembler, SQLite or the web terminal
+          # (`--no-default-features`, crates/fcmd/Cargo.toml).
+          - name: linux-mipsel-compact-static
+            os: ubuntu-latest
+            target: mipsel-unknown-linux-musl
+            zig: true
+            build_std: true
+            qemu: qemu-mipsel
+            cargo_flags: --no-default-features
+          # Big-endian MIPS: the older routers, on Atheros and Qualcomm chips. Full and compact.
+          - name: linux-mips-static
+            os: ubuntu-latest
+            target: mips-unknown-linux-musl
+            zig: true
+            build_std: true
+            qemu: qemu-mips
+          - name: linux-mips-compact-static
+            os: ubuntu-latest
+            target: mips-unknown-linux-musl
+            zig: true
+            build_std: true
+            qemu: qemu-mips
+            cargo_flags: --no-default-features
           # One binary for both Intel and Apple Silicon.
           - name: macos-universal
             os: macos-latest
@@ -125,9 +149,14 @@ jobs:
         env:
           RUSTC_BOOTSTRAP: "1"
           CARGO_PROFILE_RELEASE_OPT_LEVEL: z
+          # A plain static executable, not a static PIE: linked as a PIE for MIPS, the
+          # thread-local storage a panic uses is not where the code looks for it, and every
+          # panic — a closed pipe under `fcmd --list-themes | head -1` is one — became a
+          # segmentation fault instead of its message. Measured under QEMU, 24 November 2026.
+          RUSTFLAGS: -C relocation-model=static
         run: >
           cargo zigbuild --release --locked --target ${{ matrix.target }} -p fcmd
-          -Zbuild-std=std,panic_abort
+          -Zbuild-std=std,panic_abort ${{ matrix.cargo_flags }}
 
       - name: Build
         if: matrix.name != 'macos-universal' && !matrix.zig
@@ -187,7 +216,7 @@ jobs:
           # the one built for another processor.
           case "${{ matrix.name }}" in
             windows-*) "$dir/fcmd.exe" --version ;;
-            linux-armv7-* | linux-mipsel-*) ${{ matrix.qemu }} "$dir/fcmd" --version ;;
+            linux-armv7-* | linux-mips*) ${{ matrix.qemu }} "$dir/fcmd" --version ;;
             *) "$dir/fcmd" --version ;;
           esac
           # And on Windows it must not need the Visual C++ Redistributable: the C runtime is

@@ -31,6 +31,10 @@ pub mod structure;
 pub mod table;
 mod tags;
 pub mod view;
+#[cfg(feature = "wasm")]
+pub mod wasm;
+#[cfg(not(feature = "wasm"))]
+#[path = "wasm_none.rs"]
 pub mod wasm;
 
 pub use asm::{assemble, AsmError, Assembled};

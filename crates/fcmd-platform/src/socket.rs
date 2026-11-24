@@ -156,7 +156,8 @@ fn socket_owners() -> std::collections::HashMap<u64, (u32, String)> {
 /// `0100007F:1F90` as `127.0.0.1:8080`, and the same for the sixteen-byte form.
 ///
 /// The address is written as 32-bit words in the machine's own order, which is why each group
-/// of eight hex digits is read as a number and then taken apart again.
+/// of eight hex digits is read as a number and then taken apart again in that same order —
+/// little-endian on a PC, big-endian on an older MIPS router, where `7F000001` is 127.0.0.1.
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn address(field: &str, six: bool) -> Option<String> {
     let (host, port) = field.rsplit_once(':')?;
@@ -168,7 +169,7 @@ fn address(field: &str, six: bool) -> Option<String> {
         let mut bytes = [0u8; 16];
         for (i, chunk) in host.as_bytes().chunks(8).enumerate() {
             let word = u32::from_str_radix(std::str::from_utf8(chunk).ok()?, 16).ok()?;
-            bytes[i * 4..i * 4 + 4].copy_from_slice(&word.to_le_bytes());
+            bytes[i * 4..i * 4 + 4].copy_from_slice(&word.to_ne_bytes());
         }
         let ip = std::net::Ipv6Addr::from(bytes);
         Some(format!("[{ip}]:{port}"))
@@ -177,7 +178,7 @@ fn address(field: &str, six: bool) -> Option<String> {
             return None;
         }
         let word = u32::from_str_radix(host, 16).ok()?;
-        let ip = std::net::Ipv4Addr::from(word.to_le_bytes());
+        let ip = std::net::Ipv4Addr::from(word.to_ne_bytes());
         Some(format!("{ip}:{port}"))
     }
 }

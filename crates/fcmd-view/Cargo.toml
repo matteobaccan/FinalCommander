@@ -37,7 +37,7 @@ unicode-width = "0.2"
 # shuffled one. It uses `indexmap`, which is already in the tree under several other crates.
 serde_json = { version = "1.0.154", features = ["preserve_order"] }
 object = { version = "0.41.0", default-features = false, features = ["read_core", "elf", "pe", "macho", "archive", "std"] }
-iced-x86 = { version = "1.21.0", default-features = false, features = ["decoder", "intel", "std"] }
+iced-x86 = { version = "1.21.0", optional = true, default-features = false, features = ["decoder", "intel", "std"] }
 # AArch64 decoding (SPEC 05 §1.6). A viewer that only reads x86 is half a tool on an Apple
 # Silicon laptop or an ARM server, and an instruction table is not something to write twice.
 # 0BSD, pure Rust — so the Windows and macOS builds need no C toolchain, unlike the usual
@@ -50,18 +50,25 @@ yaxpeax-arch = { version = "0.3.3", default-features = false }
 # the ones `wasm-tools` is made of, kept by the people who write the specification, so the
 # extensions (SIMD, threads, GC, exceptions) are read as they arrive. Pure Rust, Apache-2.0
 # WITH LLVM-exception or MIT.
-wasmprinter = "0.263.0"
-wasmparser = "0.263.0"
+wasmprinter = { version = "0.263.0", optional = true }
+wasmparser = { version = "0.263.0", optional = true }
 # Pictures in the viewer (SPEC 05 §1.14): the decoder only, never the drawing, which is ours.
 # `default-features = false` is what keeps this small — the four formats a commander actually
 # opens and none of the research ones, no `rayon`, no C. One dependency instead of four
 # separate decoders, and the same crates underneath either way.
-image = { version = "0.25.10", default-features = false, features = [
+image = { version = "0.25.10", optional = true, default-features = false, features = [
   "png",
   "jpeg",
   "gif",
   "bmp",
 ] }
+
+[features]
+# What the compact build (`--no-default-features` on `fcmd`, for small machines) leaves out;
+# `fcmd`'s `full` feature turns them all on, and every other build has them.
+wasm = ["dep:wasmprinter", "dep:wasmparser"]
+pictures = ["dep:image"]
+disasm-x86 = ["dep:iced-x86"]
 
 [dev-dependencies]
 tempfile = "3"

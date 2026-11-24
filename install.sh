@@ -17,7 +17,8 @@
 #   $PREFIX/bin in Termux;
 #   /usr/local/bin when run as root, or when it is writable;
 #   ~/.local/bin otherwise (said so if it is not on PATH).
-# FCMD_VERSION=0.46.1 installs that version rather than the latest. Nothing else is touched,
+# FCMD_VERSION=0.46.1 installs that version rather than the latest; on MIPS, FCMD_COMPACT=1
+# takes the compact build. Nothing else is touched,
 # and nothing is asked for: no sudo, no configuration, no service.
 set -eu
 
@@ -50,8 +51,11 @@ case "$machine" in
         # header (byte 6: 1 little-endian, 2 big-endian). Only little-endian is built.
         # dd and tr, which even the smallest busybox has.
         order=$(dd if=/bin/sh bs=1 skip=5 count=1 2> /dev/null | tr '\001\002' 'LB')
-        [ "$order" = L ] || die "no build for big-endian MIPS ($machine)"
-        arch=mipsel
+        case "$order" in
+            L) arch=mipsel ;;
+            B) arch=mips ;;
+            *) die "cannot tell this MIPS's byte order" ;;
+        esac
         ;;
     *) die "no build for this processor ($machine)" ;;
 esac
@@ -66,6 +70,15 @@ case "$os" in
             esac
         else
             platform=linux-$arch-static
+            # A router has little flash: FCMD_COMPACT=1 takes the compact build (English
+            # alone, without the parts a router has no use for).
+            case "$arch" in
+                mips | mipsel)
+                    if [ "${FCMD_COMPACT:-0}" = 1 ]; then
+                        platform=linux-$arch-compact-static
+                    fi
+                    ;;
+            esac
         fi
         ;;
     *) die "no build for $os here; Windows has a ZIP on the release page" ;;

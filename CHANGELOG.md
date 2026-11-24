@@ -11,8 +11,19 @@ Notable changes, newest first. The format follows
 - `FinalCommander-linux-mipsel-static-<v>.tar.gz`: statically linked, for 32-bit
   little-endian MIPS with soft floating point — routers and boards on a MediaTek MT7621 or
   its kin, OpenWrt included — built for size, about 21 MB (8.6 MB compressed).
-  `install.sh` picks it on such a machine, and says so on a big-endian one, which has no
-  build.
+  `install.sh` picks it on such a machine.
+- `FinalCommander-linux-mips-static-<v>.tar.gz`, the same for big-endian MIPS: the older
+  routers on Atheros and Qualcomm chips.
+- A compact build of each MIPS archive (`-compact-`), for a router with little flash:
+  English alone, and without WebAssembly, pictures, the x86 disassembler, SQLite and the web
+  terminal, each of which says so where it would have been. `FCMD_COMPACT=1` makes
+  `install.sh` take it. It is `fcmd` built with `--no-default-features`.
+
+### Fixed
+
+- On a big-endian machine the socket list showed every address backwards (`1.0.0.127` for
+  `127.0.0.1`): `/proc/net` writes them in the machine's own byte order, and they were read as
+  little-endian.
 
 ### Changed
 

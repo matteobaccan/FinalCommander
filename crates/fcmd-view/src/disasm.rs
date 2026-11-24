@@ -14,6 +14,7 @@
 
 use std::fmt;
 
+#[cfg(feature = "disasm-x86")]
 use iced_x86::{Decoder, DecoderOptions, Formatter, Instruction, IntelFormatter, Mnemonic, OpKind};
 use object::read::{Object, ObjectSection, ObjectSymbol};
 use object::{Architecture, BinaryFormat, SectionKind};
@@ -271,6 +272,7 @@ pub fn resolve_targets(lines: &mut [Line], map: impl Fn(u64) -> Option<u64>) {
 /// This asks `iced-x86` what the operands *are* rather than reading the formatted text: the
 /// text is for people, and a branch target that has to survive a formatter option is not a
 /// branch target.
+#[cfg(feature = "disasm-x86")]
 fn branch_target(instruction: &Instruction) -> Option<Target> {
     for i in 0..instruction.op_count() {
         if matches!(
@@ -442,6 +444,30 @@ pub fn disassemble(
     if arch == Arch::Aarch64 {
         return Ok(aarch64(code, offset, address, limit));
     }
+    x86(code, offset, address, arch, limit)
+}
+
+/// x86 left out of this build (the compact one): the bytes, and why there are no lines.
+#[cfg(not(feature = "disasm-x86"))]
+fn x86(
+    _code: &[u8],
+    _offset: u64,
+    _address: u64,
+    arch: Arch,
+    _limit: usize,
+) -> Result<Vec<Line>, DisasmError> {
+    Err(DisasmError::NoDisassembler(arch.as_str()))
+}
+
+/// x86 and x86-64, with `iced-x86`.
+#[cfg(feature = "disasm-x86")]
+fn x86(
+    code: &[u8],
+    offset: u64,
+    address: u64,
+    arch: Arch,
+    limit: usize,
+) -> Result<Vec<Line>, DisasmError> {
     let mut decoder = Decoder::with_ip(arch.bitness(), code, address, DecoderOptions::NONE);
     let mut formatter = IntelFormatter::new();
     formatter.options_mut().set_first_operand_char_index(8);

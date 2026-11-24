@@ -16,6 +16,7 @@ pub use ftl::Value;
 pub type FluentValue<'a> = Value<'a>;
 
 /// `(tag, endonym)` for every language compiled into the binary.
+#[cfg(feature = "all-languages")]
 pub const LANGUAGES: &[(&str, &str)] = &[
     ("en", "English"),
     ("it", "Italiano"),
@@ -34,6 +35,7 @@ pub const LANGUAGES: &[(&str, &str)] = &[
     ("pt", "Português"),
 ];
 
+#[cfg(feature = "all-languages")]
 const CATALOGUES: &[(&str, &str)] = &[
     ("en", include_str!("../i18n/en/fc.ftl")),
     ("it", include_str!("../i18n/it/fc.ftl")),
@@ -51,6 +53,13 @@ const CATALOGUES: &[(&str, &str)] = &[
     ("lt", include_str!("../i18n/lt/fc.ftl")),
     ("pt", include_str!("../i18n/pt/fc.ftl")),
 ];
+
+/// The compact build (`--no-default-features`, for small machines) carries English alone.
+#[cfg(not(feature = "all-languages"))]
+pub const LANGUAGES: &[(&str, &str)] = &[("en", "English")];
+
+#[cfg(not(feature = "all-languages"))]
+const CATALOGUES: &[(&str, &str)] = &[("en", include_str!("../i18n/en/fc.ftl"))];
 
 pub struct I18n {
     tag: String,

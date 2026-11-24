@@ -47,7 +47,7 @@ regex = "1"
 serde_json = "1.0.154"
 # The charsets mail is written in (`mail.rs`). Already a direct dependency of fcmd-view.
 encoding_rs = "0.8"
-rusqlite = { version = "0.43", features = ["bundled"] }
+rusqlite = { version = "0.43", optional = true, features = ["bundled"] }
 thiserror = "2"
 zip = { version = "9", default-features = false, features = [
   "deflate-flate2",
@@ -56,6 +56,10 @@ zip = { version = "9", default-features = false, features = [
   "lzma",
   "xz",
 ] }
+
+[features]
+# What the compact build leaves out (see fcmd-view's): SQLite and its C library.
+sqlite = ["dep:rusqlite"]
 
 [dev-dependencies]
 tempfile = "3"

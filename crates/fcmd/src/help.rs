@@ -108,6 +108,20 @@ impl Prose {
     }
 }
 
+/// An Italian page: compiled in, or, in the compact build (English alone), left out.
+#[cfg(feature = "all-languages")]
+macro_rules! italian {
+    ($path:literal) => {
+        include_str!($path)
+    };
+}
+#[cfg(not(feature = "all-languages"))]
+macro_rules! italian {
+    ($path:literal) => {
+        ""
+    };
+}
+
 /// The written chapters, in the order the index lists them — which is the order someone meets
 /// the program in, not alphabetical.
 pub const PROSE: &[Prose] = &[
@@ -116,7 +130,7 @@ pub const PROSE: &[Prose] = &[
         title_id: "help-chapter-about",
         texts: &[
             ("en", include_str!("../../../docs/help/about.md")),
-            ("it", include_str!("../../../docs/help/it/about.md")),
+            ("it", italian!("../../../docs/help/it/about.md")),
         ],
     },
     Prose {
@@ -124,7 +138,7 @@ pub const PROSE: &[Prose] = &[
         title_id: "help-chapter-panels",
         texts: &[
             ("en", include_str!("../../../docs/help/panels.md")),
-            ("it", include_str!("../../../docs/help/it/panels.md")),
+            ("it", italian!("../../../docs/help/it/panels.md")),
         ],
     },
     Prose {
@@ -132,7 +146,7 @@ pub const PROSE: &[Prose] = &[
         title_id: "help-chapter-files",
         texts: &[
             ("en", include_str!("../../../docs/help/files.md")),
-            ("it", include_str!("../../../docs/help/it/files.md")),
+            ("it", italian!("../../../docs/help/it/files.md")),
         ],
     },
     Prose {
@@ -140,7 +154,7 @@ pub const PROSE: &[Prose] = &[
         title_id: "help-chapter-viewer",
         texts: &[
             ("en", include_str!("../../../docs/help/viewer.md")),
-            ("it", include_str!("../../../docs/help/it/viewer.md")),
+            ("it", italian!("../../../docs/help/it/viewer.md")),
         ],
     },
     Prose {
@@ -148,7 +162,7 @@ pub const PROSE: &[Prose] = &[
         title_id: "help-chapter-editor",
         texts: &[
             ("en", include_str!("../../../docs/help/editor.md")),
-            ("it", include_str!("../../../docs/help/it/editor.md")),
+            ("it", italian!("../../../docs/help/it/editor.md")),
         ],
     },
     Prose {
@@ -156,7 +170,7 @@ pub const PROSE: &[Prose] = &[
         title_id: "help-chapter-network",
         texts: &[
             ("en", include_str!("../../../docs/help/network.md")),
-            ("it", include_str!("../../../docs/help/it/network.md")),
+            ("it", italian!("../../../docs/help/it/network.md")),
         ],
     },
     Prose {
@@ -164,7 +178,7 @@ pub const PROSE: &[Prose] = &[
         title_id: "help-chapter-config",
         texts: &[
             ("en", include_str!("../../../docs/help/config.md")),
-            ("it", include_str!("../../../docs/help/it/config.md")),
+            ("it", italian!("../../../docs/help/it/config.md")),
         ],
     },
 ];
