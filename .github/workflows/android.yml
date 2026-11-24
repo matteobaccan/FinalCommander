@@ -75,7 +75,7 @@ jobs:
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "25"
       - name: Build fcmd for Android and its APK
         run: sh packaging/android/build.sh --abi ${{ matrix.abi }} --out dist
       - name: Sizes
@@ -111,7 +111,7 @@ jobs:
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "25"
       - name: Build fcmd for the emulator and its APK
         run: sh packaging/android/build.sh --abi x86_64 --out dist
       # The emulator needs KVM: GitHub's Ubuntu runners have it, open to the runner's user
