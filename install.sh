@@ -8,7 +8,8 @@
 #   curl -fsSL https://github.com/matteobaccan/FinalCommander/releases/latest/download/install.sh | sh
 #   wget -qO- https://github.com/matteobaccan/FinalCommander/releases/latest/download/install.sh | sh
 #
-# Linux (x86-64, x86 32-bit — iSH on an iPad or iPhone —, ARM 64-bit, ARM 32-bit), macOS,
+# Linux (x86-64, x86 32-bit — iSH on an iPad or iPhone —, ARM 64-bit, ARM 32-bit, MIPS
+# little-endian — routers), macOS,
 # and Termux on Android. It picks the release's archive for the system, checks it against
 # the release's SHA256SUMS, and puts `fcmd` (and its manual page, where there is a place for
 # one) in:
@@ -44,6 +45,14 @@ case "$machine" in
     aarch64 | arm64) arch=aarch64 ;;
     armv7* | armv8l) arch=armv7 ;;
     i386 | i486 | i586 | i686 | x86) arch=i686 ;;
+    mips | mipsel)
+        # `uname -m` says mips either way; the byte order is in any executable's ELF
+        # header (byte 6: 1 little-endian, 2 big-endian). Only little-endian is built.
+        # dd and tr, which even the smallest busybox has.
+        order=$(dd if=/bin/sh bs=1 skip=5 count=1 2> /dev/null | tr '\001\002' 'LB')
+        [ "$order" = L ] || die "no build for big-endian MIPS ($machine)"
+        arch=mipsel
+        ;;
     *) die "no build for this processor ($machine)" ;;
 esac
 case "$os" in

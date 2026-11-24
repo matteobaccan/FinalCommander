@@ -1292,7 +1292,7 @@ fn head_of(path: &Path) -> Option<Vec<u8>> {
 /// The caller removes it. There is no guard type doing it on drop because the one caller
 /// wants it gone on every path, cancellation included, and says so once.
 fn scratch() -> Result<PathBuf> {
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    static NEXT: portable_atomic::AtomicU64 = portable_atomic::AtomicU64::new(0);
     let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let dir = std::env::temp_dir()
         .join(format!("fcmd-{}", std::process::id()))

@@ -3670,7 +3670,7 @@ pub struct App {
     pub pixels: crate::pixels::Screen,
     /// The number of the newest frame asked of `ffmpeg`, shared with the workers: one that
     /// is fetching an older frame gives up, and one that is playing stops.
-    video_newest: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    video_newest: std::sync::Arc<portable_atomic::AtomicU64>,
     /// What `Alt+F9` last asked of the window: maximised or as it was. Windows answers with
     /// the window's real state, which replaces this; a terminal is only asked.
     window_maximised: bool,
@@ -4057,7 +4057,7 @@ impl App {
             quick_why: None,
             quick_size: (40, 20),
             pixels: crate::pixels::Screen::default(),
-            video_newest: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            video_newest: std::sync::Arc::new(portable_atomic::AtomicU64::new(0)),
             sound: None,
             window_maximised: false,
             last_calc: String::new(),

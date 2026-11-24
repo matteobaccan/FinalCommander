@@ -5217,7 +5217,7 @@ fn read_syslog() -> Result<std::path::PathBuf, String> {
 /// diff — and a view still open on one `a.txt` must not find it rewritten by the next
 /// question about another `a.txt`, in another repository or in the same one a moment later.
 fn git_answer_dir() -> std::path::PathBuf {
-    static ASKED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    static ASKED: portable_atomic::AtomicU64 = portable_atomic::AtomicU64::new(0);
     let n = ASKED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     std::env::temp_dir()
         .join(format!("fcmd-sql-{}", std::process::id()))

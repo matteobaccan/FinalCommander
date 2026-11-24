@@ -16,8 +16,9 @@
 //! changes. The container on a server is the one that cannot be written into: its copy would
 //! change and nothing would carry it back.
 
+use portable_atomic::AtomicU64;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
 use fcmd_core::{CancelToken, VPath};

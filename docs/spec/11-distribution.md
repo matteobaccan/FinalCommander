@@ -38,7 +38,7 @@ script.** Nothing to run, nothing to configure, nothing to register.
 
 ## 2. What exists today
 
-Roadmap item 18, shipped. A tag builds seven archives and publishes them, with `install.sh`:
+Roadmap item 18, shipped. A tag builds eight archives and publishes them, with `install.sh`:
 
 | Archive | What is in it |
 | --- | --- |
@@ -46,6 +46,7 @@ Roadmap item 18, shipped. A tag builds seven archives and publishes them, with `
 | `FinalCommander-linux-x86_64-static-<v>.tar.gz` | musl, static — runs on any distribution |
 | `FinalCommander-linux-aarch64-static-<v>.tar.gz` | musl, static, for ARM 64-bit, built on an ARM runner |
 | `FinalCommander-linux-i686-static-<v>.tar.gz` | musl, static, for 32-bit x86 — and iSH on iOS — cross-compiled with Zig |
+| `FinalCommander-linux-mipsel-static-<v>.tar.gz` | musl, static, for 32-bit little-endian MIPS with soft floating point (routers); a tier 3 target, so the standard library is compiled from `rust-src` by the same Rust (`-Zbuild-std` under `RUSTC_BOOTSTRAP`), with `opt-level = "z"`; tried under QEMU |
 | `FinalCommander-linux-armv7-static-<v>.tar.gz` | musl, static, for 32-bit ARM (ARMv7, hard float), cross-compiled with Zig and tried under QEMU |
 | `FinalCommander-macos-universal-<v>.tar.gz` | one binary for Intel and Apple Silicon |
 | `FinalCommander-windows-x86_64-<v>.zip` | msvc build |

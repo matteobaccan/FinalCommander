@@ -46,6 +46,7 @@ curl -fsSL https://github.com/${repo}/releases/latest/download/install.sh | sh
 | **Linux** x86-64 | [tar.gz]($(archive linux-x86_64 tar.gz)) · [static, for any distribution]($(archive linux-x86_64-static tar.gz)) |
 | **Linux** x86 32-bit, and iSH on iPad and iPhone | [static, for any distribution]($(archive linux-i686-static tar.gz)) |
 | **Linux** ARM 64-bit | [static, for any distribution]($(archive linux-aarch64-static tar.gz)) |
+| **Linux** MIPS 32-bit little-endian (routers) | [static, for any distribution]($(archive linux-mipsel-static tar.gz)) |
 | **Linux** ARM 32-bit (ARMv7) | [static, for any distribution]($(archive linux-armv7-static tar.gz)) |
 | **Android** ARM 64-bit | [APK, the app]($(archive android-aarch64 apk)) · [tar.gz, for Termux]($(archive android-aarch64 tar.gz)) |
 | **Android** ARM 32-bit (ARMv7) | [APK, the app]($(archive android-armv7 apk)) · [tar.gz, for Termux]($(archive android-armv7 tar.gz)) |

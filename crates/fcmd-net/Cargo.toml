@@ -9,6 +9,9 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+# A 64-bit atomic counter on every processor: the standard one does not exist on 32-bit MIPS,
+# where this one takes a lock instead; everywhere else it is the standard one. MIT OR Apache-2.0.
+portable-atomic = { version = "1", features = ["fallback"] }
 fcmd-config = { workspace = true }
 fcmd-arc = { workspace = true }
 fcmd-core = { workspace = true }

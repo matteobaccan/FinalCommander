@@ -113,8 +113,8 @@ skips that check, which is the one thing it exists for.
    to `main`. `tag.yml` notices the bump and the dated heading and takes it from there; if CI
    is not green within its window it says so and refuses to tag, which is the correct outcome.
 4. `.github/workflows/release.yml` then builds `linux-x86_64`, `linux-x86_64-static` (musl),
-   `linux-aarch64-static` (musl, on an ARM runner), `linux-armv7-static` and `linux-i686-static` (musl, cross-compiled with Zig), `macos-universal` (Intel + Apple Silicon in one binary) and `windows-x86_64`, runs
-   `fcmd --version` on each (under QEMU for ARMv7), and publishes the seven `FinalCommander-*` archives, `install.sh`, the Android app and its archive for 64-bit and 32-bit ARM (`android.yml`) with
+   `linux-aarch64-static` (musl, on an ARM runner), `linux-armv7-static`, `linux-i686-static` and `linux-mipsel-static` (musl, cross-compiled with Zig; MIPS with its standard library compiled from `rust-src`), `macos-universal` (Intel + Apple Silicon in one binary) and `windows-x86_64`, runs
+   `fcmd --version` on each (under QEMU for ARMv7 and MIPS), and publishes the eight `FinalCommander-*` archives, `install.sh`, the Android app and its archive for 64-bit and 32-bit ARM (`android.yml`) with
    `SHA256SUMS`. The publish step needs the workflow token to be allowed to write:
    Settings → Actions → General → Workflow permissions → *Read and write*.
 

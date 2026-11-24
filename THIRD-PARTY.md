@@ -21,6 +21,7 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `crossterm` | MIT | the terminal backend: input decoding, raw mode, painting |
 | `tokio` | MIT | the async runtime for filesystem and (later) network work |
 | `jiff` | Unlicense OR MIT | dates in the panel columns, the clock and the attributes dialog, in the machine's time zone (in place of `chrono`, wound down by its author in November 2026) |
+| `portable-atomic` | Apache-2.0 OR MIT | a 64-bit atomic counter on every processor: 32-bit MIPS has none, and this one takes a lock there |
 | `xterm.js`, `@xterm/addon-fit` | MIT | the terminal in the page `--web-terminal` serves and the Android app shows: 6.0.0 and 0.11.0, the files themselves in `crates/fcmd/assets/webterm/` and compiled into the binary, with the licence beside them |
 | `chrono` | MIT OR Apache-2.0 | carried only by `russh-sftp`, for the file times of the SFTP protocol |
 | `serde`, `toml` | MIT OR Apache-2.0 | configuration, keymaps and themes |

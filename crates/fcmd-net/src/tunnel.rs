@@ -14,8 +14,9 @@
 //! `Spec::everywhere` exists for the case where that is what is meant, and nothing sets it by
 //! accident.
 
+use portable_atomic::AtomicU64;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use tokio::net::TcpListener;

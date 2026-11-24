@@ -73,7 +73,7 @@ type Ended = Result<(), (io::ErrorKind, String)>;
 
 impl Stage {
     fn start(archive: Arc<Archive>, names: Vec<String>, beside: &Path) -> io::Result<Stage> {
-        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        static NEXT: portable_atomic::AtomicU64 = portable_atomic::AtomicU64::new(0);
         let dir = beside.join(format!(
             ".fcmd-unpack-{}-{}",
             std::process::id(),

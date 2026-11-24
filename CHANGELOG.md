@@ -6,6 +6,22 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `FinalCommander-linux-mipsel-static-<v>.tar.gz`: statically linked, for 32-bit
+  little-endian MIPS with soft floating point — routers and boards on a MediaTek MT7621 or
+  its kin, OpenWrt included — built for size, about 21 MB (8.6 MB compressed).
+  `install.sh` picks it on such a machine, and says so on a big-endian one, which has no
+  build.
+
+### Changed
+
+- Rust is now one exact version, 1.100.0, written in `rust-toolchain.toml` and used by every
+  build and every workflow; a newer one comes as a decision, not on its own.
+- Dependencies: `notify` 9 (its polling watcher brings `xxhash-rust`, BSL-1.0, now among the
+  licences allowed), `russh-sftp` 4, `russh` 0.65.4, `toml`, `zip`, `anyhow`, `jiff`; JDK 25
+  for the Android build.
+
 ## [0.46.1] — 2026-11-23
 
 FinalCommander on an iPad or an iPhone, through iSH, and one line to install it anywhere.

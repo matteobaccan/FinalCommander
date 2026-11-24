@@ -59,6 +59,7 @@ jobs:
             os: ubuntu-latest
             target: armv7-unknown-linux-musleabihf
             zig: true
+            qemu: qemu-arm
           # 32-bit x86: old PCs, and iSH, which runs Alpine Linux on an iPad or an iPhone by
           # emulating a 32-bit Intel processor. Cross-compiled with Zig like the one above;
           # the runner's kernel runs it as it is.
@@ -66,6 +67,17 @@ jobs:
             os: ubuntu-latest
             target: i686-unknown-linux-musl
             zig: true
+          # 32-bit MIPS, little-endian (mipsel): routers and boards on MediaTek MT7621 and
+          # its kin, with soft floating point. Rust ships no standard library for it (a tier 3
+          # target), so it is compiled here from rust-src by the same 1.100.0
+          # (`-Zbuild-std`, allowed on a stable compiler by RUSTC_BOOTSTRAP), and optimised
+          # for size: flash on a router is counted in megabytes.
+          - name: linux-mipsel-static
+            os: ubuntu-latest
+            target: mipsel-unknown-linux-musl
+            zig: true
+            build_std: true
+            qemu: qemu-mipsel
           # One binary for both Intel and Apple Silicon.
           - name: macos-universal
             os: macos-latest
@@ -95,14 +107,27 @@ jobs:
       - name: Install Zig, cargo-zigbuild and QEMU
         if: matrix.zig
         run: |
-          rustup target add ${{ matrix.target }}
+          if [ "${{ matrix.build_std }}" = true ]; then
+            rustup component add rust-src
+          else
+            rustup target add ${{ matrix.target }}
+          fi
           pip install ziglang cargo-zigbuild
           sudo apt-get update
           sudo apt-get install -y qemu-user
 
       - name: Build with Zig
-        if: matrix.zig
+        if: matrix.zig && !matrix.build_std
         run: cargo zigbuild --release --locked --target ${{ matrix.target }} -p fcmd
+
+      - name: Build with Zig, the standard library included
+        if: matrix.build_std
+        env:
+          RUSTC_BOOTSTRAP: "1"
+          CARGO_PROFILE_RELEASE_OPT_LEVEL: z
+        run: >
+          cargo zigbuild --release --locked --target ${{ matrix.target }} -p fcmd
+          -Zbuild-std=std,panic_abort
 
       - name: Build
         if: matrix.name != 'macos-universal' && !matrix.zig
@@ -162,7 +187,7 @@ jobs:
           # the one built for another processor.
           case "${{ matrix.name }}" in
             windows-*) "$dir/fcmd.exe" --version ;;
-            linux-armv7-*) qemu-arm "$dir/fcmd" --version ;;
+            linux-armv7-* | linux-mipsel-*) ${{ matrix.qemu }} "$dir/fcmd" --version ;;
             *) "$dir/fcmd" --version ;;
           esac
           # And on Windows it must not need the Visual C++ Redistributable: the C runtime is

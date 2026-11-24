@@ -238,7 +238,7 @@ pub struct FilmState {
 /// A number no other picture in this process has. One counter for every viewer, so the quick
 /// view's picture and the viewer's can share a cache of what was encoded for the screen.
 fn next_picture_serial() -> u64 {
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    static NEXT: portable_atomic::AtomicU64 = portable_atomic::AtomicU64::new(1);
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 

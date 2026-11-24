@@ -10,10 +10,11 @@
 //! decode that can take a second, a film on a slow disk longer, and a file `ffmpeg` cannot
 //! make sense of is given a time limit rather than the benefit of the doubt.
 
+use portable_atomic::AtomicU64;
 use std::ffi::OsString;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 

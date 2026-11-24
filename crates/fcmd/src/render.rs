@@ -9704,7 +9704,7 @@ third line
         press(&mut app, "Space");
         let (_, playing, _) = frame_asked(&mut app);
         let newest = playing.newest.clone();
-        let now = |cell: &std::sync::Arc<std::sync::atomic::AtomicU64>| {
+        let now = |cell: &std::sync::Arc<portable_atomic::AtomicU64>| {
             cell.load(std::sync::atomic::Ordering::Relaxed)
         };
         assert_eq!(now(&newest), playing.number, "the worker plays on");
