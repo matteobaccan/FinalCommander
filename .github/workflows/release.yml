@@ -98,7 +98,7 @@ jobs:
           key: ${{ matrix.name }}
 
       - name: Install the musl toolchain
-        if: endsWith(matrix.target, '-linux-musl')
+        if: endsWith(matrix.target, '-linux-musl') && !matrix.zig
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools
