@@ -753,3 +753,105 @@ signature `aeeed9bb…f604d404`. And the fake checks a presigned request the way
 does, signature first and then the clock, so one test follows a link with a bare HTTP client
 that has no keys and reads the object, and sees a link past its time, one with its duration
 rewritten and one pointed at the object beside it all refused.
+
+## 9. FinalCommander Link: another machine's folder in a panel, on the LAN
+
+Decided with the author on 23–25 November 2026 (`docs/BACKLOG.md`). One FinalCommander shows
+a folder of another, on the same local network, in a panel, as SFTP shows a server's; the
+person at the other machine says yes first, and everything between the two is encrypted. It
+is meant for one's own machines and a colleague's on the same network, not for the
+internet: reaching a machine elsewhere is what SFTP is for.
+
+### 9.1 Identity
+
+- Every installation has an **ID**: nine decimal digits, chosen at random the first time and
+  kept in the state file, shown as `123 456 789` — a number one reads out over the phone. It
+  names a machine; it is not a secret, and knowing it gives nothing without the other side's
+  yes or its PIN.
+- Beside it the installation makes a **key pair** (ECDSA P-256, through `ring`, which is
+  already in the binary) and a self-signed certificate for it, kept in the configuration
+  folder, readable by the user alone. The certificate's SHA-256 is the machine's
+  *fingerprint*; the ID is only how it is found.
+
+### 9.2 Off until asked for
+
+`link.accept` is off by default: a FinalCommander nobody set up answers no one. Turned on
+(*Options → Link*), it listens while it runs — on a TCP port of the system's choosing, and on
+UDP **47831** for discovery — and stops listening when it ends. Calling another machine
+needs nothing turned on.
+
+### 9.3 Finding a machine
+
+- *Connect to…* (in the change-drive dialog, `Alt+F1`/`Alt+F2`, a row *Link* beside NetBox)
+  takes an ID, or lists the machines that answered a broadcast.
+- The caller sends a UDP broadcast `FCMD-LINK/1 who <id>` (or `who *` to list); a machine
+  that accepts calls and has that ID answers to the sender alone with its ID, its name and its
+  TCP port. A broadcast that nobody answers in two seconds is said so.
+- **Private addresses only**, at both ends: RFC 1918, link-local, IPv6 unique-local and
+  link-local, and loopback (the tests). A packet from anything else is dropped unread; a
+  connection to anything else is not attempted.
+
+### 9.4 A call, and the person who says yes
+
+1. The caller opens a TLS 1.3 connection (`rustls`, already in the binary), each side showing
+   its own certificate; neither trusts a certificate authority — each takes the other's
+   fingerprint as what it will check.
+2. **The first time two machines meet**, both screens show the same six digits, derived from
+   both fingerprints; the person on each side compares them (on the phone, or across the
+   room). A machine in the middle would make them differ. Once confirmed, each keeps the
+   other's fingerprint, and a later call that brings a different one is refused and says why.
+3. The caller asks for a **share** and a **mode** (read only, or read and write). The called
+   side shows a dialog over whatever it is doing: who is calling (ID, name, fingerprint's
+   first digits), what is asked, and *Allow read only*, *Allow read and write* (only when
+   the share offers it) and *Refuse*. Nothing is reachable before the answer; no answer in
+   sixty seconds is a refusal.
+4. While a session is open the called side shows it on its status line — `Link: 123 456 789,
+   read only` — and a key ends it at once (`Ctrl+Alt+L`, and the same row in *Options →
+   Link*).
+
+### 9.5 The PIN, for one's own machines
+
+The called side may set a PIN (*Options → Link*), with the mode it grants. A caller that knows
+the PIN is let in without the dialog, in that mode. The PIN is never sent: it is checked
+with SPAKE2 (`spake2`, RustCrypto, MIT OR Apache-2.0) inside the TLS session, bound to both
+fingerprints, so neither a listener nor a fake peer learns it, nor can a captured exchange
+be replayed. Five wrong attempts from one machine lock it out for ten minutes. The PIN is
+kept as a salted hash, never in clear.
+
+### 9.6 What is shared
+
+A share is a folder: the active panel's folder when `link.accept` is turned on from a panel,
+or the list in *Options → Link*, each with *read only* or *read and write*. Never the whole
+disk unless the person adds `/` (or `C:\`) themselves. A path from the caller is resolved
+under the share and refused if it climbs out — `..`, an absolute path, or a symbolic link that
+leads outside — on the called side, whatever the caller sends.
+
+### 9.7 The protocol
+
+Over the TLS stream, frames of a length (four bytes, big-endian) and a JSON body: a request
+with an id, an operation and its arguments, and its answer with the same id. The operations
+are the VFS trait's (§1): `list`, `stat`, `read` (in 256 KiB chunks), `write` (the same,
+then `commit`, which renames a temporary file into place, so a broken transfer leaves no
+half file), `mkdir`, `rename`, `delete`, `set_times`, `set_mode`. **Read only is enforced by
+the called side**: every operation that writes is refused there, whatever a modified caller
+sends; the caller only greys out the keys. The first frame of each side names its version, so
+a later one can say what it does not understand.
+
+### 9.8 On the caller's side
+
+The provider is `link://123456789/share/path`, a VFS like `sftp://` (§3): `F3`–`F8`, copy both
+ways, find, compare and synchronise work on it. The panel's title says the ID, the name and
+the mode. `[[site]]` can keep a Link as it keeps a server, with the PIN in the credential
+store, never in `fcmd.toml`.
+
+### 9.9 Built in two steps
+
+1. Identity, discovery, the call and its dialog, the six digits, TLS, read-only shares,
+   the provider on the caller's side, the status line and its key.
+2. Read and write, the PIN with SPAKE2, the list of shares and of known machines, `[[site]]`.
+
+New crates, each to be measured in the binary before it goes in: `rcgen` (MIT OR Apache-2.0)
+to write the self-signed certificate, and `spake2` for step 2. Tested with two instances in
+one process on loopback: a call refused, one allowed read only whose writes are refused at the
+called end, a path that climbs out, a fingerprint that changed, a wrong PIN locked out, and a
+transfer cut in the middle that leaves nothing behind.

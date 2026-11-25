@@ -50,7 +50,8 @@ anybody who reaches the port. Ours is the same idea the way a remote-desktop pro
 - To settle before the code: the protocol (Noise with `snow`, or TLS with `rustls` and
   self-signed certificates pinned to the ID), the discovery (UDP broadcast on a fixed port, or
   mDNS), which crates and what they cost in the binary, and where the shared folders and the PIN (hashed) are kept. A spec section (SPEC 04, a provider
-  like SFTP's) comes first. **L.**
+  like SFTP's) comes first. **L.** Spec written: SPEC 04 §9, the first step being started
+  after 0.47.0.
 
 ## From hwBro
 
