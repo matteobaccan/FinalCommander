@@ -153,6 +153,22 @@ in **un file solo** e senza niente da installare.
 
 ---
 
+# Le tabelle dBase, senza un altro programma
+
+Un `.dbf` si apre come **tabella**: righe e colonne, anche da 2 GB, subito.
+
+- Legge dBase, Clipper, FoxPro e **Visual FoxPro**, con i **memo** e le code page DOS
+- **Modifica** una cella, **aggiunge**, **cancella** e recupera i record, fa il **Pack**
+- **Somme** delle colonne, solo i record marcati, **esporta** in CSV o in un nuovo DBF
+
+## Prudente con i dati degli altri programmi
+
+- Prima della prima modifica fa un **backup datato**: `CLIENTI.20261125-083015.DBF`
+- Se accanto ci sono gli **indici** della tabella, avvisa che andranno ricostruiti
+- Un valore che non ci sta viene **rifiutato**, mai tagliato
+
+---
+
 # Gli archivi sono cartelle
 
 - `Invio` su un archivio e ci si entra, **come in una cartella**
@@ -179,6 +195,38 @@ in **un file solo** e senza niente da installare.
 
 Copiare tra due server è un normale `F5`.
 Un file remoto si modifica con `F4` e si salva con `F2`.
+
+---
+
+# Link: la cartella di un altro PC, in un pannello
+
+Due FinalCommander sulla **stessa rete locale**, e niente altro da installare.
+
+- Chi condivide: *Comandi → Link: accetta chiamate*. Riceve un **ID di nove cifre**
+- Chi chiama: nel NetBox una sessione *Link* con quell'ID, come un server FTP
+- Sui due schermi compare **lo stesso codice di sei cifre**: si confronta e si accetta
+- Poi la cartella si sfoglia, si legge e si copia come qualsiasi server
+
+## Sicuro per scelta
+
+- Tutto **cifrato**, e solo indirizzi della rete di casa o dell'ufficio
+- **Sola lettura**; `Ctrl+Alt+L` chiude tutte le chiamate
+- Una macchina la cui chiave cambia viene **rifiutata**
+
+---
+
+# Link senza schermo: router e server di casa
+
+```sh
+fcmd --link-pin              # una volta: il PIN
+fcmd --link-serve /mnt/usb   # e la cartella resta raggiungibile
+```
+
+- Gira **senza schermo** su un router OpenWrt, un Raspberry Pi, un server
+- Non c'è nessuno a rispondere: entra solo chi conosce il **PIN**
+- Il PIN **non passa mai in rete**: i due lati dimostrano di conoscerlo senza dirlo
+- Cinque PIN sbagliati bloccano chi chiama per **dieci minuti**
+- Una riga di registro per ogni chiamata; pronto come **servizio** OpenWrt e systemd
 
 ---
 
@@ -255,9 +303,9 @@ Sono stati letti gli elenchi di funzioni dei programmi stessi.
 | Midnight Commander | Unix | pacchetto | SFTP, FTP | no | GPL |
 | Total Commander | Windows | installer | con plugin | no | chiusa |
 | Double Commander | tutti e tre | applicazione grafica | con plugin | no | GPL |
-| **FinalCommander** | **tutti e tre** | **un file** | **SFTP, FTP, WebDAV, S3, IMAP** | **sì** | **MIT** |
+| **FinalCommander** | **tutti e tre** | **un file** | **SFTP, FTP, WebDAV, S3, IMAP, Link** | **sì** | **MIT** |
 
-Archivi, server, editor esadecimale e database non sono plugin da cercare: **sono già dentro**.
+Archivi, server, editor esadecimale, database e tabelle dBase non sono plugin da cercare: **sono già dentro**.
 
 ---
 
