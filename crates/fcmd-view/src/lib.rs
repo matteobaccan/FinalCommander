@@ -7,6 +7,13 @@
 mod aigen;
 pub mod asm;
 pub mod bindiff;
+#[cfg(feature = "dbf")]
+pub mod dbf;
+#[cfg(not(feature = "dbf"))]
+#[path = "dbf_none.rs"]
+pub mod dbf;
+#[cfg(feature = "dbf")]
+pub mod dbf_write;
 pub mod decode;
 pub mod dfm;
 pub mod diff;
@@ -48,6 +55,8 @@ pub use disasm::{
 pub use search::{compile, Match, Pattern, SearchError, SearchMode};
 pub use source::{BytesSource, FileSource, Source};
 pub use table::Table;
+#[cfg(feature = "dbf")]
+pub use view::DbfHere;
 pub use view::{
     film_in, DecodedView, FilmState, Mode, Row, RowKind, Started, Status, Viewer, Wrap,
 };

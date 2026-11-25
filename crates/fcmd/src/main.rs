@@ -2353,6 +2353,17 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         });
                     });
                 }
+                #[cfg(feature = "dbf")]
+                Request::Dbf(ask) => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let result = app::dbf_perform(&ask);
+                        let _ = tx.send(Event::Dbf {
+                            table: ask.table,
+                            result,
+                        });
+                    });
+                }
                 Request::Undo { undo } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || {
@@ -8105,6 +8116,8 @@ dir_attr = "D"
                 // Never for real in a test: the wastebasket is the user's own.
                 | Request::Trash { .. }
                 | Request::StripMeta { .. }
+                // A table is written by the tests that are about writing one.
+                | Request::Dbf(_)
                 // The shared AWS files are the user's own: a test hands the profiles in.
                 | Request::S3Profiles { .. }
                 | Request::S3Link { .. }

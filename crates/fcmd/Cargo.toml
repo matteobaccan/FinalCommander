@@ -57,8 +57,8 @@ nix = { version = "0.32.0", features = ["fs"] }
 [features]
 # Everything, which is what every build but one has. The compact build for small machines —
 # a router's few megabytes of flash — is `--no-default-features`: English alone, and none of
-# WebAssembly, pictures, the x86 disassembler, SQLite or the web terminal; each of those, left
-# out, says so where it would have been.
+# WebAssembly, pictures, the x86 disassembler, SQLite, dBase tables or the web terminal; each of
+# those, left out, says so where it would have been.
 default = ["full"]
 full = [
   "webterm",
@@ -67,7 +67,11 @@ full = [
   "fcmd-view/pictures",
   "fcmd-view/disasm-x86",
   "fcmd-arc/sqlite",
+  "dbf",
 ]
+# dBase tables: read in table mode and written a record at a time. The viewer's half and the
+# dialogs in front of it go in and out together.
+dbf = ["fcmd-view/dbf"]
 webterm = ["dep:sha1"]
 all-languages = ["fcmd-i18n/all-languages"]
 

@@ -62,9 +62,8 @@ database manager. What it has and we do not, from its README; the Link is the se
 
 | Item | Work | Note |
 | --- | --- | --- |
-| **DBF written**: edit a cell in place, append, delete and recall, `Pack` | M | Today a DBF is read only, in table mode (5.19); the memo files and the record layout are already read. **Before the first change** a warning says the table is about to be altered and that a backup is wanted, and offers to make it (the rule below). Refused while CDX or NTX indexes sit beside it, until the row below can keep them right: the author still uses DBF files with Clipper and Harbour programs |
-| **DBF indexes**: CDX and NTX read, an order chosen, scope and seek; rebuilt when written | L | The SIx Driver's CDX included; without them a written DBF leaves its indexes stale |
-| **DBF structure editor**: add, remove and retype fields, the data copied by name, only the indexes whose key changed rebuilt | M | After writing. **The original is never rewritten** (the author, 25 November 2026): a new DBF is made with the new structure and the data, and the old table with its memo (`.dbt`, `.fpt`) and its indexes is renamed with the date and time, `CLIENTI.DBF` → `CLIENTI.20261125-083015.DBF` (year, month, day, then hours, minutes, seconds, so the copies sort by name in the order they were made; the extension kept last so it still opens as a table). The same stamped copy is the backup the row above offers |
+| **DBF indexes**: CDX and NTX read, an order chosen, scope and seek; rebuilt when written | L | The SIx Driver's CDX included; without them a written DBF leaves its indexes stale, which is why a table with index files beside it is not written today (5.19b). Memo fields are written after that |
+| **DBF structure editor**: add, remove and retype fields, the data copied by name, only the indexes whose key changed rebuilt | M | After writing. **The original is never rewritten** (the author, 25 November 2026): a new DBF is made with the new structure and the data, and the old table with its memo (`.dbt`, `.fpt`) and its indexes is renamed with the date and time, `CLIENTI.DBF` → `CLIENTI.20261125-083015.DBF` (year, month, day, then hours, minutes, seconds, so the copies sort by name in the order they were made; the extension kept last so it still opens as a table). The same stamped copy is the backup offered before a table's first change (5.19b) |
 | **xBase commands on a table**: `Append From`, `Copy To`, `Replace`, `Count`, `Sum/Average`, `Reindex`, `Zap`; filters, relations, work areas | L | **Open question**: how much of BroPlus is a file manager's job |
 | **An xBase dot prompt** (`USE`, `INDEX ON`, `SKIP`, `REPLACE`…) | L | **Open question**, as above |
 | **Find files that do *not* contain the text** | S | A check box in the `Alt+F7` dialog |
@@ -253,7 +252,7 @@ Checked against the same sources: none of the programs above does these out of t
 * **A hex editor with a patch list and byte blocks** that go through the job engine; Midnight
   Commander and far2l edit bytes, without either.
 * **Table mode**: CSV, TSV, JSONL and DBF with its memo files as a table that sorts, filters
-  and marks rows.
+  and marks rows; a DBF without indexes is also written, a record at a time, behind a backup.
 * **SQLite databases, JSON documents and mailboxes as folders**, and **IMAP** read as a panel.
   Midnight Commander reads an mbox; nobody reads the other three without a plugin.
 * **A copy that goes on after a crash**, from a journal.

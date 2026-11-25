@@ -69,6 +69,9 @@ image = { version = "0.25.10", optional = true, default-features = false, featur
 wasm = ["dep:wasmprinter", "dep:wasmparser"]
 pictures = ["dep:image"]
 disasm-x86 = ["dep:iced-x86"]
+# dBase tables in table mode, read and written. It costs no crate; it is a feature because a
+# router has no `.dbf` on it, and the compact build is for routers.
+dbf = []
 
 [dev-dependencies]
 tempfile = "3"

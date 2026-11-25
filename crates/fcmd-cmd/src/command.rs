@@ -493,6 +493,14 @@ pub enum Command {
     ViewerTableCopy,
     /// The first line of delimited text is the heading, or it is data.
     ViewerTableHeader,
+    /// Type a new value over the cell of a dBase table the view is on.
+    ViewerDbfEdit,
+    /// Append an empty record to a dBase table.
+    ViewerDbfAppend,
+    /// Delete the record under the cursor, or recall it: the `*` flag, either way.
+    ViewerDbfDelete,
+    /// Take the deleted records out of a dBase table for good.
+    ViewerDbfPack,
     ViewerModeNext,
     ViewerSearch,
     ViewerSearchNext,
@@ -914,6 +922,10 @@ impl Command {
             Command::ViewerTableMarkUp,
             Command::ViewerTableCopy,
             Command::ViewerTableHeader,
+            Command::ViewerDbfEdit,
+            Command::ViewerDbfAppend,
+            Command::ViewerDbfDelete,
+            Command::ViewerDbfPack,
             Command::ViewerModeNext,
             Command::ViewerSearch,
             Command::ViewerSearchNext,
@@ -1266,6 +1278,10 @@ impl Command {
             Command::ViewerTableMarkUp => "viewer.table.mark.up".into(),
             Command::ViewerTableCopy => "viewer.table.copy".into(),
             Command::ViewerTableHeader => "viewer.table.header".into(),
+            Command::ViewerDbfEdit => "viewer.dbf.edit".into(),
+            Command::ViewerDbfAppend => "viewer.dbf.append".into(),
+            Command::ViewerDbfDelete => "viewer.dbf.delete".into(),
+            Command::ViewerDbfPack => "viewer.dbf.pack".into(),
             Command::ViewerTableFilter => "viewer.table.filter".into(),
             Command::ViewerModeNext => "viewer.mode.next".into(),
             Command::ViewerSearch => "viewer.search".into(),
@@ -1598,6 +1614,10 @@ impl Command {
             ("viewer.table.mark.up", _) => Command::ViewerTableMarkUp,
             ("viewer.table.copy", _) => Command::ViewerTableCopy,
             ("viewer.table.header", _) => Command::ViewerTableHeader,
+            ("viewer.dbf.edit", _) => Command::ViewerDbfEdit,
+            ("viewer.dbf.append", _) => Command::ViewerDbfAppend,
+            ("viewer.dbf.delete", _) => Command::ViewerDbfDelete,
+            ("viewer.dbf.pack", _) => Command::ViewerDbfPack,
             ("viewer.table.filter", _) => Command::ViewerTableFilter,
             ("viewer.mode.next", _) => Command::ViewerModeNext,
             ("viewer.search", _) => Command::ViewerSearch,

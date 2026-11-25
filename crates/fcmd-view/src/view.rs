@@ -141,6 +141,19 @@ pub struct Row {
     pub spans: Vec<crate::markdown::Span>,
 }
 
+/// The cell of a dBase table that a command which edits would act on.
+#[cfg(feature = "dbf")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DbfHere {
+    /// Which record of the file, whatever the view is sorted or filtered to.
+    pub record: usize,
+    /// Which field, or `None` on the column of the deletion flag.
+    pub field: Option<usize>,
+    pub deleted: bool,
+    /// What the record shows, field by field: what is offered to be typed over.
+    pub cells: Vec<String>,
+}
+
 /// What the status line needs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Status {
@@ -1597,6 +1610,81 @@ impl Viewer {
             out.push('\n');
         }
         Some((out, rows.len()))
+    }
+
+    /// The header of the dBase table on screen. `None` outside table mode and for a table
+    /// that is not one: the commands that write a table ask this first.
+    #[cfg(feature = "dbf")]
+    pub fn dbf(&mut self) -> Option<&crate::dbf::Dbf> {
+        if self.mode != Mode::Table {
+            return None;
+        }
+        self.parse_table();
+        match &self.table.as_ref()?.records {
+            crate::table::Records::Dbf(dbf) => Some(dbf),
+            crate::table::Records::Read(_) => None,
+        }
+    }
+
+    /// The cell a command that edits would act on: the record under the row cursor and the
+    /// column the view is on — the same column `Ctrl+F3` sorts by. `None` for a table with
+    /// no rows, or one that is not a dBase table.
+    #[cfg(feature = "dbf")]
+    pub fn dbf_here(&mut self) -> Option<DbfHere> {
+        self.dbf()?;
+        let column = self.table_column()?;
+        let (table, source, memo) = (&self.table, &mut self.source, &mut self.memo);
+        let table = table.as_ref()?;
+        let record = table.record_of(self.table_cursor)?;
+        let cells = table.cells(&mut **source, memo.as_deref_mut(), self.table_cursor);
+        Some(DbfHere {
+            record,
+            // The first column is the deletion flag, which is no field of the table.
+            field: column.checked_sub(1),
+            deleted: cells.first().is_some_and(|c| c == "*"),
+            // Without the deletion flag's own cell, so that cell `n` is field `n`.
+            cells: cells.into_iter().skip(1).collect(),
+        })
+    }
+
+    /// Let go of the file, for the moment `Pack` renames a new table over it: on Windows a
+    /// file somebody holds open is not always one that can be replaced. Nothing is read
+    /// until [`Self::dbf_reload`] hands a source back.
+    #[cfg(feature = "dbf")]
+    pub fn dbf_release(&mut self) {
+        self.source = Box::new(crate::source::BytesSource::new(Vec::new()));
+    }
+
+    /// Read the table again after a write that changed how many records it has — a record
+    /// appended, a `Pack` — from `source`, which is the file opened afresh: after a `Pack`
+    /// the old handle is on a file that is no longer the table.
+    ///
+    /// The sort, the filter and the marks go: they were an index over records that have
+    /// moved. The cursor goes to `record`, or stays as near where it was as the table allows.
+    #[cfg(feature = "dbf")]
+    pub fn dbf_reload(&mut self, source: Box<dyn Source>, record: Option<usize>) {
+        self.source = source;
+        self.table = None;
+        self.table_marked.clear();
+        self.parse_table();
+        let rows = self.table.as_ref().map(|t| t.len()).unwrap_or(0);
+        let cursor = record
+            .unwrap_or(self.table_cursor)
+            .min(rows.saturating_sub(1));
+        self.table_cursor = cursor;
+        // The window follows the cursor here; everywhere else it is the other way round.
+        let page = self.table_page.max(1);
+        if cursor < self.table_row {
+            self.table_row = cursor;
+        } else if cursor >= self.table_row + page {
+            self.table_row = cursor + 1 - page;
+        }
+        self.table_row = self.table_row.min(rows.saturating_sub(1));
+        self.top = self
+            .table
+            .as_ref()
+            .map(|t| t.offset(self.table_row))
+            .unwrap_or(0);
     }
 
     /// `Ctrl+H` in a table of delimited text: the first line is the heading, or it is data —
@@ -3552,10 +3640,11 @@ mod tests {
         assert_eq!(v.mode, Mode::Text);
     }
 
+    #[cfg(feature = "dbf")]
     #[test]
     fn a_dbase_table_opens_as_a_table_however_large_it_says_it_is() {
         // The same hand-built table the reader's own test uses.
-        let bytes = crate::table::tests::dbase_bytes();
+        let bytes = crate::dbf::tests::dbase_bytes();
         let mut v = Viewer::new(
             Box::new(BytesSource::new(bytes)),
             VPath::local("/tmp/people.dbf"),
@@ -3571,6 +3660,50 @@ mod tests {
         assert!(note.contains("3 × 2"), "{note}");
         // No delimiter was guessed, because a dBase table has none to guess.
         assert!(!note.contains('`'), "{note}");
+    }
+
+    #[cfg(feature = "dbf")]
+    #[test]
+    fn the_cell_to_edit_is_the_cursors_record_and_the_views_column() {
+        let bytes = crate::dbf::tests::dbase_bytes();
+        let mut v = Viewer::new(
+            Box::new(BytesSource::new(bytes.clone())),
+            VPath::local("/tmp/people.dbf"),
+        );
+        assert_eq!(v.dbf_here(), None, "not in table mode yet");
+        assert!(v.as_table());
+        let _ = texts(&mut v, 40, 6);
+        // The view opens on the deletion flag's column, which is no field.
+        let here = v.dbf_here().expect("a cell");
+        assert_eq!((here.record, here.field, here.deleted), (0, None, false));
+        v.scroll(1, 40, 6);
+        v.scroll_h_column(true);
+        v.scroll_h_column(true);
+        let here = v.dbf_here().expect("a cell");
+        assert_eq!((here.record, here.field, here.deleted), (1, Some(1), true));
+        assert_eq!(v.dbf().and_then(|d| d.field(1)).map(|f| f.kind), Some('D'));
+
+        // A record appended behind the viewer's back is there after a reload, with the
+        // cursor on it and the window moved to show it.
+        let mut longer = bytes.clone();
+        longer.pop();
+        longer.extend_from_slice(b" new       20261125\x1a");
+        longer[4] = 4;
+        v.dbf_reload(Box::new(BytesSource::new(longer)), Some(3));
+        assert_eq!(v.table_rows(), 4);
+        let here = v.dbf_here().expect("a cell");
+        assert_eq!(
+            (here.record, here.cells),
+            (3, vec!["new".into(), "2026-11-25".into()])
+        );
+        // The view is still on the date's column, so that is where the row begins.
+        let rows = texts(&mut v, 40, 6);
+        assert_eq!(rows[5], "2026-11-25");
+
+        // A table of text has no dBase header to give.
+        let mut v = table_viewer("people.csv", "name,age\nmb,51\n");
+        assert!(v.dbf().is_none());
+        assert_eq!(v.dbf_here(), None);
     }
 
     #[test]

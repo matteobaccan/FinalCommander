@@ -196,8 +196,10 @@ after 9 rather than before it, and the status line says what the view is doing �
 `/tor` — so you can always see it. Neither writes anything: what changes is the order the rows
 are read in, the file is untouched, and a search or a bookmark still means the record itself.
 A table of more than two hundred thousand records refuses both and says so, because reading a
-million records for one keystroke is not what this mode is for. Changing a cell is not here on
-purpose: a viewer that writes is an editor, and `F4` is where that lives.
+million records for one keystroke is not what this mode is for. A table of text is never
+written from here: a viewer that writes is an editor, and `F4` is where that lives. The one
+table that is written is a dBase table, a record at a time — see *Changing a dBase table*
+below.
 
 The status line says what the file was read as, which delimiter was *guessed* — a comma, a
 semicolon, a tab, a bar or a caret (`^`), whichever gave a table — and how many rows and
@@ -228,6 +230,65 @@ in front of the fields, where it cannot be mistaken for part of a number.
 The text comes out in the code page the header names, DOS ones included: a table written under
 DOS in Germany is in code page 437, and `temporäre` reads as `temporäre` rather than as
 `tempor„re`.
+
+## Changing a dBase table
+
+A `.dbf` on a local disk can be changed where it is read, a record at a time. The keys are the
+panels' own with `Ctrl` held, as sorting is:
+
+| Key | What it does |
+| --- | --- |
+| `Ctrl+F4` | type a new value over the cell: the cursor's record, the column the view is on (`Ctrl+←`/`Ctrl+→` choose it) |
+| `Ctrl+N` | append an empty record, and put the cursor on it to be filled in |
+| `Ctrl+F8` | delete the record under the cursor, or recall it: the `*` in the first column |
+| `Shift+Del` | `Pack`: take the deleted records out for good |
+
+**Before the first change** to a table in a session a dialog says the table is about to be
+altered and that a backup is wanted first, and makes it: a copy of the table and of its memo
+file beside them, named with the date and the time — `CLIENTI.DBF` becomes
+`CLIENTI.20261125-083015.DBF`, `CLIENTI.DBT` becomes `CLIENTI.20261125-083015.DBT` — year,
+month, day, then hours, minutes and seconds, so the copies sort by name in the order they
+were made, and the extension last, so a copy still opens as a table. The buttons are *Back up
+and edit* and *Cancel*, and nothing is written before the answer. After it, the other changes
+of that session to that table go straight through.
+
+**A table with index files beside it is not written at all.** A `.cdx` or an `.mdx` with the
+table's name, or any `.ntx`, `.nsx` or `.idx` in the folder — an index of that kind is named
+by whoever made it, and nothing in it says which table it belongs to — and the message names
+the files. The reason is the programs those tables belong to: an index holds a copy of the
+keys, a record changed behind its back leaves it pointing at what is no longer there, and a
+Clipper, Harbour or FoxPro program that trusts it then finds the wrong record. FinalCommander
+does not keep indexes up to date, so it leaves such a table alone.
+
+What is typed is checked against the field, and written exactly or not at all:
+
+- a **character** field takes what fits in its width, in the table's own code page. A letter
+  that page has no byte for is refused and named, never replaced with a `?`. A table whose
+  header names no code page — a Clipper table does not — or a DOS page this program reads only
+  approximately (850, 852 and their kin) takes plain ASCII alone, for the same reason: a
+  guessed `è` would land on the wrong byte;
+- a **number** (`N`, `F`) is digits, a minus sign and a decimal point, laid out to the field's
+  width and decimals. `12.5` goes into two decimals as `12.50`; `12.505` does not go, because
+  it would have to be rounded;
+- a **date** is typed the way it is shown, `1975-03-12` (the eight digits alone are taken
+  too), and has to be a day of the calendar;
+- a **logical** is `true` or `false` (`T`, `F`, `Y`, `N` are taken too);
+- an empty answer empties the field;
+- a **memo** field, and the binary types (integer, currency, double, date-time), are shown
+  and not written: the key says so.
+
+`Pack` counts the deleted records first and asks, saying how many will go. It does not rewrite
+the table where it stands: the records that stay are written to a new file beside it, and when
+that file is whole it is renamed into place — there is never half a packed table on disk.
+
+Every change leaves the header right — the record count, the date of the last update, the
+end-of-file byte after the last record. The table is opened for writing only for the moment
+of each change, so a program that has it open is not kept waiting; when the table cannot be
+opened for writing — read-only, or held by another program — the status line says so and
+nothing changes. A table that another program restructured while it was on screen is not
+written either: open it again. A table inside an archive or on a server is a copy, and is not
+changed. A Visual FoxPro table with a field it numbers by itself does not take a new record
+here.
 
 Like a laid-out Markdown document, a text table is read whole — a column's width cannot be
 known from the part of the file on screen — so over sixteen megabytes the file opens as text

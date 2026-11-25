@@ -47,7 +47,7 @@ Roadmap item 18, shipped. A tag builds eleven archives and publishes them, with 
 | `FinalCommander-linux-aarch64-static-<v>.tar.gz` | musl, static, for ARM 64-bit, built on an ARM runner |
 | `FinalCommander-linux-i686-static-<v>.tar.gz` | musl, static, for 32-bit x86 — and iSH on iOS — cross-compiled with Zig |
 | `FinalCommander-linux-mipsel-static-<v>.tar.gz` | musl, static, for 32-bit little-endian MIPS with soft floating point (routers); a tier 3 target, so the standard library is compiled from `rust-src` by the same Rust (`-Zbuild-std` under `RUSTC_BOOTSTRAP`), with `opt-level = "z"`; tried under QEMU |
-| `FinalCommander-linux-mipsel-compact-static-<v>.tar.gz` | the same, compact: `--no-default-features` — English alone, and none of WebAssembly, pictures, the x86 disassembler, SQLite or the web terminal, each of which says so where it would have been |
+| `FinalCommander-linux-mipsel-compact-static-<v>.tar.gz` | the same, compact: `--no-default-features` — English alone, and none of WebAssembly, pictures, the x86 disassembler, SQLite, dBase tables or the web terminal, each of which says so where it would have been |
 | `FinalCommander-linux-mips-static-<v>.tar.gz`, `…-linux-mips-compact-static-…` | the two above for big-endian MIPS (older Atheros and Qualcomm routers) |
 | `FinalCommander-linux-armv7-static-<v>.tar.gz` | musl, static, for 32-bit ARM (ARMv7, hard float), cross-compiled with Zig and tried under QEMU |
 | `FinalCommander-macos-universal-<v>.tar.gz` | one binary for Intel and Apple Silicon |

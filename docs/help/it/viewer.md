@@ -209,8 +209,9 @@ la vista — `↑name`, `/tor` — così lo vedi sempre. Nessuno dei due scrive 
 l'ordine in cui le righe si leggono, il file resta com'è, e una ricerca o un segnalibro
 continuano a voler dire il record. Una tabella di più di duecentomila record li rifiuta
 entrambi e lo dice, perché leggere un milione di record per un tasto non è a cosa serve questa
-modalità. Modificare una cella non c'è di proposito: un visualizzatore che scrive è un editor,
-e quello sta in `F4`.
+modalità. Una tabella di testo da qui non si scrive mai: un visualizzatore che scrive è un
+editor, e quello sta in `F4`. L'unica tabella che si scrive è una tabella dBase, un record alla
+volta — vedi *Modificare una tabella dBase* più sotto.
 
 La riga di stato dice come è stato letto il file, quale separatore è stato *indovinato* — una
 virgola, un punto e virgola, una tabulazione, una barra o un accento circonflesso (`^`), quello
@@ -243,6 +244,67 @@ dove non si può confondere con parte di un numero.
 Il testo viene fuori nella code page che la testata nomina, comprese quelle DOS: una tabella
 scritta sotto DOS in Germania è in code page 437, e `temporäre` si legge `temporäre` e non
 `tempor„re`.
+
+## Modificare una tabella dBase
+
+Un `.dbf` su un disco locale si può modificare lì dove lo si legge, un record alla volta. I
+tasti sono quelli dei pannelli con `Ctrl` premuto, come per l'ordinamento:
+
+| Tasto | Che cosa fa |
+| --- | --- |
+| `Ctrl+F4` | scrive un nuovo valore sulla cella: il record del cursore, la colonna su cui è la vista (`Ctrl+←`/`Ctrl+→` la scelgono) |
+| `Ctrl+N` | aggiunge un record vuoto e ci porta il cursore, per riempirlo |
+| `Ctrl+F8` | cancella il record sotto il cursore, o lo richiama: l'asterisco nella prima colonna |
+| `Shift+Canc` | `Pack`: toglie per sempre i record cancellati |
+
+**Prima della prima modifica** a una tabella in una sessione, un dialogo dice che la tabella
+sta per essere modificata e che prima serve una copia di sicurezza, e la fa: una copia della
+tabella e del suo file memo accanto a loro, con la data e l'ora nel nome — `CLIENTI.DBF`
+diventa `CLIENTI.20261125-083015.DBF`, `CLIENTI.DBT` diventa `CLIENTI.20261125-083015.DBT` —
+anno, mese, giorno, poi ore, minuti e secondi, così le copie in ordine di nome sono in ordine
+di tempo, e l'estensione per ultima, così una copia si apre ancora come tabella. I pulsanti
+sono *Copia e modifica* e *Annulla*, e prima della risposta non viene scritto niente. Dopo, le
+altre modifiche di quella sessione a quella tabella passano senza domande.
+
+**Una tabella con dei file indice accanto non viene scritta affatto.** Un `.cdx` o un `.mdx`
+con il nome della tabella, oppure un qualsiasi `.ntx`, `.nsx` o `.idx` nella cartella — a un
+indice di quel tipo il nome lo dà chi lo crea, e dentro non c'è scritto di quale tabella è — e
+il messaggio nomina i file. Il motivo sono i programmi a cui quelle tabelle appartengono: un
+indice tiene una copia delle chiavi, un record cambiato alle sue spalle lo lascia puntato su
+qualcosa che non c'è più, e un programma Clipper, Harbour o FoxPro che se ne fida trova poi il
+record sbagliato. FinalCommander non tiene aggiornati gli indici, quindi una tabella così la
+lascia stare.
+
+Quello che si scrive viene controllato con il campo, e scritto esattamente o per niente:
+
+- un campo **carattere** prende quello che sta nella sua larghezza, nella code page della
+  tabella. Una lettera per cui quella pagina non ha un byte viene rifiutata e nominata, mai
+  sostituita con un `?`. Una tabella la cui testata non nomina una code page — una tabella
+  Clipper non lo fa — o una pagina DOS che questo programma legge solo per approssimazione
+  (850, 852 e simili) prende solo ASCII, per lo stesso motivo: una `è` tirata a indovinare
+  finirebbe sul byte sbagliato;
+- un **numero** (`N`, `F`) è fatto di cifre, un segno meno e un punto decimale, e viene
+  disposto secondo larghezza e decimali del campo. `12.5` entra in due decimali come `12.50`;
+  `12.505` non entra, perché andrebbe arrotondato;
+- una **data** si scrive come la si vede, `1975-03-12` (vanno bene anche le otto cifre da
+  sole), e deve essere un giorno del calendario;
+- un **logico** è `true` o `false` (vanno bene anche `T`, `F`, `Y`, `N`);
+- una risposta vuota svuota il campo;
+- un campo **memo**, e i tipi binari (intero, valuta, doppia precisione, data e ora), vengono
+  mostrati e non scritti: il tasto lo dice.
+
+`Pack` prima conta i record cancellati e chiede, dicendo quanti se ne andranno. Non riscrive la
+tabella lì dov'è: i record che restano vengono scritti in un file nuovo accanto, e quando quel
+file è intero viene rinominato al suo posto — su disco non c'è mai mezza tabella compattata.
+
+Ogni modifica lascia la testata a posto — il numero dei record, la data dell'ultimo
+aggiornamento, il byte di fine file dopo l'ultimo record. La tabella viene aperta in scrittura
+solo per l'istante di ogni modifica, così un programma che la tiene aperta non resta ad
+aspettare; quando non si riesce ad aprirla in scrittura — sola lettura, o tenuta da un altro
+programma — la riga di stato lo dice e non cambia niente. Nemmeno una tabella che un altro
+programma ha ristrutturato mentre era a video viene scritta: va riaperta. Una tabella dentro
+un archivio o su un server è una copia, e non viene modificata. Una tabella Visual FoxPro con
+un campo che numera da sola qui non prende record nuovi.
 
 Come un documento Markdown impaginato, una tabella di testo viene letta tutta — la larghezza di
 una colonna non si può sapere dal pezzo di file che è sullo schermo — quindi oltre i sedici

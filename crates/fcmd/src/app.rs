@@ -20,6 +20,14 @@ use crate::form::{Form, Pick, PickRow, TextEdit};
 use crate::menu::{self, Action, FormKind, Mark, PickKind};
 use crate::panel::Panel;
 
+#[cfg(feature = "dbf")]
+#[path = "dbfedit.rs"]
+mod dbfedit;
+#[cfg(feature = "dbf")]
+use dbfedit::memo_file;
+#[cfg(feature = "dbf")]
+pub use dbfedit::{perform as dbf_perform, DbfAsk, DbfDone, DbfFailed, DbfStep};
+
 /// How long a kept PowerShell has to reach its first marked prompt before it is given up on
 /// for the session. PowerShell starts slowly — a second or two, more with a profile — so this
 /// is generous; what it guards against is a wait with no end.
@@ -186,6 +194,10 @@ pub enum Request {
         line: String,
         cwd: std::path::PathBuf,
     },
+    /// A write to a dBase table, its backup, or the count `Pack` asks about first
+    /// (SPEC 05 §1.11): the table is opened for that alone, off the screen's thread.
+    #[cfg(feature = "dbf")]
+    Dbf(Box<DbfAsk>),
     /// Walk every file under `root` for the branch view (SPEC 02 §3d).
     Branch {
         panel: usize,
@@ -1510,6 +1522,12 @@ pub enum Event {
         untouched: usize,
         errors: Vec<String>,
     },
+    /// What a write to a dBase table did, or why it did not.
+    #[cfg(feature = "dbf")]
+    Dbf {
+        table: PathBuf,
+        result: Result<DbfDone, DbfFailed>,
+    },
     /// A picture encoded for the terminal, or `None` where the encoder had nothing to give.
     Pixels {
         key: crate::pixels::Key,
@@ -1926,6 +1944,12 @@ pub enum PromptKind {
     OutputSearch,
     /// What the table's rows have to hold to stay on the screen (SPEC 05 §1.11).
     TableFilter,
+    /// The new value of one cell of a dBase table: which record, which field.
+    #[cfg(feature = "dbf")]
+    DbfCell {
+        record: usize,
+        field: usize,
+    },
     /// Offset or percentage for the viewer.
     ViewerGoto,
     EditorGoto,
@@ -2365,6 +2389,9 @@ pub enum ConfirmAction {
     DiscardHex,
     /// Send the files under the cursor or marked to the printer, with this command line.
     Print { line: String },
+    /// Back a dBase table up before its first change, or pack it (SPEC 05 §1.11).
+    #[cfg(feature = "dbf")]
+    Dbf(DbfStep),
     /// Save over a file that changed on disk since it was opened.
     OverwriteChanged,
     /// Write the editor's copy over a remote file that changed on the server.
@@ -2472,6 +2499,10 @@ impl ConfirmAction {
             ConfirmAction::GitDiscard { .. } => "btn-discard",
             ConfirmAction::KillProcess { .. } => "btn-kill",
             ConfirmAction::Print { .. } => "btn-print",
+            #[cfg(feature = "dbf")]
+            ConfirmAction::Dbf(DbfStep::Backup { .. }) => "btn-dbf-backup",
+            #[cfg(feature = "dbf")]
+            ConfirmAction::Dbf(DbfStep::Pack { .. }) => "btn-dbf-pack",
         }
     }
 
@@ -3500,6 +3531,9 @@ pub struct App {
     pub last_search: Option<String>,
     /// The viewer, parked while one of its prompts is open.
     viewer_under_prompt: Option<Box<Viewer>>,
+    /// The dBase tables written in this session: which have had their backup.
+    #[cfg(feature = "dbf")]
+    dbf: dbfedit::DbfSession,
     /// The editor, parked while one of its prompts or confirmations is open.
     editor_parked: Option<Box<Editor>>,
     /// The menu bar was opened over a screen — `F9` in the editor — which is parked until the
@@ -4019,6 +4053,8 @@ impl App {
             search_case_insensitive: true,
             last_search: None,
             viewer_under_prompt: None,
+            #[cfg(feature = "dbf")]
+            dbf: Default::default(),
             editor_parked: None,
             screen_under_menu: false,
             replace_naming: None,
@@ -4476,6 +4512,8 @@ impl App {
                 seconds,
                 result,
             } => self.s3_link_made(&name, seconds, result),
+            #[cfg(feature = "dbf")]
+            Event::Dbf { table, result } => self.dbf_done(table, result),
             Event::StripDone {
                 done,
                 removed,
@@ -6318,6 +6356,9 @@ impl App {
                 );
                 if !close {
                     self.mode = Mode::Message { title, lines };
+                } else {
+                    // A message shown over the viewer goes back to it.
+                    self.restore_viewer();
                 }
             }
             Mode::MacroKey { steps } => self.macro_key(key, steps),
@@ -6563,6 +6604,8 @@ impl App {
             }
             KeyCode::Enter if confirm.button != 0 => {
                 self.mode = Mode::Normal;
+                // A question asked over the viewer gives the viewer back when it is refused.
+                self.restore_viewer();
                 self.restore_editor();
                 self.restore_hex();
                 return;
@@ -6617,6 +6660,8 @@ impl App {
                         self.trash_clash_answer(side, items, OnClash::Overwrite)
                     }
                     ConfirmAction::Print { line } => self.send_to_printer(line),
+                    #[cfg(feature = "dbf")]
+                    ConfirmAction::Dbf(step) => self.dbf_confirmed(step),
                     ConfirmAction::DiscardHex => {
                         self.hex_parked = None;
                         self.leave_screen();
@@ -6699,7 +6744,9 @@ impl App {
             }
             KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::F(10) => {
                 self.mode = Mode::Normal;
-                // A refused confirmation gives the editor back, not a lost buffer.
+                // A refused confirmation gives the editor back, not a lost buffer — and the
+                // viewer, where the question was asked over one.
+                self.restore_viewer();
                 self.restore_editor();
                 self.restore_hex();
             }
@@ -8622,6 +8669,10 @@ impl App {
                     }
                 }
                 self.reopen_bookmarks(side, row);
+            }
+            #[cfg(feature = "dbf")]
+            PromptKind::DbfCell { record, field } => {
+                self.dbf_cell_typed(record, field, prompt.text);
             }
             PromptKind::TableFilter => {
                 let needle = prompt.text.trim().to_string();
@@ -13609,6 +13660,15 @@ impl App {
                     }
                 }
             }
+            // Writing a dBase table: a cell, a new record, the deletion mark, `Pack`.
+            Command::ViewerDbfEdit
+            | Command::ViewerDbfAppend
+            | Command::ViewerDbfDelete
+            | Command::ViewerDbfPack
+                if self.mode.viewer().is_some() =>
+            {
+                self.dbf_command(cmd)
+            }
             Command::ViewerTableFilter if self.mode.viewer().is_some() => {
                 let title = self.i18n.t("table-prompt-filter");
                 let now = self
@@ -14250,6 +14310,7 @@ impl App {
                 // an archive, on a server — is not the viewer's to decide, and here it is a
                 // path on disk: the bytes of a remote table have already been fetched to
                 // one, and its memo file has not, so there is nothing to open then.
+                #[cfg(feature = "dbf")]
                 if let Some(memo) = memo_file(local) {
                     if let Ok(memo) = FileSource::open(&memo) {
                         viewer.attach_memo(Box::new(memo));
@@ -30237,6 +30298,12 @@ impl App {
         }
     }
 
+    /// The commands that write a dBase table, in the build that has no dBase tables.
+    #[cfg(not(feature = "dbf"))]
+    fn dbf_command(&mut self, _cmd: Command) {
+        self.set_error("DBF tables are not in this build of FinalCommander");
+    }
+
     /// Put the viewer back when its prompt closes.
     fn restore_viewer(&mut self) {
         if let Some(viewer) = self.viewer_under_prompt.take() {
@@ -34128,6 +34195,8 @@ fn keybar_label(cmd: Command) -> Option<&'static str> {
         Command::ViewerToPanel => "key-to-panel",
         Command::ViewerTableSort => "key-sort",
         Command::ViewerTableFilter => "key-filter",
+        Command::ViewerDbfEdit => "key-edit",
+        Command::ViewerDbfDelete => "key-delete",
         Command::ViewerBlame => "key-blame",
         _ => return None,
     })
@@ -34136,46 +34205,6 @@ fn keybar_label(cmd: Command) -> Option<&'static str> {
 /// Which part of the help a command belongs under, and in what order the parts come. The
 /// identifier's own prefix says it, which is the point of the identifiers being shaped that
 /// way: `file.copy` is a file operation whether or not anyone remembered to say so.
-/// The memo file beside a dBase table, if the table has one and it is there.
-///
-/// dBase writes `.dbt`, FoxPro writes `.fpt`, and either may be spelled in capitals beside a
-/// table spelled in capitals — a DOS habit that outlived DOS. Nothing else is guessed at: a
-/// file that is not a `.dbf` has no memo file, and a name that is there is used as it is.
-fn memo_file(table: &std::path::Path) -> Option<std::path::PathBuf> {
-    let name = table.file_name()?.to_string_lossy().into_owned();
-    let (stem, ext) = name.rsplit_once('.')?;
-    if !ext.eq_ignore_ascii_case("dbf") {
-        return None;
-    }
-    let upper = ext.chars().all(|c| c.is_ascii_uppercase());
-    for memo in ["dbt", "fpt"] {
-        let memo = if upper {
-            memo.to_uppercase()
-        } else {
-            memo.into()
-        };
-        let beside = table.with_file_name(format!("{stem}.{memo}"));
-        if beside.is_file() {
-            return Some(beside);
-        }
-        // And the other spelling, for a table whose two files disagree about it.
-        let beside = table.with_file_name(format!("{stem}.{}", flip_case(&memo)));
-        if beside.is_file() {
-            return Some(beside);
-        }
-    }
-    None
-}
-
-/// `dbt` ↔ `DBT`: the other spelling of an extension, for the case above.
-fn flip_case(ext: &str) -> String {
-    if ext.chars().all(|c| c.is_ascii_uppercase()) {
-        ext.to_lowercase()
-    } else {
-        ext.to_uppercase()
-    }
-}
-
 /// One path, quoted for the shell that is about to be handed the line.
 ///
 /// Single quotes everywhere a POSIX shell is what runs it, and double quotes for `cmd.exe`,
@@ -43861,6 +43890,7 @@ run = ["echo one", "echo two", "echo three"]
         assert_eq!(app.panel().cursor, found + 1);
     }
 
+    #[cfg(feature = "dbf")]
     #[test]
     fn the_memo_file_beside_a_table_is_found_by_either_spelling() {
         let dir = tempfile::tempdir().unwrap();
@@ -57061,5 +57091,12 @@ abcdefghij
         let lines = print_requests(&mut app);
         assert_eq!(lines.len(), 1, "{lines:?}");
         assert!(lines[0].starts_with("lpr -P office ") && lines[0].contains("read.txt"));
+    }
+
+    /// The dialogs in front of a dBase table being written, in a file of their own: a child
+    /// of this module, so that it has `app()`, `press` and `type_text`.
+    #[cfg(feature = "dbf")]
+    mod dbase_tables {
+        include!("dbfedit_tests.rs");
     }
 }

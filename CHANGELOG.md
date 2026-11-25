@@ -16,6 +16,28 @@ Notable changes, newest first. The format follows
   private addresses only, a changed key refused; `LINK` in the corner of the status line
   while calls are accepted, with the number of callers, and `Ctrl+Alt+L` hangs them all up.
   Settings `link.accept`, `link.name`, `link.share`.
+- **A dBase table can be changed where it is read.** In table mode, on a local `.dbf`:
+  `Ctrl+F4` types a new value over the cell, `Ctrl+N` appends an empty record, `Ctrl+F8`
+  deletes the record under the cursor or recalls it, and `Shift+Del` is `Pack`, which takes
+  the deleted records out for good after saying how many. Character, numeric, float, date and
+  logical fields are written, each checked against its type, width and decimals: a value that
+  does not fit is refused by name and never cut or rounded, a date is typed the way it is
+  shown, and text goes in the table's own code page — a letter that page has no byte for is
+  refused, not replaced, and a table that names no code page (a Clipper table) takes ASCII
+  alone. Memo fields and the binary types are shown and not written yet.
+- **The rules a table written by other programs needs** (the author's, 25 November 2026).
+  Before the first change to a table in a session a dialog says it is about to be altered and
+  makes a backup — the table and its memo file copied beside themselves with the date and time
+  in the name, `CLIENTI.DBF` → `CLIENTI.20261125-083015.DBF`, the extension kept last — or the
+  change is not made. A table with index files beside it (`.cdx` or `.mdx` of its name, any
+  `.ntx`, `.nsx` or `.idx`) is not written at all, and the message says why: Clipper and
+  Harbour programs would be left with stale indexes. `Pack` writes a new file and renames it
+  into place, so there is never half a table on disk; every other change is one record
+  written, with the header's count, date and end-of-file byte kept right. The table is opened
+  for writing only for the moment of each change, and a table another program holds says so.
+- dBase tables are a build feature, `dbf`, in every build but the compact one
+  (`--no-default-features`, the `-compact-` MIPS archives): there a `.dbf` opens as bytes and
+  the keys above say that dBase tables are not in the build.
 
 ### Fixed
 

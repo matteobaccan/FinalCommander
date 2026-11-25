@@ -832,6 +832,31 @@ keys = ["Ctrl+H"]
 scope = "viewer"
 cmd = "viewer.table.header"
 
+# Writing a dBase table (SPEC 05 §1.11). The keys are the panels' own with `Ctrl` held, as
+# sorting is: `F4` edits and `Ctrl+F4` edits the cell, `F8` deletes and `Ctrl+F8` deletes the
+# record — or recalls it, the flag being the whole of a dBase deletion. `Ctrl+N` is a new
+# record, as it is a new anything everywhere else. `Shift+Del` is the delete that cannot be
+# taken back, here as in the panels: `Pack`, which removes the deleted records for good.
+[[bind]]
+keys = ["Ctrl+F4"]
+scope = "viewer"
+cmd = "viewer.dbf.edit"
+
+[[bind]]
+keys = ["Ctrl+N"]
+scope = "viewer"
+cmd = "viewer.dbf.append"
+
+[[bind]]
+keys = ["Ctrl+F8"]
+scope = "viewer"
+cmd = "viewer.dbf.delete"
+
+[[bind]]
+keys = ["Shift+Del"]
+scope = "viewer"
+cmd = "viewer.dbf.pack"
+
 [[bind]]
 keys = ["Shift+F4"]
 scope = "viewer"
