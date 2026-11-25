@@ -792,7 +792,7 @@ dependencies = [
  "encoding_rs",
  "fcmd-core",
  "flate2",
- "lzma-rust2",
+ "lzma-rust2 0.25.0",
  "portable-atomic",
  "regex",
  "rusqlite",
@@ -1865,6 +1865,12 @@ checksum = "ef1d73c59a56771343712b22ea5615092c612c16ba291c0979e3105dfeec4890"
 dependencies = [
  "sha2",
 ]
+
+[[package]]
+name = "lzma-rust2"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c7861572250348d13073a9035c6a83f3e583ec9a76a65ce92f338fe1107d8f5"
 
 [[package]]
 name = "md5"
@@ -3065,9 +3071,9 @@ dependencies = [
 
 [[package]]
 name = "sevenz-rust2"
-version = "0.25.0"
+version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5e465701779cbc6d0d10cf907f175035cfdd50b8d3cb628d7f1f435ef02972f"
+checksum = "44b708f5f09d8b9330e7660acab5d2a4a2a6a485724459ccfc15bca976d1688d"
 dependencies = [
  "aes",
  "bzip2",
@@ -3076,7 +3082,7 @@ dependencies = [
  "flate2",
  "getrandom 0.4.3",
  "js-sys",
- "lzma-rust2",
+ "lzma-rust2 0.26.0",
  "ppmd-rust",
  "sha2",
  "wasm-bindgen",
@@ -4245,7 +4251,7 @@ dependencies = [
  "getrandom 0.4.3",
  "indexmap",
  "libc",
- "lzma-rust2",
+ "lzma-rust2 0.25.0",
  "memchr",
  "nix 0.32.0",
  "typed-path",
