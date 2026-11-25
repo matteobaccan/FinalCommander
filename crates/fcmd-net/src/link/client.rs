@@ -496,6 +496,48 @@ mod tests {
         assert!(!dir.path().join("shared/x").exists());
     }
 
+    struct HangingGate {
+        shares: Vec<Share>,
+        hang: tokio::sync::watch::Sender<u64>,
+    }
+
+    #[async_trait]
+    impl Gate for HangingGate {
+        fn shares(&self) -> Vec<Share> {
+            self.shares.clone()
+        }
+        async fn admit(&self, _caller: &Caller) -> Admission {
+            Admission::ReadOnly
+        }
+        fn hang_up(&self) -> Option<tokio::sync::watch::Receiver<u64>> {
+            Some(self.hang.subscribe())
+        }
+    }
+
+    #[tokio::test]
+    async fn the_called_side_can_hang_up() {
+        let dir = tree();
+        let (hang, _) = tokio::sync::watch::channel(0u64);
+        let gate = Arc::new(HangingGate {
+            shares: vec![Share::new("docs", &dir.path().join("shared"), false).unwrap()],
+            hang,
+        });
+        let them = Arc::new(Identity::generate("there").unwrap());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let g: Arc<dyn Gate> = gate.clone();
+        tokio::spawn(serve(listener, them, g));
+        let me = Identity::generate("here").unwrap();
+        let fs = call(addr, &me).await.unwrap().ask("", false).await.unwrap();
+        assert!(fs.stat("/small.txt", true).await.is_ok());
+        gate.hang.send_modify(|n| *n += 1);
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert!(
+            fs.stat("/small.txt", true).await.is_err(),
+            "the session is over"
+        );
+    }
+
     #[tokio::test]
     async fn a_refused_call_opens_nothing() {
         let dir = tree();

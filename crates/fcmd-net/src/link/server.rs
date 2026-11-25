@@ -64,6 +64,11 @@ pub trait Gate: Send + Sync {
     fn opened(&self, _caller: &Caller, _write: bool) {}
     /// It ended.
     fn closed(&self, _caller: &Caller) {}
+    /// A signal that ends every open session at once (`Ctrl+Alt+L` on this side): each
+    /// change of the value hangs up.
+    fn hang_up(&self) -> Option<tokio::sync::watch::Receiver<u64>> {
+        None
+    }
 }
 
 /// Accept calls until the listener fails. Connections from outside the local network are
@@ -169,7 +174,16 @@ async fn connection(
     )
     .await?;
     gate.opened(&caller, write);
-    let result = session(&mut tls, &share, write).await;
+    let result = match gate.hang_up() {
+        Some(mut hang_up) => {
+            hang_up.borrow_and_update();
+            tokio::select! {
+                result = session(&mut tls, &share, write) => result,
+                _ = hang_up.changed() => Ok(()),
+            }
+        }
+        None => session(&mut tls, &share, write).await,
+    };
     gate.closed(&caller);
     result
 }

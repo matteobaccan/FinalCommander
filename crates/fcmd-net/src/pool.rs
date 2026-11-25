@@ -18,6 +18,8 @@ use crate::ssh::{self, HostKeyPolicy};
 pub struct Pool {
     connections: Mutex<BTreeMap<String, Remote>>,
     policy: Mutex<HostKeyPolicy>,
+    /// How to call a Link site; `None` until the program has an identity to call with.
+    link: Mutex<Option<Arc<crate::link::Dialer>>>,
 }
 
 impl Pool {
@@ -27,6 +29,11 @@ impl Pool {
 
     pub fn policy(&self) -> HostKeyPolicy {
         self.policy.lock().expect("pool").clone()
+    }
+
+    /// Give the pool what it needs to open `link://` sites (SPEC 04 §9.8).
+    pub fn set_link(&self, dialer: crate::link::Dialer) {
+        *self.link.lock().expect("pool") = Some(Arc::new(dialer));
     }
 
     pub fn set_policy(&self, policy: HostKeyPolicy) {
@@ -76,20 +83,30 @@ impl Pool {
         {
             return Ok(existing);
         }
-        let remote = match site.scheme {
-            fcmd_core::Scheme::Ftp | fcmd_core::Scheme::Ftps => {
-                crate::ftp::connect(site, secret).await?
-            }
-            fcmd_core::Scheme::Dav | fcmd_core::Scheme::Davs => {
-                crate::dav::connect(site, secret).await?
-            }
-            fcmd_core::Scheme::Imap | fcmd_core::Scheme::Imaps => {
-                crate::imap::connect(site, secret).await?
-            }
-            // SFTP, and whatever else carries an authority: the SSH client says what it
-            // cannot do more clearly than a match arm here could.
-            _ => ssh::connect(site, secret, &self.policy()).await?,
-        };
+        let remote =
+            match site.scheme {
+                fcmd_core::Scheme::Ftp | fcmd_core::Scheme::Ftps => {
+                    crate::ftp::connect(site, secret).await?
+                }
+                fcmd_core::Scheme::Dav | fcmd_core::Scheme::Davs => {
+                    crate::dav::connect(site, secret).await?
+                }
+                fcmd_core::Scheme::Imap | fcmd_core::Scheme::Imaps => {
+                    crate::imap::connect(site, secret).await?
+                }
+                fcmd_core::Scheme::Link => {
+                    let dialer = self.link.lock().expect("pool").clone().ok_or_else(|| {
+                        NetError::Connect {
+                            host: format!("link {}", site.host),
+                            detail: "the Link is not available in this run".into(),
+                        }
+                    })?;
+                    dialer.connect(site, secret).await?
+                }
+                // SFTP, and whatever else carries an authority: the SSH client says what it
+                // cannot do more clearly than a match arm here could.
+                _ => ssh::connect(site, secret, &self.policy()).await?,
+            };
         // The user said yes to one host key, not to every host from now on.
         self.accept_new_host_key(false);
         self.insert(remote.clone());

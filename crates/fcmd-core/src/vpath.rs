@@ -27,6 +27,9 @@ pub enum Scheme {
     Imap,
     /// IMAP over TLS from the first byte, port 993 — what mail providers offer.
     Imaps,
+    /// Another FinalCommander on the local network (SPEC 04 §9): the authority's host is its
+    /// nine-digit ID, the user the share's name, and the machine is found by broadcast.
+    Link,
 }
 
 impl Scheme {
@@ -41,6 +44,7 @@ impl Scheme {
             Scheme::Davs => "davs",
             Scheme::Imap => "imap",
             Scheme::Imaps => "imaps",
+            Scheme::Link => "link",
         }
     }
 
@@ -58,6 +62,7 @@ impl Scheme {
             "davs" | "webdavs" => Some(Scheme::Davs),
             "imap" => Some(Scheme::Imap),
             "imaps" => Some(Scheme::Imaps),
+            "link" => Some(Scheme::Link),
             _ => None,
         }
     }
@@ -78,6 +83,8 @@ impl Scheme {
             Scheme::Davs => Some(443),
             Scheme::Imap => Some(143),
             Scheme::Imaps => Some(993),
+            // Where discovery listens; the server's own port comes back in its answer.
+            Scheme::Link => Some(47831),
         }
     }
 
@@ -102,7 +109,7 @@ impl Scheme {
     }
 
     /// Every scheme a site can name, for the places that offer a choice.
-    pub const SITE_SCHEMES: [Scheme; 7] = [
+    pub const SITE_SCHEMES: [Scheme; 8] = [
         Scheme::Sftp,
         Scheme::Ftp,
         Scheme::Ftps,
@@ -110,6 +117,7 @@ impl Scheme {
         Scheme::Davs,
         Scheme::Imap,
         Scheme::Imaps,
+        Scheme::Link,
     ];
 }
 

@@ -14,10 +14,12 @@
 //! - [`share`]: a caller's path resolved under a shared folder, and refused if it climbs out;
 //! - [`server`]: the called side;
 //! - [`client`]: the calling side;
+//! - [`dial`]: a Link site opened from the netbox;
 //! - [`discovery`]: who is on the network, by UDP broadcast;
 //! - [`net`]: which addresses count as the local network.
 
 pub mod client;
+pub mod dial;
 pub mod discovery;
 pub mod identity;
 pub mod net;
@@ -27,6 +29,7 @@ pub mod tls;
 pub mod wire;
 
 pub use client::{call, LinkFs, Pending};
+pub use dial::Dialer;
 pub use identity::{format_id, parse_id, Identity};
 pub use server::{serve, Admission, Caller, Gate};
 pub use share::Share;
