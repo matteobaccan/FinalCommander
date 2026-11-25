@@ -565,6 +565,20 @@ impl Default for NetCfg {
     }
 }
 
+/// `[link]`: this machine on the FinalCommander Link (SPEC 04 §9).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct LinkCfg {
+    /// Accept calls from other FinalCommanders on the local network. Off unless turned on:
+    /// a machine nobody set up answers no one.
+    pub accept: bool,
+    /// The name callers see beside this machine's ID. Empty: the machine's own name.
+    pub name: String,
+    /// The folder offered to a caller, read only. Empty: nothing is shared, and a call is
+    /// refused with that reason.
+    pub share: String,
+}
+
 /// `[[s3]]` blocks: the object storage services a path may name.
 ///
 /// There is deliberately no place here for an access key. A secret key is a password, and a
@@ -2028,6 +2042,7 @@ pub struct Config {
     #[serde(rename = "archiver", skip_serializing_if = "Vec::is_empty")]
     pub archivers: Vec<ArchiverCfg>,
     pub net: NetCfg,
+    pub link: LinkCfg,
     pub cmdline: CmdLineCfg,
     pub compare: CompareCfg,
     pub drives: DrivesCfg,
@@ -2379,6 +2394,9 @@ impl Config {
                 }
             }
             "net.known_hosts" => self.net.known_hosts = value.to_string(),
+            "link.accept" => self.link.accept = parse_bool(value)?,
+            "link.name" => self.link.name = value.to_string(),
+            "link.share" => self.link.share = value.to_string(),
             "net.keepalive_secs" => {
                 self.net.keepalive_secs = value
                     .parse()

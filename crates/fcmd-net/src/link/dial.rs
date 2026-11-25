@@ -18,6 +18,9 @@ use crate::site::Site;
 /// How long a broadcast waits for the machine to answer.
 const FIND_WAIT: Duration = Duration::from_secs(2);
 
+/// How the six digits reach the screen: the site called, and the digits.
+pub type ShowCode = Arc<dyn Fn(&Site, &str) + Send + Sync>;
+
 /// What the program around it gives the netbox to call with: who this machine is, where the
 /// fingerprints of the machines met before are kept, and how to show the six digits.
 pub struct Dialer {
@@ -26,7 +29,7 @@ pub struct Dialer {
     pub known: PathBuf,
     /// Called with the site and the six digits once the other machine answers, while its
     /// person decides.
-    pub show_code: Arc<dyn Fn(&Site, &str) + Send + Sync>,
+    pub show_code: ShowCode,
 }
 
 impl std::fmt::Debug for Dialer {
