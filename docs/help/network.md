@@ -140,6 +140,19 @@ caller at once, and turning the Link off does too. Everything is encrypted (TLS 
 private addresses are accepted, and a machine whose key changes is refused the next time with
 the name of the file to edit — `link-known`, beside the settings — if it was reinstalled.
 
+**A PIN, for your own machines.** `fcmd --link-pin` on the machine that shares sets a PIN (at
+least six characters; an empty one removes it). A caller that knows it is let in without the
+question: in its netbox session choose *ask* as the authentication, and give the PIN when the
+password is asked for. The PIN is never sent — both sides prove they know it without saying
+it — and five wrong ones lock the caller out for ten minutes.
+
+**A machine nobody sits at** — a router with a USB stick, a home server — shares a folder with
+`fcmd --link-serve /mnt/usb`, with no screen at all and until it is stopped. With nobody to
+answer, only callers with the PIN get in, so set one first. It prints the machine's ID and then
+a line for each call. `link.port` fixes the TCP port when a firewall must be opened (and UDP
+47831, for being found). `packaging/openwrt/fcmd-link` runs it as an OpenWrt service, and
+`packaging/systemd/fcmd-link.service` as a systemd one.
+
 ## Through a jump host
 
 A server that cannot be reached from here, but can be reached from one machine that can, is a

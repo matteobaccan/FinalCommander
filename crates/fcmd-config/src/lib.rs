@@ -577,6 +577,9 @@ pub struct LinkCfg {
     /// The folder offered to a caller, read only. Empty: nothing is shared, and a call is
     /// refused with that reason.
     pub share: String,
+    /// The TCP port calls come in on. 0, the default, lets the system choose one — callers
+    /// learn it from the broadcast — and a fixed one is for a firewall to be opened for.
+    pub port: u16,
 }
 
 /// `[[s3]]` blocks: the object storage services a path may name.
@@ -2397,6 +2400,11 @@ impl Config {
             "link.accept" => self.link.accept = parse_bool(value)?,
             "link.name" => self.link.name = value.to_string(),
             "link.share" => self.link.share = value.to_string(),
+            "link.port" => {
+                self.link.port = value
+                    .parse()
+                    .map_err(|_| format!("link.port: `{value}` is not a port number"))?
+            }
             "net.keepalive_secs" => {
                 self.net.keepalive_secs = value
                     .parse()

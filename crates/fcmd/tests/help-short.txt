@@ -27,5 +27,7 @@ Options:
       --paths                Print where the config file, the state file and the plugins directory are
       --list-plugins         List the plugins found in the plugins directory
       --web-terminal <ADDR>  Serve the program in a browser page on this machine, at a loopback address or port
+      --link-serve           Accept Link calls without a screen, sharing a folder read only, until stopped
+      --link-pin             Set the PIN that lets a Link caller in without the question, or remove it
   -h, --help                 Print help (see more with '--help')
   -V, --version              Print version

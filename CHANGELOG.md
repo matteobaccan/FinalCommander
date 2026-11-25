@@ -16,6 +16,16 @@ Notable changes, newest first. The format follows
   private addresses only, a changed key refused; `LINK` in the corner of the status line
   while calls are accepted, with the number of callers, and `Ctrl+Alt+L` hangs them all up.
   Settings `link.accept`, `link.name`, `link.share`.
+- The Link's PIN: `fcmd --link-pin` sets one on the machine that shares, and a caller that
+  gives it — as the netbox session's password, authentication *ask* — is let in without the
+  question. The PIN is checked with SPAKE2 bound to both machines' keys, so it never crosses
+  the network; only a salted, stretched value of it is kept, and five wrong PINs lock the
+  caller out for ten minutes.
+- `fcmd --link-serve [FOLDER]`: the Link on a machine nobody sits at — a router, a home
+  server — with no screen, sharing a folder read only to callers with the PIN and printing a
+  line for each call. `link.port` fixes the TCP port for a firewall. A procd service for
+  OpenWrt (`packaging/openwrt/fcmd-link`) and a systemd one
+  (`packaging/systemd/fcmd-link.service`) run it. In the compact build too.
 - **A dBase table can be changed where it is read.** In table mode, on a local `.dbf`:
   `Ctrl+F4` types a new value over the cell, `Ctrl+N` appends an empty record, `Ctrl+F8`
   deletes the record under the cursor or recalls it, and `Shift+Del` is `Pack`, which takes

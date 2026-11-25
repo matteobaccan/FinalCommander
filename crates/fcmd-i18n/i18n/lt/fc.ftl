@@ -1669,7 +1669,7 @@ site-max-kbps = Greičio riba, KB/s (tuščia: nėra)
 site-protocol-imap = IMAP (paštas, tik skaitymas)
 site-protocol-imaps = IMAPS (paštas per TLS, tik skaitymas)
 site-protocol-link = Link (kitas FinalCommander, vietinis tinklas)
-site-link-note = Link: serveris yra kito kompiuterio ID, naudotojas – bendrinamas aplankas (tuščia: pirmasis)
+site-link-note = Link: serveris yra kito kompiuterio ID, naudotojas – bendrinamas aplankas (tuščia: pirmasis); su „ask“ slaptažodis yra jo PIN
 
 # The AI services as a list, like the sessions
 ai-services-title = DI paslaugos

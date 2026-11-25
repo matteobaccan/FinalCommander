@@ -146,6 +146,20 @@ indirizzi privati, e una macchina la cui chiave cambia viene rifiutata la volta 
 nome del file da correggere — `link-known`, accanto alle impostazioni — se è stata
 reinstallata.
 
+**Un PIN, per le proprie macchine.** `fcmd --link-pin` sulla macchina che condivide imposta
+un PIN (almeno sei caratteri; vuoto lo toglie). Chi lo conosce entra senza la domanda: nella
+sua sessione del NetBox scegli *ask* come autenticazione e dai il PIN quando viene chiesta la
+password. Il PIN non viene mai spedito — i due lati dimostrano di conoscerlo senza dirlo — e
+cinque PIN sbagliati bloccano chi chiama per dieci minuti.
+
+**Una macchina senza nessuno davanti** — un router con una chiavetta USB, un server di casa —
+condivide una cartella con `fcmd --link-serve /mnt/usb`, senza schermo e finché non viene
+fermato. Non essendoci nessuno a rispondere, entra solo chi ha il PIN, quindi va impostato
+prima. Stampa l'ID della macchina e poi una riga per ogni chiamata. `link.port` fissa la porta
+TCP quando va aperto un firewall (e la UDP 47831, per farsi trovare).
+`packaging/openwrt/fcmd-link` lo fa girare come servizio OpenWrt, e
+`packaging/systemd/fcmd-link.service` come servizio systemd.
+
 ## Attraverso un host di salto
 
 Un server che da qui non si raggiunge, ma che si raggiunge da una macchina che invece sì, è un

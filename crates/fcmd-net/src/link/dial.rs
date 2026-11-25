@@ -11,9 +11,9 @@ use std::time::Duration;
 use super::client::call;
 use super::discovery;
 use super::identity::{fingerprint_text, parse_id, Identity};
-use crate::error::{NetError, Result};
+use crate::error::{NetError, Result, SecretKind};
 use crate::remote::Remote;
-use crate::site::Site;
+use crate::site::{Auth, Site};
 
 /// How long a broadcast waits for the machine to answer.
 const FIND_WAIT: Duration = Duration::from_secs(2);
@@ -59,9 +59,23 @@ fn failed(site: &Site, detail: impl std::fmt::Display) -> NetError {
 
 impl Dialer {
     /// Open the Link site: find, call, ask.
-    pub async fn connect(&self, site: &Site, _secret: Option<&str>) -> Result<Remote> {
+    ///
+    /// A site whose authentication is a password gives the other machine's PIN (SPEC 04
+    /// §9.5): asked for like any password, and proved without being sent.
+    pub async fn connect(&self, site: &Site, secret: Option<&str>) -> Result<Remote> {
         let id = parse_id(&site.host)
             .ok_or_else(|| failed(site, "not a FinalCommander ID: nine digits"))?;
+        let pin = match (&site.auth, secret) {
+            (Auth::Password, None) => {
+                return Err(NetError::NeedsSecret {
+                    user: site.user.clone(),
+                    host: site.host.clone(),
+                    kind: SecretKind::Password,
+                })
+            }
+            (Auth::Password, Some(pin)) => Some(pin),
+            _ => None,
+        };
         let found = discovery::find(discovery::broadcast(), Some(id), FIND_WAIT)
             .await
             .map_err(|e| failed(site, e))?;
@@ -89,12 +103,14 @@ impl Dialer {
                 ));
             }
         }
-        (self.show_code)(site, &pending.sas);
         let share = match site.user.as_str() {
             ANY_SHARE => "",
             name => name,
         };
-        let fs = pending.ask(share, false).await?;
+        let code = pending.sas.clone();
+        let fs = pending
+            .ask_with(share, false, pin, || (self.show_code)(site, &code))
+            .await?;
         let _ = self.remember(id, &theirs);
         Ok(Remote::new(site.clone(), Arc::new(fs)))
     }

@@ -53,6 +53,8 @@ pub struct Cli {
     pub list_plugins: bool,
     pub man: bool,
     pub web_terminal: Option<String>,
+    pub link_serve: bool,
+    pub link_pin: bool,
 }
 
 /// One option: its names, the names of the values it takes (none for a switch), what it
@@ -225,6 +227,23 @@ const OPTS: &[Opt] = &[
          each page that opens it runs its own fcmd on a pseudo-terminal, with the other \
          options given here. Only 127.0.0.1 and ::1 are listened on. The Android app is this, \
          in a web view.",
+    ),
+    opt(
+        "link-serve",
+        &[],
+        "Accept Link calls without a screen, sharing a folder read only, until stopped.\n\n\
+         For a machine nobody sits at — a home server, a router, a Raspberry Pi: the folder is \
+         the first PATH, or `link.share`. With no person to answer, only a caller that gives \
+         this machine's PIN is let in, so a PIN must be set first with --link-pin. Prints the \
+         machine's ID, then one line for each call.",
+    ),
+    opt(
+        "link-pin",
+        &[],
+        "Set the PIN that lets a Link caller in without the question, or remove it.\n\n\
+         Asks for the PIN twice without showing it; an empty one removes it. The PIN itself \
+         is not stored: what is kept, in `link-pin` beside the settings, is a salted, \
+         stretched value of it.",
     ),
     Opt {
         hidden: true,
@@ -698,6 +717,8 @@ impl Parser {
             list_plugins: on("list-plugins"),
             man: on("man"),
             web_terminal: one("web-terminal").map(text),
+            link_serve: on("link-serve"),
+            link_pin: on("link-pin"),
         }
     }
 }

@@ -152,7 +152,7 @@ fn random_id() -> io::Result<u32> {
     Ok(100_000_000 + u32::from_le_bytes(bytes) % 900_000_000)
 }
 
-fn write_private(path: &Path, bytes: &[u8]) -> io::Result<()> {
+pub(super) fn write_private(path: &Path, bytes: &[u8]) -> io::Result<()> {
     #[cfg(unix)]
     {
         use std::io::Write;

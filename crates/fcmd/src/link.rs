@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 
 use async_trait::async_trait;
+use fcmd_net::link::pin::Pin;
 use fcmd_net::link::{self, discovery, Admission, Caller, Gate, Identity, Share};
 use tokio::sync::{oneshot, watch};
 
@@ -43,6 +44,8 @@ pub struct Hub {
     next: Arc<AtomicU64>,
     hang_up: watch::Sender<u64>,
     running: Option<tokio::task::JoinHandle<()>>,
+    /// `link.port`: 0 for one the system chooses.
+    pub port: u16,
 }
 
 impl Hub {
@@ -57,6 +60,7 @@ impl Hub {
             next: Arc::new(AtomicU64::new(1)),
             hang_up: watch::channel(0).0,
             running: None,
+            port: 0,
         }
     }
 
@@ -108,10 +112,16 @@ impl Hub {
             next: self.next.clone(),
             share: Some(offered),
             hang_up: self.hang_up.subscribe(),
+            dir: self.dir.clone(),
         });
-        let (dir, name, tx) = (self.dir.clone(), self.name.clone(), self.tx.clone());
+        let (dir, name, tx, port) = (
+            self.dir.clone(),
+            self.name.clone(),
+            self.tx.clone(),
+            self.port,
+        );
         self.running = Some(runtime.spawn(async move {
-            if let Err(e) = run(&dir, &name, &share, gate, &tx).await {
+            if let Err(e) = run(&dir, &name, &share, port, gate, &tx).await {
                 let _ = tx.send(Event::LinkAccepting {
                     result: Err(e.to_string()),
                 });
@@ -136,11 +146,12 @@ async fn run(
     dir: &Path,
     name: &str,
     folder: &Path,
+    port: u16,
     gate: Arc<Bridge>,
     tx: &mpsc::Sender<Event>,
 ) -> std::io::Result<()> {
     let identity = Arc::new(Identity::load_or_create(dir, name)?);
-    let listener = tokio::net::TcpListener::bind(("0.0.0.0", 0)).await?;
+    let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await?;
     let port = listener.local_addr()?.port();
     let udp = tokio::net::UdpSocket::bind(("0.0.0.0", discovery::PORT))
         .await
@@ -172,6 +183,8 @@ struct Bridge {
     next: Arc<AtomicU64>,
     share: Option<Share>,
     hang_up: watch::Receiver<u64>,
+    /// Where the PIN is kept, read at each call so that `fcmd --link-pin` counts at once.
+    dir: PathBuf,
 }
 
 /// Takes the dialog down when the server stops waiting for it.
@@ -241,6 +254,133 @@ impl Gate for Bridge {
     fn hang_up(&self) -> Option<watch::Receiver<u64>> {
         Some(self.hang_up.clone())
     }
+
+    fn pin(&self) -> Option<Pin> {
+        Pin::load(&self.dir).ok().flatten()
+    }
+}
+
+/// `fcmd --link-pin`: set the PIN, or take it away with an empty one.
+pub fn set_pin(dir: &Path) -> anyhow::Result<()> {
+    let first = fcmd_tui::read_hidden_line("New Link PIN (empty removes it): ")?;
+    if first.trim().is_empty() {
+        Pin::remove(dir)?;
+        println!("The Link PIN is removed: calls go to the person at this machine again.");
+        return Ok(());
+    }
+    let pin = Pin::new(&first)?;
+    let again = fcmd_tui::read_hidden_line("The same PIN again: ")?;
+    if again.trim() != first.trim() {
+        anyhow::bail!("the two PINs differ: nothing was changed");
+    }
+    pin.save(dir)?;
+    println!(
+        "The Link PIN is set ({}). A caller gives it as the netbox session's password.",
+        dir.join(link::pin::PIN_FILE).display()
+    );
+    Ok(())
+}
+
+/// `fcmd --link-serve`: accept calls with no screen, until the process is stopped. Only a
+/// caller with the PIN gets in — there is nobody to ask — so there has to be one.
+pub fn serve_headless(dir: &Path, name: &str, folder: &Path, port: u16) -> anyhow::Result<()> {
+    if Pin::load(dir)?.is_none() {
+        anyhow::bail!(
+            "a Link that answers by itself lets in only callers with its PIN, and none is \
+             set: run `fcmd --link-pin` first"
+        );
+    }
+    let label = folder
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| folder.display().to_string());
+    let share = Share::new(&label, folder, false)
+        .map_err(|e| anyhow::anyhow!("{}: {e}", folder.display()))?;
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()?;
+    runtime.block_on(async move {
+        let identity = Arc::new(Identity::load_or_create(dir, name)?);
+        let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
+            .await
+            .map_err(|e| anyhow::anyhow!("TCP port {port}: {e}"))?;
+        let port = listener.local_addr()?.port();
+        let udp = tokio::net::UdpSocket::bind(("0.0.0.0", discovery::PORT))
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "UDP port {} for being found: {e} — is another FinalCommander here \
+                     accepting calls?",
+                    discovery::PORT
+                )
+            })?;
+        println!(
+            "FinalCommander Link: ID {} ({}), TCP port {port}, sharing {} read only; callers \
+             need the PIN.",
+            link::format_id(identity.id),
+            identity.name,
+            folder.display()
+        );
+        let gate = Arc::new(Unattended {
+            dir: dir.to_path_buf(),
+            share,
+        });
+        let found = discovery::answer(udp, identity.id, identity.name.clone(), port);
+        let served = link::serve(listener, identity, gate);
+        tokio::select! {
+            result = found => result?,
+            result = served => result?,
+        }
+        Ok(())
+    })
+}
+
+/// The gate of a Link nobody sits at: the PIN or nothing, and a line for each call.
+struct Unattended {
+    dir: PathBuf,
+    share: Share,
+}
+
+fn log(what: &str, caller: &Caller) {
+    println!(
+        "{} {what}: {} (ID {}, {})",
+        fcmd_ui::format_stamp(std::time::SystemTime::now()),
+        caller.name,
+        link::format_id(caller.id),
+        caller.addr.ip()
+    );
+}
+
+#[async_trait]
+impl Gate for Unattended {
+    fn shares(&self) -> Vec<Share> {
+        vec![self.share.clone()]
+    }
+
+    async fn admit(&self, _caller: &Caller) -> Admission {
+        Admission::Refused
+    }
+
+    fn attended(&self) -> bool {
+        false
+    }
+
+    fn pin(&self) -> Option<Pin> {
+        Pin::load(&self.dir).ok().flatten()
+    }
+
+    fn opened(&self, caller: &Caller, _write: bool) {
+        log("in, by its PIN", caller);
+    }
+
+    fn closed(&self, caller: &Caller) {
+        log("left", caller);
+    }
+
+    fn refused(&self, caller: &Caller, why: &str) {
+        log(&format!("refused, {why}"), caller);
+    }
 }
 
 #[cfg(test)]
@@ -267,6 +407,7 @@ mod tests {
             next: hub.next.clone(),
             share: Some(Share::new("shared", shared.path(), false).unwrap()),
             hang_up: hub.hang_up.subscribe(),
+            dir: here.path().to_path_buf(),
         });
         let identity = Arc::new(Identity::load_or_create(here.path(), "here").unwrap());
         let listener = runtime

@@ -22,7 +22,10 @@ use tokio_rustls::client::TlsStream;
 use tokio_rustls::TlsConnector;
 
 use super::identity::{fingerprint, sas, Identity};
-use super::wire::{self, Answer, Ask, Frame, Hello, Op, Payload, Reply, Request};
+use super::pin::{self, Exchange};
+use super::wire::{
+    self, Answer, Ask, Frame, Hello, Op, Payload, PinMessage, PinOffer, PinProof, Reply, Request,
+};
 use super::{net, tls, ANSWER_SECONDS, VERSION};
 use crate::error::{NetError, Result};
 use crate::ops::{Reader, RemoteEntry, RemoteFs, Writer};
@@ -40,6 +43,8 @@ pub struct Peer {
 /// A call answered by the machine but not yet by its person.
 pub struct Pending {
     stream: TlsStream<TcpStream>,
+    /// This machine's fingerprint, which the PIN exchange is bound to.
+    own: [u8; 32],
     pub peer: Peer,
     /// The six digits to show; the same on the other screen.
     pub sas: String,
@@ -105,6 +110,7 @@ pub async fn call(addr: SocketAddr, identity: &Identity) -> Result<Pending> {
         .map_err(|e| connect_error(addr, e))?;
     Ok(Pending {
         stream,
+        own: identity.fingerprint(),
         sas: sas(&identity.fingerprint(), &their_fp),
         peer: Peer {
             id: hello.id,
@@ -118,17 +124,39 @@ pub async fn call(addr: SocketAddr, identity: &Identity) -> Result<Pending> {
 impl Pending {
     /// Ask for `share` (empty: the first offered), to read or to write, and wait for the
     /// person there to answer.
-    pub async fn ask(mut self, share: &str, write: bool) -> Result<LinkFs> {
+    pub async fn ask(self, share: &str, write: bool) -> Result<LinkFs> {
+        self.ask_with(share, write, None, || {}).await
+    }
+
+    /// The same, proving `pin` when there is one (SPEC 04 §9.5): a machine that holds the
+    /// same PIN lets the caller in without its person. `to_person` is called when the call
+    /// goes to the person after all — no PIN given, or none set there — which is when the
+    /// six digits are worth showing.
+    pub async fn ask_with(
+        mut self,
+        share: &str,
+        write: bool,
+        pin: Option<&str>,
+        to_person: impl FnOnce(),
+    ) -> Result<LinkFs> {
         let addr = self.peer.addr;
         wire::send(
             &mut self.stream,
             &Ask {
                 share: share.to_string(),
                 write,
+                pin: pin.is_some(),
             },
         )
         .await
         .map_err(|e| connect_error(addr, e))?;
+        let proved = match pin {
+            Some(pin) => self.prove(pin).await?,
+            None => false,
+        };
+        if !proved {
+            to_person();
+        }
         let answer: Answer = timeout(
             Duration::from_secs(ANSWER_SECONDS + 15),
             wire::recv(&mut self.stream),
@@ -151,6 +179,77 @@ impl Pending {
             share: answer.share,
             write: answer.write,
         })
+    }
+}
+
+impl Pending {
+    /// The caller's side of the PIN exchange. `false`: the machine has no PIN, and the call
+    /// goes to its person.
+    async fn prove(&mut self, typed: &str) -> Result<bool> {
+        let addr = self.peer.addr;
+        let err = |e: std::io::Error| connect_error(addr, e);
+        let offer: PinOffer = timeout(Duration::from_secs(15), wire::recv(&mut self.stream))
+            .await
+            .map_err(|_| connect_error(addr, "no answer about the PIN"))?
+            .map_err(err)?;
+        if let Some(why) = offer.refused {
+            return Err(connect_error(addr, why));
+        }
+        let Some(salt) = offer.salt.and_then(|s| pin::from_hex_vec(&s)) else {
+            return Ok(false);
+        };
+        let typed = typed.to_string();
+        // A second of arithmetic on a small machine: not on the thread that runs the rest.
+        let stretched = tokio::task::spawn_blocking(move || pin::stretch(&typed, &salt))
+            .await
+            .map_err(|e| connect_error(addr, e))?;
+        let exchange = Exchange::caller(&stretched, &self.own, &self.peer.fingerprint);
+        wire::send(
+            &mut self.stream,
+            &PinMessage {
+                message: pin::hex(&exchange.message),
+            },
+        )
+        .await
+        .map_err(err)?;
+        let theirs: PinMessage = timeout(Duration::from_secs(30), wire::recv(&mut self.stream))
+            .await
+            .map_err(|_| connect_error(addr, "no PIN message"))?
+            .map_err(err)?;
+        let theirs = pin::from_hex_vec(&theirs.message)
+            .ok_or_else(|| connect_error(addr, "a broken PIN exchange"))?;
+        let proofs = exchange.finish(&theirs).map_err(err)?;
+        wire::send(
+            &mut self.stream,
+            &PinProof {
+                proof: pin::hex(&proofs.mine),
+            },
+        )
+        .await
+        .map_err(err)?;
+        // Their proof, or the refusal a wrong PIN gets.
+        let frame = timeout(Duration::from_secs(30), wire::read_frame(&mut self.stream))
+            .await
+            .map_err(|_| connect_error(addr, "no answer to the PIN"))?
+            .map_err(err)?;
+        let Frame::Json(body) = frame else {
+            return Err(connect_error(addr, "bytes where an answer was expected"));
+        };
+        if let Ok(proof) = serde_json::from_slice::<PinProof>(&body) {
+            let proof = pin::from_hex_vec(&proof.proof).unwrap_or_default();
+            if !proofs.check(&proof) {
+                return Err(connect_error(
+                    addr,
+                    "the other machine did not prove it holds the PIN — refusing to go on",
+                ));
+            }
+            return Ok(true);
+        }
+        let answer: Answer = serde_json::from_slice(&body).map_err(|e| connect_error(addr, e))?;
+        Err(connect_error(
+            addr,
+            answer.reason.unwrap_or_else(|| "refused".into()),
+        ))
     }
 }
 
@@ -536,6 +635,116 @@ mod tests {
             fs.stat("/small.txt", true).await.is_err(),
             "the session is over"
         );
+    }
+
+    struct PinGate {
+        shares: Vec<Share>,
+        pin: Option<super::super::pin::Pin>,
+        asked: StdMutex<usize>,
+        refused: StdMutex<Vec<String>>,
+    }
+
+    #[async_trait]
+    impl Gate for PinGate {
+        fn shares(&self) -> Vec<Share> {
+            self.shares.clone()
+        }
+        async fn admit(&self, _caller: &Caller) -> Admission {
+            *self.asked.lock().unwrap() += 1;
+            Admission::ReadOnly
+        }
+        fn pin(&self) -> Option<super::super::pin::Pin> {
+            self.pin.clone()
+        }
+        fn refused(&self, _caller: &Caller, why: &str) {
+            self.refused.lock().unwrap().push(why.to_string());
+        }
+    }
+
+    async fn pin_server(
+        root: &std::path::Path,
+        pin: Option<&str>,
+    ) -> (SocketAddr, Arc<PinGate>, Identity) {
+        let gate = Arc::new(PinGate {
+            shares: vec![Share::new("docs", root, false).unwrap()],
+            pin: pin.map(|p| super::super::pin::Pin::new(p).unwrap()),
+            asked: StdMutex::new(0),
+            refused: StdMutex::new(Vec::new()),
+        });
+        let them = Arc::new(Identity::generate("box").unwrap());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let g: Arc<dyn Gate> = gate.clone();
+        tokio::spawn(serve(listener, them, g));
+        (addr, gate, Identity::generate("here").unwrap())
+    }
+
+    #[tokio::test]
+    async fn the_right_pin_opens_without_the_person_and_a_wrong_one_does_not() {
+        let dir = tree();
+        let (addr, gate, me) = pin_server(&dir.path().join("shared"), Some("424242")).await;
+        let mut person = false;
+        let fs = call(addr, &me)
+            .await
+            .unwrap()
+            .ask_with("", false, Some("424242"), || person = true)
+            .await
+            .unwrap();
+        assert!(!person, "the PIN is the yes");
+        assert_eq!(*gate.asked.lock().unwrap(), 0);
+        assert!(!fs.write, "read only, as the PIN grants in this step");
+        assert_eq!(fs.stat("/small.txt", true).await.unwrap().size, 5);
+
+        let err = call(addr, &me)
+            .await
+            .unwrap()
+            .ask_with("", false, Some("000000"), || {})
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("wrong PIN"), "{err}");
+        assert_eq!(
+            *gate.asked.lock().unwrap(),
+            0,
+            "a wrong PIN is not a question"
+        );
+        assert_eq!(gate.refused.lock().unwrap().as_slice(), ["wrong PIN"]);
+    }
+
+    #[tokio::test]
+    async fn five_wrong_pins_lock_the_caller_out() {
+        let dir = tree();
+        let (addr, _gate, me) = pin_server(&dir.path().join("shared"), Some("424242")).await;
+        for _ in 0..super::super::pin::MAX_WRONG {
+            let err = call(addr, &me)
+                .await
+                .unwrap()
+                .ask_with("", false, Some("111111"), || {})
+                .await
+                .unwrap_err();
+            assert!(err.to_string().contains("wrong PIN"), "{err}");
+        }
+        let err = call(addr, &me)
+            .await
+            .unwrap()
+            .ask_with("", false, Some("424242"), || {})
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("too many wrong PINs"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn a_pin_given_to_a_machine_without_one_goes_to_its_person() {
+        let dir = tree();
+        let (addr, gate, me) = pin_server(&dir.path().join("shared"), None).await;
+        let mut person = false;
+        call(addr, &me)
+            .await
+            .unwrap()
+            .ask_with("", false, Some("424242"), || person = true)
+            .await
+            .unwrap();
+        assert!(person);
+        assert_eq!(*gate.asked.lock().unwrap(), 1);
     }
 
     #[tokio::test]

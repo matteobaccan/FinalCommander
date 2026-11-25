@@ -23,6 +23,7 @@ pub mod dial;
 pub mod discovery;
 pub mod identity;
 pub mod net;
+pub mod pin;
 pub mod server;
 pub mod share;
 pub mod tls;

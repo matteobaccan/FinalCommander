@@ -1,0 +1,22 @@
+# FinalCommander Link as a systemd service: a folder offered read only to the
+# FinalCommanders of the local network, to callers that give the PIN (SPEC 04 §9.10).
+#
+#   fcmd --link-pin                                  # once, as the user below
+#   cp fcmd-link.service ~/.config/systemd/user/     # edit the folder in ExecStart
+#   systemctl --user enable --now fcmd-link
+#   journalctl --user -u fcmd-link                   # the ID, then a line per call
+#
+# As a user service it runs with that user's files and settings, and nothing more.
+
+[Unit]
+Description=FinalCommander Link (read-only share, PIN only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/fcmd --link-serve %h/Public
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

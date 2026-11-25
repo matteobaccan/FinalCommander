@@ -28,6 +28,29 @@ pub struct Ask {
     /// The share by name; empty for the one the called side offers first.
     pub share: String,
     pub write: bool,
+    /// The caller has a PIN to prove (SPEC 04 §9.5). Absent from an older caller.
+    #[serde(default)]
+    pub pin: bool,
+}
+
+/// The called side's first word to a caller with a PIN: the salt to stretch it with, or
+/// none when this machine has no PIN (the call then goes to the person), or why not at all.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PinOffer {
+    pub salt: Option<String>,
+    pub refused: Option<String>,
+}
+
+/// A SPAKE2 message, hex.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PinMessage {
+    pub message: String,
+}
+
+/// A side's proof that it holds the key the PIN gave, hex.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PinProof {
+    pub proof: String,
 }
 
 /// The called side's answer.

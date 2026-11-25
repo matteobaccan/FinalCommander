@@ -1607,7 +1607,7 @@ site-max-kbps = 速度限制，KB/s（空：不限）
 site-protocol-imap = IMAP（邮件，只读）
 site-protocol-imaps = IMAPS（基于 TLS 的邮件，只读）
 site-protocol-link = Link（另一台 FinalCommander，局域网）
-site-link-note = Link：主机为另一台机器的 ID，用户为其共享的文件夹（留空：第一个）
+site-link-note = Link：主机为另一台机器的 ID，用户为其共享的文件夹（留空：第一个）；选择“ask”时，密码即其 PIN
 
 # The AI services as a list, like the sessions
 ai-services-title = AI 服务

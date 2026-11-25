@@ -587,6 +587,52 @@ impl Drop for Term {
     }
 }
 
+/// Read a line without showing it, for a PIN or a password asked on the command line.
+///
+/// On a terminal the characters are not echoed (raw mode for the length of the line,
+/// `Backspace` takes one back, `Esc` or `Ctrl+C` gives up with an error). When the input is
+/// not a terminal — a script feeding it — one line is read as it is.
+pub fn read_hidden_line(prompt: &str) -> io::Result<String> {
+    use std::io::IsTerminal;
+    let mut out = io::stderr();
+    write!(out, "{prompt}")?;
+    out.flush()?;
+    if !io::stdin().is_terminal() {
+        let mut line = String::new();
+        io::stdin().read_line(&mut line)?;
+        writeln!(out)?;
+        return Ok(line.trim_end_matches(['\r', '\n']).to_string());
+    }
+    terminal::enable_raw_mode()?;
+    let mut line = String::new();
+    let result = loop {
+        match event::read() {
+            Ok(Event::Key(KeyEvent {
+                code,
+                modifiers,
+                kind: KeyEventKind::Press | KeyEventKind::Repeat,
+                ..
+            })) => match code {
+                CKey::Enter => break Ok(()),
+                CKey::Esc => break Err(io::Error::other("cancelled")),
+                CKey::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    break Err(io::Error::other("cancelled"))
+                }
+                CKey::Backspace => {
+                    line.pop();
+                }
+                CKey::Char(c) => line.push(c),
+                _ => {}
+            },
+            Ok(_) => {}
+            Err(e) => break Err(e),
+        }
+    };
+    let _ = terminal::disable_raw_mode();
+    writeln!(out)?;
+    result.map(|()| line)
+}
+
 /// Restore the terminal if we panic, so a crash never leaves an unusable shell.
 /// The window operation that maximises the terminal's window (`true`) or restores it.
 pub fn window_request(on: bool) -> &'static str {

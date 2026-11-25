@@ -57,6 +57,12 @@ serde = { version = "1", features = ["derive"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
 ring = "0.17"
 rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring"] }
+# The Link's PIN (SPEC 04 §9.5) is checked by SPAKE2, so that neither a listener nor a machine
+# pretending to be the other learns it, and a wrong guess is one guess. RustCrypto's crate,
+# MIT OR Apache-2.0: its curve (curve25519-dalek 5), hash, HKDF and random numbers (getrandom
+# 0.4) are the very versions russh already brings, so this adds the one small crate and no
+# other code. A pre-release, pinned exactly, because it is the release that shares them.
+spake2 = { version = "=0.5.0-pre.0", features = ["getrandom"] }
 thiserror = "2"
 tokio = { version = "1", features = ["rt", "io-util", "net", "time", "macros", "fs", "sync"] }
 

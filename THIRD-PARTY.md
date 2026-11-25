@@ -49,6 +49,8 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `ppmd-rust` | CC0-1.0 OR MIT-0 (we take CC0-1.0) | the PPMd codec a 7z may be packed with |
 | `aes`, `cbc`, `cipher`, `digest` (RustCrypto) | MIT OR Apache-2.0 | recognising an AES-256 7z, so it asks for a password instead of looking broken |
 | `reqwest` (with `rustls`) | MIT OR Apache-2.0 | HTTPS for the object-storage client and for WebDAV |
+| `rcgen` | MIT OR Apache-2.0 | the Link's self-signed certificate, one per installation (SPEC 04 §9.1) |
+| `spake2` | MIT OR Apache-2.0 | the Link's PIN, proved without being sent (SPEC 04 §9.5); its curve, hash and HKDF are those `russh` already brings |
 | `tokio-util` | MIT | streaming a body off the disk, and a WebDAV `PUT` through a pipe |
 | `futures-util` | MIT OR Apache-2.0 | a WebDAV response body's errors made into `io::Error` as it streams |
 | `vte` | Apache-2.0 OR MIT | recognising the escape sequences a program writes to a terminal |

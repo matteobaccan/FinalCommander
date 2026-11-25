@@ -820,13 +820,32 @@ see (empty: the machine's own). Calling another machine needs nothing turned on.
 
 ### 9.5 The PIN, for one's own machines
 
-(Step 2.) The called side may set a PIN, with the mode it grants. A caller that knows the PIN
-is let in without the dialog, in that mode. The PIN is never sent: it is checked with SPAKE2
-(`spake2`, RustCrypto, MIT OR Apache-2.0) inside the TLS session, bound to both fingerprints,
-so neither a listener nor a fake peer learns it, nor can a captured exchange be replayed. Five
-wrong attempts from one machine lock it out for ten minutes. The PIN is kept as a salted hash,
-never in clear; on the caller's side it is the netbox site's password, in the credential
-store.
+`fcmd --link-pin` sets a PIN (at least six characters, asked twice without being shown; an
+empty one removes it). A caller that gives it is let in without the dialog, read only. On the
+caller's side the PIN is the netbox session's password: authentication *ask*, and it is asked
+for when the session is opened, like any password.
+
+The PIN never crosses the network:
+
+1. The caller's ask says it has a PIN. The called side answers with the salt it keeps — or
+   with none when no PIN is set here, and the call then goes to the person as in §9.4 — or
+   with a refusal while the caller's address is locked out.
+2. Both sides hold `PBKDF2-HMAC-SHA256(PIN, salt, 100 000 rounds)`: the caller computes it,
+   the called side keeps it. That value, not the PIN, is what `link-pin` beside the identity
+   holds, readable by the user alone.
+3. They run **SPAKE2** (`spake2`, RustCrypto, MIT OR Apache-2.0, on Ed25519) with it, the
+   caller's fingerprint as identity A and the called side's as identity B: inside the TLS
+   session, and bound to the two machines, so a listener learns nothing and a machine in the
+   middle gets one guess per call.
+4. Each side sends an HMAC-SHA256 of a label of its own under the key SPAKE2 gave — the caller
+   first. A wrong PIN shows as a caller's proof that does not check: the call is refused,
+   `wrong PIN`. The caller checks the called side's proof in turn, so a machine that does not
+   hold the PIN cannot pretend to have let it in.
+5. Five wrong PINs from one address lock it out for ten minutes, counted for as long as the
+   server runs.
+
+The PIN is read at every call, so `--link-pin` counts from the next one without a restart.
+Both the panels' Link (§9.2) and the one without a screen (§9.10) honour it.
 
 ### 9.6 What is shared
 
@@ -855,15 +874,38 @@ The provider is `link://<share>@<id>:47831/path`, a `RemoteFs` like SFTP's (§3)
 lists it, `F3` views, `F5` copies from it, find and compare read it. The session is read only,
 so the panel's writing keys are refused as on any read-only provider.
 
-### 9.9 Built in two steps
+### 9.9 Built in steps
 
 1. Done: identity, discovery, the call and its dialog, the six digits, TLS, the known
    fingerprints, a read-only share, the provider on the caller's side, Link sites in the
    netbox, the status line's corner and its key.
-2. Read and write, the PIN with SPAKE2, a list of shares, the machines met before on the
-   called side, and *Find on the network* in the netbox (`who *`).
+2. Done: the PIN with SPAKE2 (§9.5) and the Link without a screen (§9.10).
+3. Next: read and write, a list of shares, the machines met before on the called side, and
+   *Find on the network* in the netbox (`who *`).
 
 Tested with two instances in one process on loopback: a call refused, one accepted whose
 writes are refused at the called end, a path that climbs out, the discovery, a hang-up from
 the called side, and a call from the netbox's dialer through the dialog's answer to a
-listing.
+listing. The PIN: the right one lets a caller in without the person, a wrong one is refused
+and counted, the fifth locks the address out, and a PIN given to a machine without one goes
+to its person.
+
+### 9.10 Without a screen: `fcmd --link-serve`
+
+For a machine nobody sits at — a router with a USB stick, a home server, a Raspberry Pi —
+`fcmd --link-serve [FOLDER]` accepts calls with no terminal taken over, until the process is
+stopped. The folder is the path given, or `link.share`; it is offered read only, under its
+own name.
+
+- **The PIN or nothing.** There is no person to answer, so a caller without the PIN is turned
+  away at once and told why, and the program will not start until a PIN is set.
+- **What it prints**: the ID, the name and the TCP port first, then one line per call with
+  the time, the caller's name, ID and address — refused (no PIN, wrong PIN, locked out), in,
+  left. On a router that is the system log (`logread`), under systemd the journal.
+- `link.port` fixes the TCP port (0, the default, lets the system choose; callers learn it from
+  the broadcast), so that a firewall can be opened for it and for UDP 47831. It applies to the
+  panels' Link too.
+- `packaging/openwrt/fcmd-link` is a procd service for `/etc/init.d/`, and
+  `packaging/systemd/fcmd-link.service` a systemd user service; both run `--link-serve` and
+  start it again if it stops. The compact build has the Link, so a router's small archive
+  serves too.

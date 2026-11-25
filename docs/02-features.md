@@ -151,7 +151,7 @@ since 0.41.0 also `MU` (muCommander), `NNN`, `RANGER`, `LF`, `BROOT`, `VIFM`, `X
 | 4.13 | JSON documents as folders: objects and arrays as directories, values as files (strings as their text), read only | FarNet (JsonKit) | ✓ (SPEC 04 §4c) |
 | 4.14 | Mail as folders: an mbox as its messages, a message (`.eml`, Outlook `.msg`) as its headers, text, decoded attachments and the tree of its parts; read only | FAR (FARMail/MailView) | ✓ files on disk (SPEC 04 §4d), and `imap://`/`imaps://` mailboxes read only since 0.35.0 (SPEC 04 §6.6) |
 | 4.15 | Tunnels: a local port forwarded through the SSH connection the panel is on, and a list of the open ones | WinSCP/NetBox | ✓ `net.tunnel`, `net.tunnels` |
-| 4.16 | Link: a folder of another FinalCommander on the local network, in a panel, after its person accepts the call and compares a six-digit code; encrypted, read only | hwBro (Commander Link) | ✓ `net.link.accept`, `net.link.hangup`, protocol *Link* in the netbox (SPEC 04 §9) |
+| 4.16 | Link: a folder of another FinalCommander on the local network, in a panel, after its person accepts the call and compares a six-digit code; encrypted, read only | hwBro (Commander Link) | ✓ `net.link.accept`, `net.link.hangup`, protocol *Link* in the netbox, a PIN (`--link-pin`) and a Link without a screen (`--link-serve`) (SPEC 04 §9) |
 
 ## 5. Viewer (`F3`)
 

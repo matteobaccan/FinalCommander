@@ -978,6 +978,7 @@ dependencies = [
  "rustls-native-certs",
  "serde",
  "serde_json",
+ "spake2",
  "suppaftp",
  "tempfile",
  "thiserror",
@@ -3353,6 +3354,19 @@ checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "spake2"
+version = "0.5.0-pre.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d5601a88f45d069ad786f75c4fb13e7f127b0aadda913fb2cd65948d3c9a561"
+dependencies = [
+ "curve25519-dalek",
+ "getrandom 0.4.3",
+ "hkdf",
+ "rand_core",
+ "sha2",
 ]
 
 [[package]]

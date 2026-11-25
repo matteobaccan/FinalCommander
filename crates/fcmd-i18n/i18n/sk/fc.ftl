@@ -1666,7 +1666,7 @@ site-max-kbps = Limit rýchlosti, KB/s (prázdne: žiadny)
 site-protocol-imap = IMAP (pošta, len na čítanie)
 site-protocol-imaps = IMAPS (pošta cez TLS, len na čítanie)
 site-protocol-link = Link (iný FinalCommander, miestna sieť)
-site-link-note = Link: hostiteľ je ID druhého počítača, používateľ zdieľaný priečinok (prázdne: prvý)
+site-link-note = Link: hostiteľ je ID druhého počítača, používateľ zdieľaný priečinok (prázdne: prvý); s „ask“ je heslo jeho PIN
 
 # The AI services as a list, like the sessions
 ai-services-title = Služby AI

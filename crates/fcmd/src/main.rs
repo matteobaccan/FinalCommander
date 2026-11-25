@@ -640,6 +640,30 @@ fn run(cli: Cli) -> Result<()> {
         return Ok(());
     }
 
+    // ── the Link without a screen, and its PIN (SPEC 04 §9.5, §9.10)
+    let link_dir = paths
+        .config_file
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
+    if cli.link_pin {
+        return link::set_pin(&link_dir);
+    }
+    if cli.link_serve {
+        let folder = match (cli.paths.first(), cfg.link.share.trim()) {
+            (Some(path), _) => path.clone(),
+            (None, "") => anyhow::bail!(
+                "--link-serve needs a folder to share: give it as a path, or set link.share"
+            ),
+            (None, share) => fcmd_net::site::expand_tilde(share),
+        };
+        let name = match cfg.link.name.trim() {
+            "" => link::machine_name(),
+            name => name.to_string(),
+        };
+        return link::serve_headless(&link_dir, &name, &folder, cfg.link.port);
+    }
+
     // ── informational modes: print and exit, no terminal takeover
     //
     // Each of these says something on the command line rather than taking the screen, so each
@@ -1300,7 +1324,9 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
             "" => link::machine_name(),
             name => name.to_string(),
         };
-        link::Hub::new(dir, name, tx.clone())
+        let mut hub = link::Hub::new(dir, name, tx.clone());
+        hub.port = app.cfg.link.port;
+        hub
     };
     pool.set_link(link_hub.dialer());
     app.link_at_start();

@@ -1644,7 +1644,7 @@ site-max-kbps = Geschwindigkeitsgrenze, KB/s (leer: keine)
 site-protocol-imap = IMAP (Mail, nur lesen)
 site-protocol-imaps = IMAPS (Mail über TLS, nur lesen)
 site-protocol-link = Link (ein anderer FinalCommander, lokales Netz)
-site-link-note = Link: Host ist die ID des anderen Rechners, Benutzer der geteilte Ordner (leer: der erste)
+site-link-note = Link: Host ist die ID des anderen Rechners, Benutzer der geteilte Ordner (leer: der erste); mit „ask“ ist das Passwort seine PIN
 
 # The AI services as a list, like the sessions
 ai-services-title = KI-Dienste

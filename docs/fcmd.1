@@ -4,7 +4,7 @@
 .SH NAME
 fcmd \- FinalCommander — orthodox file manager for the terminal
 .SH SYNOPSIS
-\fBfcmd\fR [\fB\-\-config\fR] [\fB\-\-plugins\fR] [\fB\-\-theme\fR] [\fB\-\-keymap\fR] [\fB\-\-lang\fR] [\fB\-\-set\fR] [\fB\-\-view\fR] [\fB\-\-edit\fR] [\fB\-\-diff\fR] [\fB\-P\fR|\fB\-\-printwd\fR] [\fB\-\-no\-save\fR] [\fB\-\-shell\-init\fR] [\fB\-\-list\-themes\fR] [\fB\-\-list\-commands\fR] [\fB\-\-list\-languages\fR] [\fB\-\-check\-keymap\fR] [\fB\-\-export\-theme\fR] [\fB\-\-dump\-config\fR] [\fB\-\-paths\fR] [\fB\-\-list\-plugins\fR] [\fB\-\-web\-terminal\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] 
+\fBfcmd\fR [\fB\-\-config\fR] [\fB\-\-plugins\fR] [\fB\-\-theme\fR] [\fB\-\-keymap\fR] [\fB\-\-lang\fR] [\fB\-\-set\fR] [\fB\-\-view\fR] [\fB\-\-edit\fR] [\fB\-\-diff\fR] [\fB\-P\fR|\fB\-\-printwd\fR] [\fB\-\-no\-save\fR] [\fB\-\-shell\-init\fR] [\fB\-\-list\-themes\fR] [\fB\-\-list\-commands\fR] [\fB\-\-list\-languages\fR] [\fB\-\-check\-keymap\fR] [\fB\-\-export\-theme\fR] [\fB\-\-dump\-config\fR] [\fB\-\-paths\fR] [\fB\-\-list\-plugins\fR] [\fB\-\-web\-terminal\fR] [\fB\-\-link\-serve\fR] [\fB\-\-link\-pin\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] 
 .SH DESCRIPTION
 FinalCommander is a two\-panel file manager for the terminal that works the same way on Linux, macOS and Windows: one program, one set of keys, one configuration file.
 .PP
@@ -97,6 +97,16 @@ List the plugins found in the plugins directory
 Serve the program in a browser page on this machine, at a loopback address or port.
 
 Prints the address to open, with a token chosen for the run that the page needs; each page that opens it runs its own fcmd on a pseudo\-terminal, with the other options given here. Only 127.0.0.1 and ::1 are listened on. The Android app is this, in a web view.
+.TP
+\fB\-\-link\-serve\fR
+Accept Link calls without a screen, sharing a folder read only, until stopped.
+
+For a machine nobody sits at — a home server, a router, a Raspberry Pi: the folder is the first PATH, or `link.share`. With no person to answer, only a caller that gives this machine\*(Aqs PIN is let in, so a PIN must be set first with \-\-link\-pin. Prints the machine\*(Aqs ID, then one line for each call.
+.TP
+\fB\-\-link\-pin\fR
+Set the PIN that lets a Link caller in without the question, or remove it.
+
+Asks for the PIN twice without showing it; an empty one removes it. The PIN itself is not stored: what is kept, in `link\-pin` beside the settings, is a salted, stretched value of it.
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help (see a summary with \*(Aq\-h\*(Aq)

@@ -1,7 +1,8 @@
 //! The called side of the Link (SPEC 04 §9.2, §9.4, §9.7).
 //!
 //! Every connection: TLS with the caller's certificate demanded; each side's hello; the
-//! caller's ask; then the person here is asked, through [`Gate::admit`], with the six
+//! caller's ask; a caller with a PIN proves it ([`prove_pin`]) and is let in without asking;
+//! otherwise the person here is asked, through [`Gate::admit`], with the six
 //! digits on the screen — and only a yes opens the share. Everything the caller sends after
 //! that is resolved under the share ([`Share::resolve`]) and, in a read-only session, every
 //! operation that would write is refused here, whatever the caller is.
@@ -11,7 +12,7 @@ use std::io::{self, SeekFrom};
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use fcmd_core::EntryKind;
@@ -21,8 +22,12 @@ use tokio::time::timeout;
 use tokio_rustls::TlsAcceptor;
 
 use super::identity::{fingerprint, sas, Identity};
+use super::pin::{self, Exchange, Lockout, Pin};
 use super::share::Share;
-use super::wire::{self, Answer, Ask, Hello, Op, Payload, Reply, Request, WireEntry};
+use super::wire::{
+    self, Answer, Ask, Hello, Op, Payload, PinMessage, PinOffer, PinProof, Reply, Request,
+    WireEntry,
+};
 use super::{net, tls, ANSWER_SECONDS, VERSION};
 use crate::ops::RemoteEntry;
 use crate::remote::CHUNK;
@@ -43,6 +48,8 @@ pub struct Caller {
     pub share: String,
     /// Whether the caller asked to write.
     pub write: bool,
+    /// Let in by its PIN rather than by the person here.
+    pub by_pin: bool,
 }
 
 /// The person's answer.
@@ -64,6 +71,17 @@ pub trait Gate: Send + Sync {
     fn opened(&self, _caller: &Caller, _write: bool) {}
     /// It ended.
     fn closed(&self, _caller: &Caller) {}
+    /// The PIN that lets a caller in without asking (SPEC 04 §9.5), if one is set.
+    fn pin(&self) -> Option<Pin> {
+        None
+    }
+    /// Whether a person is here to answer. A Link that runs without a screen is not: a
+    /// caller without the PIN is turned away at once, and told why.
+    fn attended(&self) -> bool {
+        true
+    }
+    /// A call that was not let in, and why (for a log).
+    fn refused(&self, _caller: &Caller, _why: &str) {}
     /// A signal that ends every open session at once (`Ctrl+Alt+L` on this side): each
     /// change of the value hangs up.
     fn hang_up(&self) -> Option<tokio::sync::watch::Receiver<u64>> {
@@ -80,6 +98,7 @@ pub async fn serve(
 ) -> io::Result<()> {
     let config = tls::server_config(&identity).map_err(io::Error::other)?;
     let acceptor = TlsAcceptor::from(config);
+    let lockout = Arc::new(std::sync::Mutex::new(Lockout::default()));
     loop {
         let (tcp, addr) = listener.accept().await?;
         if !net::is_local(addr.ip()) {
@@ -89,8 +108,9 @@ pub async fn serve(
         let acceptor = acceptor.clone();
         let identity = identity.clone();
         let gate = gate.clone();
+        let lockout = lockout.clone();
         tokio::spawn(async move {
-            let _ = connection(tcp, addr, acceptor, identity, gate).await;
+            let _ = connection(tcp, addr, acceptor, identity, gate, lockout).await;
         });
     }
 }
@@ -101,6 +121,7 @@ async fn connection(
     acceptor: TlsAcceptor,
     identity: Arc<Identity>,
     gate: Arc<dyn Gate>,
+    lockout: Arc<std::sync::Mutex<Lockout>>,
 ) -> io::Result<()> {
     let mut tls = timeout(Duration::from_secs(10), acceptor.accept(tcp))
         .await
@@ -155,12 +176,38 @@ async fn connection(
         addr,
         share: share.name.clone(),
         write: ask.write,
+        by_pin: false,
     };
-    let admission = timeout(Duration::from_secs(ANSWER_SECONDS), gate.admit(&caller))
-        .await
-        .unwrap_or(Admission::Refused);
+    let mut caller = caller;
+    let by_pin = match ask.pin {
+        false => false,
+        true => match prove_pin(&mut tls, &caller, &identity, gate.pin(), &lockout).await? {
+            PinOutcome::Proved => true,
+            PinOutcome::NoPin => false,
+            PinOutcome::Refused(why) => {
+                gate.refused(&caller, &why);
+                return refuse(&mut tls, why).await;
+            }
+        },
+    };
+    caller.by_pin = by_pin;
+    if !by_pin && !gate.attended() {
+        let why = "nobody is at this machine to answer: it lets in only callers that give \
+                   its PIN, as the session's password"
+            .to_string();
+        gate.refused(&caller, "no PIN given");
+        return refuse(&mut tls, why).await;
+    }
+    let admission = match by_pin {
+        // The PIN is the yes, in the mode it carries: read only in this step.
+        true => Admission::ReadOnly,
+        false => timeout(Duration::from_secs(ANSWER_SECONDS), gate.admit(&caller))
+            .await
+            .unwrap_or(Admission::Refused),
+    };
     let write = admission == Admission::ReadWrite && ask.write && share.write;
     if admission == Admission::Refused {
+        gate.refused(&caller, "not accepted");
         return refuse(&mut tls, "the call was not accepted".to_string()).await;
     }
     wire::send(
@@ -186,6 +233,96 @@ async fn connection(
     };
     gate.closed(&caller);
     result
+}
+
+enum PinOutcome {
+    Proved,
+    /// No PIN here: the call goes to the person.
+    NoPin,
+    Refused(String),
+}
+
+/// The called side of the PIN exchange (SPEC 04 §9.5): the salt, SPAKE2, the two proofs.
+async fn prove_pin<S>(
+    s: &mut S,
+    caller: &Caller,
+    identity: &Identity,
+    pin: Option<Pin>,
+    lockout: &std::sync::Mutex<Lockout>,
+) -> io::Result<PinOutcome>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    let Some(pin) = pin else {
+        wire::send(
+            s,
+            &PinOffer {
+                salt: None,
+                refused: None,
+            },
+        )
+        .await?;
+        return Ok(PinOutcome::NoPin);
+    };
+    let ip = caller.addr.ip();
+    let locked = lockout.lock().expect("lockout").check(ip, Instant::now());
+    if let Err(left) = locked {
+        let why = format!(
+            "too many wrong PINs from this machine: try again in {} minutes",
+            left.as_secs().div_ceil(60)
+        );
+        wire::send(
+            s,
+            &PinOffer {
+                salt: None,
+                refused: Some(why.clone()),
+            },
+        )
+        .await?;
+        return Ok(PinOutcome::Refused(why));
+    }
+    wire::send(
+        s,
+        &PinOffer {
+            salt: Some(pin::hex(&pin.salt)),
+            refused: None,
+        },
+    )
+    .await?;
+    let theirs: PinMessage = timeout(Duration::from_secs(30), wire::recv(s))
+        .await
+        .map_err(|_| io::Error::other("no PIN message"))??;
+    let exchange = Exchange::called(&pin.verifier, &caller.fingerprint, &identity.fingerprint());
+    wire::send(
+        s,
+        &PinMessage {
+            message: pin::hex(&exchange.message),
+        },
+    )
+    .await?;
+    let theirs = pin::from_hex_vec(&theirs.message).unwrap_or_default();
+    let proofs = exchange.finish(&theirs);
+    let proof: PinProof = timeout(Duration::from_secs(30), wire::recv(s))
+        .await
+        .map_err(|_| io::Error::other("no PIN proof"))??;
+    let good = match &proofs {
+        Ok(proofs) => proofs.check(&pin::from_hex_vec(&proof.proof).unwrap_or_default()),
+        Err(_) => false,
+    };
+    if !good {
+        lockout.lock().expect("lockout").failed(ip, Instant::now());
+        return Ok(PinOutcome::Refused("wrong PIN".to_string()));
+    }
+    lockout.lock().expect("lockout").succeeded(ip);
+    let proofs = proofs?;
+    wire::send(
+        s,
+        &PinProof {
+            proof: pin::hex(&proofs.mine),
+        },
+    )
+    .await?;
+    Ok(PinOutcome::Proved)
 }
 
 async fn refuse<S: tokio::io::AsyncWrite + Unpin>(s: &mut S, reason: String) -> io::Result<()> {
