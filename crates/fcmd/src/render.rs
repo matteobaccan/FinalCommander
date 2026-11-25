@@ -948,6 +948,13 @@ fn draw_user_screen(app: &App, buf: &mut Buffer, scroll: usize) {
 /// The structure pane beside the content: what the file is, and where anything in it lives
 /// (SPEC 05 §1.8). A group heading is a label, a field shows its raw bytes and their meaning,
 /// and a row that points somewhere is what `Enter` follows.
+/// The rows of the structure pane that show rows: its height less the title and the frame's
+/// bottom. The keys that move the pane's cursor count with this too, or the last rows of a
+/// long structure would scroll in under the frame and never be seen.
+pub(crate) fn structure_visible_rows(pane_height: u16) -> u16 {
+    pane_height.saturating_sub(2)
+}
+
 fn draw_structure(app: &App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer, area: Rect) {
     let base = app.theme.panel();
     let frame = app.theme.fg_on("panel.frame", "panel.bg");
@@ -967,7 +974,7 @@ fn draw_structure(app: &App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer, a
         area.x + 1,
         area.y + 1,
         area.w.saturating_sub(1),
-        area.h.saturating_sub(2),
+        structure_visible_rows(area.h),
     );
     let focus = viewer.struct_focus;
     let (rows, cursor) = viewer.structure_rows(inner.h);
@@ -6540,6 +6547,56 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         assert!(!app.mode.viewer().unwrap().show_structure);
         let out = frame(&mut app, 100, 20);
         assert!(!out.contains("Structure"), "{out}");
+    }
+
+    /// A structure longer than the window: `End`, and every `Down` on the way there, keep the
+    /// cursor on a row the pane really shows — not on one of the two the title and the frame
+    /// take, under which the last rows used to scroll and stay out of sight.
+    #[test]
+    fn the_last_rows_of_a_long_structure_come_into_view() {
+        let path = std::env::current_exe().unwrap();
+        let mut app = app("far", "en");
+        let source = fcmd_view::source::FileSource::open(&path).unwrap();
+        let mut viewer = fcmd_view::Viewer::new(Box::new(source), VPath::local(&path));
+        viewer.set_mode(fcmd_view::Mode::Hex);
+        assert!(viewer.toggle_structure(), "our own binary must decode");
+        app.mode = crate::app::Mode::Viewer(Box::new(viewer));
+        frame(&mut app, 100, 20);
+        let visible = structure_visible_rows(app.viewer_size.1);
+        let len = app.mode.viewer_mut().unwrap().structure_len();
+        assert!(
+            len > visible as usize,
+            "the structure must be longer than the pane"
+        );
+
+        let on_screen = |app: &mut App| {
+            let (rows, cursor) = app.mode.viewer_mut().unwrap().structure_rows(visible);
+            cursor < rows.len()
+        };
+        for _ in 0..len {
+            app.handle_input(Input::Key("Down".parse().unwrap()));
+            assert!(on_screen(&mut app), "Down left the cursor under the frame");
+        }
+        app.handle_input(Input::Key("Home".parse().unwrap()));
+        app.handle_input(Input::Key("End".parse().unwrap()));
+        assert!(on_screen(&mut app), "End left the cursor under the frame");
+        let last = app
+            .mode
+            .viewer_mut()
+            .unwrap()
+            .structure()
+            .unwrap()
+            .rows
+            .last()
+            .unwrap()
+            .label
+            .clone();
+        let out = frame(&mut app, 100, 20);
+        let shown: String = last.chars().take(10).collect();
+        assert!(
+            out.contains(&shown),
+            "the last row, {last:?}, is on the screen:\n{out}"
+        );
     }
 
     #[test]

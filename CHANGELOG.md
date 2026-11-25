@@ -6,6 +6,12 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The viewer's structure pane (`F11`): with more rows than the window, the cursor could go
+  down under the pane's frame, and the last two rows were never shown. The keys now count the
+  rows the pane really has.
+
 ## [0.47.0] — 2026-11-25
 
 FinalCommander on routers. Four new archives for 32-bit MIPS — little-endian for the

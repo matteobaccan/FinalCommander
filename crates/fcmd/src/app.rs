@@ -7816,7 +7816,9 @@ impl App {
 
     /// Returns true when the key belonged to the structure pane.
     fn structure_pane_key(&mut self, key: Key) -> bool {
-        let height = self.viewer_size.1;
+        // The pane is as tall as the viewer's body; its rows are that less its title and
+        // its frame.
+        let height = crate::render::structure_visible_rows(self.viewer_size.1);
         let mut target = None;
         let handled = match self.live_viewer_mut() {
             Some(viewer) if viewer.show_structure && viewer.struct_focus => match key.code {
