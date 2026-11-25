@@ -71,6 +71,17 @@ database manager. What it has and we do not, from its README; the Link is the se
 | **Tabs in the editor**: several files open as tabs, a changed one marked | M | We have the screens (`F12`), FAR's model; tabs would be a second way |
 | **Files on the clipboard on Windows** (`CF_HDROP`): `Ctrl+C` in a panel puts the files there, so Explorer's `Ctrl+V` copies them, and back | M | Through `fcmd-platform`'s Windows code; on Linux and macOS a terminal has no such clipboard |
 
+## iSH on iPad and iPhone
+
+`linux-i686-static` stops on iSH with *Illegal instruction* (the author's iPhone, 0.46.1): iSH's
+decoder (`emu/decode.h` of ish-app/ish) lacks SSE and SSE2 instructions rustc emits for i686
+anywhere — `movmskps` (in 65 functions of fcmd, the first met in `cli::color`), `movlhps`/
+`movhlps`, `minps`/`maxps`/`minpd`/`maxpd`, `divps`/`divpd`, `cmpps`, `cvtdq2ps`, `cvtdq2pd`,
+`cvtps2pd`. No target flag avoids them (`ring` needs SSE2, so i586 does not build). A patch
+for iSH adding all of them was written on 25 November 2026 and handed to the author to
+propose upstream. **To verify**: when an iSH release carries it, run `install.sh` on iSH and
+turn the README's and the release notes' *does not start there yet* into a plain yes.
+
 ## Candidates for a later release
 
 Gathered on 17 November 2026 from three readings, to be discussed with the author before
