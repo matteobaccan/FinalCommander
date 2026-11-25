@@ -196,13 +196,22 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.46.1 is the version in `main`**, tagged and released with seven archives, the Android
-app and its Termux archive for 64-bit and 32-bit ARM, `install.sh` and `SHA256SUMS`. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
+**0.47.0 is the version in `main`**, tagged and released with eleven archives — four of them
+for MIPS routers —, the Android app and its Termux archive for 64-bit and 32-bit ARM,
+`install.sh` and `SHA256SUMS`. Rust is 1.100.0 exactly, from `rust-toolchain.toml`. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.47.0** — MIPS: `linux-mipsel-static` and `linux-mips-static`, each with a `-compact-`
+  twin (`fcmd --no-default-features`: English alone, no WebAssembly, pictures, x86
+  disassembler, SQLite or web terminal; HTTP still in), built by the same 1.100.0 with
+  `-Zbuild-std` under `RUSTC_BOOTSTRAP`, `opt-level = "z"`, and `-C relocation-model=static`
+  (a static PIE turned every panic into a segmentation fault); `portable-atomic` for the
+  64-bit counters 32-bit MIPS lacks; `/proc/net` read in the machine's byte order; the
+  release notes' table of every build; the Link's spec (SPEC 04 §9) and the DBF rules in the
+  backlog.
 - **0.46.1** — the same day: `linux-i686-static` (Zig, like armv7) for iSH on iPad and
   iPhone, and `install.sh` at the root, published with each release.
 - **0.46.0** — Android: `packaging/android/` (an activity with a web view on

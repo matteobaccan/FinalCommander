@@ -749,7 +749,7 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "fcmd"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "anyhow",
  "fcmd-arc",
@@ -786,7 +786,7 @@ dependencies = [
 
 [[package]]
 name = "fcmd-arc"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "bzip2",
  "encoding_rs",
@@ -806,7 +806,7 @@ dependencies = [
 
 [[package]]
 name = "fcmd-cmd"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "fcmd-core",
  "serde",
@@ -816,7 +816,7 @@ dependencies = [
 
 [[package]]
 name = "fcmd-config"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "fcmd-arc",
  "fcmd-core",
@@ -828,7 +828,7 @@ dependencies = [
 
 [[package]]
 name = "fcmd-core"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "crc32fast",
  "regex",
@@ -839,7 +839,7 @@ dependencies = [
 
 [[package]]
 name = "fcmd-edit"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "fcmd-core",
  "fcmd-platform",
@@ -853,7 +853,7 @@ dependencies = [
 
 [[package]]
 name = "fcmd-find"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "fcmd-arc",
  "fcmd-core",
@@ -867,11 +867,11 @@ dependencies = [
 
 [[package]]
 name = "fcmd-i18n"
-version = "0.46.1"
+version = "0.47.0"
 
 [[package]]
 name = "fcmd-jobs"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "crc32fast",
  "fcmd-arc",
@@ -890,7 +890,7 @@ dependencies = [
 
 [[package]]
 name = "fcmd-net"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "async-trait",
  "fcmd-arc",
@@ -916,7 +916,7 @@ dependencies = [
 
 [[package]]
 name = "fcmd-platform"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "libc",
  "nix 0.32.0",
@@ -926,7 +926,7 @@ dependencies = [
 
 [[package]]
 name = "fcmd-plug"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -937,7 +937,7 @@ dependencies = [
 
 [[package]]
 name = "fcmd-s3"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "async-trait",
  "fcmd-core",
@@ -953,7 +953,7 @@ dependencies = [
 
 [[package]]
 name = "fcmd-site"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "pulldown-cmark",
  "tempfile",
@@ -961,11 +961,11 @@ dependencies = [
 
 [[package]]
 name = "fcmd-syntax"
-version = "0.46.1"
+version = "0.47.0"
 
 [[package]]
 name = "fcmd-term"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "fcmd-platform",
  "fcmd-ui",
@@ -977,7 +977,7 @@ dependencies = [
 
 [[package]]
 name = "fcmd-tui"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "crossterm",
  "fcmd-cmd",
@@ -989,7 +989,7 @@ dependencies = [
 
 [[package]]
 name = "fcmd-ui"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "fcmd-core",
  "jiff",
@@ -1002,7 +1002,7 @@ dependencies = [
 
 [[package]]
 name = "fcmd-vfs"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "async-trait",
  "fcmd-arc",
@@ -1015,7 +1015,7 @@ dependencies = [
 
 [[package]]
 name = "fcmd-view"
-version = "0.46.1"
+version = "0.47.0"
 dependencies = [
  "encoding_rs",
  "fcmd-arc",

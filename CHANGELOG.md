@@ -6,6 +6,16 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.47.0] — 2026-11-25
+
+FinalCommander on routers. Four new archives for 32-bit MIPS — little-endian for the
+MediaTek routers OpenWrt runs on, big-endian for the older Atheros and Qualcomm ones — each
+in a full build and a compact one that leaves out what a router has no use for, so that it
+fits in a few megabytes of flash; `install.sh` tells the two byte orders apart by itself. On
+the way, the socket list learnt to read addresses on a big-endian machine. The release page
+now says, for every download, what it runs on, when to take it and why it exists. Rust is
+pinned to one exact version, 1.100.0, for every build.
+
 ### Added
 
 - `FinalCommander-linux-mipsel-static-<v>.tar.gz`: statically linked, for 32-bit
@@ -29,9 +39,11 @@ Notable changes, newest first. The format follows
 
 - Rust is now one exact version, 1.100.0, written in `rust-toolchain.toml` and used by every
   build and every workflow; a newer one comes as a decision, not on its own.
+- The release page lists every download with what it runs on, when to take it and why it
+  exists, and gives `install.sh` with `wget` as well as `curl`.
 - Dependencies: `notify` 9 (its polling watcher brings `xxhash-rust`, BSL-1.0, now among the
-  licences allowed), `russh-sftp` 4, `russh` 0.65.4, `toml`, `zip`, `anyhow`, `jiff`; JDK 25
-  for the Android build.
+  licences allowed), `russh-sftp` 4, `russh` 0.65.4, `toml`, `zip`, `anyhow`, `jiff`,
+  `crc32fast`; JDK 25 for the Android build.
 
 ## [0.46.1] — 2026-11-23
 
