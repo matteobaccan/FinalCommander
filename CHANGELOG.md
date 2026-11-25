@@ -29,18 +29,47 @@ Notable changes, newest first. The format follows
   Before the first change to a table in a session a dialog says it is about to be altered and
   makes a backup — the table and its memo file copied beside themselves with the date and time
   in the name, `CLIENTI.DBF` → `CLIENTI.20261125-083015.DBF`, the extension kept last — or the
-  change is not made. A table with index files beside it (`.cdx` or `.mdx` of its name, any
-  `.ntx`, `.nsx` or `.idx`) is not written at all, and the message says why: Clipper and
-  Harbour programs would be left with stale indexes. `Pack` writes a new file and renames it
+  change is not made. A table with index files of its own beside it — files whose name begins
+  with the table's and ends in `.ntx`, `.cdx`, `.mdx`, `.nsx` or `.idx`: `PIPPO.CDX`,
+  `pippo1.ntx`, `pippo_nome.ntx` for `pippo.dbf` — is written only after a second question,
+  asked once for the table right after the backup, which names them and says that this
+  program does not update them and that they must be rebuilt (reindexed) afterwards by the
+  program they belong to; *Cancel* writes nothing. The backup copies those indexes too, and
+  an index that turns up later is asked about before the next write. `Pack` writes a new file and renames it
   into place, so there is never half a table on disk; every other change is one record
   written, with the header's count, date and end-of-file byte kept right. The table is opened
   for writing only for the moment of each change, and a table another program holds says so.
+- **More of a dBase table is read**, after the FAR plugin LookDBF. Visual FoxPro's nullable
+  fields show `NULL`, its `V` and `Q` fields of varying length show as long as they are, and
+  the `_NullFlags` field that keeps both is no longer a column. Its containers — `.dbc`,
+  `.scx`, `.frx`, `.vcx`, `.mnx`, `.pjx`, `.lbx` — open as the tables they are, with their
+  memo files. `Enter` on a memo cell (or `m`) reads the memo whole, and `Esc` goes back to
+  the table. The structure pane (`Shift+F11`) lists every field with its type, width,
+  decimals, offset and flags. `Ctrl+F6` sums every numeric column, to the cent, over the
+  marked rows or all of them; `Ctrl+F5` shows the marked rows only, in any table.
+- **DOS code pages 850, 852 and 865 are read exactly**, from tables of their own, where they
+  were read through a Windows page that only agreed with them on some letters — so a table
+  marked with one of them is now also written in full. A table that names no code page,
+  which is what Clipper writes, can be told one: `Ctrl+T` (or `F8`, `Shift+F8` in a dBase
+  table) goes round CP437, 850, 852, 865, 866, 1250, 1251 and 1252; the choice holds for
+  that table for the session and what is typed is then written in that page exactly.
+- **The marked records of a dBase table deleted or recalled in one go**: `Ctrl+D` and
+  `Ctrl+R`, behind one question that says how many, under the same rules as every other
+  change to a table.
+- **Rows of a dBase table exported**: `Ctrl+F9` writes the marked rows, or the rows the view
+  shows in the order it shows them, to a new file — CSV in UTF-8 with the field names first,
+  or, when the name ends in `.dbf`, a table of the same structure with the records as they
+  are and the memo file copied whole beside it. A file that is there is never written over.
 - dBase tables are a build feature, `dbf`, in every build but the compact one
   (`--no-default-features`, the `-compact-` MIPS archives): there a `.dbf` opens as bytes and
   the keys above say that dBase tables are not in the build.
 
 ### Fixed
 
+- A Visual FoxPro currency between minus one and zero lost its sign in table mode: `-0.5000`
+  was shown as `0.5000`.
+- A Visual FoxPro table with a binary field (`C` or `M` marked *binary*) was taken for one
+  that numbers its own records, and refused a new record.
 - The viewer's structure pane (`F11`): with more rows than the window, the cursor could go
   down under the pane's frame, and the last two rows were never shown. The keys now count the
   rows the pane really has.

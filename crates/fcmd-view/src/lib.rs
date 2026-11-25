@@ -55,8 +55,8 @@ pub use disasm::{
 pub use search::{compile, Match, Pattern, SearchError, SearchMode};
 pub use source::{BytesSource, FileSource, Source};
 pub use table::Table;
-#[cfg(feature = "dbf")]
-pub use view::DbfHere;
 pub use view::{
     film_in, DecodedView, FilmState, Mode, Row, RowKind, Started, Status, Viewer, Wrap,
 };
+#[cfg(feature = "dbf")]
+pub use view::{DbfHere, MemoShown};

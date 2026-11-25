@@ -229,7 +229,39 @@ in front of the fields, where it cannot be mistaken for part of a number.
 
 The text comes out in the code page the header names, DOS ones included: a table written under
 DOS in Germany is in code page 437, and `temporäre` reads as `temporäre` rather than as
-`tempor„re`.
+`tempor„re`. Code pages 437, 850, 852, 865 and 866 and the Windows pages are read exactly.
+
+A **table that names no code page** — a Clipper table does not — is read as Windows-1252
+until you say otherwise: `Ctrl+T`, or `F8` or `Shift+F8`, which in a dBase table mean the
+table's own page, goes to the next of CP437, CP850, CP852, CP865, CP866, CP1250, CP1251 and
+CP1252, and after the last back to saying nothing. Stop on the one in which the accented
+names read right. The status line shows it, the choice holds for that table for as long as
+the program runs, and from then on what you type into the table is written in that page.
+
+Visual FoxPro's own things are read as well: a field with no value shows `NULL`, a field of
+varying length (`V`, `Q`) shows as much as it holds, and the files Visual FoxPro keeps its
+databases, forms, reports, classes, menus, projects and labels in — `.dbc`, `.scx`, `.frx`,
+`.vcx`, `.mnx`, `.pjx`, `.lbx` — open as the tables they are, with their memo files.
+
+More of a dBase table than a row of cells:
+
+| Key | What it does |
+| --- | --- |
+| `Enter` on a memo cell, or `m` | the whole text of the memo, in place of the table; `Esc` or `Backspace` goes back to the table |
+| `Shift+F11` | the structure: every field with its type, width, decimals, offset and flags |
+| `Ctrl+F5` | show the marked rows only, and every row again (any table, not only dBase) |
+| `Ctrl+F6` | the sum of every numeric column, over the marked rows or over all the rows shown, with how many rows had a number |
+| `Ctrl+F9` | export the marked rows, or all the rows shown, to a new file |
+| `Ctrl+T`, `F8`, `Shift+F8` | the code page of a table that names none |
+
+`Ctrl+F9` asks for a name and writes the rows in the order you see them, beside the table
+unless the name says where. A name ending in `.dbf` makes a table of the same structure, the
+records exactly as they are, with the memo file copied whole beside it under the new name so
+that every memo is still found; any other name makes a CSV file in UTF-8 with the field names
+on the first line. A file that is already there is never written over: choose another name.
+
+The keys are those of the FAR plugin LookDBF where they were free here; its `F5`, `F6` and
+`F9` take `Ctrl`, because the viewer already uses those three.
 
 ## Changing a dBase table
 
@@ -241,32 +273,38 @@ panels' own with `Ctrl` held, as sorting is:
 | `Ctrl+F4` | type a new value over the cell: the cursor's record, the column the view is on (`Ctrl+←`/`Ctrl+→` choose it) |
 | `Ctrl+N` | append an empty record, and put the cursor on it to be filled in |
 | `Ctrl+F8` | delete the record under the cursor, or recall it: the `*` in the first column |
+| `Ctrl+D` | delete every marked record, after one question that says how many |
+| `Ctrl+R` | recall every marked record, likewise |
 | `Shift+Del` | `Pack`: take the deleted records out for good |
 
 **Before the first change** to a table in a session a dialog says the table is about to be
-altered and that a backup is wanted first, and makes it: a copy of the table and of its memo
-file beside them, named with the date and the time — `CLIENTI.DBF` becomes
+altered and that a backup is wanted first, and makes it: a copy of the table, of its memo
+file and of its index files beside them, named with the date and the time — `CLIENTI.DBF` becomes
 `CLIENTI.20261125-083015.DBF`, `CLIENTI.DBT` becomes `CLIENTI.20261125-083015.DBT` — year,
 month, day, then hours, minutes and seconds, so the copies sort by name in the order they
 were made, and the extension last, so a copy still opens as a table. The buttons are *Back up
 and edit* and *Cancel*, and nothing is written before the answer. After it, the other changes
 of that session to that table go straight through.
 
-**A table with index files beside it is not written at all.** A `.cdx` or an `.mdx` with the
-table's name, or any `.ntx`, `.nsx` or `.idx` in the folder — an index of that kind is named
-by whoever made it, and nothing in it says which table it belongs to — and the message names
-the files. The reason is the programs those tables belong to: an index holds a copy of the
-keys, a record changed behind its back leaves it pointing at what is no longer there, and a
-Clipper, Harbour or FoxPro program that trusts it then finds the wrong record. FinalCommander
-does not keep indexes up to date, so it leaves such a table alone.
+**A table with index files is written only after you have been told about them.** An index
+is the table's when its name begins with the table's name and it ends in `.ntx`, `.cdx`,
+`.mdx`, `.nsx` or `.idx`: for `pippo.dbf` that is `PIPPO.CDX`, `pippo1.ntx`,
+`pippo_nome.ntx`; any other index in the folder belongs to another table and is left out of
+it. Right after the backup a second dialog names those files and says what follows from
+them: FinalCommander does not update an index, so after the change the indexes no longer
+match the table and **must be rebuilt (reindexed) by the program they belong to** — the
+Clipper, Harbour or FoxPro program that uses the table. *Go on* writes; *Cancel* writes
+nothing. You are asked once for a table in a session, and again if a new index turns up.
+The backup holds a copy of the indexes as they were.
 
 What is typed is checked against the field, and written exactly or not at all:
 
 - a **character** field takes what fits in its width, in the table's own code page. A letter
   that page has no byte for is refused and named, never replaced with a `?`. A table whose
-  header names no code page — a Clipper table does not — or a DOS page this program reads only
-  approximately (850, 852 and their kin) takes plain ASCII alone, for the same reason: a
-  guessed `è` would land on the wrong byte;
+  header names no code page — a Clipper table does not — takes plain ASCII alone until you
+  have chosen its page with `Ctrl+T` (above), and so does one in a DOS page this program
+  reads only approximately (860, 861, 863), for the same reason: a guessed `è` would land on
+  the wrong byte;
 - a **number** (`N`, `F`) is digits, a minus sign and a decimal point, laid out to the field's
   width and decimals. `12.5` goes into two decimals as `12.50`; `12.505` does not go, because
   it would have to be rounded;

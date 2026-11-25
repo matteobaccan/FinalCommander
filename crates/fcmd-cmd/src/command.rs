@@ -501,6 +501,20 @@ pub enum Command {
     ViewerDbfDelete,
     /// Take the deleted records out of a dBase table for good.
     ViewerDbfPack,
+    /// Show the marked rows of the table only, or every row again.
+    ViewerTableMarkedOnly,
+    /// Read the memo cell under the cursor whole.
+    ViewerDbfMemo,
+    /// The sum of every numeric column, over the marked rows or all of them.
+    ViewerDbfSums,
+    /// Say which code page a dBase table that names none is in: the next one.
+    ViewerDbfCodepage,
+    /// Delete every marked record of a dBase table.
+    ViewerDbfDeleteMarked,
+    /// Recall every marked record of a dBase table.
+    ViewerDbfRecallMarked,
+    /// Write the marked rows, or the rows shown, to a new CSV or dBase file.
+    ViewerDbfExport,
     ViewerModeNext,
     ViewerSearch,
     ViewerSearchNext,
@@ -926,6 +940,13 @@ impl Command {
             Command::ViewerDbfAppend,
             Command::ViewerDbfDelete,
             Command::ViewerDbfPack,
+            Command::ViewerTableMarkedOnly,
+            Command::ViewerDbfMemo,
+            Command::ViewerDbfSums,
+            Command::ViewerDbfCodepage,
+            Command::ViewerDbfDeleteMarked,
+            Command::ViewerDbfRecallMarked,
+            Command::ViewerDbfExport,
             Command::ViewerModeNext,
             Command::ViewerSearch,
             Command::ViewerSearchNext,
@@ -1282,6 +1303,13 @@ impl Command {
             Command::ViewerDbfAppend => "viewer.dbf.append".into(),
             Command::ViewerDbfDelete => "viewer.dbf.delete".into(),
             Command::ViewerDbfPack => "viewer.dbf.pack".into(),
+            Command::ViewerTableMarkedOnly => "viewer.table.marked.only".into(),
+            Command::ViewerDbfMemo => "viewer.dbf.memo".into(),
+            Command::ViewerDbfSums => "viewer.dbf.sums".into(),
+            Command::ViewerDbfCodepage => "viewer.dbf.codepage".into(),
+            Command::ViewerDbfDeleteMarked => "viewer.dbf.delete.marked".into(),
+            Command::ViewerDbfRecallMarked => "viewer.dbf.recall.marked".into(),
+            Command::ViewerDbfExport => "viewer.dbf.export".into(),
             Command::ViewerTableFilter => "viewer.table.filter".into(),
             Command::ViewerModeNext => "viewer.mode.next".into(),
             Command::ViewerSearch => "viewer.search".into(),
@@ -1618,6 +1646,13 @@ impl Command {
             ("viewer.dbf.append", _) => Command::ViewerDbfAppend,
             ("viewer.dbf.delete", _) => Command::ViewerDbfDelete,
             ("viewer.dbf.pack", _) => Command::ViewerDbfPack,
+            ("viewer.table.marked.only", _) => Command::ViewerTableMarkedOnly,
+            ("viewer.dbf.memo", _) => Command::ViewerDbfMemo,
+            ("viewer.dbf.sums", _) => Command::ViewerDbfSums,
+            ("viewer.dbf.codepage", _) => Command::ViewerDbfCodepage,
+            ("viewer.dbf.delete.marked", _) => Command::ViewerDbfDeleteMarked,
+            ("viewer.dbf.recall.marked", _) => Command::ViewerDbfRecallMarked,
+            ("viewer.dbf.export", _) => Command::ViewerDbfExport,
             ("viewer.table.filter", _) => Command::ViewerTableFilter,
             ("viewer.mode.next", _) => Command::ViewerModeNext,
             ("viewer.search", _) => Command::ViewerSearch,

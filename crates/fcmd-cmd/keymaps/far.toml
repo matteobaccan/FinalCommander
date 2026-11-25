@@ -857,6 +857,50 @@ keys = ["Shift+Del"]
 scope = "viewer"
 cmd = "viewer.dbf.pack"
 
+# What the FAR plugin LookDBF taught its users, on the keys it taught them where those are
+# free here. Its `F5` (the marked records only), `F6` (sums) and `F9` (export) are the
+# viewer's disassembly, its way to the editor and the menu, so each takes `Ctrl` — the rule
+# of every other key of the table. `Ctrl+D` deletes the marked records as it does there;
+# its `Ctrl+I` cannot recall them here, being the same byte as `Tab` to a terminal, so
+# `Ctrl+R` does — R for recall, which is dBase's own word. Its `Shift+F8` chooses the code
+# page: in a dBase table that key and `F8` already mean the table's page (the viewer's own
+# page has nothing to say about a table that is read by its header), and `Ctrl+T` is the
+# command's own. `m` reads a memo whole, as does `Enter` on a memo cell.
+[[bind]]
+keys = ["Ctrl+F5"]
+scope = "viewer"
+cmd = "viewer.table.marked.only"
+
+[[bind]]
+keys = ["Ctrl+F6"]
+scope = "viewer"
+cmd = "viewer.dbf.sums"
+
+[[bind]]
+keys = ["Ctrl+F9"]
+scope = "viewer"
+cmd = "viewer.dbf.export"
+
+[[bind]]
+keys = ["Ctrl+D"]
+scope = "viewer"
+cmd = "viewer.dbf.delete.marked"
+
+[[bind]]
+keys = ["Ctrl+R"]
+scope = "viewer"
+cmd = "viewer.dbf.recall.marked"
+
+[[bind]]
+keys = ["Ctrl+T"]
+scope = "viewer"
+cmd = "viewer.dbf.codepage"
+
+[[bind]]
+keys = ["m"]
+scope = "viewer"
+cmd = "viewer.dbf.memo"
+
 [[bind]]
 keys = ["Shift+F4"]
 scope = "viewer"

@@ -357,6 +357,11 @@ pub fn read(src: &mut dyn Bytes) -> Option<Structure> {
     if let Some(s) = crate::tags::read(src, &head, len) {
         return Some(s);
     }
+    // A dBase table has a version byte where the others have a signature, so it is asked
+    // late and believed only when its header adds up.
+    if let Some(s) = crate::dbf::structure(src, &head, len) {
+        return Some(s);
+    }
     // Last, because it is the one with no signature to go by: a mail message is text whose
     // first lines are headers, and everything above has had its chance to say otherwise.
     if let Some(s) = crate::mime::read(src, &head, len) {

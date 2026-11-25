@@ -1950,6 +1950,9 @@ pub enum PromptKind {
         record: usize,
         field: usize,
     },
+    /// The name of the file the rows of a dBase table are exported to.
+    #[cfg(feature = "dbf")]
+    DbfExport,
     /// Offset or percentage for the viewer.
     ViewerGoto,
     EditorGoto,
@@ -2503,6 +2506,12 @@ impl ConfirmAction {
             ConfirmAction::Dbf(DbfStep::Backup { .. }) => "btn-dbf-backup",
             #[cfg(feature = "dbf")]
             ConfirmAction::Dbf(DbfStep::Pack { .. }) => "btn-dbf-pack",
+            #[cfg(feature = "dbf")]
+            ConfirmAction::Dbf(DbfStep::Indexes { .. }) => "btn-dbf-go-on",
+            #[cfg(feature = "dbf")]
+            ConfirmAction::Dbf(DbfStep::Marked { deleted: true, .. }) => "btn-delete",
+            #[cfg(feature = "dbf")]
+            ConfirmAction::Dbf(DbfStep::Marked { deleted: false, .. }) => "btn-dbf-recall",
         }
     }
 
@@ -8674,6 +8683,8 @@ impl App {
             PromptKind::DbfCell { record, field } => {
                 self.dbf_cell_typed(record, field, prompt.text);
             }
+            #[cfg(feature = "dbf")]
+            PromptKind::DbfExport => self.dbf_export_named(prompt.text),
             PromptKind::TableFilter => {
                 let needle = prompt.text.trim().to_string();
                 self.restore_viewer();
@@ -13524,6 +13535,9 @@ impl App {
             }
             Command::ViewerDecompile if self.mode.viewer().is_some() => self.decompile(),
 
+            // Out of a memo that was opened from its table is back to the table: the
+            // viewer is left from there.
+            Command::ViewerQuit if self.mode.viewer_mut().is_some_and(|v| v.memo_back()) => {}
             Command::ViewerQuit => self.leave_screen(),
             Command::ViewerToPanel if self.mode.viewer().is_some() => self.viewer_to_panel(),
             Command::ViewerNextFile | Command::ViewerPrevFile if self.mode.viewer().is_some() => {
@@ -13660,11 +13674,48 @@ impl App {
                     }
                 }
             }
-            // Writing a dBase table: a cell, a new record, the deletion mark, `Pack`.
+            // `Ctrl+F5` on a table: the marked rows only, or every row again. A view over
+            // the records like the filter, and with it (SPEC 05 §1.11).
+            Command::ViewerTableMarkedOnly if self.mode.viewer().is_some() => {
+                use fcmd_view::view::MarkedOnly;
+                match self.live_viewer_mut().and_then(|v| v.table_only_marked()) {
+                    Some(MarkedOnly::On(rows)) => {
+                        let m = self
+                            .i18n
+                            .t_args("table-marked-only", &[("rows", (rows as i64).into())]);
+                        self.set_status(m);
+                    }
+                    Some(MarkedOnly::Off) => {
+                        let m = self.i18n.t("table-unfiltered");
+                        self.set_status(m);
+                    }
+                    Some(MarkedOnly::NoneMarked) => {
+                        let m = self.i18n.t("table-none-marked");
+                        self.set_error(m);
+                    }
+                    Some(MarkedOnly::TooMany) => {
+                        let m = self.i18n.t("table-too-many");
+                        self.set_error(m);
+                    }
+                    None => {
+                        let m = self.i18n.t("viewer-not-table");
+                        self.set_error(m);
+                    }
+                }
+            }
+            // A dBase table: a cell, a new record, the deletion mark of one record or of
+            // the marked ones, `Pack` — and what reads more of it than a row of cells: a
+            // memo whole, the sums, its code page, an export.
             Command::ViewerDbfEdit
             | Command::ViewerDbfAppend
             | Command::ViewerDbfDelete
             | Command::ViewerDbfPack
+            | Command::ViewerDbfMemo
+            | Command::ViewerDbfSums
+            | Command::ViewerDbfCodepage
+            | Command::ViewerDbfDeleteMarked
+            | Command::ViewerDbfRecallMarked
+            | Command::ViewerDbfExport
                 if self.mode.viewer().is_some() =>
             {
                 self.dbf_command(cmd)
@@ -14316,6 +14367,10 @@ impl App {
                         viewer.attach_memo(Box::new(memo));
                     }
                 }
+                // And the code page a table that names none was said to be in, earlier in
+                // this session.
+                #[cfg(feature = "dbf")]
+                viewer.dbf_prefer_page(self.dbf_page_for(local));
                 if viewer.is_empty() {
                     let m = self.i18n.t("viewer-empty");
                     self.set_status(m);
@@ -30316,6 +30371,27 @@ impl App {
         // `F8` walks the favourites, which is the whole point of marking any: the list is
         // thirty-odd pages long and nobody cycles through thirty.
         let favourites = self.codepage_favourites();
+        // In a dBase table three of the viewer's keys mean the table's own thing: `Enter`
+        // reads the memo under the cursor, and the two code page keys say which page a
+        // table that names none is in — the viewer's page has nothing to say about a
+        // table read by its header. And `Backspace` is the way back out of a memo.
+        if cmd == Command::ViewerBack && self.mode.viewer_mut().is_some_and(|v| v.memo_back()) {
+            return;
+        }
+        #[cfg(feature = "dbf")]
+        if self.mode.viewer_mut().is_some_and(|v| v.dbf().is_some()) {
+            let own = match cmd {
+                Command::ViewerFollowBranch => Some(Command::ViewerDbfMemo),
+                Command::ViewerCodepageNext | Command::ViewerCodepageList => {
+                    Some(Command::ViewerDbfCodepage)
+                }
+                _ => None,
+            };
+            if let Some(own) = own {
+                self.dbf_command(own);
+                return;
+            }
+        }
         if cmd == Command::ViewerCodepageList {
             self.open_codepages();
             return;

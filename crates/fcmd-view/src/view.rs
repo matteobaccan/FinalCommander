@@ -154,6 +154,46 @@ pub struct DbfHere {
     pub cells: Vec<String>,
 }
 
+/// What asking for the marked rows alone did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkedOnly {
+    /// The view is the marked rows, this many of them.
+    On(usize),
+    /// Every row again.
+    Off,
+    /// Nothing is marked, so there is nothing to keep the view to.
+    NoneMarked,
+    /// More records than a sorted or filtered view will walk: nothing changed.
+    TooMany,
+}
+
+/// What asking for the whole of a memo did.
+#[cfg(feature = "dbf")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemoShown {
+    /// The viewer now shows the memo's text; [`Viewer::memo_back`] is the way back.
+    Shown,
+    /// The cell under the cursor is not a memo of text.
+    NotMemo,
+    /// A memo field with nothing to show: empty, or its file is not beside the table.
+    Nothing,
+}
+
+/// The table a memo was opened from, kept whole while the viewer shows the memo's text:
+/// the file, and where in it the reader was.
+struct Parked {
+    source: Box<dyn Source>,
+    mode: Mode,
+    base_mode: Mode,
+    codepage: Codepage,
+    codepage_label: Option<String>,
+    top: u64,
+    col: usize,
+    table_row: usize,
+    table_cursor: usize,
+    structure: Option<Option<Structure>>,
+}
+
 /// What the status line needs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Status {
@@ -373,6 +413,12 @@ pub struct Viewer {
     /// Whether the first line of delimited text is the heading, when the reader has said so
     /// (`Ctrl+H`); `None` while it is guessed.
     table_header: Option<bool>,
+    /// The table under a memo that is being read whole, to go back to.
+    parked: Option<Parked>,
+    /// The code page a dBase table that names none was told it is in. Kept here and not
+    /// in the table, which is read again after every write that moves its records.
+    #[cfg(feature = "dbf")]
+    dbf_page: Option<crate::dbf::Page>,
     /// Cursor and scroll inside the pane, and whether the keys go to it.
     pub struct_cursor: usize,
     struct_top: usize,
@@ -482,6 +528,9 @@ impl Viewer {
             table_page: 20,
             table_marked: Default::default(),
             table_header: None,
+            parked: None,
+            #[cfg(feature = "dbf")]
+            dbf_page: None,
             struct_cursor: 0,
             struct_top: 0,
             struct_focus: false,
@@ -1468,10 +1517,12 @@ impl Viewer {
         // A dBase table says in its first bytes where its records are and how long they are,
         // so there is nothing to read here but the header: the rows are fetched a window at
         // a time, however large the file is.
-        if name.to_ascii_lowercase().ends_with(".dbf") {
+        if crate::table::dbase_name(&name) {
             let head = self.source.read_vec(0, 64 * 1024).unwrap_or_default();
             if let Some(table) = crate::table::Table::dbase(&head, whole) {
                 self.table = Some(table);
+                #[cfg(feature = "dbf")]
+                self.apply_dbf_page();
                 return;
             }
         }
@@ -1612,6 +1663,197 @@ impl Viewer {
         Some((out, rows.len()))
     }
 
+    /// The records a command over "the marked rows, or all of them" acts on, by their number
+    /// in the file and in the order the view shows them: the marked rows the view is
+    /// showing, or every row of the view when none is marked. `None` outside a table.
+    pub fn table_chosen(&mut self) -> Option<Vec<usize>> {
+        if self.mode != Mode::Table {
+            return None;
+        }
+        self.parse_table();
+        let table = self.table.as_ref()?;
+        let marked = &self.table_marked;
+        Some(
+            (0..table.len())
+                .filter_map(|row| table.record_of(row))
+                .filter(|rec| marked.is_empty() || marked.contains(rec))
+                .collect(),
+        )
+    }
+
+    /// How many rows are marked.
+    pub fn table_marked_count(&self) -> usize {
+        self.table_marked.len()
+    }
+
+    /// Show the marked rows only, or every row again: a view over the records like the
+    /// filter, which it works together with. The marks are taken as they stand; marking
+    /// goes on working inside the view, and a row unmarked there leaves it at the next
+    /// asking. `None` outside a table.
+    pub fn table_only_marked(&mut self) -> Option<MarkedOnly> {
+        if self.mode != Mode::Table {
+            return None;
+        }
+        self.parse_table();
+        let on = self.table.as_ref()?.only_marked();
+        if !on && self.table_marked.is_empty() {
+            return Some(MarkedOnly::NoneMarked);
+        }
+        let only = (!on).then(|| self.table_marked.clone());
+        let (table, source, memo) = (&mut self.table, &mut self.source, &mut self.memo);
+        let table = table.as_mut()?;
+        if !table.set_only(&mut **source, memo.as_deref_mut(), only) {
+            return Some(MarkedOnly::TooMany);
+        }
+        let rows = table.len();
+        self.table_row = 0;
+        self.table_cursor = 0;
+        self.top = self.table.as_ref().map(|t| t.offset(0)).unwrap_or(0);
+        Some(if on {
+            MarkedOnly::Off
+        } else {
+            MarkedOnly::On(rows)
+        })
+    }
+
+    /// The sum of every numeric column of the dBase table on screen, over the marked rows
+    /// or every row of the view, and how many rows that was. `None` for anything that is
+    /// not a dBase table; `Err` with the count when there are more rows than a walk of the
+    /// records is allowed to read on the drawing thread.
+    #[cfg(feature = "dbf")]
+    pub fn dbf_sums(&mut self) -> Option<Result<(Vec<crate::dbf::ColumnSum>, usize), usize>> {
+        self.dbf()?;
+        let records = self.table_chosen()?;
+        if records.len() > crate::table::MAX_VIEW {
+            return Some(Err(records.len()));
+        }
+        let (table, source) = (&self.table, &mut self.source);
+        let sums = table.as_ref()?.sums(&mut **source, &records)?;
+        Some(Ok((sums, records.len())))
+    }
+
+    /// Show the whole text of the memo cell under the cursor in place of the table: a view
+    /// derived from the file, as a decompiler's listing is, with the table kept underneath
+    /// for [`Self::memo_back`]. A cell has one line of a memo and forty columns of that.
+    #[cfg(feature = "dbf")]
+    pub fn dbf_memo(&mut self) -> Option<MemoShown> {
+        let here = self.dbf_here()?;
+        let dbf = self.dbf()?.clone();
+        let Some(field) = here.field.filter(|f| dbf.is_memo(*f)) else {
+            return Some(MemoShown::NotMemo);
+        };
+        let record = self
+            .source
+            .read_vec(dbf.offset(here.record), dbf.record_len)
+            .unwrap_or_default();
+        let text = self
+            .memo
+            .as_deref_mut()
+            .and_then(|memo| dbf.memo_whole(&record, field, memo));
+        let Some(text) = text else {
+            return Some(MemoShown::Nothing);
+        };
+        let name = dbf.field(field).map(|f| f.name).unwrap_or_default();
+        let empty: Box<dyn Source> = Box::new(crate::source::BytesSource::new(Vec::new()));
+        self.parked = Some(Parked {
+            source: std::mem::replace(&mut self.source, empty),
+            mode: self.mode,
+            base_mode: self.base_mode,
+            codepage: self.codepage,
+            codepage_label: self.codepage_label.take(),
+            top: self.top,
+            col: self.col,
+            table_row: self.table_row,
+            table_cursor: self.table_cursor,
+            structure: self.structure.take(),
+        });
+        self.show_structure = false;
+        self.struct_focus = false;
+        // A memo is written with the line ends of the system that wrote it.
+        self.show_derived(
+            &format!("memo {name}, record {}", here.record + 1),
+            text.replace("\r\n", "\n").replace('\r', "\n"),
+        );
+        Some(MemoShown::Shown)
+    }
+
+    /// Is the viewer showing a memo read whole, with its table underneath?
+    pub fn in_memo(&self) -> bool {
+        self.parked.is_some()
+    }
+
+    /// Back from a memo to the table it was opened from, on the row it was opened from.
+    /// `false` when no memo is open.
+    pub fn memo_back(&mut self) -> bool {
+        let Some(parked) = self.parked.take() else {
+            return false;
+        };
+        self.source = parked.source;
+        self.derived = None;
+        self.mode = parked.mode;
+        self.base_mode = parked.base_mode;
+        self.codepage = parked.codepage;
+        self.codepage_label = parked.codepage_label;
+        self.top = parked.top;
+        self.top_sub = 0;
+        self.col = parked.col;
+        self.table_row = parked.table_row;
+        self.table_cursor = parked.table_cursor;
+        self.structure = parked.structure;
+        self.show_structure = false;
+        self.struct_focus = false;
+        self.clear_search();
+        true
+    }
+
+    /// The code page the dBase table on screen was told it is in, if it was.
+    #[cfg(feature = "dbf")]
+    pub fn dbf_page(&self) -> Option<crate::dbf::Page> {
+        self.dbf_page
+    }
+
+    /// Tell the dBase table on screen which code page its text is in, or take the telling
+    /// back (`None`). `false` when there is no such table, or its header names a page
+    /// itself — in which case nothing is kept either.
+    #[cfg(feature = "dbf")]
+    pub fn dbf_set_page(&mut self, page: Option<crate::dbf::Page>) -> bool {
+        if !self.dbf().is_some_and(|dbf| !dbf.names_its_page()) {
+            return false;
+        }
+        self.dbf_page = page;
+        self.apply_dbf_page();
+        // A sort or a filter was worked out from the text as it read before.
+        let (table, source, memo) = (&mut self.table, &mut self.source, &mut self.memo);
+        if let Some(table) = table.as_mut() {
+            if table.sorted_by().is_some() || table.filtered_on().is_some() {
+                let needle = table.filtered_on().unwrap_or_default().to_string();
+                table.set_filter(&mut **source, memo.as_deref_mut(), &needle);
+            }
+        }
+        true
+    }
+
+    /// The page this table was said to be in before the viewer was opened on it: taken up
+    /// when the table is first read, and dropped then if its header names one after all.
+    #[cfg(feature = "dbf")]
+    pub fn dbf_prefer_page(&mut self, page: Option<crate::dbf::Page>) {
+        self.dbf_page = page;
+        // Whoever opened the viewer may have had the table read already.
+        if self.table.is_some() {
+            self.apply_dbf_page();
+        }
+    }
+
+    /// Put the chosen page on the table that has just been read.
+    #[cfg(feature = "dbf")]
+    fn apply_dbf_page(&mut self) {
+        if let Some(crate::table::Records::Dbf(dbf)) = self.table.as_mut().map(|t| &mut t.records) {
+            if !dbf.set_page(self.dbf_page) {
+                self.dbf_page = None;
+            }
+        }
+    }
+
     /// The header of the dBase table on screen. `None` outside table mode and for a table
     /// that is not one: the commands that write a table ask this first.
     #[cfg(feature = "dbf")]
@@ -1663,6 +1905,8 @@ impl Viewer {
     /// moved. The cursor goes to `record`, or stays as near where it was as the table allows.
     #[cfg(feature = "dbf")]
     pub fn dbf_reload(&mut self, source: Box<dyn Source>, record: Option<usize>) {
+        // A memo that was being read is of the table as it was.
+        self.memo_back();
         self.source = source;
         self.table = None;
         self.table_marked.clear();
@@ -1784,7 +2028,7 @@ impl Viewer {
         }
         // The size limit is about reading a file whole, which a dBase table is not: it is
         // read a window at a time however large it is.
-        name.to_ascii_lowercase().ends_with(".dbf") || self.source.len() <= TABLE_LIMIT
+        crate::table::dbase_name(&name) || self.source.len() <= TABLE_LIMIT
     }
 
     /// Show the file as a table. `false` when there is no table in it, so the caller can say
@@ -1858,6 +2102,15 @@ impl Viewer {
         }
         if let Some(needle) = table.filtered_on() {
             note.push_str(&format!(" · /{needle}"));
+        }
+        if table.only_marked() {
+            note.push_str(" · marked only");
+        }
+        // The page a table was told it is in, which its header does not say and a reader
+        // of accented names has to be able to see.
+        #[cfg(feature = "dbf")]
+        if let (Some(page), crate::table::Records::Dbf(_)) = (self.dbf_page, &table.records) {
+            note.push_str(&format!(" · {}", page.name()));
         }
         if table.skipped > 0 {
             note.push_str(&format!(" · {} skipped", table.skipped));

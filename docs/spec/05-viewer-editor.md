@@ -687,11 +687,12 @@ heading`; `Ctrl+H` turns the guess round and reparses. JSON Lines and dBase name
 and have nothing to turn. The delimiters guessed are `,` `;` tab `|` and `^`, in that order on
 a tie.
 
-**Editing a cell stays out**, and that is the decision rather than a gap: a viewer that writes
-is an editor, and `F4` and the hex pane are where writing lives. Writing a cell back would also
-be three jobs rather than one — a line rewritten for CSV, fixed-length records and a memo file
-beside them for DBF, and nothing honest at all for a file that was read only as far as the
-limit.
+**A cell of delimited text or of JSON Lines is not edited**, and that is the decision rather
+than a gap: writing one back means rewriting a line, and so every line after it, of a file
+whose quoting and delimiter were guessed — and there is nothing honest to write at all for a
+file that was read only as far as the limit. `F4` is where such a file is changed. The dBase
+table is the one format that is written from this mode (below), because its records are of a
+fixed length and one of them can be changed without moving another.
 
 **The text formats are read whole**, up to a limit (`TABLE_LIMIT`, sixteen megabytes), exactly
 as the Markdown render is and for the same reason — a column's width cannot be known from the
@@ -719,9 +720,12 @@ reads as a number nobody can tell from `1`. The status line's `rows × columns` 
 fields and not that column. The header's language byte picks the text encoding, and the DOS
 code pages are read as DOS code pages: a table written in Germany under DOS carries `0x0F`
 and is in code page 437, where reading it as Windows-1252 turns `temporäre` into `tempor„re`.
-437 is the viewer's own table, the one it has had since it learned to show a DOS text file;
-850, 852 and the other DOS tables `encoding_rs` does not carry fall back to the Windows table
-that agrees with them on the accented letters, which is what a field holds. A **memo** field shows what the `.dbt` or `.fpt`
+437 is the viewer's own table, the one it has had since it learned to show a DOS text file.
+850, 852 and 865 are tables of this program's own as well, 128 entries each (`dbf.rs`), since
+`encoding_rs` carries none of them: a table whose header names one is read exactly, and is
+therefore written in full (below). 860, 861, 863, Kamenický and Mazovia still fall back to
+the Windows table that agrees with them on most of the accented letters, and are read and
+not written beyond ASCII. A **memo** field shows what the `.dbt` or `.fpt`
 beside the table holds, on one line — a memo is written with newlines in it and a cell has one
 line to give. Opening that second file is the *caller's* job, because what a path means — on
 disk, inside an archive, on a server — is not the viewer's to decide: the application looks
@@ -735,38 +739,114 @@ which is what there is to say. A picture or an object field says the same: a cel
 for either. A header that claims more records than
 the file can hold is a truncated table: what is there is read and the status line says `cut`.
 
+**What was learned from LookDBF** (the FAR plugin, BSD-3-Clause, read for its ideas and for
+how Visual FoxPro numbers its bits; none of its code is here). All of it reads, and all of it
+is the `dbf` feature except the view of the marked rows, which is any table's.
+
+* **Visual FoxPro's nulls and fields of varying length.** The system field `_NullFlags` (type
+  `0`, flag `0x01`) is the table's own bookkeeping and is **no column**; it keeps its room in
+  the record. Its bits are dealt out in field order, the lowest bit of the first byte first:
+  a `V` (varchar) or `Q` (varbinary) field takes one that says *shorter than the width*, the
+  length then being the field's last byte; a field with the nullable flag (`0x02`) takes one
+  that says *no value*; a field that is both takes two, in that order. A cell with no value
+  shows `NULL`; a `V` shows its text, a `Q` its bytes in hex. Without `_NullFlags` nothing
+  is null, whatever the fields' flags say.
+* **Visual FoxPro's containers are tables.** `.dbc`, `.scx`, `.frx`, `.vcx`, `.mnx`, `.pjx`
+  and `.lbx` open in table mode by name, each with its memo file — `.dct`, `.sct`, `.frt`,
+  `.vct`, `.mnt`, `.pjt`, `.lbt` — found in either spelling of case, as `.dbt` and `.fpt`
+  are.
+* **A memo read whole**: `Enter` on a memo cell, or `m` (`viewer.dbf.memo`), shows the
+  memo's complete text in place of the table — a derived view like a decompiler's listing
+  (§1.6), titled with the field and the record, searched and scrolled as text. `Esc` and
+  `Backspace` go back to the table, on the row it was left on; from the table `Esc` leaves
+  the viewer as before. Up to 16 MiB of memo is read. A cell that is no text memo, an empty
+  one, and one whose file is not beside the table each say so.
+* **The structure** of a table is in the structure pane (`Shift+F11`, §1.8): the version,
+  the record count, the last update, the header and record lengths and the code page; then
+  every field with its type, width and decimals (`N 7.2`), its offset in the record and its
+  flags (system, nullable, binary, autoincrement), `_NullFlags` included. A DBF has a
+  version byte and no signature, so the pane believes one only when the header fits in the
+  file, the field types are ones somebody writes and the widths add up to the record length.
+* **Sums**: `Ctrl+F6` (`viewer.dbf.sums`) shows the sum of every numeric column — `N`, `F`,
+  `I`, `Y`, `B` — over the marked rows, or over every row of the view when none is marked,
+  with the count of rows that held a number beside each. Decimal fields are added as whole
+  units of their smallest decimal, so a column of prices adds up to the cent; a `B` is a
+  double and is added as one. An empty cell and a `NULL` add nothing and are not counted.
+  The records are read on the spot, so the limit of the sort (`MAX_VIEW`, 200 000) applies.
+* **The marked rows only**: `Ctrl+F5` (`viewer.table.marked.only`) keeps the view to the
+  rows marked when it is pressed, and shows every row again when pressed again. It is an
+  index of record numbers like the filter and works with it and with the sort; the status
+  line says `marked only`. Marking goes on working inside the view.
+* **The code page of a table that names none.** A language byte of zero is what Clipper
+  writes. `Ctrl+T` (`viewer.dbf.codepage`) — and `F8` or `Shift+F8`, which in a dBase table
+  mean the table's page, the viewer's own having nothing to say about a table read by its
+  header — goes to the next of CP437, CP850, CP852, CP865, CP866, CP1250, CP1251, CP1252 and
+  then back to the header's silence. The choice holds for that table for the session
+  (reopened, it is still read so), is shown on the status line, and from then on what is
+  typed into the table is **written in that page exactly**; until a page is chosen such a
+  table takes ASCII alone, as before. A header that names its page is not argued with, and
+  nothing is written into the header either way.
+* **Export**: `Ctrl+F9` (`viewer.dbf.export`) writes the marked rows, or every row of the
+  view, in the order the view shows them, to a new file whose name a dialog asks for —
+  beside the table unless the name says where. A name that says dBase (`.dbf` and the
+  container extensions) makes a **table** of the same structure: the header as it is with
+  the new count and date, each record byte for byte with its deletion mark, and — because a
+  memo field holds a block number, which a copied record keeps — the memo file copied
+  **whole** under the new name, so every number still means what it meant; the status line
+  says so. A Visual FoxPro table's link to its database is blanked in the copy. Any other
+  name makes **CSV**: UTF-8, the field names first, one line a record, RFC 4180 quoting,
+  each cell as the table shows it (a memo on one line) with the deletion mark in the first
+  column, as `Ctrl+C` copies it. **A file that is there is never written over**: the name is
+  refused when it is typed and again by the worker, which creates its files new, and a
+  write that fails takes its half away. The table is only read, so no backup is asked for.
+
+The keys are LookDBF's where those are free: its `F5`, `F6` and `F9` are the viewer's
+disassembly, its way to the editor and the menu, so each takes `Ctrl`; its `Ctrl+I` is `Tab`
+to a terminal, so the marked records are recalled with `Ctrl+R`.
+
 **A DBF is also the one table that is written** (the author's rules of 25 November 2026;
 `fcmd-view/src/dbf_write.rs`, the dialogs in `fcmd/src/dbfedit.rs`). On a local `.dbf` in table
 mode: `Ctrl+F4` (`viewer.dbf.edit`) types a new value over the cell — the cursor's record, the
 column the view is on, and the first field when the view is on the deletion flag's column —
 `Ctrl+N` (`viewer.dbf.append`) appends an empty record and puts the cursor on it, `Ctrl+F8`
-(`viewer.dbf.delete`) sets or clears the record's `*`, and `Shift+Del` (`viewer.dbf.pack`)
-packs. The keys are the panels' with `Ctrl`, as the sort is: `F4` edits, `F8` deletes, and
-`Shift+Del` is the delete that cannot be taken back.
+(`viewer.dbf.delete`) sets or clears the record's `*`, `Ctrl+D` (`viewer.dbf.delete.marked`)
+and `Ctrl+R` (`viewer.dbf.recall.marked`) set or clear it on every marked record, and
+`Shift+Del` (`viewer.dbf.pack`) packs. The keys are the panels' with `Ctrl`, as the sort is:
+`F4` edits, `F8` deletes, and `Shift+Del` is the delete that cannot be taken back.
 
 * **The backup comes first.** Before the first change to a table in a session a dialog says
   the table is about to be altered and that a backup is wanted, with two buttons, *Back up and
   edit* and *Cancel*. Nothing is written before the answer. The backup is a copy of the table,
-  of its memo file and of the index files that carry its name, each beside its original with
+  of its memo file and of its index files (below), each beside its original with
   the moment before the extension: `CLIENTI.DBF` → `CLIENTI.20261125-083015.DBF`,
   `CLIENTI.DBT` → `CLIENTI.20261125-083015.DBT`. A name that is taken is an error, never an
   overwrite, and a backup that fails half way removes its own copies; a change whose backup
   failed is not made. The table is then remembered for the session and not asked about again.
-* **Indexes are a refusal.** While a `.cdx` or `.mdx` with the table's stem, or any `.ntx`,
-  `.nsx` or `.idx` in its folder, sits beside the table, nothing is written and nothing is
-  backed up; a message names the files and says why — a record changed behind an index leaves
-  it stale, and the Clipper and Harbour programs these tables belong to would find the wrong
-  records. The production index is matched by name because that is how it is found; the
-  others are named by whoever made them and say nothing of their table, so any one counts.
-  `.nsx` is on the list beside `.ntx` because the SIx driver writes it. The look at the folder
-  is made when the key is pressed and again by the worker before it copies or writes.
+* **Indexes are a question, not a refusal** (the author's second rule of 25 November 2026, in place
+  of the refusal the first one made). An index belongs to a table when its name **begins
+  with the table's stem**, whatever the case, and its extension is `.ntx`, `.cdx`, `.mdx`,
+  `.nsx` or `.idx` (and `.dcx`, the index of a Visual FoxPro container): for `pippo.dbf`,
+  `PIPPO.CDX`, `pippo1.ntx` and `pippo_nome.ntx` count, and any other index in the folder
+  is another table's and is ignored. A copy a backup made — `PIPPO.20261125-083015.CDX` —
+  is not an index. Where a table has any, a dialog right after the backup names them and
+  says that this program does not update them, so that after the change they must be
+  rebuilt (reindexed) by the program they belong to; the buttons are *Go on* and *Cancel*,
+  and cancel writes nothing. It is asked once for a table in a session, and applies to
+  every way of writing: a cell, a new record, a deletion or recall of one record or of the
+  marked ones, `Pack`. The look at the folder is made when the key is pressed, again when
+  the question is answered, and again by the worker at the moment of the write
+  (`check_indexes`): an index that was not among the ones agreed to — one that arrived
+  while the question stood, or after it — stops the write and the question is asked again
+  with it named. The index files themselves are never opened.
 * **A value is written exactly or not at all.** `C`: the bytes of the text in the table's code
   page, padded with spaces, refused when longer than the field (never cut) or when a character
   has no byte in that page (never a `?`). Only a page the reader holds exactly is written in
-  full: where the language byte names none (Clipper writes zero) or names a DOS page read
-  through its Windows cousin (850, 852, …), ASCII alone is accepted, because the approximation
-  that is good enough to read would put an accented letter on another byte than the table's
-  own programs expect. `N`/`F`: an optional sign, digits, an optional point; right-aligned,
+  full — 437, 850, 852, 865, 866 and the Windows pages: where the language byte names none
+  (Clipper writes zero) and no page has been chosen for the table (above), or names a DOS page
+  read through its Windows cousin (860, 861, 863, …), ASCII alone is accepted, because the
+  approximation that is good enough to read would put an accented letter on another byte
+  than the table's own programs expect. A value written into a field that held `NULL` clears
+  its bit in `_NullFlags`: it is a value now. `N`/`F`: an optional sign, digits, an optional point; right-aligned,
   with exactly the field's decimals; refused when it is not a number, when it has more
   significant decimals than the field (never rounded) or when it does not fit the width.
   `D`: `YYYY-MM-DD` as shown, or the eight digits, and a real day; stored `YYYYMMDD`. `L`:
@@ -777,7 +857,12 @@ packs. The keys are the panels' with `Ctrl`, as the sort is: `F4` edits, `F8` de
   the `1A` after the last record, which is put there when the file ends without it. An
   appended record is written where the `1A` was, with the `1A` after it, and the count last,
   so a write cut short leaves the table saying what it said. Its text fields are spaces and
-  its binary ones zeros.
+  its binary ones zeros; `_NullFlags` is zeros too, but for the bit of each `V` or `Q` field,
+  which is empty by being zero long.
+* **The marked records in one go.** `Ctrl+D` deletes and `Ctrl+R` recalls every marked
+  record the view is showing, behind one question that says how many; they are written in
+  one opening of the table, all or none — a number that is no record stops it before the
+  first flag — and the status line says how many actually changed.
 * **The original changes only by those record writes.** `Pack` counts the deleted records
   first and asks, saying how many; then the header and the records that stay go to a new file
   beside the table (`<name>.fcmd-pack`), which is synced and renamed over the original. A
@@ -793,12 +878,13 @@ packs. The keys are the panels' with `Ctrl`, as the sort is: `F4` edits, `F8` de
 * **Local files only**: a table inside an archive or fetched from a server is a temporary
   copy, and the keys say so.
 
-Not yet: memo fields, the binary field types, tables with indexes (`docs/BACKLOG.md`), and the
-structure editor.
+Not yet: writing memo fields, the binary field types and the fields of varying length;
+keeping an index up to date rather than leaving it to be rebuilt; setting a field to `NULL`;
+importing; and the structure editor (`docs/BACKLOG.md`).
 
 All of dBase — the reader and the writer — is the `dbf` feature of `fcmd-view` and of `fcmd`,
 in the default build and left out of the compact one (`--no-default-features`), where a `.dbf`
-opens as bytes and these four keys say that dBase tables are not in the build.
+opens as bytes and these keys say that dBase tables are not in the build.
 
 **The readers, in the order they are worth building.**
 
@@ -806,7 +892,7 @@ opens as bytes and these four keys say that dBase tables are not in the build.
 | --- | --- | --- |
 | CSV / TSV | delimiter-separated text, RFC 4180 quoting | guessing the delimiter (`,`, `;`, tab, `|`) from the first kilobytes and *saying* which was guessed; a quoted field may hold the delimiter and a newline, so a row is not a line |
 | JSONL / NDJSON | one JSON object per line | the columns are the union of the keys of the first *N* records, in first-seen order, and a record that has a key the header does not shows it in an overflow column rather than being silently cut |
-| DBF | dBase III/IV and FoxPro: a typed header, then fixed-length records | **Shipped in 0.7.0**, windowed: the field types, the deleted-record flag (shown, not skipped), the header's code page. The memo files beside it (`.dbt`, `.fpt`) followed in 0.7.2 — all three formats, each recognised by what it holds. Written a record at a time, behind a backup, where no index sits beside it (above) |
+| DBF | dBase III/IV and FoxPro: a typed header, then fixed-length records | **Shipped in 0.7.0**, windowed: the field types, the deleted-record flag (shown, not skipped), the header's code page. The memo files beside it (`.dbt`, `.fpt`) followed in 0.7.2 — all three formats, each recognised by what it holds. Written a record at a time, behind a backup, and past its indexes only when told to go on (above). Visual FoxPro's nulls, varying fields and containers, the DOS pages 850/852/865, sums, export and the rest of what LookDBF taught: 0.48 |
 
 **Reading a window, not a file**, wherever the format allows it — which is the promise the
 viewer makes everywhere else. DBF is the best case: a fixed record length and a count in the

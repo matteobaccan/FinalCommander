@@ -5,10 +5,13 @@
 //!
 //! * **The file is opened for writing only for the moment of a write**, and closed again. A
 //!   table another program holds is a refusal that says so, not a wait.
-//! * **Nothing is written while an index sits beside the table.** An index holds a copy of
-//!   the keys; a record changed behind its back leaves it pointing at what is no longer
-//!   there, and the program that trusts it then finds the wrong record or none. Until this
-//!   program can keep an index right, it does not touch a table that has one.
+//! * **Nothing is written behind an index nobody was asked about.** An index holds a copy
+//!   of the keys; a record changed behind its back leaves it pointing at what is no longer
+//!   there, and the program that trusts it then finds the wrong record or none. This
+//!   program does not keep an index right, so before it writes a table that has any it
+//!   names them and is told to go on — the reindexing afterwards being the business of the
+//!   program the indexes belong to — and an index that turns up later is asked about again
+//!   ([`check_indexes`]).
 //! * **A value is written exactly or not at all**: too long, not a number, a date that is
 //!   not one, a letter the table's code page has no byte for — each is refused by name.
 //!   Nothing is cut, rounded or replaced with a `?`.
@@ -17,7 +20,11 @@
 //!   into place, so there is no moment at which half a table is on disk.
 //! * **The backup is a copy with the date in its name**, `CLIENTI.DBF` →
 //!   `CLIENTI.20261125-083015.DBF`, the extension kept last so the copy still opens as a
-//!   table, and the memo file copied with it.
+//!   table, and the memo file and the indexes copied with it.
+//!
+//! What only reads the table and writes another file is here too: the export of some of its
+//! records to CSV or to a table of the same structure, which never writes over a file that
+//! is there.
 //!
 //! Every write leaves the header saying the truth: the record count, the date of the last
 //! change in bytes 1–3, and the `1A` that ends the records.
@@ -103,8 +110,11 @@ pub enum Refused {
 /// Why a table was not written.
 #[derive(Debug)]
 pub enum WriteError {
-    /// Index files sit beside the table.
+    /// Index files sit beside the table that nobody has agreed to leave stale: all of the
+    /// table's indexes as they are now, for the question to name.
     Indexes(Vec<PathBuf>),
+    /// The file an export would write is already there, and nothing is written over.
+    Exists(PathBuf),
     /// The table could not be opened for writing: read-only, or held by another program.
     Open(io::Error),
     /// A read or a write failed part of the way.
@@ -183,32 +193,89 @@ fn stem_of(table: &Path) -> String {
     }
 }
 
-/// The index files that keep `table` from being written.
+/// The extensions an index goes by: Clipper's, FoxPro's (and the one of its database
+/// container), dBase IV's, Harbour's and FoxBase's.
+const INDEX_EXTENSIONS: [&str; 6] = ["ntx", "cdx", "mdx", "nsx", "idx", "dcx"];
+
+/// The memo file's extension for a table's: what dBase and FoxPro write beside a `.dbf`,
+/// and what Visual FoxPro writes beside each of the tables it keeps its own things in.
+/// Lower case in, lower case out; empty for a name that is no table's.
+pub fn memo_extensions(table_extension: &str) -> &'static [&'static str] {
+    match table_extension {
+        "dbf" => &["dbt", "fpt"],
+        "dbc" => &["dct"],
+        "scx" => &["sct"],
+        "frx" => &["frt"],
+        "vcx" => &["vct"],
+        "mnx" => &["mnt"],
+        "pjx" => &["pjt"],
+        "lbx" => &["lbt"],
+        _ => &[],
+    }
+}
+
+fn extension_of(table: &Path) -> String {
+    let name = table
+        .file_name()
+        .map(|n| n.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    match name.rsplit_once('.') {
+        Some((_, ext)) => ext.to_string(),
+        None => String::new(),
+    }
+}
+
+/// Is this the stem of a copy [`backup`] made — `clienti.20261125-083015`? A backup of an
+/// index is not an index of the table: nothing opens it, and nothing is owed to it.
+fn is_backup(stem: &str) -> bool {
+    let Some((_, stamp)) = stem.rsplit_once('.') else {
+        return false;
+    };
+    let bytes = stamp.as_bytes();
+    bytes.len() == 15
+        && bytes[8] == b'-'
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(i, b)| i == 8 || b.is_ascii_digit())
+}
+
+/// The index files of `table`: the files beside it whose name begins with the table's own
+/// and whose extension is an index's.
 ///
-/// A `.cdx` or an `.mdx` is the table's own when it carries the table's name: that is the
-/// production index, opened with the table whether the program asks or not. A `.ntx`, an
-/// `.nsx` or an `.idx` is named by whoever made it — `CLIENTI.DBF` is indexed by
-/// `CLINOME.NTX` as readily as by `CLIENTI.NTX` — and nothing in the file says which table
-/// it belongs to, so any of them in the folder counts. That refuses more than it must, and
-/// it is the side to err on: a stale index is found weeks later, by a program that lists the
-/// wrong customer.
+/// `PIPPO.DBF` is indexed by `PIPPO.CDX`, by `pippo1.ntx`, by `PIPPO_NOME.NTX`: a program
+/// names its indexes after the table and whatever tells them apart, and the name is all
+/// there is to go by — nothing in an index file says which table it belongs to. An index
+/// named otherwise is another table's, or nobody's, and is left out of this.
 pub fn index_files(table: &Path) -> Vec<PathBuf> {
     let own = stem_of(table);
-    beside(table, |stem, ext| match ext {
-        "cdx" | "mdx" => stem == own,
-        "ntx" | "nsx" | "idx" => true,
-        _ => false,
+    beside(table, |stem, ext| {
+        INDEX_EXTENSIONS.contains(&ext) && stem.starts_with(&own) && !is_backup(stem)
     })
 }
 
-/// The files a backup copies with the table: its memo file and the indexes that carry its
-/// name. (An index named otherwise is not known to be this table's, and a table that has
-/// any is not written at all — see [`index_files`].)
+/// Is every index now beside `table` one of `agreed` — the ones whoever asked for a write
+/// has been told of and has agreed to leave to be rebuilt? Otherwise all of the indexes as
+/// they are now, for the question to be asked again.
+///
+/// Asked on the worker at the moment of every write: an index made by another program
+/// between the question and the write is an index nobody was asked about.
+pub fn check_indexes(table: &Path, agreed: &[PathBuf]) -> Result<(), WriteError> {
+    let now = index_files(table);
+    if now.iter().all(|index| agreed.contains(index)) {
+        Ok(())
+    } else {
+        Err(WriteError::Indexes(now))
+    }
+}
+
+/// The files a backup copies with the table: its memo file, and its indexes.
 fn companions(table: &Path) -> Vec<PathBuf> {
     let own = stem_of(table);
-    beside(table, |stem, ext| {
-        stem == own && matches!(ext, "dbt" | "fpt" | "cdx" | "mdx" | "ntx" | "nsx" | "idx")
-    })
+    let memos = memo_extensions(&extension_of(table));
+    let mut out = beside(table, |stem, ext| stem == own && memos.contains(&ext));
+    out.extend(index_files(table));
+    out
 }
 
 /// What the copy of `file` made at `at` is called: the moment goes before the extension,
@@ -225,7 +292,7 @@ pub fn backup_name(file: &Path, at: Stamp) -> PathBuf {
     file.with_file_name(stamped)
 }
 
-/// Copy the table, its memo file and its own indexes beside themselves, each under its
+/// Copy the table, its memo file and its indexes beside themselves, each under its
 /// [`backup_name`]. The copies made, the table's first.
 ///
 /// A name that is already taken is an error and nothing is overwritten: a backup is the one
@@ -441,18 +508,14 @@ impl Open {
     }
 }
 
-/// Open `table` for a write, having checked everything that would make the write wrong:
-/// indexes beside it, a file that is no longer the table on screen, a length that does not
-/// agree with the header.
+/// Open `table` for a write, having checked what would make the write wrong: a file that
+/// is no longer the table on screen, a length that does not agree with the header. (The
+/// indexes beside it are [`check_indexes`]'s to ask about, before this.)
 ///
 /// `shown` is the header the reader has. The count may have moved — another program appends
 /// while this one looks — but the fields may not: a write placed by a layout the file no
 /// longer has would land in the middle of some other field.
 fn open(table: &Path, shown: &Dbf) -> Result<Open, WriteError> {
-    let indexes = index_files(table);
-    if !indexes.is_empty() {
-        return Err(WriteError::Indexes(indexes));
-    }
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -524,9 +587,25 @@ pub fn set_cell(
         return Err(WriteError::NoRecord);
     }
     let within = open.dbf.fields[field].at as u64;
-    open.file
-        .seek(SeekFrom::Start(open.dbf.offset(record) + within))?;
+    let start = open.dbf.offset(record);
+    open.file.seek(SeekFrom::Start(start + within))?;
     open.file.write_all(&bytes)?;
+    // A field that held no value holds one now: Visual FoxPro keeps "no value" as a bit of
+    // its own beside the record's bytes, and a value written under a bit left set would
+    // still read as none.
+    if let (Some(bit), Some((flags, len))) = (open.dbf.fields[field].null_bit, open.dbf.nulls) {
+        if bit / 8 < len {
+            let place = start + (flags + bit / 8) as u64;
+            let mut byte = [0u8; 1];
+            open.file.seek(SeekFrom::Start(place))?;
+            open.file.read_exact(&mut byte)?;
+            if byte[0] & (1 << (bit % 8)) != 0 {
+                byte[0] &= !(1 << (bit % 8));
+                open.file.seek(SeekFrom::Start(place))?;
+                open.file.write_all(&byte)?;
+            }
+        }
+    }
     let records = open.dbf.records;
     close(open, records, at)
 }
@@ -550,6 +629,41 @@ pub fn set_deleted(
     close(open, records, at)
 }
 
+/// Set or clear the deletion flag of every one of `records` in one go, and say how many of
+/// them it changed — a record that already was what is asked of it is left as it is.
+///
+/// All of them or none: a number that is no record of the table is found before the first
+/// flag is written.
+pub fn set_deleted_many(
+    table: &Path,
+    shown: &Dbf,
+    records: &[usize],
+    deleted: bool,
+    at: Stamp,
+) -> Result<usize, WriteError> {
+    let mut open = open(table, shown)?;
+    if records.iter().any(|record| *record >= open.dbf.records) {
+        return Err(WriteError::NoRecord);
+    }
+    let want = if deleted { b'*' } else { b' ' };
+    let mut changed = 0usize;
+    for &record in records {
+        let place = open.dbf.offset(record);
+        let mut flag = [0u8; 1];
+        open.file.seek(SeekFrom::Start(place))?;
+        open.file.read_exact(&mut flag)?;
+        // `*` is deleted and anything else is not, which is how every reader takes it.
+        if (flag[0] == b'*') != deleted {
+            open.file.seek(SeekFrom::Start(place))?;
+            open.file.write_all(&[want])?;
+            changed += 1;
+        }
+    }
+    let count = open.dbf.records;
+    close(open, count, at)?;
+    Ok(changed)
+}
+
 /// Append an empty record, and say which one it is.
 ///
 /// The record goes where the end-of-file byte was and the byte goes after it; the header's
@@ -559,7 +673,7 @@ pub fn append(table: &Path, shown: &Dbf, at: Stamp) -> Result<usize, WriteError>
     // Visual FoxPro numbers such a field from a counter in the header, and a record that
     // arrives without its number breaks the one promise the field makes.
     let fox = matches!(open.head[0], 0x30..=0x32);
-    if fox && open.dbf.fields.iter().any(|f| f.flags & 0x0c != 0) {
+    if fox && open.dbf.fields.iter().any(|f| f.flags & 0x0c == 0x0c) {
         return Err(WriteError::Numbered);
     }
     let end = open.end();
@@ -590,6 +704,20 @@ pub fn append(table: &Path, shown: &Dbf, at: Stamp) -> Result<usize, WriteError>
             let to = (f.at + f.len).min(record.len());
             if f.at < to {
                 record[f.at..to].fill(0);
+            }
+        }
+    }
+    // Visual FoxPro's flags are bits, not text: none set, but for the fields of varying
+    // length, which are empty by being zero long — the bit that says "shorter than the
+    // width", and the length in the last byte, which is the zero already there.
+    if let Some((flags, len)) = open.dbf.nulls {
+        let to = (flags + len).min(record.len());
+        if flags < to {
+            record[flags..to].fill(0);
+        }
+        for bit in open.dbf.fields.iter().filter_map(|f| f.var_bit) {
+            if bit / 8 < len && flags + bit / 8 < record.len() {
+                record[flags + bit / 8] |= 1 << (bit % 8);
             }
         }
     }
@@ -707,6 +835,193 @@ fn copy_kept(open: Open, new: File, at: Stamp) -> Result<Packed, WriteError> {
         removed: dbf.records - left,
         left,
     })
+}
+
+// ── export ─────────────────────────────────────────────────────────────────────────────────
+
+/// What an export wrote.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Exported {
+    pub rows: usize,
+    /// The memo file written beside an exported table, when the table has one.
+    pub memo: Option<PathBuf>,
+}
+
+/// A new file that must not be there yet. The name being taken is an answer of its own.
+fn create_new(target: &Path) -> Result<File, WriteError> {
+    OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(target)
+        .map_err(|e| match e.kind() {
+            io::ErrorKind::AlreadyExists => WriteError::Exists(target.to_path_buf()),
+            _ => WriteError::Io(e),
+        })
+}
+
+/// A table's header and one record at a time, for the two exports to read.
+fn open_to_read(table: &Path, shown: &Dbf) -> Result<(File, Dbf, Vec<u8>), WriteError> {
+    let mut file = File::open(table).map_err(WriteError::Open)?;
+    let mut head = vec![0u8; shown.first as usize];
+    file.read_exact(&mut head)
+        .map_err(|_| WriteError::NotATable)?;
+    let dbf = Dbf::parse(&head).ok_or(WriteError::NotATable)?;
+    if dbf.first != shown.first || dbf.record_len != shown.record_len || dbf.fields != shown.fields
+    {
+        return Err(WriteError::Changed);
+    }
+    Ok((file, dbf, head))
+}
+
+/// One cell as a CSV field (RFC 4180): quoted when it holds the comma, a quote or a line
+/// break, with the quotes inside it doubled.
+fn csv_field(cell: &str) -> String {
+    if cell.contains([',', '"', '\n', '\r']) {
+        format!("\"{}\"", cell.replace('"', "\"\""))
+    } else {
+        cell.to_string()
+    }
+}
+
+/// Write `records` of the table, in the order given, as comma-separated text in UTF-8: the
+/// field names first, then a line a record, each cell as table mode shows it — a date as
+/// `1975-03-12`, a memo as its text on one line — with the deletion mark in the first
+/// column, where table mode has it. `memo` is the table's memo file, where it has one.
+///
+/// Read through `shown`, so in the code page the reader was told the table is in. The file
+/// is new or the export is refused, and a write that fails takes its half away.
+pub fn export_csv(
+    table: &Path,
+    memo: Option<&Path>,
+    shown: &Dbf,
+    records: &[usize],
+    target: &Path,
+) -> Result<Exported, WriteError> {
+    let (mut file, dbf, _) = open_to_read(table, shown)?;
+    if records.iter().any(|record| *record >= dbf.records) {
+        return Err(WriteError::NoRecord);
+    }
+    let mut memo = memo.and_then(|path| crate::source::FileSource::open(path).ok());
+    let new = create_new(target)?;
+    let written = (|| -> Result<(), WriteError> {
+        let mut out = BufWriter::new(new);
+        let line = |cells: Vec<String>| -> String {
+            let fields: Vec<String> = cells.iter().map(|cell| csv_field(cell)).collect();
+            format!("{}\r\n", fields.join(","))
+        };
+        out.write_all(line(shown.columns()).as_bytes())?;
+        let mut record = vec![0u8; dbf.record_len];
+        for &n in records {
+            file.seek(SeekFrom::Start(dbf.offset(n)))?;
+            file.read_exact(&mut record)
+                .map_err(|_| WriteError::Length)?;
+            let memo = memo.as_mut().map(|m| m as &mut dyn crate::source::Source);
+            out.write_all(line(shown.cells(&record, memo)).as_bytes())?;
+        }
+        let new = out.into_inner().map_err(|e| e.into_error())?;
+        new.sync_all()?;
+        Ok(())
+    })();
+    match written {
+        Ok(()) => Ok(Exported {
+            rows: records.len(),
+            memo: None,
+        }),
+        Err(e) => {
+            let _ = std::fs::remove_file(target);
+            Err(e)
+        }
+    }
+}
+
+/// Write `records` of the table, in the order given, as a new table of the same structure:
+/// the header as it is, with the new count and `at` as its date, and each record byte for
+/// byte — its deletion mark with it.
+///
+/// A memo field holds the number of a block in the memo file, and a record copied as it is
+/// keeps its numbers; so the memo file is copied whole beside the new table, under the new
+/// table's name, and every number still means what it meant. That carries the memos of the
+/// records left behind as well, which costs room and loses nothing. `memo` is that file.
+///
+/// A Visual FoxPro table that belongs to a database says so after its fields, with the path
+/// of the container; the copy is a table of its own and that path is blanked in it.
+///
+/// Both files are new or the export is refused before anything is written, and a write
+/// that fails takes its files away.
+pub fn export_dbf(
+    table: &Path,
+    memo: Option<&Path>,
+    shown: &Dbf,
+    records: &[usize],
+    target: &Path,
+    at: Stamp,
+) -> Result<Exported, WriteError> {
+    let (mut file, dbf, mut head) = open_to_read(table, shown)?;
+    if records.iter().any(|record| *record >= dbf.records) {
+        return Err(WriteError::NoRecord);
+    }
+    // The memo file keeps its own extension, in the case the target's is written in.
+    let memo_target = memo.map(|memo| {
+        let ext = memo
+            .extension()
+            .map(|e| e.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let upper = target
+            .extension()
+            .is_some_and(|e| e.to_string_lossy().chars().all(|c| !c.is_lowercase()));
+        target.with_extension(if upper {
+            ext.to_uppercase()
+        } else {
+            ext.to_lowercase()
+        })
+    });
+    if let Some(taken) = memo_target.iter().find(|path| path.exists()) {
+        return Err(WriteError::Exists(taken.clone()));
+    }
+    let new = create_new(target)?;
+    let written = (|| -> Result<(), WriteError> {
+        head[1..4].copy_from_slice(&at.in_a_header());
+        head[4..8].copy_from_slice(&(records.len() as u32).to_le_bytes());
+        if matches!(head[0], 0x30..=0x32) {
+            // After the terminator of the fields, to the end of the header.
+            let fields = dbf.fields.len() + usize::from(dbf.nulls.is_some());
+            let from = (32 + fields * 32 + 1).min(head.len());
+            head[from..].fill(0);
+        }
+        let mut out = BufWriter::new(new);
+        out.write_all(&head)?;
+        let mut record = vec![0u8; dbf.record_len];
+        for &n in records {
+            file.seek(SeekFrom::Start(dbf.offset(n)))?;
+            file.read_exact(&mut record)
+                .map_err(|_| WriteError::Length)?;
+            out.write_all(&record)?;
+        }
+        out.write_all(&[END_OF_FILE])?;
+        let new = out.into_inner().map_err(|e| e.into_error())?;
+        new.sync_all()?;
+        if let (Some(from), Some(to)) = (memo, &memo_target) {
+            copy_new(from, to).map_err(|e| match e.kind() {
+                io::ErrorKind::AlreadyExists => WriteError::Exists(to.clone()),
+                _ => WriteError::Io(e),
+            })?;
+        }
+        Ok(())
+    })();
+    match written {
+        Ok(()) => Ok(Exported {
+            rows: records.len(),
+            memo: memo_target,
+        }),
+        Err(e) => {
+            let _ = std::fs::remove_file(target);
+            // A memo file that turned up in the way is somebody else's, and stays.
+            if let (Some(memo), false) = (&memo_target, matches!(e, WriteError::Exists(_))) {
+                let _ = std::fs::remove_file(memo);
+            }
+            Err(e)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -959,12 +1274,40 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), before);
         set_cell(&path, &dbf, 0, 0, "caffe'", THEN).expect("ASCII is the same everywhere");
         assert_eq!(shown(&path, 0)[1], "caffe'");
-        // Code page 850 is read through 1252, which is near enough to read and not to write.
-        let (_dir, _path, dbf) = on_disk("latin.dbf", 0x02);
+        // Code page 860 is read through 1252, which is near enough to read and not to write.
+        let (_dir, _path, dbf) = on_disk("porto.dbf", 0x24);
         assert!(matches!(
             encode(&dbf, 0, "è"),
             Err(Refused::NoByte { exact: false, .. })
         ));
+    }
+
+    #[test]
+    fn a_table_told_its_code_page_is_written_in_it_exactly() {
+        // The same Clipper table, once somebody has said it is in 850: `è` is the byte 8A
+        // there, and that is the byte written.
+        let (_dir, path, mut dbf) = on_disk("CLIENTI.DBF", 0x00);
+        assert!(dbf.set_page(Some(crate::dbf::Page::Cp850)));
+        set_cell(&path, &dbf, 0, 0, "caffè", THEN).expect("850 has an è");
+        let bytes = std::fs::read(&path).unwrap();
+        let at = dbf.offset(0) as usize + 1;
+        assert_eq!(&bytes[at..at + 10], b"caff\x8a     ");
+        // The header still says nothing: the choice is this program's, not the table's.
+        assert_eq!(bytes[29], 0);
+        // What 850 has not got is refused as a page's own refusal, by name.
+        assert!(matches!(
+            set_cell(&path, &dbf, 0, 0, "5 €", THEN),
+            Err(WriteError::Cell(Refused::NoByte {
+                ch: '€',
+                exact: true
+            }))
+        ));
+        // And a table whose header does name 850 is written in full with nobody asked.
+        let (_dir, path, dbf) = on_disk("latin.dbf", 0x02);
+        set_cell(&path, &dbf, 0, 0, "Ávila", THEN).expect("850 has an Á");
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(&bytes[at..at + 10], b"\xb5vila     ");
+        assert_eq!(shown(&path, 0)[1], "Ávila");
     }
 
     #[test]
@@ -1121,45 +1464,314 @@ mod tests {
     }
 
     #[test]
-    fn nothing_is_written_while_an_index_sits_beside_the_table() {
-        let (dir, path, dbf) = on_disk("CLIENTI.DBF", 0x03);
-        let before = std::fs::read(&path).unwrap();
-        // Another table's production index is another table's business.
-        std::fs::write(dir.path().join("FORNIT.CDX"), b"x").unwrap();
-        std::fs::write(dir.path().join("CLIENTI.TXT"), b"x").unwrap();
-        assert!(index_files(&path).is_empty());
-        set_deleted(&path, &dbf, 0, true, THEN).expect("no index of its own");
-        set_deleted(&path, &dbf, 0, false, THEN).unwrap();
-        let before_date = std::fs::read(&path).unwrap();
-        assert_eq!(before_date[8..], before[8..]);
-
-        // Its own is, in whichever case the name is spelled.
-        let cdx = dir.path().join("clienti.cdx");
-        std::fs::write(&cdx, b"x").unwrap();
-        assert_eq!(index_files(&path), std::slice::from_ref(&cdx));
-        let refused = |what: Result<(), WriteError>| match what {
-            Err(WriteError::Indexes(files)) => files,
-            other => panic!("{other:?}"),
-        };
-        assert_eq!(
-            refused(set_cell(&path, &dbf, 0, 0, "x", THEN)),
-            std::slice::from_ref(&cdx)
-        );
-        refused(set_deleted(&path, &dbf, 0, true, THEN));
-        refused(append(&path, &dbf, THEN).map(|_| ()));
-        refused(pack(&path, &dbf, THEN).map(|_| ()));
-        assert_eq!(std::fs::read(&path).unwrap(), before_date);
-        std::fs::remove_file(&cdx).unwrap();
-
-        // A Clipper index is called whatever its maker called it, so any one counts.
-        for name in ["CLINOME.NTX", "byname.idx", "CLIENTI.MDX", "ORDINI.NSX"] {
-            let index = dir.path().join(name);
-            std::fs::write(&index, b"x").unwrap();
-            assert_eq!(index_files(&path), std::slice::from_ref(&index), "{name}");
-            refused(set_cell(&path, &dbf, 0, 0, "x", THEN));
-            std::fs::remove_file(&index).unwrap();
+    fn an_index_is_the_tables_when_its_name_begins_with_the_tables() {
+        let (dir, path, _dbf) = on_disk("PIPPO.DBF", 0x03);
+        let at = |name: &str| dir.path().join(name);
+        // Other tables' indexes, and files that are no index at all.
+        for name in [
+            "FORNIT.CDX",
+            "PIPPO.TXT",
+            "xpippo.ntx",
+            "PIPP.NTX",
+            "ordini.idx",
+        ] {
+            std::fs::write(at(name), b"x").unwrap();
         }
-        assert_eq!(std::fs::read(&path).unwrap(), before_date);
+        assert!(index_files(&path).is_empty());
+        check_indexes(&path, &[]).expect("no index of its own");
+
+        // Its own: the same name, and the name with something after it, in either case.
+        let own = [
+            "PIPPO.CDX",
+            "PIPPO_NOME.NTX",
+            "pippo.mdx",
+            "pippo1.ntx",
+            "pippo2.NSX",
+            "pippox.idx",
+        ];
+        for name in own {
+            std::fs::write(at(name), b"x").unwrap();
+        }
+        let mut expected: Vec<PathBuf> = own.iter().map(|name| at(name)).collect();
+        expected.sort();
+        assert_eq!(index_files(&path), expected);
+
+        // A copy a backup made of an index is not an index of the table.
+        std::fs::write(at("PIPPO.20261125-083015.CDX"), b"x").unwrap();
+        std::fs::write(at("pippo1.20261125-083015.ntx"), b"x").unwrap();
+        assert_eq!(index_files(&path), expected);
+        // But a name that only looks a little like one is.
+        std::fs::write(at("pippo.2026.ntx"), b"x").unwrap();
+        assert!(index_files(&path).contains(&at("pippo.2026.ntx")));
+    }
+
+    #[test]
+    fn a_write_goes_on_only_past_the_indexes_somebody_agreed_to() {
+        let (dir, path, dbf) = on_disk("CLIENTI.DBF", 0x03);
+        let cdx = dir.path().join("clienti.cdx");
+        std::fs::write(&cdx, b"the index").unwrap();
+        // Nobody was asked: all of the indexes come back, for the question.
+        match check_indexes(&path, &[]) {
+            Err(WriteError::Indexes(files)) => assert_eq!(files, std::slice::from_ref(&cdx)),
+            other => panic!("{other:?}"),
+        }
+        // Agreed to: the write is this program's to make, and the index is not touched.
+        check_indexes(&path, std::slice::from_ref(&cdx)).expect("agreed");
+        set_cell(&path, &dbf, 0, 0, "x", THEN).expect("the write itself does not look");
+        assert_eq!(std::fs::read(&cdx).unwrap(), b"the index");
+        // One that turns up afterwards was not agreed to, and both are named.
+        let ntx = dir.path().join("CLIENTI2.NTX");
+        std::fs::write(&ntx, b"x").unwrap();
+        match check_indexes(&path, std::slice::from_ref(&cdx)) {
+            Err(WriteError::Indexes(files)) => assert_eq!(files, [ntx.clone(), cdx.clone()]),
+            other => panic!("{other:?}"),
+        }
+        // An index that went away is nothing to ask about.
+        std::fs::remove_file(&ntx).unwrap();
+        check_indexes(&path, &[cdx.clone(), ntx]).expect("fewer is fine");
+    }
+
+    #[test]
+    fn the_marked_records_are_deleted_or_recalled_in_one_write() {
+        let (_dir, path, dbf) = on_disk("stock.dbf", 0x03);
+        // Three records, the second already deleted: two change.
+        assert_eq!(
+            set_deleted_many(&path, &dbf, &[0, 1, 2], true, THEN).unwrap(),
+            2
+        );
+        for record in 0..3 {
+            assert_eq!(shown(&path, record)[0], "*");
+        }
+        assert_eq!(header(&path), (3, [126, 11, 25]));
+        assert_eq!(
+            set_deleted_many(&path, &dbf, &[2, 0], false, THEN).unwrap(),
+            2
+        );
+        assert_eq!(shown(&path, 0)[0], "");
+        assert_eq!(shown(&path, 1)[0], "*");
+        assert_eq!(shown(&path, 2)[0], "");
+        // Nothing but the flags moved.
+        let bytes = std::fs::read(&path).unwrap();
+        let original = table_bytes(0x03);
+        assert_eq!(bytes[8..], original[8..]);
+        // A record that is not there stops all of it, before the first flag.
+        let before = std::fs::read(&path).unwrap();
+        assert!(matches!(
+            set_deleted_many(&path, &dbf, &[0, 7], true, THEN),
+            Err(WriteError::NoRecord)
+        ));
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        // And none at all is a write of nothing.
+        assert_eq!(set_deleted_many(&path, &dbf, &[], true, THEN).unwrap(), 0);
+    }
+
+    /// The Visual FoxPro table of the reader's tests, on disk.
+    fn fox_on_disk() -> (tempfile::TempDir, PathBuf, Dbf) {
+        let dir = tempfile::tempdir().expect("a folder");
+        let path = dir.path().join("fox.dbf");
+        let bytes = crate::dbf::tests::fox_bytes();
+        std::fs::write(&path, &bytes).expect("written");
+        let dbf = Dbf::parse(&bytes).expect("a table");
+        (dir, path, dbf)
+    }
+
+    #[test]
+    fn a_value_written_over_a_null_is_a_value_and_a_new_record_has_none_set() {
+        let (_dir, path, dbf) = fox_on_disk();
+        // Record 1 has no `QTY` and no `NAME`; its `NOTE` is an ordinary field.
+        assert_eq!(shown(&path, 1), ["", "NULL", "ABCD", "NULL", ""]);
+        set_cell(&path, &dbf, 1, 3, "hi", THEN).expect("a C field");
+        assert_eq!(shown(&path, 1), ["", "NULL", "ABCD", "NULL", "hi"]);
+        // The fields of varying length and the integers are shown and not written yet.
+        for field in 0..3 {
+            assert!(matches!(
+                set_cell(&path, &dbf, 1, field, "1", THEN),
+                Err(WriteError::Cell(Refused::ReadOnly { .. }))
+            ));
+        }
+
+        // An appended record: the flags are bits and not spaces, the fields of varying
+        // length are empty by being zero long, and nothing in it is null.
+        assert_eq!(append(&path, &dbf, THEN).unwrap(), 3);
+        assert_eq!(shown(&path, 3), ["", "", "", "0", ""]);
+        let bytes = std::fs::read(&path).unwrap();
+        let flags = dbf.offset(3) as usize + 24;
+        assert_eq!(
+            bytes[flags], 0b0101,
+            "`NAME` and `CODE` are short, nothing is null"
+        );
+    }
+
+    #[test]
+    fn a_null_text_field_written_over_loses_its_null() {
+        // `NAME C(4)` that may be null, and is, in the one record.
+        let bytes = crate::dbf::tests::build(
+            0x30,
+            0x03,
+            &[("NAME", b'C', 4, 0, 0x02), ("_NullFlags", b'0', 1, 0, 0x05)],
+            &[(b' ', b"    \x01".to_vec())],
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("n.dbf");
+        std::fs::write(&path, &bytes).unwrap();
+        let dbf = Dbf::parse(&bytes).unwrap();
+        assert_eq!(shown(&path, 0), ["", "NULL"]);
+        set_cell(&path, &dbf, 0, 0, "ada", THEN).unwrap();
+        assert_eq!(shown(&path, 0), ["", "ada"]);
+    }
+
+    #[test]
+    fn the_export_to_csv_is_the_table_as_shown_in_utf_8_with_its_heading() {
+        let (dir, path, dbf) = on_disk("dos.dbf", 0x01);
+        set_cell(&path, &dbf, 0, 0, "Kä,\"a\"", THEN).unwrap();
+        let target = dir.path().join("out.csv");
+        // In the order asked for, which is the view's.
+        let done = export_csv(&path, None, &dbf, &[2, 0], &target).unwrap();
+        assert_eq!(
+            done,
+            Exported {
+                rows: 2,
+                memo: None
+            }
+        );
+        let text = std::fs::read_to_string(&target).expect("UTF-8");
+        assert_eq!(
+            text,
+            "*,NAME,QTY,RATE,BORN,OK,NOTE\r\n\
+             ,ada,-12.00,,1815-12-10,false,\r\n\
+             ,\"Kä,\"\"a\"\"\",1.50,0.250,1975-03-12,true,memo:1\r\n"
+        );
+        // A file that is there is never written over, and is left as it was.
+        assert!(matches!(
+            export_csv(&path, None, &dbf, &[1], &target),
+            Err(WriteError::Exists(taken)) if taken == target
+        ));
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), text);
+        // A record that is not there writes no file at all.
+        let other = dir.path().join("other.csv");
+        assert!(matches!(
+            export_csv(&path, None, &dbf, &[9], &other),
+            Err(WriteError::NoRecord)
+        ));
+        assert!(!other.exists());
+        // The table itself was only read.
+        assert_eq!(shown(&path, 1)[0], "*");
+    }
+
+    #[test]
+    fn the_export_to_a_table_copies_the_records_as_they_are_and_the_memo_file_whole() {
+        let (dir, path, dbf) = on_disk("STOCK.DBF", 0x03);
+        let memo = dir.path().join("STOCK.DBT");
+        std::fs::write(&memo, b"the memos, every block of them").unwrap();
+        let original = std::fs::read(&path).unwrap();
+        let target = dir.path().join("PART.DBF");
+        let done = export_dbf(&path, Some(&memo), &dbf, &[2, 1], &target, THEN).unwrap();
+        let memo_copy = dir.path().join("PART.DBT");
+        assert_eq!(
+            done,
+            Exported {
+                rows: 2,
+                memo: Some(memo_copy.clone())
+            }
+        );
+        // A table of the same structure: two records, dated now, the deleted one still so.
+        assert_eq!(header(&target), (2, [126, 11, 25]));
+        let new = std::fs::read(&target).unwrap();
+        let first = dbf.first as usize;
+        assert_eq!(new[8..first], original[8..first]);
+        let record = |bytes: &[u8], n: usize| {
+            let at = first + n * dbf.record_len;
+            bytes[at..at + dbf.record_len].to_vec()
+        };
+        assert_eq!(record(&new, 0), record(&original, 2));
+        assert_eq!(record(&new, 1), record(&original, 1));
+        assert_eq!(new.len(), first + 2 * dbf.record_len + 1);
+        assert_eq!(new.last(), Some(&END_OF_FILE));
+        assert_eq!(shown(&target, 0)[1], "ada");
+        assert_eq!(shown(&target, 1)[0], "*");
+        // The memo file whole, so the block numbers in the records still mean something.
+        assert_eq!(
+            std::fs::read(&memo_copy).unwrap(),
+            b"the memos, every block of them"
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+
+        // Neither file is written over: a memo file in the way stops the table too.
+        let again = dir.path().join("AGAIN.DBF");
+        std::fs::write(dir.path().join("AGAIN.DBT"), b"somebody's").unwrap();
+        assert!(matches!(
+            export_dbf(&path, Some(&memo), &dbf, &[0], &again, THEN),
+            Err(WriteError::Exists(_))
+        ));
+        assert!(!again.exists());
+        assert_eq!(
+            std::fs::read(dir.path().join("AGAIN.DBT")).unwrap(),
+            b"somebody's"
+        );
+        assert!(matches!(
+            export_dbf(&path, None, &dbf, &[0], &target, THEN),
+            Err(WriteError::Exists(_))
+        ));
+        // A table with no memo file is one file, and none of them is a table of none.
+        let lone = dir.path().join("lone.dbf");
+        let done = export_dbf(&path, None, &dbf, &[], &lone, THEN).unwrap();
+        assert_eq!(
+            done,
+            Exported {
+                rows: 0,
+                memo: None
+            }
+        );
+        assert_eq!(header(&lone).0, 0);
+        assert_eq!(std::fs::read(&lone).unwrap().len(), first + 1);
+    }
+
+    #[test]
+    fn an_exported_visual_foxpro_table_is_a_table_of_its_own() {
+        let (dir, path, dbf) = fox_on_disk();
+        let target = dir.path().join("free.dbf");
+        export_dbf(&path, None, &dbf, &[1, 0], &target, THEN).unwrap();
+        let new = std::fs::read(&target).unwrap();
+        let original = std::fs::read(&path).unwrap();
+        // The fields as they were, and no path of a database after them.
+        let fields = 32 + 5 * 32 + 1;
+        assert_eq!(new[8..fields], original[8..fields]);
+        assert!(original[fields..dbf.first as usize].iter().any(|b| *b != 0));
+        assert!(new[fields..dbf.first as usize].iter().all(|b| *b == 0));
+        // The nulls and the lengths went with the records.
+        assert_eq!(shown(&target, 0), ["", "NULL", "ABCD", "NULL", ""]);
+        assert_eq!(shown(&target, 1), ["", "ada", "01020304", "7", "x"]);
+    }
+
+    #[test]
+    fn a_backup_takes_the_indexes_named_after_the_table_and_the_memo_of_a_container() {
+        let dir = tempfile::tempdir().unwrap();
+        let at = |name: &str| dir.path().join(name);
+        let path = at("shop.dbc");
+        std::fs::write(&path, table_bytes(0x03)).unwrap();
+        for name in [
+            "shop.dct",
+            "shop.dcx",
+            "shop_by_name.cdx",
+            "other.dct",
+            "shop.dbt",
+        ] {
+            std::fs::write(at(name), name.as_bytes()).unwrap();
+        }
+        let mut made = backup(&path, THEN).unwrap();
+        made.sort();
+        assert_eq!(
+            made,
+            [
+                at("shop.20261125-083015.dbc"),
+                at("shop.20261125-083015.dct"),
+                at("shop.20261125-083015.dcx"),
+                at("shop_by_name.20261125-083015.cdx"),
+            ]
+        );
+        // The copies are no indexes of the table: a second backup copies as many files.
+        let later = Stamp { second: 16, ..THEN };
+        assert_eq!(backup(&path, later).unwrap().len(), 4);
     }
 
     #[test]

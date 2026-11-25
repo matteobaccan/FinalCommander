@@ -83,6 +83,23 @@ pub struct Table {
     sort: Option<(usize, bool)>,
     /// What the rows are filtered on, for the status line to say.
     filter: Option<String>,
+    /// The records the view is kept to, when it shows the marked rows only: the marks as
+    /// they stood when that was asked for. An index like the other two, and gone as easily.
+    only: Option<std::collections::BTreeSet<usize>>,
+}
+
+/// The extensions a dBase table goes by. `.dbf`, and the files Visual FoxPro keeps its own
+/// things in, which are tables under other names: a database container, a form, a report,
+/// a class library, a menu, a project, a label.
+const DBASE_NAMES: [&str; 8] = [
+    ".dbf", ".dbc", ".scx", ".frx", ".vcx", ".mnx", ".pjx", ".lbx",
+];
+
+/// Does this name say dBase table? What decides whether a file is read by its header a
+/// record at a time rather than whole as text.
+pub fn dbase_name(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    DBASE_NAMES.iter().any(|ext| name.ends_with(ext))
 }
 
 /// What sorting a column did, which is what the caller has to say out loud.
@@ -135,6 +152,7 @@ impl Table {
             order: None,
             sort: None,
             filter: None,
+            only: None,
         };
         // The declared widths, with the headings allowed to widen a column.
         for (i, name) in table.columns.iter().enumerate() {
@@ -173,7 +191,7 @@ impl Table {
             .any(|ext| name.ends_with(ext))
             // A dBase table is read where the build has the reader for it; in the compact
             // build it is bytes, like any other file nobody here reads.
-            || (crate::dbf::BUILT_IN && name.ends_with(".dbf"))
+            || (crate::dbf::BUILT_IN && dbase_name(&name))
     }
 
     /// Delimiter-separated text, RFC 4180 quoting. `delimiter` is `None` to guess; whether
@@ -209,6 +227,7 @@ impl Table {
             order: None,
             sort: None,
             filter: None,
+            only: None,
         };
         // A row with more fields than the header has them: a header short of a column is a
         // common export, and dropping the data would be worse than naming the column after
@@ -295,6 +314,7 @@ impl Table {
             order: None,
             sort: None,
             filter: None,
+            only: None,
         };
         table.measure();
         table
@@ -479,6 +499,29 @@ impl Table {
         }
     }
 
+    /// Is the view kept to the rows that were marked?
+    pub fn only_marked(&self) -> bool {
+        self.only.is_some()
+    }
+
+    /// Keep the view to these records — the marked ones — or to all of them again (`None`).
+    /// The sort and the filter stay as they are and apply within what is kept. `false` when
+    /// those would have to walk more records than they will, in which case nothing changed.
+    pub fn set_only(
+        &mut self,
+        source: &mut dyn crate::source::Source,
+        memo: Option<&mut (dyn crate::source::Source + '_)>,
+        only: Option<std::collections::BTreeSet<usize>>,
+    ) -> bool {
+        let walks = self.sort.is_some() || self.filter.is_some();
+        if walks && self.records_len() > MAX_VIEW {
+            return false;
+        }
+        self.only = only;
+        self.rebuild(source, memo);
+        true
+    }
+
     /// Keep only the rows that hold `needle`, or all of them again when it is empty. `false`
     /// when there are more records than this will walk, in which case nothing changed.
     pub fn set_filter(
@@ -505,7 +548,13 @@ impl Table {
         mut memo: Option<&mut (dyn crate::source::Source + '_)>,
     ) {
         if self.sort.is_none() && self.filter.is_none() {
-            self.order = None;
+            // The marked rows alone need no record read: the marks are the index, in the
+            // order of the file.
+            let count = self.records_len();
+            self.order = self
+                .only
+                .as_ref()
+                .map(|only| only.iter().copied().filter(|rec| *rec < count).collect());
             return;
         }
         let count = self.records_len();
@@ -514,6 +563,9 @@ impl Table {
         let mut keep: Vec<(usize, String)> = Vec::with_capacity(count);
         let col = self.sort.map(|(col, _)| col);
         for rec in 0..count {
+            if self.only.as_ref().is_some_and(|only| !only.contains(&rec)) {
+                continue;
+            }
             let cells = self.cells_of(source, memo.as_deref_mut(), rec);
             if let Some(needle) = &self.filter {
                 if !cells.iter().any(|c| c.to_lowercase().contains(needle)) {
@@ -551,7 +603,7 @@ impl Table {
     }
 
     /// The cells of one *record*, by its own index rather than the view's.
-    fn cells_of(
+    pub(crate) fn cells_of(
         &self,
         source: &mut dyn crate::source::Source,
         memo: Option<&mut (dyn crate::source::Source + '_)>,
@@ -1021,6 +1073,34 @@ pub(crate) mod tests {
 
     /// A cell reads as a number where it is one, including the way half of Europe writes a
     /// price — and `1,200` is a thousand and two hundred rather than one and a fifth.
+    #[test]
+    fn the_marked_rows_alone_are_a_view_that_works_with_the_sort_and_the_filter() {
+        let mut table = Table::separated("name,size\nb,10\na,9\nc,1000\nab,5\n", None);
+        let mut source = src();
+        let names = |table: &Table, source: &mut crate::source::BytesSource| -> Vec<String> {
+            (0..table.len())
+                .map(|row| table.cells(source, None, row)[0].clone())
+                .collect()
+        };
+        // Records 3, 0 and 2, in the order of the file — and one that is not a record.
+        let only: std::collections::BTreeSet<usize> = [3, 0, 2, 99].into_iter().collect();
+        assert!(table.set_only(&mut source, None, Some(only)));
+        assert!(table.only_marked());
+        assert_eq!(names(&table, &mut source), ["b", "c", "ab"]);
+        assert_eq!(table.record_of(1), Some(2));
+        // Sorted and filtered within what is kept.
+        table.cycle_sort(&mut source, None, 1);
+        assert_eq!(names(&table, &mut source), ["ab", "b", "c"]);
+        assert!(table.set_filter(&mut source, None, "b"));
+        assert_eq!(names(&table, &mut source), ["ab", "b"]);
+        // Every row again, with the sort and the filter as they were.
+        assert!(table.set_only(&mut source, None, None));
+        assert!(!table.only_marked());
+        assert_eq!(names(&table, &mut source), ["ab", "b"]);
+        assert!(table.set_filter(&mut source, None, ""));
+        assert_eq!(names(&table, &mut source), ["ab", "a", "b", "c"]);
+    }
+
     #[test]
     fn a_number_is_a_number_however_it_is_written() {
         assert_eq!(as_number("42"), Some(42.0));

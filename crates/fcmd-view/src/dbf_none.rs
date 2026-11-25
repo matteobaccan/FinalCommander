@@ -48,3 +48,12 @@ impl Dbf {
         Vec::new()
     }
 }
+
+/// No table, so no structure of one for the pane.
+pub(crate) fn structure(
+    _src: &mut dyn crate::structure::Bytes,
+    _head: &[u8],
+    _len: u64,
+) -> Option<crate::structure::Structure> {
+    None
+}

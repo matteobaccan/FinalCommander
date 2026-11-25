@@ -243,7 +243,41 @@ dove non si può confondere con parte di un numero.
 
 Il testo viene fuori nella code page che la testata nomina, comprese quelle DOS: una tabella
 scritta sotto DOS in Germania è in code page 437, e `temporäre` si legge `temporäre` e non
-`tempor„re`.
+`tempor„re`. Le code page 437, 850, 852, 865 e 866 e quelle di Windows sono lette esattamente.
+
+Una **tabella che non nomina la sua code page** — una tabella Clipper non lo fa — viene letta
+come Windows-1252 finché non dici tu qual è: `Ctrl+T`, oppure `F8` o `Shift+F8`, che in una
+tabella dBase riguardano la pagina della tabella, passa alla successiva fra CP437, CP850,
+CP852, CP865, CP866, CP1250, CP1251 e CP1252, e dopo l'ultima torna a non dire niente.
+Fermati su quella in cui i nomi accentati si leggono giusti. La riga di stato la mostra, la
+scelta vale per quella tabella finché il programma resta aperto, e da lì in poi quello che
+scrivi nella tabella viene scritto in quella pagina.
+
+Si leggono anche le cose proprie di Visual FoxPro: un campo senza valore mostra `NULL`, un
+campo di lunghezza variabile (`V`, `Q`) mostra quanto contiene, e i file in cui Visual FoxPro
+tiene database, form, report, classi, menu, progetti ed etichette — `.dbc`, `.scx`, `.frx`,
+`.vcx`, `.mnx`, `.pjx`, `.lbx` — si aprono come le tabelle che sono, con i loro file memo.
+
+Di una tabella dBase si può vedere più di una riga di celle:
+
+| Tasto | Che cosa fa |
+| --- | --- |
+| `Invio` su una cella memo, oppure `m` | il testo intero del memo, al posto della tabella; `Esc` o `Backspace` riporta alla tabella |
+| `Shift+F11` | la struttura: ogni campo con tipo, larghezza, decimali, posizione e flag |
+| `Ctrl+F5` | mostra solo le righe marcate, e di nuovo tutte (qualsiasi tabella, non solo dBase) |
+| `Ctrl+F6` | la somma di ogni colonna numerica, sulle righe marcate o su tutte quelle mostrate, con il numero di righe che avevano un valore |
+| `Ctrl+F9` | esporta le righe marcate, o tutte quelle mostrate, in un file nuovo |
+| `Ctrl+T`, `F8`, `Shift+F8` | la code page di una tabella che non la nomina |
+
+`Ctrl+F9` chiede un nome e scrive le righe nell'ordine in cui le vedi, accanto alla tabella se
+il nome non dice dove. Un nome che finisce in `.dbf` produce una tabella con la stessa
+struttura, i record esattamente come sono, e il file memo copiato per intero accanto con il
+nuovo nome, così ogni memo si ritrova; qualsiasi altro nome produce un file CSV in UTF-8 con
+i nomi dei campi sulla prima riga. Un file che esiste già non viene mai sovrascritto: scegli
+un altro nome.
+
+I tasti sono quelli del plugin LookDBF di FAR dove qui erano liberi; i suoi `F5`, `F6` e `F9`
+prendono `Ctrl`, perché il visualizzatore usa già quei tre.
 
 ## Modificare una tabella dBase
 
@@ -255,34 +289,40 @@ tasti sono quelli dei pannelli con `Ctrl` premuto, come per l'ordinamento:
 | `Ctrl+F4` | scrive un nuovo valore sulla cella: il record del cursore, la colonna su cui è la vista (`Ctrl+←`/`Ctrl+→` la scelgono) |
 | `Ctrl+N` | aggiunge un record vuoto e ci porta il cursore, per riempirlo |
 | `Ctrl+F8` | cancella il record sotto il cursore, o lo richiama: l'asterisco nella prima colonna |
+| `Ctrl+D` | cancella tutti i record marcati, dopo una sola domanda che dice quanti sono |
+| `Ctrl+R` | richiama tutti i record marcati, allo stesso modo |
 | `Shift+Canc` | `Pack`: toglie per sempre i record cancellati |
 
 **Prima della prima modifica** a una tabella in una sessione, un dialogo dice che la tabella
 sta per essere modificata e che prima serve una copia di sicurezza, e la fa: una copia della
-tabella e del suo file memo accanto a loro, con la data e l'ora nel nome — `CLIENTI.DBF`
+tabella, del suo file memo e dei suoi file indice accanto a loro, con la data e l'ora nel nome — `CLIENTI.DBF`
 diventa `CLIENTI.20261125-083015.DBF`, `CLIENTI.DBT` diventa `CLIENTI.20261125-083015.DBT` —
 anno, mese, giorno, poi ore, minuti e secondi, così le copie in ordine di nome sono in ordine
 di tempo, e l'estensione per ultima, così una copia si apre ancora come tabella. I pulsanti
 sono *Copia e modifica* e *Annulla*, e prima della risposta non viene scritto niente. Dopo, le
 altre modifiche di quella sessione a quella tabella passano senza domande.
 
-**Una tabella con dei file indice accanto non viene scritta affatto.** Un `.cdx` o un `.mdx`
-con il nome della tabella, oppure un qualsiasi `.ntx`, `.nsx` o `.idx` nella cartella — a un
-indice di quel tipo il nome lo dà chi lo crea, e dentro non c'è scritto di quale tabella è — e
-il messaggio nomina i file. Il motivo sono i programmi a cui quelle tabelle appartengono: un
-indice tiene una copia delle chiavi, un record cambiato alle sue spalle lo lascia puntato su
-qualcosa che non c'è più, e un programma Clipper, Harbour o FoxPro che se ne fida trova poi il
-record sbagliato. FinalCommander non tiene aggiornati gli indici, quindi una tabella così la
-lascia stare.
+**Una tabella con dei file indice viene scritta solo dopo che ne sei stato avvisato.** Un
+indice è della tabella quando il suo nome comincia con il nome della tabella e finisce in
+`.ntx`, `.cdx`, `.mdx`, `.nsx` o `.idx`: per `pippo.dbf` sono `PIPPO.CDX`, `pippo1.ntx`,
+`pippo_nome.ntx`; ogni altro indice nella cartella è di un'altra tabella e non c'entra.
+Subito dopo la copia di sicurezza un secondo dialogo nomina quei file e dice che cosa ne
+consegue: FinalCommander non aggiorna gli indici, quindi dopo la modifica gli indici non
+corrispondono più alla tabella e **vanno ricostruiti (reindicizzati) dal programma a cui
+appartengono** — il programma Clipper, Harbour o FoxPro che usa la tabella. *Prosegui*
+scrive; *Annulla* non scrive niente. La domanda viene fatta una volta per tabella in una
+sessione, e di nuovo se compare un indice nuovo. La copia di sicurezza contiene gli indici
+com'erano.
 
 Quello che si scrive viene controllato con il campo, e scritto esattamente o per niente:
 
 - un campo **carattere** prende quello che sta nella sua larghezza, nella code page della
   tabella. Una lettera per cui quella pagina non ha un byte viene rifiutata e nominata, mai
   sostituita con un `?`. Una tabella la cui testata non nomina una code page — una tabella
-  Clipper non lo fa — o una pagina DOS che questo programma legge solo per approssimazione
-  (850, 852 e simili) prende solo ASCII, per lo stesso motivo: una `è` tirata a indovinare
-  finirebbe sul byte sbagliato;
+  Clipper non lo fa — prende solo ASCII finché non ne hai scelto la pagina con `Ctrl+T` (vedi
+  sopra), e così una in una pagina DOS che questo programma legge solo per approssimazione
+  (860, 861, 863), per lo stesso motivo: una `è` tirata a indovinare finirebbe sul byte
+  sbagliato;
 - un **numero** (`N`, `F`) è fatto di cifre, un segno meno e un punto decimale, e viene
   disposto secondo larghezza e decimali del campo. `12.5` entra in due decimali come `12.50`;
   `12.505` non entra, perché andrebbe arrotondato;
