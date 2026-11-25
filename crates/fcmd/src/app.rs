@@ -7816,7 +7816,11 @@ impl App {
 
     /// Returns true when the key belonged to the structure pane.
     fn structure_pane_key(&mut self, key: Key) -> bool {
-        let height = self.viewer_size.1;
+        // The pane is as tall as the viewer's body; its rows are that less its title and
+        // its frame.
+        // The pane is as tall as the reader's body — the screen's for the viewer, the box's
+        // for the quick view; its rows are that less its title and its frame.
+        let height = crate::render::structure_visible_rows(self.live_viewer_size().1);
         let mut target = None;
         let handled = match self.live_viewer_mut() {
             Some(viewer) if viewer.show_structure && viewer.struct_focus => match key.code {
@@ -12322,6 +12326,10 @@ impl App {
         // to the command line while a panel has the focus, and a preview must not swallow
         // what somebody is typing.
         if self.quick_focused() && key.as_typed_char().is_none() {
+            // With the structure pane focused, its cursor takes the arrows, as in the viewer.
+            if self.structure_pane_key(key) {
+                return;
+            }
             // `Tab` moves the keys between the content and the structure pane — but only
             // while that pane is open. With no pane to move to it is the panels' own `Tab`
             // again, which is the way back out of the preview: a key that does nothing is a

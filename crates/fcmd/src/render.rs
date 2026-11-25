@@ -948,6 +948,13 @@ fn draw_user_screen(app: &App, buf: &mut Buffer, scroll: usize) {
 /// The structure pane beside the content: what the file is, and where anything in it lives
 /// (SPEC 05 §1.8). A group heading is a label, a field shows its raw bytes and their meaning,
 /// and a row that points somewhere is what `Enter` follows.
+/// The rows of the structure pane that show rows: its height less the title and the frame's
+/// bottom. The keys that move the pane's cursor count with this too, or the last rows of a
+/// long structure would scroll in under the frame and never be seen.
+pub(crate) fn structure_visible_rows(pane_height: u16) -> u16 {
+    pane_height.saturating_sub(2)
+}
+
 fn draw_structure(app: &App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer, area: Rect) {
     let base = app.theme.panel();
     let frame = app.theme.fg_on("panel.frame", "panel.bg");
@@ -967,7 +974,7 @@ fn draw_structure(app: &App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer, a
         area.x + 1,
         area.y + 1,
         area.w.saturating_sub(1),
-        area.h.saturating_sub(2),
+        structure_visible_rows(area.h),
     );
     let focus = viewer.struct_focus;
     let (rows, cursor) = viewer.structure_rows(inner.h);
@@ -2196,7 +2203,9 @@ fn draw_quick_view(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
         app.first_frame(&mut quick, app.quick_size);
         app.quick = Some(quick);
     }
-    let Some(viewer) = app.quick.as_mut() else {
+    // Out of the app while it is drawn, so the structure pane can be drawn with the app's
+    // theme beside it; put back at the end.
+    let Some(mut viewer) = app.quick.take() else {
         // Nothing under the cursor, or nothing we can read from here: the reason is a line of
         // its own rather than an empty frame that looks broken.
         let text = app
@@ -2212,13 +2221,27 @@ fn draw_quick_view(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
         return;
     };
 
+    // The structure pane (`Shift+F11`) takes the right of the box, as in the viewer, and the
+    // rows the rest: without this it was turned on, took the keys, and was never drawn.
+    let mut body = Rect::new(inner.x + 1, inner.y, inner.w.saturating_sub(1), inner.h);
+    let pane = if viewer.show_structure {
+        let pane_w = (body.w / 3).clamp(28, 48).min(body.w.saturating_sub(24));
+        (pane_w >= 24).then(|| {
+            let at = Rect::new(body.right() - pane_w, body.y, pane_w, body.h);
+            body = Rect::new(body.x, body.y, body.w - pane_w, body.h);
+            at
+        })
+    } else {
+        None
+    };
+    app.quick_size = (body.w, body.h);
+
     // A picture is painted rather than written, here as in the viewer: without this the
     // quick view of a `.png` is an empty frame, because a picture has no rows of text.
-    let body = Rect::new(inner.x + 1, inner.y, inner.w.saturating_sub(1), inner.h);
     let drew = paint_picture(
         &mut app.pixels,
         crate::pixels::Slot::Quick,
-        viewer,
+        &mut viewer,
         &app.theme,
         buf,
         body,
@@ -2230,17 +2253,14 @@ fn draw_quick_view(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
     let rows = if drew {
         Vec::new()
     } else {
-        viewer.rows(inner.w.saturating_sub(1), inner.h)
+        viewer.rows(body.w, body.h)
     };
     for (n, row) in rows.iter().enumerate() {
-        let text = fcmd_ui::truncate_cols(&row.text, inner.w.saturating_sub(1) as usize);
-        buf.put_str(
-            inner.x + 1,
-            inner.y + n as u16,
-            &text,
-            base,
-            inner.w.saturating_sub(1),
-        );
+        let text = fcmd_ui::truncate_cols(&row.text, body.w as usize);
+        buf.put_str(body.x, body.y + n as u16, &text, base, body.w);
+    }
+    if let Some(at) = pane {
+        draw_structure(app, &mut viewer, buf, at);
     }
     let name = viewer.path.display_name();
     let foot = app.theme.fg_on("panel.frame", "panel.bg");
@@ -2253,6 +2273,7 @@ fn draw_quick_view(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
         foot,
         nw + 2,
     );
+    app.quick = Some(viewer);
 }
 
 /// The AI conversation in its own panel: the session's title on the frame, the
@@ -6542,6 +6563,56 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         assert!(!out.contains("Structure"), "{out}");
     }
 
+    /// A structure longer than the window: `End`, and every `Down` on the way there, keep the
+    /// cursor on a row the pane really shows — not on one of the two the title and the frame
+    /// take, under which the last rows used to scroll and stay out of sight.
+    #[test]
+    fn the_last_rows_of_a_long_structure_come_into_view() {
+        let path = std::env::current_exe().unwrap();
+        let mut app = app("far", "en");
+        let source = fcmd_view::source::FileSource::open(&path).unwrap();
+        let mut viewer = fcmd_view::Viewer::new(Box::new(source), VPath::local(&path));
+        viewer.set_mode(fcmd_view::Mode::Hex);
+        assert!(viewer.toggle_structure(), "our own binary must decode");
+        app.mode = crate::app::Mode::Viewer(Box::new(viewer));
+        frame(&mut app, 100, 20);
+        let visible = structure_visible_rows(app.viewer_size.1);
+        let len = app.mode.viewer_mut().unwrap().structure_len();
+        assert!(
+            len > visible as usize,
+            "the structure must be longer than the pane"
+        );
+
+        let on_screen = |app: &mut App| {
+            let (rows, cursor) = app.mode.viewer_mut().unwrap().structure_rows(visible);
+            cursor < rows.len()
+        };
+        for _ in 0..len {
+            app.handle_input(Input::Key("Down".parse().unwrap()));
+            assert!(on_screen(&mut app), "Down left the cursor under the frame");
+        }
+        app.handle_input(Input::Key("Home".parse().unwrap()));
+        app.handle_input(Input::Key("End".parse().unwrap()));
+        assert!(on_screen(&mut app), "End left the cursor under the frame");
+        let last = app
+            .mode
+            .viewer_mut()
+            .unwrap()
+            .structure()
+            .unwrap()
+            .rows
+            .last()
+            .unwrap()
+            .label
+            .clone();
+        let out = frame(&mut app, 100, 20);
+        let shown: String = last.chars().take(10).collect();
+        assert!(
+            out.contains(&shown),
+            "the last row, {last:?}, is on the screen:\n{out}"
+        );
+    }
+
     #[test]
     #[ignore = "a look at the screen, not an assertion"]
     fn eyeball_structure() {
@@ -9410,6 +9481,55 @@ third line
         assert_eq!(placed.len(), 1);
         assert!(placed[0].x >= 50, "in the other panel: {:?}", placed[0]);
         assert!(placed[0].data.starts_with(b"\x1bP0;1;0q"));
+    }
+
+    /// The quick view's structure pane (`Shift+F11`) is drawn beside the bytes, as the
+    /// viewer's is, and takes the arrows while it has the focus. It used to be turned on and
+    /// handed the keys without ever being drawn.
+    #[test]
+    fn the_quick_view_shows_its_structure_pane_and_scrolls_it_to_the_end() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::copy(
+            std::env::current_exe().unwrap(),
+            dir.path().join("prog.bin"),
+        )
+        .unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "Ctrl+Q");
+        press(&mut app, "Tab");
+        assert!(app.quick_focused());
+        press(&mut app, "Shift+F11");
+        let out = frame(&mut app, 120, 24);
+        assert!(out.contains("Structure"), "{out}");
+        assert!(out.contains("ELF header"), "{out}");
+
+        let top = app.quick.as_ref().unwrap().top;
+        press(&mut app, "Down");
+        assert_eq!(
+            app.quick.as_ref().unwrap().top,
+            top,
+            "the pane took the arrow"
+        );
+
+        press(&mut app, "End");
+        let last = app
+            .quick
+            .as_mut()
+            .unwrap()
+            .structure()
+            .unwrap()
+            .rows
+            .last()
+            .unwrap()
+            .label
+            .clone();
+        let out = frame(&mut app, 120, 24);
+        let shown: String = last.chars().take(8).collect();
+        assert!(
+            out.contains(&shown),
+            "the last row, {last:?}, is on the screen:\n{out}"
+        );
     }
 
     /// The first bytes of an MP4: enough for the viewer to ask whether it is a film.

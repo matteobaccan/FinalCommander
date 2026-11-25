@@ -6,6 +6,15 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The viewer's structure pane (`F11`): with more rows than the window, the cursor could go
+  down under the pane's frame, and the last two rows were never shown. The keys now count the
+  rows the pane really has.
+- The quick view's structure pane (`Shift+F11` in `Ctrl+Q`) was turned on and given the
+  keys but never drawn, so the arrows seemed to do nothing. It is drawn beside the bytes as
+  in the viewer, and its arrows, `PgUp`/`PgDn`, `Home`/`End` and `Enter` work there too.
+
 ## [0.47.0] — 2026-11-25
 
 FinalCommander on routers. Four new archives for 32-bit MIPS — little-endian for the
