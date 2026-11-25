@@ -113,6 +113,33 @@ office. `Tunnels…` in the same menu lists what is open with three counters —
 carried, open now, refused by the far end — and `Enter` on a row closes it, which frees the
 port at once.
 
+## Another FinalCommander on the network (Link)
+
+A folder of another computer on the same local network, in a panel, with nothing to install
+but FinalCommander on both — and nothing reachable until the person at the other machine says
+yes.
+
+**On the machine that shares**: put a panel on the folder and choose `F9 → Commands → Link:
+accept calls on/off`. The status line says the machine's ID — nine digits, `123 456 789` — and
+the corner shows `LINK` for as long as calls are accepted. The folder is offered read only.
+To share at every start instead, set `link.accept = true` and the folder in `link.share`.
+
+**On the machine that calls**: in the netbox (`Alt+N`), `Ins` for a new session, protocol
+*Link*, the other machine's ID as the host, and the user left empty (or the name of the
+folder). Opening it finds the machine by a broadcast on the local network and calls it; the
+status line shows a six-digit code.
+
+**The call**: the machine called shows who is calling, the folder asked for and the same six
+digits. Compare them — on the phone, or across the room — and accept only if they match: a
+different code means somebody in the middle. The lit button is *Cancel*, so an `Enter` typed
+by chance refuses. Once accepted, the caller's panel lists the folder; viewing, copying out,
+finding and comparing work as on any server.
+
+While someone is reading, the corner says `LINK 1`; `Ctrl+Alt+L` on the panels hangs up every
+caller at once, and turning the Link off does too. Everything is encrypted (TLS 1.3), only
+private addresses are accepted, and a machine whose key changes is refused the next time with
+the name of the file to edit — `link-known`, beside the settings — if it was reinstalled.
+
 ## Through a jump host
 
 A server that cannot be reached from here, but can be reached from one machine that can, is a

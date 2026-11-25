@@ -6,6 +6,17 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- FinalCommander Link: a folder of another FinalCommander on the same local network, in a
+  panel (SPEC 04 §9). *Commands → Link: accept calls on/off* shares the active panel's folder
+  read only; on the other machine a netbox session with protocol *Link* and that machine's
+  nine-digit ID calls it. The person called sees who is calling and a six-digit code that the
+  caller's screen shows too, and accepts only if the two match. Encrypted with TLS 1.3,
+  private addresses only, a changed key refused; `LINK` in the corner of the status line
+  while calls are accepted, with the number of callers, and `Ctrl+Alt+L` hangs them all up.
+  Settings `link.accept`, `link.name`, `link.share`.
+
 ### Fixed
 
 - The viewer's structure pane (`F11`): with more rows than the window, the cursor could go

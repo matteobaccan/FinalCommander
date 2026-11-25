@@ -117,6 +117,35 @@ server consegnata a questa macchina, e aprirlo ovunque la consegnerebbe al resto
 aperte ora, rifiutate dall'altro capo — e `Enter` su una riga lo chiude, liberando subito la
 porta.
 
+## Un altro FinalCommander in rete (Link)
+
+Una cartella di un altro computer della stessa rete locale, in un pannello, senza installare
+nulla oltre a FinalCommander su entrambi — e senza che nulla sia raggiungibile finché la
+persona all'altra macchina non dice sì.
+
+**Sulla macchina che condivide**: porta un pannello sulla cartella e scegli `F9 → Comandi →
+Link: accetta chiamate sì/no`. La riga di stato dice l'ID della macchina — nove cifre,
+`123 456 789` — e nell'angolo resta `LINK` finché le chiamate sono accettate. La cartella è
+offerta in sola lettura. Per condividerla a ogni avvio, imposta `link.accept = true` e la
+cartella in `link.share`.
+
+**Sulla macchina che chiama**: nel NetBox (`Alt+N`), `Ins` per una nuova sessione, protocollo
+*Link*, l'ID dell'altra macchina come host e l'utente vuoto (o il nome della cartella).
+Aprendola, la macchina viene cercata con un broadcast sulla rete locale e chiamata; la riga di
+stato mostra un codice di sei cifre.
+
+**La chiamata**: la macchina chiamata mostra chi chiama, la cartella chiesta e le stesse sei
+cifre. Confrontale — al telefono, o da una scrivania all'altra — e accetta solo se sono
+uguali: un codice diverso vuol dire qualcuno in mezzo. Il pulsante acceso è *Annulla*, così
+un `Invio` battuto per caso rifiuta. Accettata la chiamata, il pannello di chi chiama elenca
+la cartella; vedere, copiare fuori, cercare e confrontare funzionano come su qualunque server.
+
+Mentre qualcuno legge, nell'angolo c'è `LINK 1`; `Ctrl+Alt+L` sui pannelli chiude tutte le
+chiamate insieme, e così anche spegnere il Link. Tutto è cifrato (TLS 1.3), si accettano solo
+indirizzi privati, e una macchina la cui chiave cambia viene rifiutata la volta dopo, con il
+nome del file da correggere — `link-known`, accanto alle impostazioni — se è stata
+reinstallata.
+
 ## Attraverso un host di salto
 
 Un server che da qui non si raggiunge, ma che si raggiunge da una macchina che invece sì, è un
