@@ -820,6 +820,7 @@ name = "fcmd"
 version = "0.47.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "fcmd-arc",
  "fcmd-cmd",
  "fcmd-config",

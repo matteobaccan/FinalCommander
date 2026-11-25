@@ -539,6 +539,21 @@ menu-view-filtered = Megnézés parancson át
 menu-learn-keys = Billentyűk tanítása
 menu-tunnel = &Alagút nyitása…
 menu-tunnels = Ala&gutak…
+menu-link-accept = Link: hívások fogadása be/ki
+menu-link-hangup = Link: bontás
+link-calling = { $host } hívása: a képernyőjén a kódnak { $code } kell lennie
+link-on = Link be — ez a gép az { $id } azonosító, és csak olvasásra megosztja: { $share }
+link-off = Link ki: a hívásokat már nem fogadja
+link-failed = a Link nem indult el: { $error }
+link-opened = Link: { $name } olvassa: { $share } — Ctrl+Alt+L bont
+link-closed = Link: { $name } kilépett
+link-hung-up = Link: minden hívás bontva
+link-no-share = a Link ennek a gépnek egy mappáját osztja meg: előbb lépjen a panellel egy mappába
+link-call-title = Link-hívás
+link-call-from = { $name } (ID { $id }, { $addr }) hív
+link-call-share = és olvasni szeretné: { $share }, csak olvasásra.
+link-call-code = Csak akkor fogadja, ha a hívó képernyőjén a { $code } kód látszik
+link-call-gone = a Link-hívás megválaszolatlan maradt
 tunnel-title = Alagút: [helyi:]gép:port
 tunnel-list-title = Alagutak
 tunnel-none = nincs nyitott alagút
@@ -1636,6 +1651,8 @@ site-max-kbps = Sebességkorlát, KB/s (üres: nincs)
 # Session editor: IMAP, read only
 site-protocol-imap = IMAP (levelek, csak olvasás)
 site-protocol-imaps = IMAPS (levelek TLS-en át, csak olvasás)
+site-protocol-link = Link (másik FinalCommander, helyi hálózat)
+site-link-note = Link: a gazdagép a másik gép azonosítója, a felhasználó a megosztott mappa (üres: az első)
 
 # The AI services as a list, like the sessions
 ai-services-title = AI-szolgáltatások

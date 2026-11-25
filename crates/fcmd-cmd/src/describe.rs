@@ -246,6 +246,10 @@ impl Command {
 
             Command::NetTunnel => "open a tunnel over the connection this panel is on",
             Command::NetTunnels => "the tunnels that are open",
+            Command::NetLinkAccept => {
+                "accept Link calls from the local network, sharing this panel's folder read only"
+            }
+            Command::NetLinkHangUp => "end every Link session open on this machine",
             Command::NetS3Profile => {
                 "choose the AWS profile an object storage service signs its requests with"
             }

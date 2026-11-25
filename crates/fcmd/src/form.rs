@@ -750,10 +750,14 @@ impl Form {
                     ("davs", t("site-protocol-davs")),
                     ("imap", t("site-protocol-imap")),
                     ("imaps", t("site-protocol-imaps")),
+                    ("link", t("site-protocol-link")),
                 ],
                 &scheme,
             ),
             Field::text("site.host", t("site-host"), cfg.host.clone()),
+            // The two rows mean something else for a Link site, and the dialog says so
+            // rather than growing a second set of them.
+            Field::Note(t("site-link-note")),
             Field::text(
                 "site.port",
                 t("site-port"),
@@ -826,25 +830,25 @@ impl Form {
             Page {
                 label: t("site-page-session"),
                 from: 0,
-                to: 8,
+                to: 9,
                 enabled: true,
             },
             Page {
                 label: t("site-page-environment"),
-                from: 8,
-                to: 13,
+                from: 9,
+                to: 14,
                 enabled: true,
             },
             Page {
                 label: t("site-page-directories"),
-                from: 13,
-                to: 15,
+                from: 14,
+                to: 16,
                 enabled: true,
             },
             Page {
                 label: t("site-page-sftp"),
-                from: 15,
-                to: 19,
+                from: 16,
+                to: 20,
                 enabled: sftp,
             },
         ];

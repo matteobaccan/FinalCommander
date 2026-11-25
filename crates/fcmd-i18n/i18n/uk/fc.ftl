@@ -545,6 +545,21 @@ menu-view-filtered = Перегляд через команду
 menu-learn-keys = Вивчити клавіші
 menu-tunnel = Від&крити тунель…
 menu-tunnels = Тун&елі…
+menu-link-accept = Link: приймати виклики увімк/вимк
+menu-link-hangup = Link: завершити
+link-calling = виклик { $host }: код на його екрані має бути { $code }
+link-on = Link увімкнено — ця машина має ID { $id } і відкриває { $share } лише для читання
+link-off = Link вимкнено: виклики більше не приймаються
+link-failed = Link не запустився: { $error }
+link-opened = Link: { $name } читає { $share } — Ctrl+Alt+L завершує
+link-closed = Link: { $name } від'єднався
+link-hung-up = Link: усі виклики завершено
+link-no-share = Link відкриває теку цього комп'ютера: спершу перейдіть панеллю в теку
+link-call-title = Виклик Link
+link-call-from = { $name } (ID { $id }, { $addr }) викликає
+link-call-share = і просить прочитати { $share }, лише для читання.
+link-call-code = Приймайте, лише якщо на екрані того, хто викликає, код { $code }
+link-call-gone = виклик Link лишився без відповіді
 tunnel-title = Тунель: [локальний:]вузол:порт
 tunnel-list-title = Тунелі
 tunnel-none = жодного тунелю не відкрито
@@ -1650,6 +1665,8 @@ site-max-kbps = Обмеження швидкості, КБ/с (порожньо
 # Session editor: IMAP, read only
 site-protocol-imap = IMAP (пошта, лише читання)
 site-protocol-imaps = IMAPS (пошта через TLS, лише читання)
+site-protocol-link = Link (інший FinalCommander, локальна мережа)
+site-link-note = Link: хост — ID іншої машини, користувач — тека, яку вона відкриває (порожньо: перша)
 
 # The AI services as a list, like the sessions
 ai-services-title = Служби ШІ

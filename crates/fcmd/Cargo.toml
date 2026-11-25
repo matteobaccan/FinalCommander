@@ -33,7 +33,9 @@ fcmd-vfs = { workspace = true }
 fcmd-syntax = { workspace = true }
 fcmd-term = { workspace = true }
 fcmd-view = { workspace = true }
-tokio = { version = "1.53.3", features = ["rt-multi-thread", "fs", "sync", "time", "macros"] }
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "fs", "sync", "time", "macros", "net"] }
+# The Link's called side implements fcmd-net's `Gate`, an async trait: already in the tree.
+async-trait = "0.1"
 unicode-width = "0.2.2"
 # The secrets file (`vault.rs`): AES-256-GCM and PBKDF2. Already in the tree under russh and
 # fcmd-s3, so this is no new code to trust, only a direct use of it.

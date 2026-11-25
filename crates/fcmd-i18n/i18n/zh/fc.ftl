@@ -531,6 +531,21 @@ menu-view-filtered = 通过命令查看
 menu-learn-keys = 学习按键
 menu-tunnel = 打开隧道…
 menu-tunnels = 隧道…
+menu-link-accept = Link：接受呼叫 开/关
+menu-link-hangup = Link：挂断
+link-calling = 正在呼叫 { $host }：其屏幕上的代码应为 { $code }
+link-on = Link 已开启 — 本机 ID 为 { $id }，以只读方式共享 { $share }
+link-off = Link 已关闭：不再接受呼叫
+link-failed = Link 无法启动：{ $error }
+link-opened = Link：{ $name } 正在读取 { $share } — Ctrl+Alt+L 挂断
+link-closed = Link：{ $name } 已离开
+link-hung-up = Link：所有呼叫已挂断
+link-no-share = Link 共享的是本机的文件夹：请先把面板移到一个文件夹
+link-call-title = Link 呼叫
+link-call-from = { $name }（ID { $id }，{ $addr }）正在呼叫
+link-call-share = 请求以只读方式读取 { $share }。
+link-call-code = 仅当呼叫方屏幕显示代码 { $code } 时才接受
+link-call-gone = Link 呼叫无人应答
 tunnel-title = 隧道：[本地:]主机:端口
 tunnel-list-title = 隧道
 tunnel-none = 没有打开的隧道
@@ -1589,6 +1604,8 @@ site-max-kbps = 速度限制，KB/s（空：不限）
 # Session editor: IMAP, read only
 site-protocol-imap = IMAP（邮件，只读）
 site-protocol-imaps = IMAPS（基于 TLS 的邮件，只读）
+site-protocol-link = Link（另一台 FinalCommander，局域网）
+site-link-note = Link：主机为另一台机器的 ID，用户为其共享的文件夹（留空：第一个）
 
 # The AI services as a list, like the sessions
 ai-services-title = AI 服务

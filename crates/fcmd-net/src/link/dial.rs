@@ -18,13 +18,21 @@ use crate::site::Site;
 /// How long a broadcast waits for the machine to answer.
 const FIND_WAIT: Duration = Duration::from_secs(2);
 
+/// The user of a Link site that names no share: whichever the other machine offers first.
+pub const ANY_SHARE: &str = "*";
+
 /// How the six digits reach the screen: the site called, and the digits.
 pub type ShowCode = Arc<dyn Fn(&Site, &str) + Send + Sync>;
 
-/// What the program around it gives the netbox to call with: who this machine is, where the
-/// fingerprints of the machines met before are kept, and how to show the six digits.
+/// What the program around it gives the netbox to call with: where this machine's identity
+/// and the fingerprints of the machines met before are kept, its name, and how to show the
+/// six digits. The identity is read — made, the first time — only when a call is placed, so
+/// nothing is written for somebody who never uses the Link.
 pub struct Dialer {
-    pub identity: Arc<Identity>,
+    /// The folder of `link-id`, `link-cert.der` and `link-key.der`.
+    pub dir: PathBuf,
+    /// The name shown on the other screen.
+    pub name: String,
     /// `<id> <fingerprint hex>` per line.
     pub known: PathBuf,
     /// Called with the site and the six digits once the other machine answers, while its
@@ -35,7 +43,8 @@ pub struct Dialer {
 impl std::fmt::Debug for Dialer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Dialer")
-            .field("identity", &self.identity)
+            .field("dir", &self.dir)
+            .field("name", &self.name)
             .field("known", &self.known)
             .finish_non_exhaustive()
     }
@@ -63,7 +72,9 @@ impl Dialer {
                  turned on there?",
             ));
         };
-        let pending = call(there.addr, &self.identity).await?;
+        let identity =
+            Identity::load_or_create(&self.dir, &self.name).map_err(|e| failed(site, e))?;
+        let pending = call(there.addr, &identity).await?;
         let theirs = pending.peer.fingerprint;
         if let Some(known) = self.known_fingerprint(id) {
             if known != theirs {
@@ -79,7 +90,11 @@ impl Dialer {
             }
         }
         (self.show_code)(site, &pending.sas);
-        let fs = pending.ask(&site.user, false).await?;
+        let share = match site.user.as_str() {
+            ANY_SHARE => "",
+            name => name,
+        };
+        let fs = pending.ask(share, false).await?;
         let _ = self.remember(id, &theirs);
         Ok(Remote::new(site.clone(), Arc::new(fs)))
     }
@@ -128,7 +143,8 @@ mod tests {
     fn a_fingerprint_is_kept_once_and_read_back() {
         let dir = tempfile::tempdir().unwrap();
         let dialer = Dialer {
-            identity: Arc::new(Identity::generate("here").unwrap()),
+            dir: dir.path().to_path_buf(),
+            name: "here".into(),
             known: dir.path().join("link-known"),
             show_code: Arc::new(|_, _| {}),
         };

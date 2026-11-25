@@ -531,6 +531,21 @@ menu-view-filtered = Voir à travers une commande
 menu-learn-keys = Apprendre les touches
 menu-tunnel = &Ouvrir un tunnel…
 menu-tunnels = &Tunnels…
+menu-link-accept = Link : accepter les appels oui/non
+menu-link-hangup = Link : raccrocher
+link-calling = appel de { $host } : le code sur son écran doit être { $code }
+link-on = Link actif — cette machine est l'ID { $id }, elle partage { $share } en lecture seule
+link-off = Link coupé : les appels ne sont plus acceptés
+link-failed = Link n'a pas pu démarrer : { $error }
+link-opened = Link : { $name } lit { $share } — Ctrl+Alt+L raccroche
+link-closed = Link : { $name } est parti
+link-hung-up = Link : tous les appelants ont été déconnectés
+link-no-share = Link partage un dossier de cet ordinateur : placez d'abord le panneau sur un dossier
+link-call-title = Appel Link
+link-call-from = { $name } (ID { $id }, { $addr }) appelle
+link-call-share = et demande à lire { $share }, en lecture seule.
+link-call-code = N'acceptez que si l'écran de l'appelant affiche le code { $code }
+link-call-gone = l'appel Link est resté sans réponse
 tunnel-title = Tunnel : [local:]hôte:port
 tunnel-list-title = Tunnels
 tunnel-none = aucun tunnel ouvert
@@ -1626,6 +1641,8 @@ site-max-kbps = Limite de vitesse, Ko/s (vide : aucune)
 # Session editor: IMAP, read only
 site-protocol-imap = IMAP (courrier, lecture seule)
 site-protocol-imaps = IMAPS (courrier sur TLS, lecture seule)
+site-protocol-link = Link (un autre FinalCommander, réseau local)
+site-link-note = Link : l'hôte est l'ID de l'autre machine, l'utilisateur le dossier partagé (vide : le premier)
 
 # The AI services as a list, like the sessions
 ai-services-title = Services d'IA

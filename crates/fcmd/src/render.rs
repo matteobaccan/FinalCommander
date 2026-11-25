@@ -527,6 +527,13 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         if !app.background.is_empty() {
             mark.push_str(&format!("[{}]", app.background.len()));
         }
+        // Accepting Link calls, and how many machines are reading this one now.
+        if app.link_on {
+            match app.link_sessions {
+                0 => mark.push_str("LINK "),
+                n => mark.push_str(&format!("LINK {n} ")),
+            }
+        }
         // A question out to an AI: which service, and the seconds it has been thinking, with
         // a wheel that turns, until the answer or the error comes back.
         if let Some((name, since)) = &app.ai_busy {

@@ -531,6 +531,21 @@ menu-view-filtered = Durch einen Befehl ansehen
 menu-learn-keys = Tasten lernen
 menu-tunnel = Tunnel &öffnen…
 menu-tunnels = Tunnel…
+menu-link-accept = Link: Anrufe annehmen ein/aus
+menu-link-hangup = Link: auflegen
+link-calling = Anruf bei { $host }: der Code auf seinem Bildschirm muss { $code } sein
+link-on = Link an — dieser Rechner ist ID { $id } und teilt { $share } nur lesbar
+link-off = Link aus: Anrufe werden nicht mehr angenommen
+link-failed = Link konnte nicht starten: { $error }
+link-opened = Link: { $name } liest { $share } — Strg+Alt+L legt auf
+link-closed = Link: { $name } hat aufgelegt
+link-hung-up = Link: alle Anrufer getrennt
+link-no-share = Link teilt einen Ordner dieses Rechners: zuerst das Panel auf einen Ordner stellen
+link-call-title = Link-Anruf
+link-call-from = { $name } (ID { $id }, { $addr }) ruft an
+link-call-share = und möchte { $share } lesen, nur lesbar.
+link-call-code = Nur annehmen, wenn der Anrufer den Code { $code } sieht
+link-call-gone = der Link-Anruf blieb unbeantwortet
 tunnel-title = Tunnel: [lokal:]Host:Port
 tunnel-list-title = Tunnel
 tunnel-none = kein Tunnel offen
@@ -1626,6 +1641,8 @@ site-max-kbps = Geschwindigkeitsgrenze, KB/s (leer: keine)
 # Session editor: IMAP, read only
 site-protocol-imap = IMAP (Mail, nur lesen)
 site-protocol-imaps = IMAPS (Mail über TLS, nur lesen)
+site-protocol-link = Link (ein anderer FinalCommander, lokales Netz)
+site-link-note = Link: Host ist die ID des anderen Rechners, Benutzer der geteilte Ordner (leer: der erste)
 
 # The AI services as a list, like the sessions
 ai-services-title = KI-Dienste

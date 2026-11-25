@@ -134,6 +134,13 @@ keys = ["Ctrl+Alt+Y"]
 scope = "panel"
 cmd = "tool.sync.saved"
 
+# Hang up every Link session another machine has open on this one (SPEC 04 §9). In the
+# editor the same keys make the file read only: a different screen, a different question.
+[[bind]]
+keys = ["Ctrl+Alt+L"]
+scope = "panel"
+cmd = "net.link.hangup"
+
 # What can be done with the archive under the cursor, as a menu — MultiArc's `ArcCmd`.
 [[bind]]
 keys = ["Shift+F3"]

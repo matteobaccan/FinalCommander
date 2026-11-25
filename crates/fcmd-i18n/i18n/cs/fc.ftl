@@ -542,6 +542,21 @@ menu-view-filtered = Zobrazit přes příkaz
 menu-learn-keys = Naučit klávesy
 menu-tunnel = Otevřít &tunel…
 menu-tunnels = Tun&ely…
+menu-link-accept = Link: přijímat hovory ano/ne
+menu-link-hangup = Link: zavěsit
+link-calling = volání { $host }: kód na jeho obrazovce musí být { $code }
+link-on = Link zapnut — tento počítač má ID { $id } a sdílí { $share } jen pro čtení
+link-off = Link vypnut: hovory se už nepřijímají
+link-failed = Link se nepodařilo spustit: { $error }
+link-opened = Link: { $name } čte { $share } — Ctrl+Alt+L zavěsí
+link-closed = Link: { $name } odešel
+link-hung-up = Link: všechny hovory zavěšeny
+link-no-share = Link sdílí složku tohoto počítače: nejdřív přejděte panelem do složky
+link-call-title = Hovor Link
+link-call-from = { $name } (ID { $id }, { $addr }) volá
+link-call-share = a žádá o čtení { $share }, jen pro čtení.
+link-call-code = Přijměte jen tehdy, když volající vidí kód { $code }
+link-call-gone = hovor Link zůstal bez odpovědi
 tunnel-title = Tunel: [místní:]hostitel:port
 tunnel-list-title = Tunely
 tunnel-none = žádný tunel není otevřen
@@ -1647,6 +1662,8 @@ site-max-kbps = Limit rychlosti, KB/s (prázdné: žádný)
 # Session editor: IMAP, read only
 site-protocol-imap = IMAP (pošta, jen pro čtení)
 site-protocol-imaps = IMAPS (pošta přes TLS, jen pro čtení)
+site-protocol-link = Link (jiný FinalCommander, místní síť)
+site-link-note = Link: hostitel je ID druhého počítače, uživatel sdílená složka (prázdné: první)
 
 # The AI services as a list, like the sessions
 ai-services-title = Služby AI

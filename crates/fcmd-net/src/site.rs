@@ -306,7 +306,7 @@ impl Site {
             .ok_or_else(|| NetError::Connect {
                 host: cfg.host.clone(),
                 detail: format!(
-                    "unknown scheme `{}` (sftp | ftp | ftps | webdav | webdavs | imap | imaps)",
+                    "unknown scheme `{}` (sftp | ftp | ftps | webdav | webdavs | imap | imaps | link)",
                     cfg.scheme
                 ),
             })?;
@@ -334,6 +334,19 @@ impl Site {
         if let Some(dir) = &cfg.start_dir {
             if !dir.trim().is_empty() {
                 site.start_dir = dir.trim().to_string();
+            }
+        }
+        // A Link site (SPEC 04 §9.8): the host is the other machine's nine-digit ID, however
+        // it was spaced, and the user is the name of the folder it shares — `*`, the one it
+        // offers first, when none is given, rather than the login name of this machine.
+        if scheme == Scheme::Link {
+            let id = crate::link::parse_id(&cfg.host).ok_or_else(|| NetError::Connect {
+                host: cfg.host.clone(),
+                detail: "a Link site's host is the other machine's ID: nine digits".into(),
+            })?;
+            site.host = id.to_string();
+            if cfg.user.as_deref().is_none_or(|u| u.trim().is_empty()) {
+                site.user = crate::link::dial::ANY_SHARE.to_string();
             }
         }
         site.group = cfg.group.clone().filter(|g| !g.trim().is_empty());
@@ -618,5 +631,28 @@ mod tests {
         assert!(Auth::parse("magic").is_err());
         assert!(Auth::parse("key:").is_err());
         assert_eq!(Auth::Agent.describe(), "agent");
+    }
+
+    #[test]
+    fn a_link_site_is_an_id_and_a_share() {
+        let cfg = fcmd_config::SiteCfg {
+            id: "office".into(),
+            scheme: "link".into(),
+            host: "123 456-789".into(),
+            ..Default::default()
+        };
+        let site = Site::from_config(&cfg).unwrap();
+        assert_eq!(site.host, "123456789");
+        assert_eq!(
+            site.user,
+            crate::link::dial::ANY_SHARE,
+            "not this machine's login"
+        );
+        assert_eq!(site.port, 47831);
+        let bad = fcmd_config::SiteCfg {
+            host: "12345".into(),
+            ..cfg
+        };
+        assert!(Site::from_config(&bad).is_err());
     }
 }

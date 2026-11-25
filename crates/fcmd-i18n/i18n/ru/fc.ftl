@@ -531,6 +531,21 @@ menu-view-filtered = Смотреть через команду
 menu-learn-keys = Изучить клавиши
 menu-tunnel = От&крыть туннель…
 menu-tunnels = Т&уннели…
+menu-link-accept = Link: принимать вызовы вкл/выкл
+menu-link-hangup = Link: завершить
+link-calling = вызов { $host }: код на его экране должен быть { $code }
+link-on = Link включён — эта машина имеет ID { $id } и открывает { $share } только для чтения
+link-off = Link выключен: вызовы больше не принимаются
+link-failed = Link не запустился: { $error }
+link-opened = Link: { $name } читает { $share } — Ctrl+Alt+L завершает
+link-closed = Link: { $name } отключился
+link-hung-up = Link: все вызовы завершены
+link-no-share = Link открывает папку этого компьютера: сначала перейдите панелью в папку
+link-call-title = Вызов Link
+link-call-from = { $name } (ID { $id }, { $addr }) вызывает
+link-call-share = и просит прочитать { $share }, только для чтения.
+link-call-code = Принимайте, только если на экране вызывающего код { $code }
+link-call-gone = вызов Link остался без ответа
 tunnel-title = Туннель: [локальный:]хост:порт
 tunnel-list-title = Туннели
 tunnel-none = нет открытых туннелей
@@ -1627,6 +1642,8 @@ site-max-kbps = Ограничение скорости, КБ/с (пусто: н
 # Session editor: IMAP, read only
 site-protocol-imap = IMAP (почта, только чтение)
 site-protocol-imaps = IMAPS (почта через TLS, только чтение)
+site-protocol-link = Link (другой FinalCommander, локальная сеть)
+site-link-note = Link: хост — ID другой машины, пользователь — открытая ею папка (пусто: первая)
 
 # The AI services as a list, like the sessions
 ai-services-title = Сервисы ИИ

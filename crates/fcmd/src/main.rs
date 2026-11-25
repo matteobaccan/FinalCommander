@@ -17,6 +17,7 @@ mod help;
 mod highlight;
 mod history;
 mod hit;
+mod link;
 mod menu;
 mod panel;
 mod pixels;
@@ -1286,6 +1287,23 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
 
     // One pool of connections, shared by the panels, the viewer and every job.
     let pool = Pool::new();
+    // The Link (SPEC 04 §9): its identity beside the settings, the dialer the netbox calls
+    // `link://` sites with, and the called side, started when the settings or the command
+    // ask for it.
+    let mut link_hub = {
+        let dir = app
+            .config_file()
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."));
+        let name = match app.cfg.link.name.trim() {
+            "" => link::machine_name(),
+            name => name.to_string(),
+        };
+        link::Hub::new(dir, name, tx.clone())
+    };
+    pool.set_link(link_hub.dialer());
+    app.link_at_start();
     if !app.cfg.net.known_hosts.trim().is_empty() {
         pool.set_policy(fcmd_net::HostKeyPolicy {
             known_hosts: Some(fcmd_net::site::expand_tilde(app.cfg.net.known_hosts.trim())),
@@ -1592,6 +1610,9 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         });
                     });
                 }
+                Request::LinkAccept { share } => link_hub.accept(runtime.handle(), share),
+                Request::LinkAnswer { call, accept } => link_hub.answer(call, accept),
+                Request::LinkHangUp => link_hub.hang_up(),
                 Request::Disconnect { key } => {
                     let tx = tx.clone();
                     let pool = pool.clone();
@@ -2649,6 +2670,9 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
         while let Ok(event) = rx.try_recv() {
             app.handle_event(event);
         }
+        // A Link call that came in over another screen is asked about once the panels are
+        // back.
+        app.offer_link_call();
         // `Alt+Ins` asked for the screen grabber, and the screen it wants is the frame that
         // is on the terminal — which is this buffer, still holding what was last drawn
         // (SPEC 06 §11b). It is handed over here rather than in the key handler because the
@@ -8092,6 +8116,9 @@ dir_attr = "D"
                 | Request::Interactive { .. }
                 | Request::Decompile { .. }
                 | Request::Connect { .. }
+                | Request::LinkAccept { .. }
+                | Request::LinkAnswer { .. }
+                | Request::LinkHangUp
                 | Request::Disconnect { .. }
                 | Request::ArcPassword { .. }
                 | Request::Upload { .. } => {}

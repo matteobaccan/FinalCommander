@@ -531,6 +531,21 @@ menu-view-filtered = Ver a través de una orden
 menu-learn-keys = Aprender teclas
 menu-tunnel = Abrir &un túnel…
 menu-tunnels = T&úneles…
+menu-link-accept = Link: aceptar llamadas sí/no
+menu-link-hangup = Link: colgar
+link-calling = llamando a { $host }: el código en su pantalla debe ser { $code }
+link-on = Link activo — esta máquina es el ID { $id } y comparte { $share } solo lectura
+link-off = Link apagado: ya no se aceptan llamadas
+link-failed = Link no pudo arrancar: { $error }
+link-opened = Link: { $name } está leyendo { $share } — Ctrl+Alt+L cuelga
+link-closed = Link: { $name } se ha ido
+link-hung-up = Link: todas las llamadas colgadas
+link-no-share = Link comparte una carpeta de este equipo: lleve antes el panel a una carpeta
+link-call-title = Llamada Link
+link-call-from = { $name } (ID { $id }, { $addr }) está llamando
+link-call-share = y pide leer { $share }, solo lectura.
+link-call-code = Acepte solo si la pantalla de quien llama muestra el código { $code }
+link-call-gone = la llamada Link quedó sin respuesta
 tunnel-title = Túnel: [local:]host:puerto
 tunnel-list-title = Túneles
 tunnel-none = no hay ningún túnel abierto
@@ -1626,6 +1641,8 @@ site-max-kbps = Límite de velocidad, KB/s (vacío: ninguno)
 # Session editor: IMAP, read only
 site-protocol-imap = IMAP (correo, solo lectura)
 site-protocol-imaps = IMAPS (correo sobre TLS, solo lectura)
+site-protocol-link = Link (otro FinalCommander, red local)
+site-link-note = Link: el host es el ID de la otra máquina, el usuario la carpeta que comparte (vacío: la primera)
 
 # The AI services as a list, like the sessions
 ai-services-title = Servicios de IA

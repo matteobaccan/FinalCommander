@@ -545,6 +545,21 @@ menu-view-filtered = Прагляд праз каманду
 menu-learn-keys = Вывучыць клавішы
 menu-tunnel = Ад&крыць тунэль…
 menu-tunnels = Тун&элі…
+menu-link-accept = Link: прымаць выклікі укл/выкл
+menu-link-hangup = Link: завяршыць
+link-calling = выклік { $host }: код на яго экране павінен быць { $code }
+link-on = Link уключаны — гэтая машына мае ID { $id } і адкрывае { $share } толькі для чытання
+link-off = Link выключаны: выклікі больш не прымаюцца
+link-failed = Link не запусціўся: { $error }
+link-opened = Link: { $name } чытае { $share } — Ctrl+Alt+L завяршае
+link-closed = Link: { $name } адключыўся
+link-hung-up = Link: усе выклікі завершаны
+link-no-share = Link адкрывае тэчку гэтага камп'ютара: спачатку перайдзіце панэллю ў тэчку
+link-call-title = Выклік Link
+link-call-from = { $name } (ID { $id }, { $addr }) выклікае
+link-call-share = і просіць прачытаць { $share }, толькі для чытання.
+link-call-code = Прымайце, толькі калі на экране таго, хто выклікае, код { $code }
+link-call-gone = выклік Link застаўся без адказу
 tunnel-title = Тунэль: [лакальны:]вузел:порт
 tunnel-list-title = Тунэлі
 tunnel-none = ніводзін тунэль не адкрыты
@@ -1650,6 +1665,8 @@ site-max-kbps = Абмежаванне хуткасці, КБ/с (пуста: б
 # Session editor: IMAP, read only
 site-protocol-imap = IMAP (пошта, толькі чытанне)
 site-protocol-imaps = IMAPS (пошта праз TLS, толькі чытанне)
+site-protocol-link = Link (іншы FinalCommander, лакальная сетка)
+site-link-note = Link: хост — ID іншай машыны, карыстальнік — тэчка, якую яна адкрывае (пуста: першая)
 
 # The AI services as a list, like the sessions
 ai-services-title = Службы ШІ

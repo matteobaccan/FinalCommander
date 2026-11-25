@@ -545,6 +545,21 @@ menu-view-filtered = Žiūrėti per komandą
 menu-learn-keys = Išmokti klavišus
 menu-tunnel = Atidaryti &tunelį…
 menu-tunnels = Tun&eliai…
+menu-link-accept = Link: priimti skambučius taip/ne
+menu-link-hangup = Link: padėti ragelį
+link-calling = skambinama { $host }: jo ekrane kodas turi būti { $code }
+link-on = Link įjungtas — šis kompiuteris yra ID { $id }, bendrina { $share } tik skaitymui
+link-off = Link išjungtas: skambučiai nebepriimami
+link-failed = Link nepavyko paleisti: { $error }
+link-opened = Link: { $name } skaito { $share } — Ctrl+Alt+L padeda ragelį
+link-closed = Link: { $name } atsijungė
+link-hung-up = Link: visi skambučiai baigti
+link-no-share = Link bendrina šio kompiuterio aplanką: pirmiausia pereikite skydeliu į aplanką
+link-call-title = Link skambutis
+link-call-from = { $name } (ID { $id }, { $addr }) skambina
+link-call-share = ir prašo skaityti { $share }, tik skaitymui.
+link-call-code = Priimkite tik jei skambinančiojo ekrane rodomas kodas { $code }
+link-call-gone = Link skambutis liko neatsakytas
 tunnel-title = Tunelis: [vietinis:]serveris:prievadas
 tunnel-list-title = Tuneliai
 tunnel-none = nėra atidaryto tunelio
@@ -1651,6 +1666,8 @@ site-max-kbps = Greičio riba, KB/s (tuščia: nėra)
 # Session editor: IMAP, read only
 site-protocol-imap = IMAP (paštas, tik skaitymas)
 site-protocol-imaps = IMAPS (paštas per TLS, tik skaitymas)
+site-protocol-link = Link (kitas FinalCommander, vietinis tinklas)
+site-link-note = Link: serveris yra kito kompiuterio ID, naudotojas – bendrinamas aplankas (tuščia: pirmasis)
 
 # The AI services as a list, like the sessions
 ai-services-title = DI paslaugos

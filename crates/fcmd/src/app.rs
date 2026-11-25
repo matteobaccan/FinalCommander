@@ -606,6 +606,32 @@ pub enum Request {
         expect: Option<RemoteStamp>,
         force: bool,
     },
+    /// Accept Link calls, offering this folder read only — or, with `None`, stop accepting
+    /// them and hang up whoever is connected (SPEC 04 §9).
+    LinkAccept {
+        share: Option<std::path::PathBuf>,
+    },
+    /// The person's answer to a call the dialog asked about.
+    LinkAnswer {
+        call: u64,
+        accept: bool,
+    },
+    /// End every session another machine has open here.
+    LinkHangUp,
+}
+
+/// A Link call waiting for the person here to answer it (SPEC 04 §9.5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkCall {
+    /// This program's number for the call, which the answer carries back.
+    pub call: u64,
+    /// The caller's nine digits, already spaced.
+    pub id: String,
+    pub name: String,
+    /// The six digits, which the caller's screen shows too.
+    pub code: String,
+    pub addr: String,
+    pub share: String,
 }
 
 /// What to do again once an archive's password has been given.
@@ -1163,6 +1189,28 @@ pub enum GitOut {
 /// What comes back.
 #[derive(Debug)]
 pub enum Event {
+    /// A Link site answered: the six digits its person is comparing while they decide.
+    LinkCode {
+        host: String,
+        code: String,
+    },
+    /// Another machine is calling.
+    LinkCall(LinkCall),
+    /// A call nobody answered in time was dropped by the server.
+    LinkCallGone {
+        call: u64,
+    },
+    /// Accepting calls began — this machine's ID and the folder offered — or could not, or
+    /// (`Ok(None)`) ended.
+    LinkAccepting {
+        result: Result<Option<(String, String)>, String>,
+    },
+    /// A caller began reading here (`open`) or stopped.
+    LinkSession {
+        name: String,
+        share: String,
+        open: bool,
+    },
     /// Something that is not a key has changed what the screen should show: a terminal's
     /// program writing output nobody asked for. The loop draws after every event, so this
     /// carries nothing and does nothing but arrive.
@@ -2373,6 +2421,9 @@ pub enum ConfirmAction {
     /// is under the cursor, and taking it out is the reader's own act — which is what
     /// `ssh` makes one do, for the same reason.
     OpenKnownHosts { path: String, line: usize },
+    /// Let another machine read the shared folder (SPEC 04 §9.5): anything but the button
+    /// that does it refuses the call.
+    LinkCall { call: u64 },
     /// Record a host key we have never seen and connect.
     AcceptHostKey {
         panel: usize,
@@ -2411,7 +2462,7 @@ impl ConfirmAction {
                 fcmd_platform::ServiceAction::Stop => "btn-service-stop",
                 _ => "btn-service-restart",
             },
-            ConfirmAction::AcceptHostKey { .. } => "btn-accept",
+            ConfirmAction::AcceptHostKey { .. } | ConfirmAction::LinkCall { .. } => "btn-accept",
             ConfirmAction::OpenKnownHosts { .. } => "btn-open-file",
             ConfirmAction::OpenRelease { .. } => "btn-open-page",
             ConfirmAction::InstallTool { .. } => "btn-install",
@@ -3529,6 +3580,14 @@ pub struct App {
     /// live on the runtime, where their listeners and their copying do; this is what the list
     /// shows and what a status line counts.
     pub tunnels: Vec<TunnelInfo>,
+    /// Whether this machine accepts Link calls, and how many callers are reading it now:
+    /// both shown in the corner of the status line, because somebody else reading one's
+    /// files is not something to find out by accident.
+    pub link_on: bool,
+    pub link_sessions: usize,
+    /// Calls waiting for the dialog: one at a time, and only over the panels, so a call does
+    /// not land in the middle of an edit.
+    link_calls: std::collections::VecDeque<LinkCall>,
     compare: Option<(u64, CancelToken)>,
     /// The checksum run that is going, and the token that stops it. `Esc` on a panel with an
     /// empty command line stops it, the way it stops a comparison.
@@ -3995,6 +4054,9 @@ impl App {
             pending_link: None,
             fetch_id: None,
             tunnels: Vec::new(),
+            link_on: false,
+            link_sessions: 0,
+            link_calls: std::collections::VecDeque::new(),
             compare: None,
             grab_wanted: false,
             sum: None,
@@ -4327,6 +4389,50 @@ impl App {
 
     pub fn handle_event(&mut self, event: Event) {
         match event {
+            Event::LinkCode { host, code } => {
+                let msg = self.i18n.t_args(
+                    "link-calling",
+                    &[("host", host.into()), ("code", code.into())],
+                );
+                self.set_status(msg);
+            }
+            Event::LinkCall(call) => {
+                self.link_calls.push_back(call);
+                self.offer_link_call();
+            }
+            Event::LinkCallGone { call } => self.link_call_gone(call),
+            Event::LinkAccepting { result } => match result {
+                Ok(Some((id, share))) => {
+                    self.link_on = true;
+                    let msg = self
+                        .i18n
+                        .t_args("link-on", &[("id", id.into()), ("share", share.into())]);
+                    self.set_status(msg);
+                }
+                Ok(None) => {
+                    self.link_on = false;
+                    self.link_sessions = 0;
+                    self.set_status(self.i18n.t("link-off"));
+                }
+                Err(e) => {
+                    self.link_on = false;
+                    let msg = self.i18n.t_args("link-failed", &[("error", e.into())]);
+                    self.set_error(msg);
+                }
+            },
+            Event::LinkSession { name, share, open } => {
+                let msg = if open {
+                    self.link_sessions += 1;
+                    self.i18n.t_args(
+                        "link-opened",
+                        &[("name", name.into()), ("share", share.into())],
+                    )
+                } else {
+                    self.link_sessions = self.link_sessions.saturating_sub(1);
+                    self.i18n.t_args("link-closed", &[("name", name.into())])
+                };
+                self.set_status(msg);
+            }
             Event::UpdateChecked { manual, result } => self.on_update_checked(manual, result),
             Event::ToolVersions {
                 side,
@@ -6388,6 +6494,27 @@ impl App {
         // `Enter` takes the one that is lit.
         let others = confirm.action.other_keys();
         let count = others.len() + 2;
+        // A call refused says so to the caller at once, rather than leaving them waiting
+        // out the minute.
+        if let ConfirmAction::LinkCall { call } = confirm.action {
+            let refused = match key.code {
+                KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::F(10) => true,
+                KeyCode::Enter => confirm.button != 0,
+                // Not `y`: the call may open while somebody is typing, and a letter of a word
+                // must not let a stranger in.
+                KeyCode::Char('y') | KeyCode::Char('Y') => return,
+                _ => false,
+            };
+            if refused {
+                self.mode = Mode::Normal;
+                self.requests.push(Request::LinkAnswer {
+                    call,
+                    accept: false,
+                });
+                self.offer_link_call();
+                return;
+            }
+        }
         match key.code {
             // The page about dialogs, with the question waiting behind it.
             KeyCode::F(1) if key.mods == Mods::NONE => self.open_dialog_help(),
@@ -6517,6 +6644,11 @@ impl App {
                         });
                     }
                     ConfirmAction::AskAi { query } => self.ask_ai(*query),
+                    ConfirmAction::LinkCall { call } => {
+                        self.requests
+                            .push(Request::LinkAnswer { call, accept: true });
+                        self.offer_link_call();
+                    }
                     ConfirmAction::Undo => self.run_undo(),
                     ConfirmAction::KillProcess { pid, name } => {
                         let msg = self
@@ -12996,6 +13128,11 @@ impl App {
             Command::FileStripMeta => self.open_strip_meta(),
             Command::FileUnpack => self.open_unpack_form(),
             Command::NetTunnel => self.ask_tunnel(),
+            Command::NetLinkAccept => self.toggle_link(),
+            Command::NetLinkHangUp => {
+                self.requests.push(Request::LinkHangUp);
+                self.set_status(self.i18n.t("link-hung-up"));
+            }
             Command::NetTunnels => {
                 self.requests.push(Request::TunnelList);
                 self.open_tunnels();
@@ -24800,6 +24937,87 @@ impl App {
     }
 
     /// Ask where the tunnel goes.
+    /// Turn accepting Link calls on, sharing the active panel's folder, or off.
+    fn toggle_link(&mut self) {
+        if self.link_on {
+            self.requests.push(Request::LinkAccept { share: None });
+            return;
+        }
+        let cwd = &self.panels[self.active].cwd;
+        if !cwd.is_local() {
+            self.set_error(self.i18n.t("link-no-share"));
+            return;
+        }
+        let share = cwd.as_path().to_path_buf();
+        self.requests
+            .push(Request::LinkAccept { share: Some(share) });
+    }
+
+    /// At start: accept calls if the settings say so, sharing the folder they name.
+    pub fn link_at_start(&mut self) {
+        let share = self.cfg.link.share.trim();
+        if self.cfg.link.accept && !share.is_empty() {
+            let share = fcmd_net::site::expand_tilde(share);
+            self.requests
+                .push(Request::LinkAccept { share: Some(share) });
+        }
+    }
+
+    /// Ask about the next call waiting, if the panels are what is on the screen.
+    pub fn offer_link_call(&mut self) {
+        if !matches!(self.mode, Mode::Normal) {
+            return;
+        }
+        let Some(call) = self.link_calls.pop_front() else {
+            return;
+        };
+        let title = self.i18n.t("link-call-title");
+        let lines = vec![
+            self.i18n.t_args(
+                "link-call-from",
+                &[
+                    ("name", call.name.clone().into()),
+                    ("id", call.id.clone().into()),
+                    ("addr", call.addr.clone().into()),
+                ],
+            ),
+            self.i18n
+                .t_args("link-call-share", &[("share", call.share.clone().into())]),
+            String::new(),
+            self.i18n
+                .t_args("link-call-code", &[("code", call.code.clone().into())]),
+        ];
+        self.mode = Mode::Confirm(Confirm {
+            title,
+            lines,
+            action: ConfirmAction::LinkCall { call: call.call },
+            // On the way out: the dialog opens while somebody may be typing, and an `Enter`
+            // meant for the command line refuses rather than lets a stranger in.
+            button: 1,
+        });
+    }
+
+    /// A call the server gave up on: out of the queue, or off the screen.
+    fn link_call_gone(&mut self, call: u64) {
+        let name = self
+            .link_calls
+            .iter()
+            .find(|c| c.call == call)
+            .map(|c| c.name.clone());
+        self.link_calls.retain(|c| c.call != call);
+        let on_screen = matches!(
+            &self.mode,
+            Mode::Confirm(Confirm { action: ConfirmAction::LinkCall { call: c }, .. }) if *c == call
+        );
+        if on_screen {
+            self.mode = Mode::Normal;
+        }
+        if on_screen || name.is_some() {
+            self.set_status(self.i18n.t("link-call-gone"));
+            self.offer_link_call();
+        }
+    }
+
     fn ask_tunnel(&mut self) {
         if self.panel().cwd.authority().is_none() {
             let m = self.i18n.t("tunnel-needs-connection");
@@ -35572,6 +35790,101 @@ mod tests {
         assert_eq!(app.cfg.sites.len(), 1, "F4 must edit, not add");
         assert_eq!(app.cfg.sites[0].host, "new.example.net");
         assert_eq!(app.cfg.sites[0].id, "box");
+    }
+
+    fn a_link_call(call: u64) -> LinkCall {
+        LinkCall {
+            call,
+            id: "123 456 789".into(),
+            name: "laptop".into(),
+            code: "042 917".into(),
+            addr: "192.168.1.20".into(),
+            share: "photos".into(),
+        }
+    }
+
+    #[test]
+    fn a_link_call_is_refused_by_enter_and_accepted_only_on_purpose() {
+        let mut app = app();
+        app.handle_event(Event::LinkCall(a_link_call(1)));
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("the call was not asked about: {:?}", app.mode)
+        };
+        let said = confirm.lines.join("\n");
+        assert!(
+            said.contains("laptop") && said.contains("042 917"),
+            "{said}"
+        );
+        // An `Enter` meant for the command line, or a `y` of a word being typed, lets no
+        // stranger in.
+        press(&mut app, "y");
+        assert!(matches!(app.mode, Mode::Confirm(_)));
+        press(&mut app, "Enter");
+        assert!(app.mode.is_normal());
+        let answers: Vec<_> = app
+            .take_requests()
+            .into_iter()
+            .filter(|r| matches!(r, Request::LinkAnswer { .. }))
+            .collect();
+        assert!(matches!(
+            answers.as_slice(),
+            [Request::LinkAnswer {
+                call: 1,
+                accept: false
+            }]
+        ));
+
+        // The next call, answered on the button that does it.
+        app.handle_event(Event::LinkCall(a_link_call(2)));
+        press(&mut app, "Left");
+        press(&mut app, "Enter");
+        assert!(app.take_requests().iter().any(|r| matches!(
+            r,
+            Request::LinkAnswer {
+                call: 2,
+                accept: true
+            }
+        )));
+    }
+
+    #[test]
+    fn a_link_call_waits_for_the_panels_and_goes_when_the_server_gives_up() {
+        let mut app = app();
+        app.open_site_form(None);
+        app.handle_event(Event::LinkCall(a_link_call(7)));
+        assert!(
+            matches!(app.mode, Mode::Form(_)),
+            "a call does not land on a dialog"
+        );
+        app.mode = Mode::Normal;
+        app.offer_link_call();
+        assert!(matches!(app.mode, Mode::Confirm(_)));
+        app.handle_event(Event::LinkCallGone { call: 7 });
+        assert!(app.mode.is_normal());
+        assert!(!app.status.is_empty());
+    }
+
+    #[test]
+    fn the_status_corner_counts_who_is_reading_this_machine() {
+        let mut app = app();
+        app.handle_event(Event::LinkAccepting {
+            result: Ok(Some(("123 456 789".into(), "/srv/photos".into()))),
+        });
+        assert!(app.link_on);
+        app.handle_event(Event::LinkSession {
+            name: "laptop".into(),
+            share: "photos".into(),
+            open: true,
+        });
+        assert_eq!(app.link_sessions, 1);
+        app.handle_event(Event::LinkSession {
+            name: "laptop".into(),
+            share: "photos".into(),
+            open: false,
+        });
+        assert_eq!(app.link_sessions, 0);
+        app.handle_event(Event::LinkAccepting { result: Ok(None) });
+        assert!(!app.link_on);
     }
 
     #[test]

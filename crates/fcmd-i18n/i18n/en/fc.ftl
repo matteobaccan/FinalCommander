@@ -539,6 +539,21 @@ menu-view-filtered = View through a command
 menu-learn-keys = Learn keys
 menu-tunnel = Open a &tunnel…
 menu-tunnels = Tunn&els…
+menu-link-accept = Link: accept calls on/off
+menu-link-hangup = Link: hang up
+link-calling = calling { $host }: the code on its screen must be { $code }
+link-on = Link on — this machine is ID { $id }, sharing { $share } read only
+link-off = Link off: calls are no longer accepted
+link-failed = Link could not start: { $error }
+link-opened = Link: { $name } is reading { $share } — Ctrl+Alt+L hangs up
+link-closed = Link: { $name } has left
+link-hung-up = Link: every caller hung up
+link-no-share = Link shares a folder of this computer: move the panel to one first
+link-call-title = Link call
+link-call-from = { $name } (ID { $id }, { $addr }) is calling
+link-call-share = and asks to read { $share }, read only.
+link-call-code = Accept only if the caller's screen shows the code { $code }
+link-call-gone = the Link call went unanswered
 tunnel-title = Tunnel: [local:]host:port
 tunnel-list-title = Tunnels
 tunnel-none = no tunnel is open
@@ -1636,6 +1651,8 @@ site-max-kbps = Speed limit, KB/s (empty: none)
 # Session editor: IMAP, read only
 site-protocol-imap = IMAP (mail, read only)
 site-protocol-imaps = IMAPS (mail over TLS, read only)
+site-protocol-link = Link (another FinalCommander, local network)
+site-link-note = Link: the host is the other machine's ID, the user the folder it shares (empty: the first)
 
 # The AI services as a list, like the sessions
 ai-services-title = AI services
