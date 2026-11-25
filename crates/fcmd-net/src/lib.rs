@@ -10,6 +10,7 @@ pub mod error;
 pub mod ftp;
 pub mod imap;
 pub mod jobs;
+pub mod link;
 pub mod memory;
 pub mod ops;
 pub mod pool;
