@@ -273,36 +273,6 @@ Archivi, server, editor esadecimale e database non sono plugin da cercare: **son
 
 ---
 
-# In arrivo: FinalCommander Link
-
-La cartella di un'altra macchina in un pannello, **solo sulla rete locale**.
-
-- Ogni installazione ha un **ID di nove cifre**: `123 456 789`
-- Spento finché non lo si accende
-- Una **chiamata**: chi è dall'altra parte la accetta sullo schermo
-- Tutto ciò che passa è **cifrato**
-- Un **PIN** per le proprie macchine, senza la domanda ogni volta
-- **Sola lettura** oppure **lettura e scrittura**
-
-<span class="piccolo">Per una macchina fuori dalla rete locale c'è già SFTP.</span>
-
----
-
-# In arrivo: tabelle DBF modificabili
-
-Oggi un file DBF si apre come tabella, in sola lettura.
-
-- Modificare una cella, aggiungere e cancellare righe
-- **Prima del primo cambiamento** un avviso propone una copia di sicurezza
-- Cambiando la struttura **l'originale non viene mai riscritto**
-- La vecchia tabella resta, rinominata con data e ora:
-
-```
-CLIENTI.DBF  →  CLIENTI.20261125-083015.DBF
-```
-
----
-
 <!-- _class: lead -->
 <!-- _paginate: false -->
 

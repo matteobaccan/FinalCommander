@@ -189,7 +189,11 @@ Nothing needed to continue lives outside the repository; this section is the mem
    trusting the test that wrote it. Run the generator twice and compare the bytes: a picture
    that changes between runs has a date, a temporary path or a size from the machine in it,
    and those are fixed in the test (`File::set_modified`, a fixed title, a fixed drive list).
-7. **How the author works**: one change at a time, in sequence, each one finished — tests,
+7. **Presentations** (`docs/presentations/`, Marp): in Italian for now, for a general
+   audience, and only about what the program does today — never what it could do, will do or
+   is coming (the author, 25 November 2026: such slides read as binding promises). No
+   "coming soon", no roadmap, no "in arrivo".
+8. **How the author works**: one change at a time, in sequence, each one finished — tests,
    help in English and Italian, spec, `CHANGELOG.md`, the feature table, the screenshots —
    before the next is started. Releases are cut once a week, on Wednesday morning (see
    *How it is worked* below), or when the author asks for one.
