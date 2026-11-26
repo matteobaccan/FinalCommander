@@ -849,7 +849,14 @@ every background screen that holds some, because the panels cannot otherwise kno
   read as; the setting it moves (`panel.height_cut`) is what they give up, so the two have
   opposite signs and exactly one place says so.
 - Any element can be hidden; hiding both panels gives the full-screen shell (FAR `Ctrl+O`).
-- Minimum usable size 60x15; below that the panels stack and the key bar collapses to one row.
+- **One panel on a narrow screen** (`panel.single_below`, 60 columns by default, 0 for
+  never): below that width — a phone held upright, a terminal split in two — the screen is
+  the active panel alone, and `Tab`, which moves the focus as always, brings the other. The
+  exception is a quick view, an information panel or a tree in the other panel: those are
+  about the file the active panel is on, so the two go one above the other, each half the
+  height, as long as there are twelve rows for them. A panel hidden by hand (`Ctrl+P`,
+  `Ctrl+F1`, `Ctrl+F2`) stays hidden at any width; nothing about the panels changes but where
+  they are drawn, so widening the window gives both back.
 
 ### 9a. A panel that is a list rather than a directory (shipped)
 

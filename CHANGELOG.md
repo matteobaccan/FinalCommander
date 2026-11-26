@@ -8,6 +8,10 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- One panel on a narrow screen: below 60 columns — a phone held upright, a terminal split
+  in two — the screen shows the active panel alone and `Tab` brings the other; a quick view,
+  an information panel or a tree goes under the panel it is about. `panel.single_below` sets
+  the width, 0 keeps two panels at any width.
 - FinalCommander Link: a folder of another FinalCommander on the same local network, in a
   panel (SPEC 04 §9). *Commands → Link: accept calls on/off* shares the active panel's folder
   read only; on the other machine a netbox session with protocol *Link* and that machine's

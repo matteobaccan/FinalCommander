@@ -194,6 +194,12 @@ dall'elenco: una che non c'è più, o una da cui sei solo passato. È il terzo d
 `Alt+F12` è dove questo pannello è stato, in ordine; `Ctrl+D` sono le cartelle che hai scelto
 di tenere; questo è quello che si tiene da solo.
 
+**Su uno schermo stretto** — un telefono tenuto in verticale, un terminale diviso in due — due
+pannelli affiancati sarebbero troppo stretti per leggere un nome, quindi sotto le 60 colonne
+lo schermo mostra un solo pannello, quello in cui sei, e `Tab` porta l'altro. Una vista
+rapida (`Ctrl+Q`), un pannello informazioni o un albero va invece sotto il pannello a cui si
+riferisce. `panel.single_below` fissa la larghezza (0: due pannelli a qualsiasi larghezza).
+
 `Ctrl+H` mostra i file nascosti. `Ctrl+P` nasconde il pannello in cui non sei, `Ctrl+F1` e
 `Ctrl+F2` nascondono quello di sinistra o di destra per dare all'altro tutto lo schermo, e
 `Ctrl+O` li toglie entrambi per mostrare quello che hanno stampato i comandi. Con i pannelli

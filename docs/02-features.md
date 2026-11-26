@@ -99,6 +99,7 @@ since 0.41.0 also `MU` (muCommander), `NNN`, `RANGER`, `LF`, `BROOT`, `VIFM`, `X
 | 2.8 | Sync panel paths (`=`), open current dir in the other panel, swap panels | all | ✓ |
 | 2.9 | Command line under the panels with history, completion, insert-current-name macros | FAR/MC | ✓ |
 | 2.10 | Mouse: click, drag-select, wheel scroll, drag&drop between panels and with the OS | FAR/TC | ~ click, drag-select, the wheel, and a drop from one panel on the other, which opens the copy dialog; not with the desktop, which is decided against (`docs/BACKLOG.md`, Settled) |
+| 2.11 | One panel on a narrow screen (a phone held upright), `Tab` bringing the other, a quick view under the panel it is about | Nightglass | ✓ `panel.single_below` (SPEC 02 §9) |
 
 ## 3. File operations
 

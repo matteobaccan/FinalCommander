@@ -363,6 +363,12 @@ pub struct PanelCfg {
     /// `Ctrl+Up` and `Ctrl+Down` move it, and it is FAR's way of watching a command's output
     /// without leaving the panels.
     pub height_cut: u16,
+    /// Below this many columns the screen shows one panel, the active one, and `Tab` brings
+    /// the other: on a phone held upright two panels side by side are two halves too narrow
+    /// to read a name in. A quick view, an information panel or a tree beside the active
+    /// panel goes under it instead, since it is about the file the active panel is on. 0
+    /// keeps two panels at any width.
+    pub single_below: u16,
     pub quick_search: QuickSearch,
     /// Read the directory's own `descript.ion` and show what it says (SPEC 02 §9). One small
     /// file per directory read, which is what FAR does; off for somebody who keeps no
@@ -402,6 +408,7 @@ impl Default for PanelCfg {
             mark_openable: true,
             split: 50,
             height_cut: 0,
+            single_below: 60,
             quick_search: QuickSearch::Alt,
             descriptions: true,
             description_names: Vec::new(),
@@ -2377,6 +2384,12 @@ impl Config {
                     .parse::<u16>()
                     .map_err(|_| format!("`{value}` is not a number"))?
                     .clamp(10, 90)
+            }
+            "panel.single_below" => {
+                self.panel.single_below = value
+                    .trim()
+                    .parse()
+                    .map_err(|_| format!("`{value}` is not a number"))?
             }
             "panel.height_cut" => {
                 self.panel.height_cut = value

@@ -182,6 +182,12 @@ that is gone, or one you only ever passed through. It is the third of three list
 is where this panel has been, in order; `Ctrl+D` is the folders you chose to keep; this is
 the one that keeps itself.
 
+**On a narrow screen** — a phone held upright, a terminal split in two — two panels side by
+side would each be too narrow to read a name in, so below 60 columns the screen shows one
+panel, the one you are in, and `Tab` brings the other. A quick view (`Ctrl+Q`), an
+information panel or a tree goes under the panel it is about instead. `panel.single_below`
+sets the width (0: two panels at any width).
+
 `Ctrl+H` shows the hidden files. `Ctrl+P` hides the panel you are not in, `Ctrl+F1` and
 `Ctrl+F2` hide the left or the right one to give the other the whole screen, and `Ctrl+O`
 takes both off to show what the commands have printed. With the panels off everything else

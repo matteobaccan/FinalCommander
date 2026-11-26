@@ -22,6 +22,54 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     cursor
 }
 
+/// Where the two panels go in `space`, the rows between the menu and the command line.
+///
+/// `Ctrl+F1`/`Ctrl+F2` hide one panel and give the screen to the other: a zero-width area
+/// draws nothing, which is all "panel off" has to mean. Below `panel.single_below` columns
+/// the screen is one panel wide (a phone held upright): the active panel alone, or — when
+/// the other is a quick view, an information panel or a tree, which are about the file the
+/// active one is on — the two one above the other.
+pub(crate) fn panel_areas(app: &App, space: Rect) -> [Rect; 2] {
+    let Rect { x, y, w, h } = space;
+    let off = |shown: usize| -> [Rect; 2] {
+        let full = Rect::new(x, y, w, h);
+        let none = Rect::new(x + w, y, 0, h);
+        if shown == 0 {
+            [full, none]
+        } else {
+            [none, full]
+        }
+    };
+    if let Some(hidden) = app.hidden {
+        return off(1 - hidden.min(1));
+    }
+    let single = app.cfg.panel.single_below;
+    if single > 0 && w < single {
+        let active = app.active;
+        let other = 1 - active;
+        let beside = !matches!(app.panels[other].content, fcmd_panel::Content::Files);
+        // Six rows is the least a panel is worth drawing at, so two need twelve.
+        if beside && h >= 12 {
+            let top_h = h / 2;
+            let top = Rect::new(x, y, w, top_h);
+            let bottom = Rect::new(x, y + top_h, w, h - top_h);
+            let mut areas = [top, top];
+            areas[active] = top;
+            areas[other] = bottom;
+            return areas;
+        }
+        return off(active);
+    }
+    // The split is a percentage, so it survives a resize of the terminal; a panel narrower
+    // than ten columns is not a panel, so neither side can be squeezed out.
+    let left_w = ((w as u32 * app.cfg.panel.split as u32) / 100) as u16;
+    let left_w = left_w.clamp(10.min(w), w.saturating_sub(10));
+    [
+        Rect::new(x, y, left_w, h),
+        Rect::new(x + left_w, y, w - left_w, h),
+    ]
+}
+
 /// One whole frame into the buffer.
 fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     let (w, h) = (buf.width(), buf.height());
@@ -159,28 +207,7 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             .min(full_h)
     };
 
-    // `Ctrl+F1`/`Ctrl+F2` hide one panel and give the screen to the other: a zero-width area
-    // draws nothing, which is all "panel off" has to mean.
-    let areas = match app.hidden {
-        Some(0) => [
-            Rect::new(0, menu_h, 0, panels_h),
-            Rect::new(0, menu_h, w, panels_h),
-        ],
-        Some(_) => [
-            Rect::new(0, menu_h, w, panels_h),
-            Rect::new(w, menu_h, 0, panels_h),
-        ],
-        None => {
-            // The split is a percentage, so it survives a resize of the terminal; a panel
-            // narrower than ten columns is not a panel, so neither side can be squeezed out.
-            let left_w = ((w as u32 * app.cfg.panel.split as u32) / 100) as u16;
-            let left_w = left_w.clamp(10.min(w), w.saturating_sub(10));
-            [
-                Rect::new(0, menu_h, left_w, panels_h),
-                Rect::new(left_w, menu_h, w - left_w, panels_h),
-            ]
-        }
-    };
+    let areas = panel_areas(app, Rect::new(0, menu_h, w, panels_h));
 
     // A side with more than one tab gives its top row to the tab bar (SPEC 02 §8). A bar
     // that was always there would cost every panel a row of files to say that it has one
@@ -9488,6 +9515,54 @@ third line
         assert_eq!(placed.len(), 1);
         assert!(placed[0].x >= 50, "in the other panel: {:?}", placed[0]);
         assert!(placed[0].data.starts_with(b"\x1bP0;1;0q"));
+    }
+
+    /// Below `panel.single_below` columns the screen is one panel wide: the active panel
+    /// alone, `Tab` bringing the other; a quick view goes under the active panel; and 0
+    /// keeps the two side by side at any width.
+    #[test]
+    fn a_narrow_screen_shows_one_panel_and_tab_brings_the_other() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("note.txt"), b"hello\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        let space = Rect::new(0, 1, 50, 30);
+
+        let areas = panel_areas(&app, space);
+        assert_eq!(areas[0], space, "the active panel takes the width");
+        assert_eq!(areas[1].w, 0);
+        press(&mut app, "Tab");
+        let areas = panel_areas(&app, space);
+        assert_eq!(areas[1], space, "Tab brings the other");
+        assert_eq!(areas[0].w, 0);
+        press(&mut app, "Tab");
+
+        // A quick view is about the file the active panel is on: it goes underneath.
+        press(&mut app, "Down");
+        press(&mut app, "Ctrl+Q");
+        let areas = panel_areas(&app, space);
+        assert_eq!(areas[app.active].w, 50);
+        assert_eq!(areas[1 - app.active].w, 50);
+        assert!(areas[1 - app.active].y > areas[app.active].y);
+        let out = frame(&mut app, 50, 30);
+        assert!(
+            out.contains("hello"),
+            "the quick view is on the screen:\n{out}"
+        );
+        press(&mut app, "Ctrl+Q");
+
+        // Wide enough, or turned off: two side by side, as always.
+        let wide = panel_areas(&app, Rect::new(0, 1, 120, 30));
+        assert_eq!(wide[0].w + wide[1].w, 120);
+        assert!(wide[0].w > 0 && wide[1].w > 0);
+        app.cfg.panel.single_below = 0;
+        let off = panel_areas(&app, space);
+        assert!(off[0].w > 0 && off[1].w > 0);
+
+        // A panel hidden by hand stays the reader's choice at any width.
+        app.cfg.panel.single_below = 60;
+        app.hidden = Some(0);
+        let areas = panel_areas(&app, space);
+        assert_eq!(areas[1], space);
     }
 
     /// The quick view's structure pane (`Shift+F11`) is drawn beside the bytes, as the
