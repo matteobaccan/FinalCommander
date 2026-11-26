@@ -7253,6 +7253,104 @@ Some **bold** text and a [link](https://example.com).
         );
     }
 
+    /// A `.docx` of this body, written the way a word processor writes one.
+    fn docx(path: &std::path::Path, body: &str) {
+        use std::io::Write;
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(path).unwrap());
+        zip.start_file(
+            "word/document.xml",
+            zip::write::SimpleFileOptions::default(),
+        )
+        .unwrap();
+        write!(zip, "<w:document><w:body>{body}</w:body></w:document>").unwrap();
+        zip.finish().unwrap();
+    }
+
+    /// `F3` on a word processor's document shows its words (SPEC 05 §1.16), laid out as a
+    /// README is, and the keys that lead to a README's source lead to this one's bytes.
+    #[test]
+    fn an_office_document_opens_as_its_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let para = |t: &str| format!("<w:p><w:r><w:t>{t}</w:t></w:r></w:p>");
+        let cell = |t: &str| format!("<w:tc>{}</w:tc>", para(t));
+        let body = format!(
+            "<w:p><w:pPr><w:pStyle w:val=\"Heading1\"/></w:pPr><w:r><w:t>Quarterly report</w:t></w:r></w:p>\
+             {}<w:p><w:pPr><w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"1\"/></w:numPr></w:pPr><w:r><w:t>first point</w:t></w:r></w:p>\
+             <w:tbl><w:tr>{}{}</w:tr><w:tr>{}{}</w:tr></w:tbl>",
+            para("Sales rose by 3.5% (net)."),
+            cell("name"),
+            cell("size"),
+            cell("a"),
+            cell("1"),
+        );
+        docx(&dir.path().join("report.docx"), &body);
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        let buf = frame_buf(&mut app, 60, 20);
+        let text = buf.to_text();
+        assert!(text.contains("Quarterly report"), "{text}");
+        assert!(text.contains("════"), "a heading is ruled: {text}");
+        assert!(text.contains("Sales rose by 3.5% (net)."), "{text}");
+        assert!(text.contains("• first point"), "a list is bulleted: {text}");
+        assert!(text.contains("┌──────┬──────┐"), "a table is drawn: {text}");
+        assert!(!text.contains("PK"), "{text}");
+        let row = text
+            .lines()
+            .position(|l| l.trim_start().starts_with("Quarterly"))
+            .expect("the heading is on screen") as u16;
+        let x = text.lines().nth(row as usize).unwrap().find('Q').unwrap() as u16;
+        assert!(buf.get(x, row).unwrap().style.bold, "the heading is bold");
+
+        // `Shift+F2` shows the source — a zip — and again shows the text.
+        press(&mut app, "Shift+F2");
+        let text = frame(&mut app, 60, 20);
+        assert!(text.contains("PK"), "the source is the file: {text}");
+        assert!(!text.contains("Quarterly report"), "{text}");
+        press(&mut app, "Shift+F2");
+        let text = frame(&mut app, 60, 20);
+        assert!(text.contains("Quarterly report"), "{text}");
+
+        // `F2` is the other way to the source, and `F4` from the bytes goes round the
+        // wheel to the text again: dump, hex, document.
+        press(&mut app, "F2");
+        assert!(frame(&mut app, 60, 20).contains("PK"));
+        press(&mut app, "F4");
+        press(&mut app, "F4");
+        let text = frame(&mut app, 60, 20);
+        assert!(text.contains("Quarterly report"), "{text}");
+    }
+
+    /// A document that cannot be laid out says so, and is still there to be read as bytes.
+    #[test]
+    fn a_document_that_is_not_one_says_so_and_opens_as_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("broken.docx"), b"PK\x03\x04 and no more").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        assert_eq!(app.status, app.i18n.t("viewer-document-unreadable"));
+        let text = frame(&mut app, 60, 20);
+        assert!(text.contains("PK"), "{text}");
+        press(&mut app, "Shift+F2");
+        assert_eq!(app.status, app.i18n.t("viewer-document-unreadable"));
+
+        // With the setting off a document opens as what it is, and the key still lays it
+        // out when asked.
+        let dir = tempfile::tempdir().unwrap();
+        docx(
+            &dir.path().join("note.docx"),
+            "<w:p><w:r><w:t>Just a note.</w:t></w:r></w:p>",
+        );
+        let mut app = app_on_disk(dir.path());
+        app.cfg.ui.markdown = false;
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        assert!(!frame(&mut app, 60, 20).contains("Just a note."));
+        press(&mut app, "Shift+F2");
+        assert!(frame(&mut app, 60, 20).contains("Just a note."));
+    }
+
     /// A dialog with more rows than the screen has lines scrolls to the cursor. Without it
     /// the last rows of the attributes dialog — the times, and the box that takes the change
     /// into the folders — would be drawn below the bottom of the screen on a short terminal,

@@ -194,6 +194,15 @@ struct Parked {
     structure: Option<Option<Structure>>,
 }
 
+/// The file under an office document that is being shown as its text: the viewer's source
+/// is the text while it is, and this is the way back to the bytes.
+struct Under {
+    source: Box<dyn Source>,
+    base_mode: Mode,
+    codepage: Codepage,
+    codepage_label: Option<String>,
+}
+
 /// What the status line needs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Status {
@@ -231,6 +240,12 @@ pub const HEX_STEPS: [usize; 8] = [8, 16, 24, 32, 40, 48, 56, 64];
 /// this is the one place the viewer reads more than a screenful — four megabytes is a very
 /// long README and a very short log.
 pub const MARKDOWN_LIMIT: u64 = 4 * 1024 * 1024;
+
+/// The largest office document whose text is laid out (SPEC 05 §1.16). The file, that is: a
+/// report is mostly its pictures, which are never read, so this is generous. What is
+/// actually read out of it has limits of its own — [`crate::document::XML_LIMIT`] for the
+/// XML and the Markdown limit above for the text that comes of it.
+pub const DOCUMENT_LIMIT: u64 = 256 * 1024 * 1024;
 
 /// The largest file table mode will read whole (SPEC 05 §1.11).
 ///
@@ -388,6 +403,12 @@ pub struct Viewer {
     /// [`MARKDOWN_LIMIT`]: a reader of a 40 GB log gets the viewer's usual promise, and a
     /// reader of a README gets its columns lined up.
     markdown: Option<(usize, Vec<crate::markdown::Line>)>,
+    /// The office document whose text is on screen (SPEC 05 §1.16), when one is: the file
+    /// itself, put aside while the viewer reads the text made from it.
+    document: Option<Under>,
+    /// The rendered line the last search in a document's text stopped on, as the pair that
+    /// names it; the search goes on from the line after.
+    rendered_match: Option<(u64, usize)>,
     /// The parsed table, in table mode. Like the rendered Markdown above it needs the whole
     /// file — a column's width cannot be known from the part of it that is on screen — so it
     /// is parsed once and kept, and the mode is only offered for files under
@@ -521,6 +542,8 @@ impl Viewer {
             disasm_targets: Vec::new(),
             branch_stack: Vec::new(),
             markdown: None,
+            document: None,
+            rendered_match: None,
             table: None,
             memo: None,
             table_row: 0,
@@ -895,7 +918,26 @@ impl Viewer {
         }
     }
 
-    pub fn set_mode(&mut self, mode: Mode) {
+    pub fn set_mode(&mut self, mut mode: Mode) {
+        // Any other way of reading a document is a way of reading the file, so the file
+        // comes back first. Its "text" is whatever it opened as before it was laid out,
+        // which for a zip is the dump: the key that shows a README's source shows this
+        // one's too, and its source is bytes.
+        if mode != Mode::Markdown {
+            if let Some(base) = self.leave_document() {
+                if mode == Mode::Text {
+                    mode = base;
+                }
+            }
+        } else if self.document.is_none() && crate::document::is_document(&self.path.display_name())
+        {
+            // The laid-out mode of a document is its text or nothing: a file remembered
+            // in this mode, or opened after another that was in it, is asked for here
+            // without anybody having made the text, and Markdown laid out over the bytes
+            // of a zip is noise. One that cannot be read stays as it is.
+            let _ = self.as_document();
+            return;
+        }
         if mode != Mode::Hex {
             self.base_mode = mode;
         }
@@ -936,6 +978,8 @@ impl Viewer {
     /// disassembled, as a raw sweep from where the cursor already is, using the host
     /// architecture; the status line says so.
     pub fn start_disasm(&mut self) -> Result<Started, DisasmError> {
+        // It is the file that is disassembled, never the text made from it.
+        self.leave_document();
         match self.format() {
             Format::JavaClass => {
                 let bytes = self.whole_file()?;
@@ -1016,6 +1060,9 @@ impl Viewer {
     pub fn show_derived_bytes(&mut self, producer: &str, bytes: Vec<u8>) {
         self.source = Box::new(crate::source::BytesSource::new(bytes));
         self.derived = Some(producer.to_string());
+        // Whatever was on screen is replaced, a document's text included.
+        self.document = None;
+        self.markdown = None;
         self.decoded = None;
         self.codepage = Codepage::Utf8;
         self.mode = Mode::Text;
@@ -2132,6 +2179,123 @@ impl Viewer {
         markdown && self.source.len() <= MARKDOWN_LIMIT && self.derived.is_none()
     }
 
+    // ── office documents (SPEC 05 §1.16) ───────────────────────────────────────────────────
+
+    /// Is this a file whose text the document view can show? Its name has to say so, and it
+    /// has to be the file itself rather than something already made from one.
+    pub fn renders_document(&mut self) -> bool {
+        crate::document::is_document(&self.path.display_name())
+            && self.derived.is_none()
+            && self.document.is_none()
+            && self.parked.is_none()
+            && self.source.len() <= DOCUMENT_LIMIT
+    }
+
+    /// Is a document's text what is on screen?
+    pub fn in_document(&self) -> bool {
+        self.document.is_some()
+    }
+
+    /// Show an office document as its text: headings, paragraphs, lists and tables, laid
+    /// out the way Markdown is, because Markdown is what it is turned into on the way.
+    ///
+    /// `None` when the file is not one by its name; `Some(Err(_))` when it is and cannot be
+    /// shown, so the caller can say why and the file stays as it was.
+    pub fn as_document(&mut self) -> Option<Result<(), crate::document::DocumentError>> {
+        if !self.renders_document() {
+            return None;
+        }
+        // What the structure pane says is read from the file, and the file is about to be
+        // put aside: read it now, while it is there to read.
+        self.structure();
+        let text = match crate::document::to_markdown(&mut SourceBytes(self.source.as_mut())) {
+            Ok(text) => text,
+            Err(e) => return Some(Err(e)),
+        };
+        let text: Box<dyn Source> = Box::new(crate::source::BytesSource::new(text.into_bytes()));
+        self.document = Some(Under {
+            source: std::mem::replace(&mut self.source, text),
+            base_mode: self.base_mode,
+            codepage: self.codepage,
+            codepage_label: self.codepage_label.take(),
+        });
+        self.derived = Some("document text".to_string());
+        self.codepage = Codepage::Utf8;
+        self.mode = Mode::Markdown;
+        self.base_mode = Mode::Markdown;
+        self.moved_to_another_source();
+        Some(Ok(()))
+    }
+
+    /// Back from a document's text to the file. Returns the mode the file opened in.
+    fn leave_document(&mut self) -> Option<Mode> {
+        let under = self.document.take()?;
+        self.source = under.source;
+        self.derived = None;
+        self.codepage = under.codepage;
+        self.codepage_label = under.codepage_label;
+        self.base_mode = under.base_mode;
+        self.moved_to_another_source();
+        Some(under.base_mode)
+    }
+
+    /// Everything that named a place in the bytes the viewer was reading names nothing in
+    /// the ones it reads now.
+    fn moved_to_another_source(&mut self) {
+        self.markdown = None;
+        self.syntax_memo = None;
+        self.history.clear();
+        self.disasm_trail.clear();
+        self.top = 0;
+        self.top_sub = 0;
+        self.col = 0;
+        self.last_match = None;
+        self.rendered_match = None;
+    }
+
+    /// The next line of a document's text that the query is on.
+    ///
+    /// A document is searched as it is shown, a rendered line at a time: the text the
+    /// viewer holds for it is Markdown nobody wrote, with a backslash before every full
+    /// stop, and a search for `3.5` in that would find nothing that is on the screen.
+    fn step_rendered(&mut self, pattern: &Pattern, backwards: bool) -> bool {
+        let width = self.markdown.as_ref().map(|(w, _)| *w).unwrap_or(80);
+        self.render_markdown(width);
+        let Some((_, lines)) = &self.markdown else {
+            return false;
+        };
+        let here = Self::markdown_index(lines, self.top, self.top_sub);
+        let last = self
+            .rendered_match
+            .and_then(|pair| lines.iter().position(|l| (l.source, l.sub) == pair));
+        let hit = |l: &crate::markdown::Line| !pattern.matches_in(l.text.as_bytes()).is_empty();
+        let found = if backwards {
+            let end = last.unwrap_or(here).min(lines.len());
+            lines[..end].iter().rposition(hit)
+        } else {
+            let start = last.map(|i| i + 1).unwrap_or(here);
+            lines
+                .iter()
+                .enumerate()
+                .skip(start)
+                .find(|(_, l)| hit(l))
+                .map(|(i, _)| i)
+        };
+        let Some(found) = found else {
+            return false;
+        };
+        let (source, sub) = (lines[found].source, lines[found].sub);
+        self.history.push((self.top, self.top_sub));
+        self.top = source;
+        self.top_sub = sub;
+        self.rendered_match = Some((source, sub));
+        self.last_match = Some(Match {
+            offset: source,
+            len: 0,
+        });
+        true
+    }
+
     // ── pictures (SPEC 05 §1.14) ───────────────────────────────────────────────────────────
 
     /// Decode the picture, once, and keep the answer — the good one and the bad one alike.
@@ -3153,6 +3317,9 @@ impl Viewer {
         let Some(pattern) = self.pattern.clone() else {
             return false;
         };
+        if self.document.is_some() && self.mode == Mode::Markdown {
+            return self.step_rendered(&pattern, backwards);
+        }
         let from = match (self.last_match, backwards) {
             (Some(m), false) => m.offset + 1,
             (Some(m), true) => m.offset,
@@ -3173,6 +3340,7 @@ impl Viewer {
         self.pattern = None;
         self.query = None;
         self.last_match = None;
+        self.rendered_match = None;
     }
 
     pub fn query(&self) -> Option<&str> {
@@ -3616,6 +3784,143 @@ mod tests {
             Box::new(BytesSource::new(text.as_bytes().to_vec())),
             VPath::local("/tmp/read.md"),
         )
+    }
+
+    /// A `.docx` of these paragraphs of `word/document.xml`, as a viewer on it.
+    fn document_viewer(name: &str, body: &str) -> Viewer {
+        use std::io::Write;
+        let xml = format!("<w:document><w:body>{body}</w:body></w:document>");
+        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        for (part, text) in [
+            (
+                "docProps/core.xml",
+                "<cp:coreProperties><dc:title>Report</dc:title></cp:coreProperties>",
+            ),
+            ("word/document.xml", xml.as_str()),
+        ] {
+            zip.start_file(part, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(text.as_bytes()).unwrap();
+        }
+        let bytes = zip.finish().unwrap().into_inner();
+        Viewer::new(
+            Box::new(BytesSource::new(bytes)),
+            VPath::local(std::env::temp_dir().join(name)),
+        )
+    }
+
+    fn para(text: &str) -> String {
+        format!("<w:p><w:r><w:t>{text}</w:t></w:r></w:p>")
+    }
+
+    #[test]
+    fn a_document_opens_as_its_text_and_goes_back_to_its_bytes() {
+        let body = format!(
+            "<w:p><w:pPr><w:pStyle w:val=\"Heading1\"/></w:pPr><w:r><w:t>Report</w:t></w:r></w:p>{}",
+            para("Version 3.5 is out.")
+        );
+        let mut v = document_viewer("report.docx", &body);
+        assert_eq!(v.mode, Mode::Dump, "a zip is bytes until it is laid out");
+        assert!(v.renders_document());
+        assert_eq!(v.as_document(), Some(Ok(())));
+        assert_eq!(v.mode, Mode::Markdown);
+        assert!(v.in_document());
+        let rows: Vec<String> = v.rows(40, 10).into_iter().map(|r| r.text).collect();
+        assert_eq!(rows, ["Report", "══════", "", "Version 3.5 is out."]);
+        // The structure pane still says what the file says about itself.
+        assert!(v.structure().is_some_and(|s| s.summary.contains("Report")));
+        // It is one view of the file, not a file of its own: nothing is laid out twice.
+        assert!(!v.renders_document());
+        assert_eq!(v.as_document(), None);
+
+        // `F2` is the way to the source, and the source of a `.docx` is a zip.
+        v.toggle_wrap();
+        assert_eq!(v.mode, Mode::Dump);
+        assert!(!v.in_document());
+        assert!(v.derived.is_none());
+        assert!(v.rows(40, 2)[0].text.starts_with("PK"));
+        // And back, and from there to the hex of the file, not of the text.
+        assert_eq!(v.as_document(), Some(Ok(())));
+        v.toggle_hex();
+        assert_eq!(v.mode, Mode::Hex);
+        assert!(!v.in_document());
+        assert!(v.rows(80, 1)[0].text.contains("50 4B 03 04"));
+        v.toggle_hex();
+        assert_eq!(v.mode, Mode::Dump);
+
+        // Asked for by its mode — a file remembered as laid out — it is laid out, not
+        // drawn as Markdown over its own bytes.
+        v.set_mode(Mode::Markdown);
+        assert!(v.in_document());
+        assert_eq!(v.rows(40, 1)[0].text, "Report");
+    }
+
+    #[test]
+    fn a_search_in_a_document_finds_the_text_as_it_is_shown() {
+        let mut body = String::new();
+        for i in 0..40 {
+            body.push_str(&para(&format!("Line {i} of the report.")));
+        }
+        body.push_str(&para("The total is 3.5 (three and a half)."));
+        body.push_str(&para("Nothing else."));
+        body.push_str(&para("Again: 3.5 exactly."));
+        let mut v = document_viewer("totals.docx", &body);
+        assert_eq!(v.as_document(), Some(Ok(())));
+        let cancel = CancelToken::new();
+        // The text behind the screen has a backslash before the full stop; the reader's
+        // query has not, and it is the reader who is searching.
+        assert!(v
+            .search("3.5 (three", SearchMode::Plain, false, false, &cancel)
+            .unwrap());
+        let rows = v.rows(60, 3);
+        assert_eq!(rows[0].text, "The total is 3.5 (three and a half).");
+        assert_eq!(rows[0].hits, [(13, 10)]);
+        // Again, forwards and then back.
+        assert!(v
+            .search("3.5", SearchMode::Plain, false, false, &cancel)
+            .unwrap());
+        assert_eq!(v.rows(60, 1)[0].text, "Again: 3.5 exactly.");
+        assert!(!v.find_again(false, &cancel), "there is no third");
+        assert!(v.find_again(true, &cancel));
+        assert_eq!(
+            v.rows(60, 1)[0].text,
+            "The total is 3.5 (three and a half)."
+        );
+        // `Ctrl+Z` goes back to where the search started from.
+        assert!(v.undo_jump());
+        assert!(!v
+            .search("no such words", SearchMode::Plain, false, false, &cancel)
+            .unwrap());
+    }
+
+    #[test]
+    fn a_document_that_cannot_be_read_stays_as_it_was() {
+        // The name of a document on something that is not one.
+        let mut v = Viewer::new(
+            Box::new(BytesSource::new(b"PK\x03\x04 not really".to_vec())),
+            VPath::local(std::env::temp_dir().join("broken.odt")),
+        );
+        assert_eq!(
+            v.as_document(),
+            Some(Err(crate::document::DocumentError::Unreadable))
+        );
+        assert_eq!(v.mode, Mode::Dump);
+        assert!(!v.in_document());
+        v.set_mode(Mode::Markdown);
+        assert_eq!(v.mode, Mode::Dump, "nor by asking for the mode");
+        // Too much XML for the allowance: refused, and the bytes are still there to read.
+        let filler = "<w:p><w:r><w:t>          </w:t></w:r></w:p>";
+        let body = filler.repeat(crate::document::XML_LIMIT / filler.len() + 1);
+        let mut v = document_viewer("bomb.docx", &body);
+        assert_eq!(
+            v.as_document(),
+            Some(Err(crate::document::DocumentError::TooLarge))
+        );
+        assert_eq!(v.mode, Mode::Dump);
+        assert!(v.rows(40, 1)[0].text.starts_with("PK"));
+        // And a name that says nothing is not tried at all.
+        let mut v = document_viewer("report.zip", &para("x"));
+        assert_eq!(v.as_document(), None);
     }
 
     /// A viewer on a tabular file, which is what `reads_table` asks about.

@@ -18,6 +18,7 @@ pub mod decode;
 pub mod dfm;
 pub mod diff;
 pub mod disasm;
+pub mod document;
 pub mod guides;
 pub mod il;
 pub mod jvm;
@@ -52,6 +53,7 @@ pub use disasm::{
     analyze, disassemble, probe, resolve_targets, Arch, Binary, DisasmError, Format, Line, Target,
     TargetKind,
 };
+pub use document::DocumentError;
 pub use search::{compile, Match, Pattern, SearchError, SearchMode};
 pub use source::{BytesSource, FileSource, Source};
 pub use table::Table;

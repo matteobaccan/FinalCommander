@@ -12,6 +12,21 @@ Notable changes, newest first. The format follows
   in two — the screen shows the active panel alone and `Tab` brings the other; a quick view,
   an information panel or a tree goes under the panel it is about. `panel.single_below` sets
   the width, 0 keeps two panels at any width.
+- The text of office documents in the viewer (SPEC 05 §1.16). `F3` on a `.docx` or an `.odt`
+  shows its words laid out the way a Markdown file is: headings by the document's own styles
+  (by the style's name, so an Italian Word's `Titolo1` is a heading too), wrapped paragraphs,
+  bulleted and numbered lists, tables drawn with their columns lined up, bold, italic and
+  struck-out text, line breaks and tabs, `[image: name]` where a picture was, and footnotes
+  and endnotes numbered in the text and listed at the end. A `.pptx` or an `.odp` shows the
+  text of each slide in the order they are shown. `Shift+F2` and `F2` go to the source — the
+  file's bytes — and back, `F4` has the text in its cycle, `F7` searches what is on the
+  screen, `Shift+F11` keeps showing the properties, and *Interface → Markdown laid out to be
+  read* decides whether a document opens this way. No new crate, and in the compact build:
+  the zip reader is the structure pane's and the XML reader is our own, a flat walk that a
+  deeply nested file cannot overflow. A document is refused, with a message, when its XML
+  inflates past 16 MiB or its text past 4 MiB, whatever sizes the file declares, and an
+  entity it defines for itself is never expanded. A line separator (U+2028) in a Markdown
+  paragraph now ends the line there.
 - FinalCommander Link: a folder of another FinalCommander on the same local network, in a
   panel (SPEC 04 §9). *Commands → Link: accept calls on/off* shares the active panel's folder
   read only; on the other machine a netbox session with protocol *Link* and that machine's

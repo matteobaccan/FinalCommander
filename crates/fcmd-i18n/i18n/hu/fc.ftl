@@ -353,6 +353,8 @@ viewer-wrap-mode = { $mode }
 viewer-no-undo = nincs korábbi pozíció
 viewer-empty = (üres fájl)
 viewer-not-markdown = nem Markdown fájl, vagy túl nagy a megjelenítéshez
+viewer-document-too-large = a dokumentum túl nagy a szövegként való megjelenítéshez
+viewer-document-unreadable = a dokumentum szövege nem olvasható
 viewer-not-table = nem táblázatos fájl, vagy túl nagy az egészben való beolvasáshoz
 viewer-status = { $mode } { $codepage }  { $offset } / { $len }  { $percent }%
 

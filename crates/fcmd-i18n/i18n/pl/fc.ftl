@@ -355,6 +355,8 @@ viewer-wrap-mode = { $mode }
 viewer-no-undo = nie ma wcześniejszej pozycji
 viewer-empty = (pusty plik)
 viewer-not-markdown = to nie jest plik Markdown albo jest za duży, by go złożyć
+viewer-document-too-large = dokument jest za duży, by złożyć go jako tekst
+viewer-document-unreadable = tekstu tego dokumentu nie da się odczytać
 viewer-not-table = to nie jest plik tabelaryczny albo jest za duży, by odczytać go w całości
 viewer-status = { $mode } { $codepage }  { $offset } / { $len }  { $percent }%
 

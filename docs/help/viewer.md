@@ -59,6 +59,34 @@ out from the part of it that happens to be on screen, so the document is rendere
 four megabytes it stays the source, and says so. *Interface → Markdown laid out to be read*
 turns the first screen back into the source for good.
 
+# Office documents
+
+`F3` on a word processor's document shows its text, laid out the same way: `.docx` and `.odt`
+(and Word's `.docm`, `.dotx`, `.dotm`, OpenDocument's `.ott`). Headings are headings, by the
+style the document gave them; paragraphs are wrapped to the window; bulleted and numbered
+lists are lists; a table is drawn with its columns lined up, its first row as the heading;
+bold, italic and struck-out text keep their look; a line break and a tab stay where they
+were; a picture is `[image: name]`; a footnote is `[1]` in the text and `[1]` with its words
+at the end. A presentation — `.pptx`, `.ppsx`, `.odp` — shows the text of each slide under
+`Slide 1`, `Slide 2`…, in the order they are shown: the title, the points as bullets, the
+tables.
+
+It is the text and not the page: no fonts, sizes, colours, columns or page breaks, no
+headers and footers, no comments, and nothing that was deleted with tracked changes on.
+
+The keys are Markdown's. `Shift+F2` switches between the text and the source — which for a
+document is the file itself, a zip, shown as bytes — `F2` goes to the source too, and `F4`
+has the text in its cycle after the hex. `F7` searches the text as it is on the screen.
+`Shift+F11` still shows what the document says about itself: title, author, dates, pages.
+*Interface → Markdown laid out to be read* is the setting for these too: off, a document
+opens as its bytes and `Shift+F2` lays it out.
+
+A document inside an archive or on a server is laid out like any other. One whose text is
+longer than four megabytes, or whose XML is longer than sixteen, is not laid out and the
+status line says so — the sizes a file declares are not believed, so a document built to
+swell when opened is refused rather than read. Spreadsheets (`.xlsx`, `.ods`) and the older
+`.doc` are not laid out: their properties are in `Shift+F11`.
+
 # Pictures
 
 A `.png`, a `.jpg`, a `.gif` or a `.bmp` opens as the picture. `F4` goes on from there to the

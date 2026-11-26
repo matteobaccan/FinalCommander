@@ -346,6 +346,8 @@ viewer-wrap-mode = { $mode }
 viewer-no-undo = 没有更早的位置
 viewer-empty = （空文件）
 viewer-not-markdown = 不是 Markdown 文件，或者太大无法排版
+viewer-document-too-large = 文档太大，无法排版为文本
+viewer-document-unreadable = 无法读取此文档的文本
 viewer-not-table = 不是表格文件，或过大无法整体读取
 viewer-status = { $mode } { $codepage }  { $offset } / { $len }  { $percent }%
 

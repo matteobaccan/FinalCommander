@@ -357,6 +357,8 @@ viewer-wrap-mode = { $mode }
 viewer-no-undo = ankstesnės pozicijos nėra
 viewer-empty = (tuščias failas)
 viewer-not-markdown = tai ne Markdown failas arba jis per didelis išdėstyti
+viewer-document-too-large = dokumentas per didelis išdėstyti kaip tekstą
+viewer-document-unreadable = šio dokumento teksto nepavyksta perskaityti
 viewer-not-table = tai ne lentelinis failas arba jis per didelis perskaityti visą
 viewer-status = { $mode } { $codepage }  { $offset } / { $len }  { $percent }%
 

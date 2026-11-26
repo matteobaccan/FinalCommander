@@ -1102,6 +1102,12 @@ fn push_url(out: &mut Vec<Atom>, url: &str, strong: bool) {
     out.push(Atom::new(')', Class::Url, strong));
 }
 
+/// U+2028, the character Unicode has for "the line ends here and the paragraph does not".
+/// A paragraph that holds one is broken there: it is what a line break inside a paragraph of
+/// a word processor's document is turned into (`document.rs`), and it means the same in a
+/// Markdown file that happens to hold one.
+const LINE_SEPARATOR: char = '\u{2028}';
+
 /// How wide a character is on screen; a control character takes no room.
 fn char_width(c: char) -> usize {
     unicode_width::UnicodeWidthChar::width(c).unwrap_or(0)
@@ -1142,7 +1148,7 @@ fn flow(atoms: &[Atom], width: usize, first: &str, cont: &str) -> Vec<(String, V
                 room = width.saturating_sub(indent.width()).max(4);
             }
         }
-        if atom.ch == ' ' || atom.ch == '\t' {
+        if atom.ch == ' ' || atom.ch == '\t' || atom.ch == LINE_SEPARATOR {
             let word_w: usize = word.iter().map(|a| char_width(a.ch)).sum();
             let line_w: usize = line.iter().map(|a| char_width(a.ch)).sum();
             if line_w + word_w > room && !line.is_empty() {
@@ -1151,6 +1157,14 @@ fn flow(atoms: &[Atom], width: usize, first: &str, cont: &str) -> Vec<(String, V
                 room = width.saturating_sub(indent.width()).max(4);
             }
             line.append(&mut word);
+            if atom.ch == LINE_SEPARATOR {
+                // The line ends here whatever room is left on it, and the paragraph goes
+                // on underneath, under the same indent a wrapped line would have.
+                flush(&mut line, indent, &mut out);
+                indent = cont;
+                room = width.saturating_sub(indent.width()).max(4);
+                continue;
+            }
             line.push(Atom::new(' ', atom.class, atom.bold));
             continue;
         }

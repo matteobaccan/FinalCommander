@@ -355,6 +355,8 @@ viewer-wrap-mode = { $mode }
 viewer-no-undo = žádná dřívější pozice
 viewer-empty = (prázdný soubor)
 viewer-not-markdown = není to soubor Markdown, nebo je příliš velký na vysázení
+viewer-document-too-large = dokument je příliš velký na vysázení jako text
+viewer-document-unreadable = text tohoto dokumentu nelze přečíst
 viewer-not-table = není to tabulkový soubor, nebo je příliš velký na načtení celý
 viewer-status = { $mode } { $codepage }  { $offset } / { $len }  { $percent }%
 

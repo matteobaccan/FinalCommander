@@ -14419,8 +14419,14 @@ impl App {
                 }
                 // A README opens as a README. `Shift+F2` is the way to its source, and the
                 // setting is for a reader who would rather start there.
-                if self.cfg.ui.markdown {
-                    viewer.as_markdown();
+                // An office document opens as its text for the same reason and under the
+                // same setting (SPEC 05 §1.16): the words are what `F3` on a `.docx` is
+                // for. One that cannot be laid out says why and stays the bytes it is.
+                if self.cfg.ui.markdown && !viewer.as_markdown() {
+                    if let Some(Err(e)) = viewer.as_document() {
+                        let m = self.i18n.t(document_error(e));
+                        self.set_status(m);
+                    }
                 }
                 // And a `.csv` opens as a table, for the same reason and with `Shift+F3`
                 // as the way back to the commas. Only a name that says it is tabular opens
@@ -30690,7 +30696,16 @@ impl App {
                             } else if viewer.as_picture() || viewer.as_table() {
                                 None
                             } else {
-                                Some(M::Text)
+                                // An office document's text is its laid-out view, and
+                                // it sets the mode itself as the other two do.
+                                match viewer.as_document() {
+                                    Some(Ok(())) => None,
+                                    Some(Err(e)) => {
+                                        error = Some(document_error(e).into());
+                                        Some(M::Text)
+                                    }
+                                    None => Some(M::Text),
+                                }
                             }
                         }
                     };
@@ -30702,7 +30717,13 @@ impl App {
                     if viewer.mode == fcmd_view::Mode::Markdown {
                         viewer.set_mode(fcmd_view::Mode::Text);
                     } else if !viewer.as_markdown() {
-                        error = Some("viewer-not-markdown".into());
+                        // The same key lays out an office document, whose way back to
+                        // the source is this key again like a README's.
+                        match viewer.as_document() {
+                            Some(Ok(())) => {}
+                            Some(Err(e)) => error = Some(document_error(e).into()),
+                            None => error = Some("viewer-not-markdown".into()),
+                        }
                     }
                 }
                 Command::ViewerTable => {
@@ -34846,6 +34867,14 @@ where
 fn open_via_terminal() -> bool {
     std::env::var_os("FCMD_OPEN_VIA_TERMINAL").is_some_and(|v| v == "1")
 }
+/// Why an office document is not shown as its text, as the message that says so.
+fn document_error(e: fcmd_view::DocumentError) -> &'static str {
+    match e {
+        fcmd_view::DocumentError::TooLarge => "viewer-document-too-large",
+        fcmd_view::DocumentError::Unreadable => "viewer-document-unreadable",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

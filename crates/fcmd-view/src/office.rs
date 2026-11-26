@@ -49,8 +49,8 @@ pub(crate) fn read(src: &mut dyn Bytes, head: &[u8], len: u64) -> Option<Structu
 }
 
 /// One entry of the central directory: its name and where its local header is.
-struct Entry {
-    name: String,
+pub(crate) struct Entry {
+    pub(crate) name: String,
     method: u16,
     compressed: u64,
     local: u64,
@@ -66,7 +66,7 @@ fn le32(b: &[u8], at: usize) -> Option<u32> {
 
 /// The end-of-central-directory record is in the last 64 kB and change, behind a comment of
 /// up to 65 535 bytes; the directory it points at is read whole, up to a cap.
-fn central_directory(src: &mut dyn Bytes, len: u64) -> Option<Vec<Entry>> {
+pub(crate) fn central_directory(src: &mut dyn Bytes, len: u64) -> Option<Vec<Entry>> {
     let tail_len = len.min(65_557) as usize;
     let tail = src.at(len - tail_len as u64, tail_len);
     let eocd = tail.windows(4).rposition(|w| w == b"PK\x05\x06")?;
@@ -101,31 +101,67 @@ fn central_directory(src: &mut dyn Bytes, len: u64) -> Option<Vec<Entry>> {
     Some(out)
 }
 
-/// An entry's bytes, stored or deflated — the two methods every office program writes.
+/// An entry's text, stored or deflated — the two methods every office program writes.
 fn inflate(src: &mut dyn Bytes, e: &Entry, len: u64) -> Option<String> {
+    match part(src, e, len, PART_LIMIT) {
+        Part::Read(bytes) | Part::Cut(bytes) => Some(String::from_utf8_lossy(&bytes).into_owned()),
+        Part::Unreadable => None,
+    }
+}
+
+/// What reading one entry came to.
+pub(crate) enum Part {
+    /// All of it.
+    Read(Vec<u8>),
+    /// The first `limit` bytes of something longer: enough for a properties part, where the
+    /// fields come first, and a refusal for a document's text, which is read whole or not.
+    Cut(Vec<u8>),
+    /// Not stored and not deflated, or its header is not where the directory says.
+    Unreadable,
+}
+
+/// An entry's bytes, up to `limit` of them. The limit is on what comes *out*: the sizes a
+/// zip declares are whatever its writer chose to say, and an entry of a few kilobytes that
+/// inflates to gigabytes is the oldest trick there is, so the inflater is stopped by a count
+/// of its own and never trusted to stop by itself.
+pub(crate) fn part(src: &mut dyn Bytes, e: &Entry, len: u64, limit: usize) -> Part {
     let head = src.at(e.local, 30);
     if le32(&head, 0) != Some(0x0403_4B50) {
-        return None;
+        return Part::Unreadable;
     }
-    let skip = 30 + le16(&head, 26)? as u64 + le16(&head, 28)? as u64;
-    let start = e.local + skip;
+    let (Some(name), Some(extra)) = (le16(&head, 26), le16(&head, 28)) else {
+        return Part::Unreadable;
+    };
+    let start = e.local + 30 + name as u64 + extra as u64;
     if start >= len {
-        return None;
+        return Part::Unreadable;
     }
-    let raw = src.at(start, (e.compressed as usize).min(PART_LIMIT));
-    let bytes = match e.method {
+    // No more of the entry is read than may come out of it, and a byte: an entry whose
+    // packed bytes alone are past the limit is over it without being inflated at all.
+    let held = e.compressed.min(len - start);
+    let want = held.min(limit as u64 + 1) as usize;
+    let raw = src.at(start, want);
+    let mut bytes = match e.method {
         0 => raw,
         8 => {
             let mut out = Vec::new();
-            flate2::read::DeflateDecoder::new(&raw[..])
-                .take(PART_LIMIT as u64)
-                .read_to_end(&mut out)
-                .ok()?;
+            // A stream that breaks off is kept as far as it went: the text before the break
+            // is still the document's, and the reader of it copes with an element left open.
+            let _ = flate2::read::DeflateDecoder::new(&raw[..])
+                .take(limit as u64 + 1)
+                .read_to_end(&mut out);
+            if out.is_empty() && !raw.is_empty() {
+                return Part::Unreadable;
+            }
             out
         }
-        _ => return None,
+        _ => return Part::Unreadable,
     };
-    Some(String::from_utf8_lossy(&bytes).into_owned())
+    if bytes.len() > limit || held > want as u64 {
+        bytes.truncate(limit);
+        return Part::Cut(bytes);
+    }
+    Part::Read(bytes)
 }
 
 /// The text of the first element called `tag` (with its namespace prefix), entities read.

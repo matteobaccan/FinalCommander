@@ -75,3 +75,8 @@ dbf = []
 
 [dev-dependencies]
 tempfile = "3"
+# The tests of the document view (SPEC 05 §1.16) build their `.docx` and `.odt` with the
+# writer the rest of the tree writes zips with, so the reader here — which is our own, a
+# central directory and an inflate — is tried on what a real writer produces. Tests only:
+# the viewer itself links no zip crate.
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }

@@ -1111,6 +1111,7 @@ dependencies = [
  "wasmprinter",
  "yaxpeax-arch",
  "yaxpeax-arm",
+ "zip",
 ]
 
 [[package]]

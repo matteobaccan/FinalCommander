@@ -65,6 +65,37 @@ documento viene impaginato tutto. Oltre i quattro megabyte resta il sorgente, e 
 *Interfaccia → Markdown impaginato per essere letto* riporta la prima schermata al sorgente per
 sempre.
 
+# Documenti d'ufficio
+
+`F3` su un documento di un programma di scrittura ne mostra il testo, impaginato allo stesso
+modo: `.docx` e `.odt` (e i `.docm`, `.dotx`, `.dotm` di Word, gli `.ott` di OpenDocument). I
+titoli sono titoli, secondo lo stile che il documento ha dato loro; i paragrafi vanno a capo
+sulla finestra; le liste puntate e numerate sono liste; una tabella è disegnata con le
+colonne allineate e la prima riga come intestazione; grassetto, corsivo e barrato restano
+tali; un'interruzione di riga e una tabulazione restano dov'erano; un'immagine è
+`[image: nome]`; una nota a piè di pagina è `[1]` nel testo e `[1]` con le sue parole in
+fondo. Una presentazione — `.pptx`, `.ppsx`, `.odp` — mostra il testo di ogni diapositiva
+sotto `Slide 1`, `Slide 2`…, nell'ordine in cui vengono proiettate: il titolo, i punti come
+elenco, le tabelle.
+
+È il testo e non la pagina: niente caratteri, dimensioni, colori, colonne o interruzioni di
+pagina, niente intestazioni e piè di pagina, niente commenti, e niente di ciò che è stato
+cancellato con le revisioni attive.
+
+I tasti sono quelli del Markdown. `Shift+F2` passa fra il testo e il sorgente — che per un
+documento è il file stesso, uno zip, mostrato come byte — anche `F2` porta al sorgente, e
+`F4` ha il testo nel suo giro dopo l'esadecimale. `F7` cerca nel testo com'è sullo schermo.
+`Shift+F11` continua a mostrare quello che il documento dice di sé: titolo, autore, date,
+pagine. *Interfaccia → Markdown impaginato per essere letto* vale anche per questi: spento,
+un documento si apre come byte e `Shift+F2` lo impagina.
+
+Un documento dentro un archivio o su un server viene impaginato come ogni altro. Uno il cui
+testo supera i quattro megabyte, o il cui XML ne supera sedici, non viene impaginato e la
+riga di stato lo dice — le dimensioni che un file dichiara non vengono credute, quindi un
+documento costruito per gonfiarsi all'apertura viene rifiutato invece che letto. I fogli di
+calcolo (`.xlsx`, `.ods`) e i vecchi `.doc` non vengono impaginati: le loro proprietà sono in
+`Shift+F11`.
+
 # Le immagini
 
 Un `.png`, un `.jpg`, un `.gif` o un `.bmp` si apre come immagine. Da lì `F4` prosegue verso il

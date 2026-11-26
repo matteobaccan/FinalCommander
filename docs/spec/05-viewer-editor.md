@@ -26,7 +26,7 @@ bytecode and the other architectures decoded in process.
 | `text` | decoded text, wrap off/char/word | arbitrary line length, tabs expanded per config |
 | `dump` | raw bytes as characters, fixed width | for binaries where text decoding lies |
 | `hex` | offset + hex + ASCII/decoded pane | bytes-per-row adjustable (the arrows, since sideways means nothing else in a dump) in **blocks of eight** — 8, 16, 24, 32, 40, 48, 56, 64, the group the dump already draws a gap between — the widest the window can hold, and jumps aligned to the width |
-| `markdown` | Markdown laid out to be read: the marks off, headings ruled, lists bulleted, tables drawn | **Implemented** (`Shift+F2`, and in `Shift+F4`'s ring). The one mode that reads the whole file, because a table's columns cannot be laid out from the part of it on screen: limited to 4 MiB, over which the file stays its source and says so. Every rendered line carries the `(offset, sub)` pair of the source line it came from, so scrolling, the bookmarks and the search need no line index. A search here searches what is on screen, not the marks behind it. |
+| `markdown` | Markdown laid out to be read: the marks off, headings ruled, lists bulleted, tables drawn | **Implemented** (`Shift+F2`, and in `Shift+F4`'s ring). The one mode that reads the whole file, because a table's columns cannot be laid out from the part of it on screen: limited to 4 MiB, over which the file stays its source and says so. Every rendered line carries the `(offset, sub)` pair of the source line it came from, so scrolling, the bookmarks and the search need no line index. A search here searches what is on screen, not the marks behind it. An office document's text is shown through this mode (§1.16), and U+2028 in a paragraph ends the line there. |
 | `table` | a tabular file as columns: a header row, aligned columns, horizontal scroll | see §1.11 — one mode for CSV, TSV, JSONL and DBF, because what differs between them is the reader and not the screen |
 | `image` | a picture or a frame of a film, in real pixels or half blocks | see §1.14 — PNG, JPEG, GIF and BMP, decided by the file's first bytes; `F3` on a picture opens here and `F4` goes on to the bytes. §1.14a is the pixels, §1.15 the films |
 | `preview` | rendered content (markdown, PDF page, media info, archive listing) | pluggable, see §1.7 |
@@ -617,6 +617,86 @@ output on the null device. Both are listed in the external programs panel.
 - Only a file on this disk, as for a film: the copy `F3` fetched of a file on a server.
 - **Later**: an MP3 decoder in process (a crate from the author's *inga* project) replaces the
   external player for MP3.
+
+### 1.16 Office documents: the text, laid out
+
+`F3` on a word processor's document shows its words. Before this an office document was a zip
+to the viewer, and all that could be read of it was its properties in the structure pane
+(§1.8); the text is what somebody opening one came for.
+
+**What is read.** By name: `.docx`, `.docm`, `.dotx`, `.dotm` (Word); `.odt`, `.ott`
+(OpenDocument text); `.pptx`, `.pptm`, `.ppsx`, `.potx` (PowerPoint); `.odp`, `.otp`
+(OpenDocument presentation). Which of the families a file is comes from the parts its zip
+holds — `word/document.xml`, `ppt/presentation.xml`, `content.xml` — and not from the name.
+
+**How it is shown.** The document is turned into Markdown and drawn by the Markdown view
+(§1.1): no second layout engine, and the same headings, bullets, hanging indents and drawn
+tables a README has. The Markdown is a form in between that nobody reads, so every character
+of the document's own text that Markdown would read as a mark is escaped — an asterisk in a
+paragraph is an asterisk on the screen.
+
+| In the document | On the screen |
+| --- | --- |
+| A heading — Word: the paragraph style whose *name* is `heading 1`…`9` or `Title` in `word/styles.xml` (the id is `Titolo1` in an Italian Word and `Heading1` in an English one; the name is the same in both), or `w:outlineLvl`; with no styles part, an id `HeadingN`. ODF: `text:h` with its `text:outline-level` | A heading of that level, ruled under for the first two |
+| A paragraph | Wrapped to the window |
+| Bold, italic, struck out — Word's `w:b`, `w:i`, `w:strike` on the run; ODF's automatic text styles; PowerPoint's `b`, `i`, `strike` | Bold, the emphasis colour, the struck-out colour. Not inside a heading or a table cell, which are drawn one way throughout; a format that comes from a named style is not followed |
+| A list — Word: `w:numPr`, bulleted or numbered as `word/numbering.xml` says for that list and level; ODF: `text:list`, numbered where its list style (in the content or in `styles.xml`) has a number format for the level | Bullets by depth or numbers counted per list and level, starting at one; a second paragraph of an ODF item on a line of its own under the first |
+| A table | Drawn as a table, the first row as its heading. A cell's paragraphs are joined on one line; a table inside a cell gives the cell its words; merged cells are not spanned |
+| A line break (`w:br`, `text:line-break`, `a:br`), a tab | A new line inside the paragraph; four spaces |
+| A picture | `[image: name]` — the drawing's description or name |
+| A footnote or an endnote | `[n]` where it is referred to, numbered in the order of reference, and `[n] text` under a rule at the end |
+| A slide | `Slide n` as a second-level heading, in the order the presentation shows them (`p:sldIdLst`, not the numbers in the file names); its title a third-level heading, the paragraphs of its body an outline of bullets, a text box paragraphs, a table a table. The date, the footer and the slide number are left out, and so are the speaker's notes |
+
+Left out because it is not the document: text deleted under tracked changes, comments, the
+headers and footers of a page, the fallback copy of a drawing (`mc:Fallback`), field codes.
+Fonts, sizes, colours, alignment, columns and the position of anything on a page are not
+shown and are not meant to be.
+
+**The line separator.** A line break inside a paragraph is written into the Markdown as
+U+2028, and the Markdown view starts a new line there under the indent a wrapped line would
+have. That holds for a Markdown file that contains one too, which is what the character
+means.
+
+**The keys and the setting are Markdown's.** `ui.markdown` (*Interface → Markdown laid out to
+be read*) decides whether a document opens as its text; `Shift+F2` switches between the text
+and the source; `F2` goes from the text to the source; `F4`'s ring has the text after the
+hex. The **source of a document is the file**: a zip, shown as the dump it opened as before —
+never the Markdown in between. While the text is shown the status line calls it `document
+text`, and the structure pane keeps saying what the file says about itself.
+
+**Search** (`F7`, `Shift+F7`, `Alt+F7`) in a document's text goes rendered line by rendered
+line and finds what is on the screen: the Markdown behind it has a backslash before every
+full stop, and a search for `3.5` there would find nothing a reader can see. A match that a
+wrap splits over two lines is not found.
+
+**Limits.** None of them is the file's word:
+
+- the file: 256 MiB (`DOCUMENT_LIMIT`) — a report is mostly its pictures, which are not read;
+- the XML inflated out of it, all parts together: 16 MiB (`document::XML_LIMIT`). The count
+  is on what comes *out* of the inflater, whatever size the entry declares, so an entry of a
+  few kilobytes that inflates to gigabytes is stopped at the limit and refused;
+- the text: 4 MiB, the Markdown limit;
+- 2 000 slides.
+
+Past any of them the document is not laid out: the status line says `the document is too
+large to lay out as text` and the file stays the bytes it is. A file that is not a zip, has no
+text part, or whose part is encrypted or not stored or deflated says `the text of this
+document cannot be read`. XML that breaks off gives the text it had up to the break.
+
+**The readers.** No new crate. The zip is read by the reader the structure pane has
+(`office.rs`: the end-of-central-directory record, the directory, one entry inflated with
+`flate2`), and the XML by a tokenizer of our own in `document.rs` — elements, attributes,
+text, `CDATA`, the five entities and the numbered ones. It is a flat walk with counters, never
+recursion, so XML nested a million deep costs a million steps and no stack; a `DOCTYPE` is
+passed over and an entity a document declares is never expanded. UTF-16 is read by its byte
+order mark. Being crate-free, the view is in the compact build too.
+
+**Where the bytes come from** is not this view's business: it reads the viewer's source, so a
+document inside an archive or on a server is laid out like one on the disk.
+
+**Not built** (in the backlog): `.xlsx` and `.ods` as tables through table mode; the address
+of a hyperlink; formats inherited from named styles; `.doc`, `.rtf` and flat ODF (`.fodt`);
+the quick view, which lays out no Markdown either.
 
 ### 1.11 Table mode: the tabular formats
 
