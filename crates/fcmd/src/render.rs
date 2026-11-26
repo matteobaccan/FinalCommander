@@ -9509,7 +9509,13 @@ third line
         press(&mut app, "Shift+F11");
         let out = frame(&mut app, 120, 24);
         assert!(out.contains("Structure"), "{out}");
-        assert!(out.contains("ELF header"), "{out}");
+        // The test program itself: ELF, Mach-O or PE as the machine has it, so the first row
+        // is read from the structure rather than named here.
+        let first = app.quick.as_mut().unwrap().structure().unwrap().rows[0]
+            .label
+            .clone();
+        let shown: String = first.chars().take(8).collect();
+        assert!(out.contains(&shown), "the first row, {first:?}:\n{out}");
 
         let top = app.quick.as_ref().unwrap().top;
         press(&mut app, "Down");
