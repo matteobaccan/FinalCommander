@@ -77,6 +77,17 @@ Notable changes, newest first. The format follows
 - dBase tables are a build feature, `dbf`, in every build but the compact one
   (`--no-default-features`, the `-compact-` MIPS archives): there a `.dbf` opens as bytes and
   the keys above say that dBase tables are not in the build.
+- **Another branch in the other panel, without checking it out** (SPEC 06 §15). `Shift+F3`
+  on a row of the branches list or of the log — `Ctrl+Enter` too — or *Browse a branch, a tag
+  or a commit…* in the git menu (`git.browse`), which asks for the ref: the files of that
+  branch, tag or commit as a read-only tree beside the work tree, to walk, read with `F3` and
+  `Ctrl+Q`, copy out with `F5`, search by name and compare with the other panel. The frame
+  says the repository, the ref, the commit and that it is read only; the commit is fixed when
+  the panel opens, so it does not change if the branch moves. The executable bit and the
+  target of a link are shown, a submodule is a folder that says its files are elsewhere, and
+  every key that would change a file is refused. It is the `git` on the machine that answers
+  (`ls-tree`, `cat-file`), run as a program with the ref never taken as an option; no
+  repository, an unknown ref and a missing `git` each say so. In the compact build too.
 
 ### Fixed
 

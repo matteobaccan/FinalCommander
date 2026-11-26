@@ -782,9 +782,38 @@ Dai pannelli del log e dei branch il resto di git è a un tasto funzione:
 | `F6` | push |
 | `F7` | committa quello che è in staging, dopo aver chiesto il messaggio |
 | `F8` | i branch (dal log), o il log (dai branch) |
+| `Shift+F3` | i file del branch, o del commit, nell'altro pannello — vedi sotto; `Ctrl+Invio` fa lo stesso |
 
 `Ctrl+Q` accanto a uno dei due mostra la stessa cosa di `F3`, per la riga sotto il cursore, mentre
 ti sposti.
+
+**Un altro branch accanto a quello su cui sei.** `Shift+F3` su una riga dell'elenco dei branch
+— o del log — apre quel branch, o quel commit, nell'*altro* pannello come cartelle e file,
+senza farne il checkout: il pannello in cui sei tiene l'albero di lavoro, e i due stanno
+fianco a fianco. *Sfoglia un ramo, un tag o un commit…* nel menu di git (`Ctrl+Alt+G`, comando
+`git.browse`) fa lo stesso da qualunque cartella di un repository e chiede quale: un branch,
+un tag, o un commit con il suo hash.
+
+La cornice dice il repository, il ref, il commit e che è in **sola lettura** —
+`fcmd@main [a1b2c3d4, sola lettura] /src`. Il commit è quello che il ref indicava quando il
+pannello si è aperto, e resta quello anche se nel frattempo il branch va avanti; riaprilo per
+avere il nuovo. Lì dentro giri per le cartelle, `F3` e `Ctrl+Q` leggono un file com'è in quel
+commit, `F5` copia file e cartelle fuori, sul disco, `Alt+F7` cerca per nome, e i due pannelli
+si confrontano come due cartelle qualsiasi (*Comandi → Confronta cartelle*) — con l'albero di
+lavoro nell'altro, è quello che il branch ha e tu no. Un file eseguibile si vede come tale, un
+link mostra dove punta, e un sottomodulo è una cartella che si apre vuota e dice che i suoi
+file stanno in un altro repository. Ogni file porta l'ora del commit: git non tiene un'ora per
+file.
+
+Niente lì dentro si può cambiare. `F4`, `F6`, `F7`, `F8`, gli attributi e una copia *dentro*
+sono rifiutati, ognuno con la stessa frase: è un commit mostrato come file. `..` in cima
+torna al repository. Quello che si legge è quello che è stato committato, byte per byte: i
+fine riga non vengono convertiti, e di un file tenuto in Git LFS si vede il puntatore che è
+stato committato al suo posto.
+
+Se non si può aprire la riga di stato dice quale è stato il motivo: la cartella non è in un
+repository, git non conosce un branch, un tag o un commit con quel nome, il nome non è uno
+che un ref possa avere (niente che cominci con `-` lo è), o `git` non è installato.
 
 **Pull** e **push** girano in sottofondo e la riga di stato dice cosa ha detto git alla fine.
 Non si fermano mai a chiedere una password su questo schermo: uno che ne ha bisogno fallisce e

@@ -18,6 +18,9 @@
 //! from a table of command lines, for the formats this program does not implement and the
 //! operating system does. It is a port of FAR's MultiArc; `docs/05-multiarc.md` is its
 //! specification.
+//!
+//! `gittree` is the other program this crate asks: one commit of a Git repository, read as a
+//! container through `git` itself (SPEC 06 §15).
 
 mod archive;
 mod cab;
@@ -25,6 +28,7 @@ pub mod cfb;
 mod cpio;
 mod ext;
 mod format;
+pub mod gittree;
 pub mod json;
 mod limits;
 pub mod mail;

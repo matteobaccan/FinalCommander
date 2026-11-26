@@ -750,6 +750,9 @@ pub enum GitAsk {
     Push,
     Pull,
     Switch(String),
+    /// Which commit a branch, a tag or a hash names, to browse its files without checking
+    /// it out.
+    Browse(String),
 }
 
 /// Which part of what changed a row of the `:git` panel is in (SPEC 06 §15). The order is the
@@ -1196,6 +1199,14 @@ pub enum GitOut {
         /// The file in the work tree the two versions are of.
         file: std::path::PathBuf,
     },
+    /// A ref resolved to its commit, and the descriptor written for it: the file a panel
+    /// steps into to read that commit's tree (`fcmd_arc::gittree`).
+    Tree {
+        descriptor: std::path::PathBuf,
+        reference: fcmd_arc::gittree::GitRef,
+    },
+    /// There is no tree to browse, and which of the reasons it is — each has its own words.
+    NoTree(fcmd_arc::gittree::GitError),
 }
 
 /// What comes back.
@@ -1989,6 +2000,8 @@ pub enum PromptKind {
     EditorSaveAs,
     /// The message of a commit, from the git panel.
     GitCommit,
+    /// Which branch, tag or commit to browse in the other panel.
+    GitBrowse,
     /// What to call this tab. An empty answer takes the name off again.
     TabName,
     /// What to call a folder in the hotlist. An empty answer leaves it with its path.
@@ -3697,6 +3710,10 @@ pub struct App {
     /// The commits of the log panel and the branches of the branches panel, by row.
     git_commits: Vec<GitCommit>,
     git_branches: Vec<(String, bool)>,
+    /// The Git trees opened in this session, by the descriptor each is read through: what
+    /// the panel's frame says instead of the descriptor's own path, and where `..` at the
+    /// top of one goes.
+    git_trees: std::collections::HashMap<std::path::PathBuf, fcmd_arc::gittree::GitRef>,
     /// The plugins found at startup, on and off and broken (*Options → Plugins configuration*).
     pub plugins: Vec<PluginRow>,
     /// The programs from elsewhere, as the panel of them last found them (`:tools`).
@@ -4137,6 +4154,7 @@ impl App {
             git_pending: None,
             git_commits: Vec::new(),
             git_branches: Vec::new(),
+            git_trees: std::collections::HashMap::new(),
             user_screen: Vec::new(),
             shell_screen: false,
             hidden: None,
@@ -8662,6 +8680,13 @@ impl App {
                 }
                 self.git_ask(GitAsk::Commit(message));
             }
+            PromptKind::GitBrowse => {
+                // An empty answer is a change of mind, not a ref to complain about.
+                let reference = prompt.text.trim().to_string();
+                if !reference.is_empty() {
+                    self.git_ask(GitAsk::Browse(reference));
+                }
+            }
             PromptKind::TabName => {
                 let raw = prompt.text.trim().to_string();
                 self.panel_mut().name = (!raw.is_empty()).then_some(raw);
@@ -11693,6 +11718,13 @@ impl App {
     /// Change an archive: one job, one progress box, and the old archive untouched until
     /// the new one is written and checked.
     fn start_rebuild(&mut self, archive: VPath, changes: Vec<fcmd_arc::Change>) {
+        // A commit is not rewritten from a panel, whatever key or dialog led here.
+        if Self::in_git_tree(&archive.enter("/")) {
+            self.pack_delete = None;
+            let m = self.i18n.t("git-tree-read-only");
+            self.set_error(m);
+            return;
+        }
         if changes.is_empty() {
             // Nothing to write means nothing was written, and nothing written means the
             // originals a move was going to delete stay where they are.
@@ -12622,6 +12654,10 @@ impl App {
         if self.mode.is_normal() && self.live_viewer().is_none() && self.git_list_key(cmd) {
             return;
         }
+        if self.mode.is_normal() && self.live_viewer().is_none() && self.refused_in_a_git_tree(cmd)
+        {
+            return;
+        }
         // While the viewer is open, movement and its own toggles belong to it, not the panel
         // — and the quick view with the focus is a viewer, so they belong to it as well.
         if self.live_viewer().is_some() && is_viewer_movement(cmd) {
@@ -13357,6 +13393,7 @@ impl App {
             Command::MacroList => self.open_macros(),
             Command::AppScreens => self.open_screens(),
             Command::ToolGit => self.open_git(),
+            Command::GitBrowse => self.ask_git_browse(),
             Command::ToolTrash => {
                 let side = self.active;
                 self.open_trash_panel(side);
@@ -16169,6 +16206,13 @@ impl App {
             Command::FileCopy | Command::FileCopyCurrent => self.git_ask(GitAsk::Pull),
             Command::FileMove | Command::FileMoveCurrent => self.git_ask(GitAsk::Push),
             Command::FileMkdir => self.ask_commit_message(),
+            // The row's own files, in the other panel: `Shift+F3` beside `F3`, which is the
+            // row's log, and `Ctrl+Enter`, which on a row that is not a file has no name to
+            // put on the command line.
+            Command::ArcCommands
+            | Command::CmdInsert(fcmd_cmd::Insert::Name, fcmd_cmd::Which::Active) => {
+                self.ask_git_browse()
+            }
             Command::FileDelete | Command::FileDeleteCurrent if in_log => {
                 self.git_ask(GitAsk::Branches)
             }
@@ -16194,6 +16238,7 @@ impl App {
             PickRow::plain(self.i18n.t("git-status"), "status", false),
             PickRow::plain(self.i18n.t("git-branches"), "branches", false),
             PickRow::plain(self.i18n.t("git-log"), "log", false),
+            PickRow::plain(self.i18n.t("git-browse"), "browse", false),
         ];
         if let Some(name) = self
             .git_file_at_cursor()
@@ -16250,6 +16295,10 @@ impl App {
                 self.ask_commit_message();
                 return;
             }
+            "browse" => {
+                self.ask_git_browse();
+                return;
+            }
             // What changed as a tree of folders, or back to a list: the same answer drawn
             // again, without asking git.
             "tree" => {
@@ -16304,6 +16353,119 @@ impl App {
         }
         let path = self.panel().path_of(entry);
         path.is_local().then(|| path.as_path().to_path_buf())
+    }
+
+    /// *Browse a branch…*: the files of a branch, a tag or a commit in the other panel, read
+    /// only and not checked out (SPEC 06 §15). On a row that names one — a branch of the
+    /// branches list, a commit of the log — it is that one; anywhere else the ref is asked
+    /// for.
+    fn ask_git_browse(&mut self) {
+        if self.git_cwd().is_none() {
+            let m = self.i18n.t("git-local-only");
+            self.set_error(m);
+            return;
+        }
+        let on_the_row = self
+            .git_branch_at_cursor()
+            .map(|(branch, _)| branch)
+            .or_else(|| self.git_commit_at_cursor().map(|commit| commit.hash));
+        if let Some(reference) = on_the_row {
+            self.git_ask(GitAsk::Browse(reference));
+            return;
+        }
+        let title = self.i18n.t("git-browse-prompt");
+        self.mode = Mode::Prompt(Prompt {
+            kind: PromptKind::GitBrowse,
+            title,
+            text: String::new(),
+            secret: false,
+            sources: Vec::new(),
+        });
+    }
+
+    /// Is this path inside a Git tree — one commit of a repository, read through its
+    /// descriptor? Asked of the outermost container, so an archive that was committed and is
+    /// opened from the tree is inside it too.
+    pub(crate) fn in_git_tree(path: &VPath) -> bool {
+        Self::git_tree_host(path).is_some()
+    }
+
+    /// The descriptor a path inside a Git tree is read through, and the path as text from
+    /// the top of the tree (`/src/lib.rs`).
+    fn git_tree_host(path: &VPath) -> Option<(VPath, String)> {
+        let mut host = path.leave()?;
+        while let Some(outer) = host.leave() {
+            host = outer;
+        }
+        if !host.is_local() || !fcmd_arc::gittree::named_like(host.as_path()) {
+            return None;
+        }
+        let whole = path.to_string();
+        let inside = whole
+            .strip_prefix(&host.to_string())
+            .and_then(|rest| rest.strip_prefix('!'))
+            .unwrap_or("/")
+            .to_string();
+        Some((host, inside))
+    }
+
+    /// What a panel's frame and the window's title say about where they are: the path — or,
+    /// inside a Git tree opened in this session, the repository, the ref, the commit it was
+    /// when the panel opened and that it is read only, in place of the descriptor's path.
+    pub fn place_of(&self, path: &VPath) -> String {
+        let known = Self::git_tree_host(path).and_then(|(host, inside)| {
+            self.git_trees
+                .get(host.as_path())
+                .map(|reference| (reference, inside))
+        });
+        let Some((reference, inside)) = known else {
+            return path.to_string();
+        };
+        let repo = reference
+            .repo
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| reference.repo.display().to_string());
+        self.i18n.t_args(
+            "git-tree-place",
+            &[
+                ("repo", repo.into()),
+                ("ref", reference.name.clone().into()),
+                ("commit", reference.short().to_string().into()),
+                ("path", inside.into()),
+            ],
+        )
+    }
+
+    /// The keys that change files, in a panel that shows a commit: refused, with the one
+    /// reason, before a dialog has asked anything. What reaches a Git tree some other way —
+    /// a copy into it from the other panel — is refused where the archive would be written.
+    fn refused_in_a_git_tree(&mut self, cmd: Command) -> bool {
+        let writes = matches!(
+            cmd,
+            Command::FileEdit
+                | Command::FileEditNew
+                | Command::FileEditAlt
+                | Command::FileMove
+                | Command::FileMoveCurrent
+                | Command::FileMkdir
+                | Command::FileDelete
+                | Command::FileDeleteCurrent
+                | Command::FileDeleteForce
+                | Command::FileAttributes
+                | Command::FileWipe
+                | Command::FileLink
+                | Command::FileMultiRename
+                | Command::FileDescribe
+                | Command::FileRecode
+                | Command::FileStripMeta
+        );
+        if !writes || self.panel().temp.is_some() || !Self::in_git_tree(&self.panel().cwd) {
+            return false;
+        }
+        let m = self.i18n.t("git-tree-read-only");
+        self.set_error(m);
+        true
     }
 
     /// The commit message, asked for before anything is committed.
@@ -16724,6 +16886,51 @@ impl App {
                     }
                 }
                 self.diff_git = Some((file, staged));
+            }
+            Ok(GitOut::Tree {
+                descriptor,
+                reference,
+            }) => {
+                // The other panel, so the work tree stays beside it: two panels are what
+                // comparing two branches takes.
+                let other = 1 - panel.min(1);
+                let root = VPath::local(&descriptor).enter("/");
+                let m = self.i18n.t_args(
+                    "git-tree-opened",
+                    &[
+                        ("ref", reference.name.clone().into()),
+                        ("commit", reference.short().to_string().into()),
+                    ],
+                );
+                self.git_trees.insert(descriptor, reference);
+                if !self.panel_go(other, root, true) {
+                    return;
+                }
+                if self.hidden == Some(other) {
+                    self.hidden = None;
+                }
+                self.read_panel(other);
+                self.set_status(m);
+            }
+            Ok(GitOut::NoTree(why)) => {
+                use fcmd_arc::gittree::GitError;
+                let m = match why {
+                    GitError::NoGit => self.i18n.t("git-no-git"),
+                    GitError::NotARepository(path) => self.i18n.t_args(
+                        "git-no-repo",
+                        &[("path", path.display().to_string().into())],
+                    ),
+                    GitError::UnknownRef(name) => {
+                        self.i18n.t_args("git-no-ref", &[("ref", name.into())])
+                    }
+                    GitError::BadRef(name) => {
+                        self.i18n.t_args("git-bad-ref", &[("ref", name.into())])
+                    }
+                    other => self
+                        .i18n
+                        .t_args("git-failed", &[("why", other.to_string().into())]),
+                };
+                self.set_error(m);
             }
         }
     }
@@ -31851,6 +32058,12 @@ impl App {
         // case is the one that is easiest to miss: coming out of an archive, where the name
         // to go back to is the archive's own and not the directory's inside it.
         let leaving = self.panels[index].cwd.clone();
+        // Out of the top of a Git tree is back to the repository it is a commit of — not
+        // to the temporary folder its descriptor is kept in, which is nowhere a reader went.
+        let path = match self.out_of_a_git_tree(&leaving, &path) {
+            Some(repository) => repository,
+            None => path,
+        };
         let came_from = leaving
             .parent()
             .map(|parent| parent.normalised())
@@ -31863,6 +32076,17 @@ impl App {
             self.panels[index].want_cursor = Some(name);
         }
         self.read_panel(index);
+    }
+
+    /// Where leaving the top of a Git tree for the folder above it really goes: the
+    /// repository. `None` for every other move.
+    fn out_of_a_git_tree(&self, leaving: &VPath, to: &VPath) -> Option<VPath> {
+        let host = leaving.leave()?;
+        if host.in_container() || leaving.inner_path() != "/" {
+            return None;
+        }
+        let reference = self.git_trees.get(host.as_path())?;
+        (host.parent()?.normalised() == to.normalised()).then(|| VPath::local(&reference.repo))
     }
 
     // ── the folders kept to hand (SPEC 02 §11) ──────────────────────────────────────────
@@ -33210,8 +33434,11 @@ impl App {
     /// key that had stopped working.
     fn panel_go(&mut self, index: usize, path: VPath, push_history: bool) -> bool {
         let text = path.to_string();
+        // A Git tree is read through a file of this session's: it is somewhere to go back to
+        // with the panel's own history, and nowhere to remember for tomorrow.
+        let lasting = !Self::in_git_tree(&path);
         if self.panels[index].go(path, push_history) {
-            if push_history {
+            if push_history && lasting {
                 let now = crate::history::now();
                 self.marks.touch(crate::history::FOLDERS, &text, now);
                 // The same moment counts for the frequent folders: going somewhere is what
@@ -33255,7 +33482,7 @@ impl App {
                 Mode::Editor(editor) => edited(&editor.path, editor.name()),
                 Mode::Hex(hex) => edited(&hex.path, hex.name()),
                 Mode::Diff(diff) => format!("{} ↔ {}", diff.left_name, diff.right_name),
-                _ => self.panel().cwd.to_string(),
+                _ => self.place_of(&self.panel().cwd),
             }
         };
         Some(format!("{place} - fcmd"))
@@ -50119,6 +50346,161 @@ abcdefghij
         };
         assert!(pick.rows.iter().any(|r| r.value == "push"));
         assert!(pick.rows.iter().any(|r| r.value == "pull"));
+    }
+
+    /// *Browse a branch*: which keys ask for it and for what, what the frame of the other
+    /// panel then says, and the words for each way it can fail (SPEC 06 §15). Git itself is
+    /// not asked here — the answers are handed in — so this runs where there is none.
+    #[test]
+    fn a_branch_is_asked_for_by_its_row_and_the_other_panel_says_what_it_shows() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "x").unwrap();
+        let mut app = editing_app(dir.path());
+        let asked = |app: &mut App| -> Vec<GitAsk> {
+            app.take_requests()
+                .into_iter()
+                .filter_map(|r| match r {
+                    Request::Git { what, .. } => Some(what),
+                    _ => None,
+                })
+                .collect()
+        };
+        let row_with = |app: &App, text: &str| {
+            (0..app.panels[0].listing.len())
+                .find(|&r| {
+                    app.panels[0]
+                        .listing
+                        .row(r)
+                        .unwrap()
+                        .name_str()
+                        .contains(text)
+                })
+                .unwrap()
+        };
+
+        // On a branch of the branches list, by either key; on a commit of the log too.
+        app.handle_event(Event::GitDone {
+            panel: 0,
+            result: Ok(GitOut::Branches(vec![
+                ("main".into(), true),
+                ("feature/x".into(), false),
+            ])),
+        });
+        app.panels[0].cursor = row_with(&app, "feature/x");
+        for key in ["Shift+F3", "Ctrl+Enter"] {
+            press(&mut app, key);
+            assert_eq!(
+                asked(&mut app),
+                vec![GitAsk::Browse("feature/x".into())],
+                "{key}"
+            );
+        }
+        app.handle_event(Event::GitDone {
+            panel: 0,
+            result: Ok(GitOut::Log(vec![GitCommit {
+                hash: "bbb2222".into(),
+                date: "2026-11-06".into(),
+                author: "M".into(),
+                subject: "second".into(),
+            }])),
+        });
+        app.panels[0].cursor = row_with(&app, "bbb2222");
+        press(&mut app, "Shift+F3");
+        assert_eq!(asked(&mut app), vec![GitAsk::Browse("bbb2222".into())]);
+        // The menu has the row, and with no ref under the cursor the command asks for one.
+        press(&mut app, "F2");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no menu: {:?}", app.mode)
+        };
+        assert!(pick.rows.iter().any(|r| r.value == "browse"));
+        press(&mut app, "Esc");
+        app.goto(VPath::local(dir.path()));
+        app.take_requests();
+        app.run(Command::GitBrowse);
+        assert!(matches!(&app.mode, Mode::Prompt(p) if p.kind == PromptKind::GitBrowse));
+        for c in "v1".chars() {
+            press(&mut app, &c.to_string());
+        }
+        press(&mut app, "Enter");
+        assert_eq!(asked(&mut app), vec![GitAsk::Browse("v1".into())]);
+
+        // The answer opens in the *other* panel, and its frame says what it is.
+        let descriptor = dir.path().join("fcmd@feature-x.gitref");
+        let reference = fcmd_arc::gittree::GitRef {
+            repo: dir.path().join("fcmd"),
+            commit: "a1b2c3d4".repeat(5),
+            name: "feature/x".into(),
+        };
+        app.handle_event(Event::GitDone {
+            panel: 0,
+            result: Ok(GitOut::Tree {
+                descriptor: descriptor.clone(),
+                reference,
+            }),
+        });
+        let root = VPath::local(&descriptor).enter("/");
+        assert_eq!(app.panels[1].cwd, root);
+        assert_eq!(app.panels[0].cwd, VPath::local(dir.path()));
+        assert_eq!(app.active, 0, "the focus stays on the work tree");
+        assert!(app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::Read { panel: 1, .. })));
+        assert_eq!(
+            app.place_of(&root.join("src")),
+            "fcmd@feature/x [a1b2c3d4, read only] /src"
+        );
+        let mut buf = fcmd_ui::Buffer::new(120, 25);
+        crate::render::draw(&mut app, &mut buf);
+        let drawn = buf.to_text();
+        assert!(
+            drawn.contains("fcmd@feature/x [a1b2c3d4, read only] /"),
+            "{drawn}"
+        );
+        // A tree nobody opened in this session is shown by its path, like any container.
+        let stranger = VPath::local(dir.path().join("other@main.gitref")).enter("/");
+        assert_eq!(app.place_of(&stranger), stranger.to_string());
+        assert!(App::in_git_tree(&stranger));
+        assert!(!App::in_git_tree(&VPath::local(dir.path())));
+
+        // Each refusal in its own words.
+        use fcmd_arc::gittree::GitError;
+        for (why, id, arg) in [
+            (GitError::NoGit, "git-no-git", None),
+            (
+                GitError::UnknownRef("nope".into()),
+                "git-no-ref",
+                Some(("ref", "nope")),
+            ),
+            (
+                GitError::BadRef("-x".into()),
+                "git-bad-ref",
+                Some(("ref", "-x")),
+            ),
+        ] {
+            app.handle_event(Event::GitDone {
+                panel: 0,
+                result: Ok(GitOut::NoTree(why)),
+            });
+            let want = match arg {
+                Some((name, value)) => app.i18n.t_args(id, &[(name, value.to_string().into())]),
+                None => app.i18n.t(id),
+            };
+            assert_eq!(app.status, want);
+            assert!(app.status_error, "{id}");
+        }
+        app.handle_event(Event::GitDone {
+            panel: 0,
+            result: Ok(GitOut::NoTree(GitError::NotARepository(
+                dir.path().to_path_buf(),
+            ))),
+        });
+        assert!(app.status_error);
+        assert!(
+            app.status.contains(&dir.path().display().to_string()),
+            "{}",
+            app.status
+        );
     }
 
     /// `ai:` asks the first service; `ai:name:` another; files go only after a dialog that

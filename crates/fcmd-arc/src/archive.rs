@@ -125,6 +125,10 @@ pub struct Archive {
     /// with a compressor that is not here, or one of a set. The index is still good — and
     /// the cache hands such an archive to a program that reads all of it, where there is one.
     beyond: Option<String>,
+    /// One commit of a Git repository, when that is what this is (`gittree`): which one, and
+    /// the submodules in it. Nothing is parsed here and no table is involved — `git` lists
+    /// the tree and `git` hands each file over.
+    git: Option<(crate::gittree::GitRef, Vec<(String, String)>)>,
 }
 
 impl Archive {
@@ -149,6 +153,25 @@ impl Archive {
             path: name.clone(),
             source: e,
         })?;
+        // A descriptor of a Git tree is a container by what it names, not by its own bytes.
+        if let Some(reference) = crate::gittree::GitRef::read(path) {
+            let tree = crate::gittree::index(&reference, limits, cancel)?;
+            let mut archive = Archive {
+                format: None,
+                tool: None,
+                runner: None,
+                source: path.to_path_buf(),
+                stamp: (meta.len(), meta.modified().ok()),
+                entries: tree.entries,
+                by_path: HashMap::new(),
+                children: HashMap::new(),
+                key: None,
+                beyond: None,
+                git: Some((reference, tree.submodules)),
+            };
+            archive.build_tree();
+            return Ok(archive);
+        }
         let mut head = [0u8; 264];
         let read = {
             let mut file = File::open(path).map_err(|e| ArcError::Io {
@@ -232,6 +255,7 @@ impl Archive {
             children: HashMap::new(),
             key: key.map(str::to_string),
             beyond,
+            git: None,
         };
         archive.build_tree();
         Ok(archive)
@@ -316,6 +340,7 @@ impl Archive {
             children: HashMap::new(),
             key: None,
             beyond: None,
+            git: None,
         };
         archive.build_tree();
         Ok(archive)
@@ -430,6 +455,9 @@ impl Archive {
 
     /// What the frame calls it: the format's own name, or the table's.
     pub fn label(&self) -> &str {
+        if self.git.is_some() {
+            return "git";
+        }
         match (&self.format, &self.tool) {
             (Some(format), _) => format.label(),
             (None, Some(tool)) => &tool.name,
@@ -445,6 +473,22 @@ impl Archive {
     /// The table that reads this, when a program on the machine does.
     pub fn tool(&self) -> Option<&Arc<crate::ext::Tool>> {
         self.tool.as_ref()
+    }
+
+    /// The commit this is a tree of, when it is one commit of a Git repository.
+    pub fn git(&self) -> Option<&crate::gittree::GitRef> {
+        self.git.as_ref().map(|(reference, _)| reference)
+    }
+
+    /// The commit a submodule is pinned at, when `inner` is one: a folder of this tree whose
+    /// files are in another repository, and so are not here to be listed.
+    pub fn submodule(&self, inner: &str) -> Option<&str> {
+        let inner = normalise(inner);
+        let (_, submodules) = self.git.as_ref()?;
+        submodules
+            .iter()
+            .find(|(path, _)| *path == inner)
+            .map(|(_, commit)| commit.as_str())
     }
 
     pub fn source(&self) -> &Path {
@@ -846,6 +890,15 @@ impl Archive {
         cancel: &CancelToken,
         progress: &mut dyn FnMut(&str, u64, u64),
     ) -> Result<Report> {
+        if self.git.is_some() {
+            // Git checks every object it reads against its own name; there is no archive
+            // here to have been damaged apart from the repository.
+            return Err(ArcError::Refused {
+                path: self.name(),
+                reason: "a Git tree is not an archive to test: `git fsck` checks a repository"
+                    .to_string(),
+            });
+        }
         let (Some(tool), Some(runner)) = (&self.tool, &self.runner) else {
             return Err(ArcError::External {
                 path: self.name(),
@@ -916,6 +969,9 @@ impl Archive {
                 path: self.name(),
                 entry: format!("{inner} is a directory"),
             });
+        }
+        if let Some((reference, _)) = &self.git {
+            return crate::gittree::copy_out(reference, &inner, out, cancel, progress);
         }
         let Some(format) = self.format else {
             // Nothing in this crate can parse it, so there is nothing to seek into: the

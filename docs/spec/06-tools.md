@@ -1143,7 +1143,8 @@ with an origin of its own and a key bar that says what its keys do there:
   a file new in the index (it stays on disk, untracked), the wastebasket (a job, so the undo
   has it) for an untracked file, nothing for a conflict; the file's log is in the `F2` menu.
 * **Branches** (`:gitbranches`): the local branches, the current one marked. `Enter` on another
-  asks and then runs `git switch`; `F3` is that branch's log.
+  asks and then runs `git switch`; `F3` is that branch's log, and `Shift+F3` its files in the
+  other panel (*Browse a branch*, below).
 * **The log** (`:gitlog`): up to a thousand commits, newest first and kept in git's order (the
   panel is unsorted), one row each — hash, date, author, subject — of the repository, a branch,
   or one file (`--follow`). `Enter` or `F3` shows a commit with `git show --stat --patch`.
@@ -1154,6 +1155,58 @@ commit, and `F8` the other of the two lists; the quick view beside either asks g
 and shows the answer only if it is still for the row under the cursor. `Alt+F1`/`Alt+F2` list
 **Git** among the panels when the panel's folder is in a repository (the place worker found a
 `Repo` for it), and choosing it opens the log on that side.
+
+**Browse a branch** (`git.browse`; `Shift+F3` or `Ctrl+Enter` on a row of the branches list
+or of the log; *Browse a branch, a tag or a commit…* in the git menu, which asks for the ref
+when the row does not name one): the files of a branch, a tag or a commit in the **other**
+panel, read only, without checking it out — the panel the key was pressed in keeps the work
+tree, so the two can be compared side by side.
+
+* **It is a container, not a scheme.** The ref is resolved once, on the worker, with
+  `git rev-parse --verify --quiet <ref>^{commit}` (which peels a tag and refuses a name that
+  is not a commit), and a **descriptor** is written into a folder of the session's own under
+  `fcmd-sql-<pid>`: `<repository>@<ref>.gitref`, four lines — a magic line, the top of the
+  work tree (the repository itself when it is bare), the commit's full hash, the ref as it
+  was asked. The panel then goes to `<descriptor>!/`, which is the path of an archive
+  (SPEC 04 §4), and `fcmd-arc` reads a descriptor as one: the index is one run of
+  `git ls-tree -r -t -z --long <commit>`, an entry's bytes are
+  `git cat-file blob <commit>:<path>`, and the targets of the links come from one
+  `git cat-file --batch`. So everything that works inside an archive works here with no code
+  of its own — the listing, `F3`, the quick view, `F5` out through the job engine with its
+  progress and its `Esc`, find by name, the comparison of the two panels, the comparison of
+  two files — and a path of the kind `git://repo@ref/path` was not added because it would
+  have needed a provider, a job filesystem and a fetch of its own to do the same.
+* **How git is run**: as a program, never through a shell, `git -C <repository>` with every
+  name an argument of its own, nothing on its standard input, `GIT_TERMINAL_PROMPT=0` and
+  `GIT_OPTIONAL_LOCKS=0`. This is the same function the rest of the git tools now run git
+  through (`fcmd_arc::gittree::run`). A ref that is empty, starts with `-` or holds a
+  control character is refused before git is asked; from then on git is only ever given the
+  hash, and a descriptor whose commit line is not forty or sixty-four hex digits, or whose
+  repository is not an absolute path, is not a descriptor.
+* **What the tree shows**: a blob is a file, with the executable bit git recorded (`100755`)
+  and its size; mode `120000` is a link with its target; a tree is a folder; a gitlink — a
+  submodule — is a folder that lists empty, and the listing says it is a submodule at the
+  commit it is pinned to and that its files are in another repository. Every entry carries
+  the commit's time, since git keeps none per file. The bytes are the blob's: no line-ending
+  conversion, no filter, so a file kept in Git LFS is its pointer. The guard on the number of
+  entries (SPEC 04 §4) applies; the ones on the unpacked size and the ratio do not, because
+  listing a tree unpacks nothing.
+* **Read only.** `F4`, `Shift+F4`, `F6`, `F7`, `F8`, the attributes, wipe, links, the
+  multi-rename and the descriptions are refused in such a panel before any dialog opens, with
+  one sentence; anything that would rebuild the container some other way — a copy into it
+  from the other panel, a save from an editor — is refused where the rebuild would start,
+  with the same sentence, and `fcmd-arc`'s rebuild refuses a descriptor by itself.
+  *Test archive* answers that a Git tree is not an archive to test.
+* **The frame** shows `<repository>@<ref> [<short hash>, read only] <path>` in place of the
+  descriptor's path, for the trees opened in this session; the window title says the same.
+  The commit is fixed when the panel opens: the branch moving on does not change what the
+  panel shows. `..` at the top of the tree goes to the repository, not to the folder the
+  descriptor is kept in, and the tree is left out of the folder history and of the frequent
+  folders — the panel's own back and forward keep it — since its path is gone with the
+  session.
+* **Errors**, each in its own words and in the reader's language: `git` is not installed;
+  the folder is in no repository; git knows no branch, tag or commit by that name; the name
+  is not one a ref can have. Anything else is git's own message.
 
 `Blame` opens in the viewer. **Pull** and **push** run in the background with
 `GIT_TERMINAL_PROMPT=0` and, unless one is set, `GIT_SSH_COMMAND="ssh -o BatchMode=yes"`, so

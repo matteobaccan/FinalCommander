@@ -745,8 +745,35 @@ From the log and the branches panels the rest of git is a function key away:
 | `F6` | push |
 | `F7` | commit what is staged, after asking for the message |
 | `F8` | the branches (from the log), or the log (from the branches) |
+| `Shift+F3` | the files of the branch, or of the commit, in the other panel — see below; `Ctrl+Enter` is the same |
 
 `Ctrl+Q` beside either shows the same thing as `F3`, for the row under the cursor, as you move.
+
+**Another branch beside the one you are on.** `Shift+F3` on a row of the branches list — or
+of the log — opens that branch, or that commit, in the *other* panel as folders and files,
+without checking it out: the panel you are in keeps the work tree, and the two stand side by
+side. *Browse a branch, a tag or a commit…* in the git menu (`Ctrl+Alt+G`, command
+`git.browse`) does the same from any folder of a repository and asks which: a branch, a tag,
+or a commit by its hash.
+
+The frame says the repository, the ref, the commit and that it is **read only** —
+`fcmd@main [a1b2c3d4, read only] /src`. The commit is the one the ref named when the panel
+opened, and it stays that commit if the branch moves on meanwhile; open it again for the new
+one. In there you walk the folders, `F3` and `Ctrl+Q` read a file as it is in that commit,
+`F5` copies files and folders out to the disk, `Alt+F7` finds by name, and the two panels
+compare like any two folders (*Commands → Compare folders*) — with the work tree in the other
+one, that is what the branch has and you have not. A file that may be run is shown as one, a
+link shows where it points, and a submodule is a folder that opens empty and says its files
+are in another repository. Every file carries the commit's time: git keeps no time per file.
+
+Nothing in it can be changed. `F4`, `F6`, `F7`, `F8`, the attributes and a copy *into* it
+are refused, each with the same sentence: it is a commit shown as files. `..` at the top
+goes back to the repository. What is read is what was committed, byte for byte: line endings
+are not converted, and a file kept in Git LFS is the pointer that was committed for it.
+
+If it cannot be opened the status line says which it was: the folder is in no repository,
+git knows no branch, tag or commit by that name, the name is not one a ref can have (nothing
+starting with `-` is), or `git` is not installed.
 
 **Pull** and **push** run in the background and the status line says what git said at the
 end. They never stop to ask for a password on this screen: one that needs it fails and says so

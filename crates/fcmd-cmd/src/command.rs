@@ -410,6 +410,9 @@ pub enum Command {
     ToolGit,
     /// A commit message drafted by the language model from what is staged.
     GitCommitDraft,
+    /// Another branch, a tag or a commit in the other panel, as files to read — without
+    /// checking it out (SPEC 06 §15).
+    GitBrowse,
     /// Ask the language model what the marked block, or the screen, is — and, in the panels,
     /// why the command that has just failed did.
     AiExplain,
@@ -898,6 +901,7 @@ impl Command {
             Command::ToolTaskList,
             Command::ToolGit,
             Command::GitCommitDraft,
+            Command::GitBrowse,
             Command::AiExplain,
             Command::AiRewrite,
             Command::AiRename,
@@ -1262,6 +1266,7 @@ impl Command {
             Command::ToolTaskList => "tool.task.list".into(),
             Command::ToolGit => "tool.git".into(),
             Command::GitCommitDraft => "git.commit.draft".into(),
+            Command::GitBrowse => "git.browse".into(),
             Command::AiExplain => "ai.explain".into(),
             Command::AiRewrite => "ai.rewrite".into(),
             Command::AiRename => "ai.rename".into(),
@@ -1586,6 +1591,7 @@ impl Command {
             ("tool.task.list", _) => Command::ToolTaskList,
             ("tool.git", _) => Command::ToolGit,
             ("git.commit.draft", _) => Command::GitCommitDraft,
+            ("git.browse", _) => Command::GitBrowse,
             ("ai.explain", _) => Command::AiExplain,
             ("ai.rewrite", _) => Command::AiRewrite,
             ("ai.rename", _) => Command::AiRename,

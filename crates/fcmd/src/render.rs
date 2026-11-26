@@ -327,7 +327,7 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         // A list panel says what it is a list of; a directory panel says where it is.
         let path = match &panel.temp {
             Some(list) => list.title.clone(),
-            None => panel.cwd.to_string(),
+            None => app.place_of(&panel.cwd),
         };
         let status = app.cfg.panel.status_line.then(|| cursor_line(app, panel));
         let message = panel

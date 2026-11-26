@@ -216,6 +216,7 @@ Three findings that are not gaps against anybody:
 | A right margin in the editor; a ruler in the viewer | Midnight Commander | S | yes | The editor's line numbers are in (`Alt+N`) |
 | Wrap while typing, a block aligned or justified; boxes drawn | Midnight Commander, FAR, far2l | S each | yes | FAR ships them as plugins (`align`, `autowrap`, `drawline`). The case of a block (`Alt+C`) and a paragraph laid out to a width (`Alt+P`) are in |
 | Git's changes in the editor's margin | far2l | M | yes | The git panel and blame are in |
+| The browsed branch, further: remote branches and tags listed to choose from rather than typed; a submodule entered through its own repository; `F3` on two rows as the diff of a file between two refs; a tree kept across sessions (its descriptor lives in the session's temporary folder); Git LFS files fetched rather than shown as pointers; names that are not UTF-8 | — | S each | yes | *Browse a branch* is in (SPEC 06 §15): a branch, a tag or a commit read only in the other panel |
 | Spell check | Midnight Commander | M | as a program (`aspell`, `hunspell`) | |
 | A scratchpad kept between runs | far2l | S | yes | |
 

@@ -132,6 +132,13 @@ pub fn rebuild(
     if plan.is_empty() {
         return Ok(Written::default());
     }
+    // One commit of a Git repository is history, and history is not edited from a panel.
+    if crate::gittree::named_like(path) {
+        return Err(ArcError::Refused {
+            path: path.display().to_string(),
+            reason: "a Git tree is read only".to_string(),
+        });
+    }
     let format =
         Format::of_path(path).ok_or_else(|| ArcError::Unknown(path.display().to_string()))?;
     if !format.writable() {

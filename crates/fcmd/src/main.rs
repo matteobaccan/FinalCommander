@@ -5291,30 +5291,29 @@ fn git_answer_dir() -> std::path::PathBuf {
 
 /// Run git in `cwd` and say what it said, its own error included when it failed.
 fn git(cwd: &std::path::Path, args: &[&str]) -> Result<String, String> {
-    let mut command = std::process::Command::new("git");
-    command
-        .arg("-C")
-        .arg(cwd)
-        .args(args)
-        .stdin(std::process::Stdio::null())
-        // Never a question on the terminal fcmd is drawing on: a push or a pull that needs a
-        // password fails and says so, and the help says to run it in the terminal instead.
-        // `ssh` asks on `/dev/tty` whatever stdin is, so it is told not to ask at all —
-        // unless whoever runs fcmd has set their own ssh command, which is theirs to keep.
-        .env("GIT_TERMINAL_PROMPT", "0");
-    if std::env::var_os("GIT_SSH_COMMAND").is_none() {
-        command.env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes");
-    }
-    let out = command.output().map_err(|e| format!("git: {e}"))?;
-    if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
-        return Err(if err.is_empty() {
-            format!("git {}: {}", args.join(" "), out.status)
-        } else {
-            err
-        });
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    // The one place that starts git for an answer: no shell, nothing on its standard input,
+    // and never a question on the terminal fcmd is drawing on — a push or a pull that needs
+    // a password fails and says so, and the help says to run it in the terminal instead.
+    fcmd_arc::gittree::run(cwd, args, None, &CancelToken::new())
+        .map(|out| String::from_utf8_lossy(&out).into_owned())
+        .map_err(|e| e.to_string())
+}
+
+/// *Browse a branch…*: the commit a ref names, and the descriptor a panel reads its tree
+/// through, written into a folder of this session's that is removed with it. The ref is
+/// resolved here and once, so what the panel shows is this commit wherever the branch goes.
+fn git_browse(cwd: &std::path::Path, reference: &str) -> Result<app::GitOut, String> {
+    let reference = match fcmd_arc::gittree::resolve(cwd, reference) {
+        Ok(reference) => reference,
+        Err(why) => return Ok(app::GitOut::NoTree(why)),
+    };
+    let descriptor = reference
+        .write_in(&git_answer_dir())
+        .map_err(|e| e.to_string())?;
+    Ok(app::GitOut::Tree {
+        descriptor,
+        reference,
+    })
 }
 
 /// `file` as git names it inside the repository at `root`: relative, with `/`. The file's
@@ -5468,6 +5467,11 @@ fn last_line_of(text: &str) -> String {
 /// folder and are removed with it.
 fn run_git(cwd: &std::path::Path, what: &app::GitAsk) -> Result<app::GitOut, String> {
     use app::{GitAsk, GitOut};
+    // Asked before the work tree's top is: a repository without one can still be browsed,
+    // and a folder that is in none gets its own answer rather than git's.
+    if let GitAsk::Browse(reference) = what {
+        return git_browse(cwd, reference);
+    }
     // git names the top with `/` on Windows as well (`D:/repo`), and a path half in one
     // separator and half in the other is one the wastebasket there refuses.
     let top = git(cwd, &["rev-parse", "--show-toplevel"])?;
@@ -5691,6 +5695,7 @@ fn run_git(cwd: &std::path::Path, what: &app::GitAsk) -> Result<app::GitOut, Str
             git(&root, &["switch", branch])?;
             Ok(GitOut::Done(branch.clone()))
         }
+        GitAsk::Browse(reference) => git_browse(cwd, reference),
         GitAsk::Blame(file) => {
             let name = file
                 .file_name()
@@ -10009,5 +10014,368 @@ place = "diagonally"
             0,
             "and nothing is written"
         );
+    }
+
+    /// A small real repository made here: `main` with a folder, a file that may be run and a
+    /// link, and `other`, one commit on, where the readme differs and `src/new.rs` is new.
+    /// `None` without `git` on the machine — browsing a branch needs it, and so does its test.
+    fn a_repository_with_two_branches() -> Option<tempfile::TempDir> {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let run = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .args(args)
+                .output()
+        };
+        if run(&["init", "-q", "-b", "main"]).is_err() {
+            return None;
+        }
+        run(&["config", "user.email", "t@example.com"]).unwrap();
+        run(&["config", "user.name", "T"]).unwrap();
+        run(&["config", "core.autocrlf", "false"]).unwrap();
+        run(&["config", "commit.gpgsign", "false"]).unwrap();
+        std::fs::write(root.join("readme.md"), "# on main\n").unwrap();
+        std::fs::create_dir(root.join("src")).unwrap();
+        std::fs::write(root.join("src/lib.rs"), "pub fn one() {}\n").unwrap();
+        std::fs::write(root.join("run.sh"), "#!/bin/sh\necho hi\n").unwrap();
+        run(&["add", "."]).unwrap();
+        // The executable bit and the link are written into the index as git records them: a
+        // work tree cannot be trusted to hold either on every system the tests run on.
+        run(&["update-index", "--chmod=+x", "run.sh"]).unwrap();
+        let blob = {
+            use std::io::Write as _;
+            let mut child = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .args(["hash-object", "-w", "--stdin"])
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .spawn()
+                .unwrap();
+            child.stdin.take().unwrap().write_all(b"readme.md").unwrap();
+            let out = child.wait_with_output().unwrap();
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        };
+        run(&[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            &format!("120000,{blob},latest"),
+        ])
+        .unwrap();
+        run(&["commit", "-q", "-m", "first"]).unwrap();
+        run(&["switch", "-q", "-c", "other"]).unwrap();
+        std::fs::write(root.join("readme.md"), "# on the other branch\n").unwrap();
+        std::fs::write(root.join("src/new.rs"), "pub fn two() {}\n").unwrap();
+        run(&["add", "readme.md", "src/new.rs"]).unwrap();
+        run(&["commit", "-q", "-m", "second"]).unwrap();
+        run(&["switch", "-q", "main"]).unwrap();
+        Some(dir)
+    }
+
+    /// Answer what the app asked git, with git itself, then serve whatever that set going.
+    fn serve_git(app: &mut App) {
+        for request in app.take_requests() {
+            if let Request::Git { panel, cwd, what } = request {
+                let result = run_git(&cwd, &what);
+                app.handle_event(Event::GitDone { panel, result });
+            }
+        }
+        serve(app);
+    }
+
+    /// The names a panel shows, in name order whatever the panel sorts by.
+    fn names_in(app: &App, side: usize) -> Vec<String> {
+        let listing = &app.panels[side].listing;
+        let mut names: Vec<String> = (0..listing.len())
+            .filter_map(|i| listing.row(i))
+            .map(|e| e.name_str().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    /// Put the cursor of a panel on the row called `name`.
+    fn cursor_on(app: &mut App, side: usize, name: &str) {
+        let row = (0..app.panels[side].listing.len())
+            .find(|i| {
+                app.panels[side]
+                    .listing
+                    .row(*i)
+                    .is_some_and(|e| e.name_str().trim_start_matches(['*', ' ']) == name)
+            })
+            .unwrap_or_else(|| panic!("{name} is listed: {:?}", names_in(app, side)));
+        app.panels[side].cursor = row;
+    }
+
+    /// Another branch in the other panel, from the branches list: listed, read with `F3`,
+    /// copied out with `F5`, never written, and left for the repository with `..` — through
+    /// the real git, the real provider and the real job engine (SPEC 06 §15).
+    #[test]
+    fn another_branch_is_browsed_beside_the_work_tree_and_is_never_written() {
+        let Some(repo) = a_repository_with_two_branches() else {
+            return;
+        };
+        let root = repo.path();
+        let elsewhere = tempfile::tempdir().unwrap();
+        let out = elsewhere.path().join("out");
+        std::fs::create_dir(&out).unwrap();
+        let mut app = app_on(root, root);
+        serve(&mut app);
+
+        // The branches list, the cursor on the branch that is not checked out, `Shift+F3`.
+        app.handle_event(Event::GitDone {
+            panel: 0,
+            result: run_git(root, &app::GitAsk::Branches),
+        });
+        assert_eq!(app.panels[0].temp_origin(), Some(":gitbranches"));
+        cursor_on(&mut app, 0, "other");
+        key(&mut app, "Shift+F3");
+        serve_git(&mut app);
+
+        // The other panel is the branch; this one still lists the branches of the work tree.
+        let tree = app.panels[1].cwd.clone();
+        assert!(tree.in_container(), "{}: {}", tree, app.status);
+        assert!(!app.status_error, "{}", app.status);
+        assert_eq!(app.panels[0].temp_origin(), Some(":gitbranches"));
+        assert_eq!(
+            names_in(&app, 1),
+            ["..", "latest", "readme.md", "run.sh", "src"]
+        );
+        // The frame names the repository and the branch, and says it cannot be written.
+        let place = app.place_of(&tree);
+        let repo_name = root.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(
+            place.starts_with(&format!("{repo_name}@other [")),
+            "{place}"
+        );
+        assert!(place.contains("read only"), "{place}");
+        // What git records about a file is on its row: that it may be run, where a link goes.
+        let row = |app: &App, name: &str| {
+            let listing = &app.panels[1].listing;
+            (0..listing.len())
+                .filter_map(|i| listing.row(i))
+                .find(|e| e.name_str() == name)
+                .cloned()
+                .unwrap()
+        };
+        assert!(row(&app, "run.sh")
+            .flags
+            .contains(fcmd_core::EntryFlags::EXECUTABLE));
+        assert!(!row(&app, "readme.md")
+            .flags
+            .contains(fcmd_core::EntryFlags::EXECUTABLE));
+        let link = row(&app, "latest");
+        assert_eq!(link.kind, fcmd_core::EntryKind::Symlink);
+        assert_eq!(
+            link.link_target.as_deref(),
+            Some(std::ffi::OsStr::new("readme.md"))
+        );
+
+        // Over to it. `F3` reads the other branch's readme, not the one on disk.
+        key(&mut app, "Tab");
+        assert_eq!(app.active, 1);
+        cursor_on(&mut app, 1, "readme.md");
+        key(&mut app, "F3");
+        serve(&mut app);
+        let shown = {
+            let viewer = app.mode.viewer_mut().expect("the viewer");
+            (viewer.path.display_name(), viewer.len())
+        };
+        assert_eq!(shown, ("readme.md".to_string(), 22));
+        key(&mut app, "Esc");
+        assert_eq!(
+            std::fs::read(root.join("readme.md")).unwrap(),
+            b"# on main\n"
+        );
+
+        // Into the folder, where the file only the other branch has is.
+        cursor_on(&mut app, 1, "src");
+        key(&mut app, "Enter");
+        serve(&mut app);
+        assert_eq!(names_in(&app, 1), ["..", "lib.rs", "new.rs"]);
+        key(&mut app, "Home");
+        key(&mut app, "Enter");
+        serve(&mut app);
+        assert_eq!(app.panels[1].cwd, tree);
+
+        // Every key that would change a file is refused, with the one reason, and no dialog.
+        let refusal = app.i18n.t("git-tree-read-only");
+        cursor_on(&mut app, 1, "readme.md");
+        for command in [
+            fcmd_cmd::Command::FileEdit,
+            fcmd_cmd::Command::FileEditNew,
+            fcmd_cmd::Command::FileMove,
+            fcmd_cmd::Command::FileMkdir,
+            fcmd_cmd::Command::FileDelete,
+            fcmd_cmd::Command::FileAttributes,
+        ] {
+            app.set_status(String::new());
+            app.run(command);
+            assert_eq!(app.status, refusal, "{command:?}");
+            assert!(app.status_error, "{command:?}");
+            assert!(app.mode.is_normal(), "{command:?} opened something");
+            assert!(app.take_requests().is_empty(), "{command:?} asked for work");
+        }
+
+        // `F5` copies out to the folder in the other panel: a file, a folder, the file that
+        // may be run.
+        key(&mut app, "Tab");
+        app.goto(VPath::local(&out));
+        serve(&mut app);
+        key(&mut app, "Tab");
+        for name in ["readme.md", "src", "run.sh"] {
+            cursor_on(&mut app, 1, name);
+            key(&mut app, "F5");
+            key(&mut app, "Enter");
+            serve(&mut app);
+            serve(&mut app);
+            assert!(!app.status_error, "{name}: {}", app.status);
+        }
+        assert_eq!(
+            std::fs::read(out.join("readme.md")).unwrap(),
+            b"# on the other branch\n"
+        );
+        assert_eq!(
+            std::fs::read(out.join("src").join("new.rs")).unwrap(),
+            b"pub fn two() {}\n"
+        );
+        assert_eq!(
+            std::fs::read(out.join("src").join("lib.rs")).unwrap(),
+            b"pub fn one() {}\n"
+        );
+        assert_eq!(
+            std::fs::read(out.join("run.sh")).unwrap(),
+            b"#!/bin/sh\necho hi\n"
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(out.join("run.sh"))
+                .unwrap()
+                .permissions()
+                .mode();
+            assert_ne!(mode & 0o111, 0, "the copy may still be run: {mode:o}");
+        }
+        // Nothing of it reached the work tree, which is still `main`.
+        assert!(!root.join("src").join("new.rs").exists());
+
+        // The other way is refused where the tree would have to be written: `F5` on a file
+        // of the folder, with the branch as the destination.
+        key(&mut app, "Tab");
+        serve(&mut app);
+        cursor_on(&mut app, 0, "run.sh");
+        key(&mut app, "F5");
+        key(&mut app, "Enter");
+        assert_eq!(app.status, refusal);
+        assert!(app.status_error);
+        assert!(app
+            .take_requests()
+            .iter()
+            .all(|r| !matches!(r, Request::ArcRebuild { .. } | Request::Job { .. })));
+        if !app.mode.is_normal() {
+            key(&mut app, "Esc");
+        }
+
+        // `..` at the top of the tree is the repository, not the folder the descriptor is in.
+        key(&mut app, "Tab");
+        assert_eq!(app.panels[1].cwd, tree);
+        key(&mut app, "Home");
+        key(&mut app, "Enter");
+        serve(&mut app);
+        assert!(!app.panels[1].cwd.in_container());
+        assert_eq!(
+            app.panels[1].cwd.as_path().canonicalize().unwrap(),
+            root.canonicalize().unwrap()
+        );
+    }
+
+    /// *Browse a branch…* asks for the ref, and each way it can fail says which it was: a
+    /// name git does not know, a name that would be an option, a folder that is in no
+    /// repository. The commit is the one the ref named when it was asked.
+    #[test]
+    fn browsing_a_ref_asks_for_it_and_says_plainly_why_it_cannot() {
+        let Some(repo) = a_repository_with_two_branches() else {
+            return;
+        };
+        let root = repo.path();
+        let mut app = app_on(root, root);
+        serve(&mut app);
+        let browse = |app: &mut App, reference: &str| {
+            app.run(fcmd_cmd::Command::GitBrowse);
+            match &mut app.mode {
+                app::Mode::Prompt(prompt) => {
+                    assert_eq!(prompt.kind, app::PromptKind::GitBrowse);
+                    prompt.text = reference.to_string();
+                }
+                _ => panic!("the ref is asked for: {}", app.status),
+            }
+            key(app, "Enter");
+            serve_git(app);
+        };
+
+        browse(&mut app, "no-such-branch");
+        assert!(app.status_error);
+        assert_eq!(
+            app.status,
+            app.i18n
+                .t_args("git-no-ref", &[("ref", "no-such-branch".into())])
+        );
+        assert!(!app.panels[1].cwd.in_container());
+
+        // Refused before git is asked: nothing that starts with `-` is a ref.
+        browse(&mut app, "--upload-pack=x");
+        assert!(app.status_error);
+        assert_eq!(
+            app.status,
+            app.i18n
+                .t_args("git-bad-ref", &[("ref", "--upload-pack=x".into())])
+        );
+        assert!(!app.panels[1].cwd.in_container());
+
+        // An empty answer is a change of mind.
+        browse(&mut app, "  ");
+        assert!(app.mode.is_normal());
+        assert!(!app.panels[1].cwd.in_container());
+
+        // A commit by its hash, and the tree stays that commit when the branch moves on.
+        let head = git(root, &["rev-parse", "main"])
+            .unwrap()
+            .trim()
+            .to_string();
+        browse(&mut app, &head[..12]);
+        assert!(!app.status_error, "{}", app.status);
+        let tree = app.panels[1].cwd.clone();
+        assert!(tree.in_container(), "{}", app.status);
+        assert!(app.place_of(&tree).contains(&head[..8]));
+        std::fs::write(root.join("readme.md"), "# main, later\n").unwrap();
+        git(root, &["commit", "-q", "-a", "-m", "third"]).unwrap();
+        let cache = fcmd_arc::Cache::new(Default::default());
+        let (archive, inner) = cache
+            .open_in(&tree.join("readme.md"), &CancelToken::new())
+            .unwrap();
+        assert_eq!(
+            archive.read(&inner, &CancelToken::new()).unwrap(),
+            b"# on main\n"
+        );
+
+        // From a folder that is in no repository — unless the temporary directory is itself
+        // inside one, where there is no such folder to stand in.
+        let plain = tempfile::tempdir().unwrap();
+        if git(plain.path(), &["rev-parse", "--git-dir"]).is_err() {
+            app.goto(VPath::local(plain.path()));
+            serve(&mut app);
+            browse(&mut app, "main");
+            assert!(app.status_error);
+            assert_eq!(
+                app.status,
+                app.i18n.t_args(
+                    "git-no-repo",
+                    &[("path", plain.path().display().to_string().into())]
+                )
+            );
+        }
     }
 }

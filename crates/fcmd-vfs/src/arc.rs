@@ -50,6 +50,10 @@ impl ArcVfs {
         {
             return true;
         }
+        // One commit of a Git repository, named by a descriptor (SPEC 06 §15).
+        if fcmd_arc::gittree::named_like(path) {
+            return true;
+        }
         path.file_name()
             .is_some_and(|name| fcmd_arc::claimed_by_a_tool(&name.to_string_lossy()))
     }
@@ -151,6 +155,31 @@ impl Vfs for ArcVfs {
         tokio::task::spawn_blocking(move || ArcVfs { cache }.blocking_stat(&owned))
             .await
             .map_err(|e| Error::Other(format!("stat task failed: {e}")))?
+    }
+
+    /// The one directory of a container that is not all there: a submodule in a Git tree,
+    /// which is a folder whose files are in another repository. It is listed as the empty
+    /// folder it is here, and says why it is empty rather than looking like one.
+    async fn list_dir(&self, path: &VPath, cancel: CancelToken) -> Result<crate::Dir> {
+        let owned = path.clone();
+        let cache = self.cache.clone();
+        tokio::task::spawn_blocking(move || {
+            let vfs = ArcVfs { cache };
+            let entries = vfs.list_blocking(&owned, &cancel)?;
+            let (archive, inner) = vfs.open_in(&owned, &cancel)?;
+            Ok(match archive.submodule(&inner) {
+                Some(commit) => crate::Dir::partial(
+                    entries,
+                    format!(
+                        "a submodule at commit {}: its files are in another repository",
+                        &commit[..commit.len().min(8)]
+                    ),
+                ),
+                None => crate::Dir::whole(entries),
+            })
+        })
+        .await
+        .map_err(|e| Error::Other(format!("listing task failed: {e}")))?
     }
 }
 
@@ -286,10 +315,75 @@ mod tests {
         assert!(error.to_string().contains("copied here first"), "{error}");
     }
 
+    /// One commit of a repository made here, through its descriptor — which needs `git` on
+    /// the machine, as browsing a branch does; without one there is nothing to say.
+    #[tokio::test]
+    async fn a_git_tree_lists_like_an_archive_and_a_submodule_says_what_it_is() {
+        let repo = tempfile::tempdir().unwrap();
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(repo.path())
+                .args(args)
+                .output()
+        };
+        if git(&["init", "-q", "-b", "main"]).is_err() {
+            return;
+        }
+        git(&["config", "user.email", "t@example.com"]).unwrap();
+        git(&["config", "user.name", "T"]).unwrap();
+        git(&["config", "commit.gpgsign", "false"]).unwrap();
+        std::fs::create_dir(repo.path().join("src")).unwrap();
+        std::fs::write(repo.path().join("src").join("a.txt"), "aaaa").unwrap();
+        git(&["add", "."]).unwrap();
+        git(&[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            "160000,1234567890123456789012345678901234567890,vendor",
+        ])
+        .unwrap();
+        git(&["commit", "-q", "-m", "first"]).unwrap();
+
+        let scratch = tempfile::tempdir().unwrap();
+        let descriptor = fcmd_arc::gittree::resolve(repo.path(), "main")
+            .expect("main is a commit")
+            .write_in(scratch.path())
+            .unwrap();
+        let vfs = ArcVfs::new(Limits::default());
+        let root = VPath::local(&descriptor).enter("/");
+
+        let top = vfs.list_dir(&root, CancelToken::new()).await.unwrap();
+        assert!(top.complete);
+        let names: Vec<String> = top
+            .entries
+            .iter()
+            .map(|e| e.name_str().into_owned())
+            .collect();
+        assert_eq!(names, ["..", "src", "vendor"]);
+        assert_eq!(vfs.stat(&root.join("src/a.txt")).await.unwrap().size, 4);
+        assert_eq!(
+            vfs.read_blocking(&root.join("src/a.txt"), &CancelToken::new())
+                .unwrap(),
+            b"aaaa"
+        );
+
+        // The submodule opens, empty but for the way out, and says why it is empty.
+        let inside = vfs
+            .list_dir(&root.join("vendor"), CancelToken::new())
+            .await
+            .unwrap();
+        assert_eq!(inside.entries.len(), 1);
+        assert!(!inside.complete);
+        let note = inside.note.unwrap_or_default();
+        assert!(note.contains("submodule at commit 12345678"), "{note}");
+    }
+
     #[test]
     fn what_looks_like_an_archive_is_decided_by_name() {
         assert!(ArcVfs::looks_like_archive(Path::new("/a/src.tar.gz")));
         assert!(ArcVfs::looks_like_archive(Path::new("/a/app.jar")));
         assert!(!ArcVfs::looks_like_archive(Path::new("/a/notes.txt")));
+        assert!(ArcVfs::looks_like_archive(Path::new("/a/repo@main.gitref")));
     }
 }

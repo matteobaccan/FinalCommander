@@ -264,6 +264,9 @@ impl Command {
             Command::ToolTaskList => "the running processes, as a panel",
             Command::ToolGit => "the repository: what changed, the log, blame, branches",
             Command::GitCommitDraft => "commit what is staged, with a message the model drafted",
+            Command::GitBrowse => {
+                "another branch, a tag or a commit in the other panel, read only, not checked out"
+            }
             Command::AiExplain => {
                 "ask the model what the marked block or the screen is, or why the last command failed"
             }
