@@ -2396,14 +2396,12 @@ fn draw_quick_view(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
 
     // The name on the frame's foot, as a panel's totals are, so the preview itself is all
     // the room the rows get.
-    let rows = if drew {
-        Vec::new()
-    } else {
-        viewer.rows(body.w, body.h)
-    };
-    for (n, row) in rows.iter().enumerate() {
-        let text = fcmd_ui::truncate_cols(&row.text, body.w as usize);
-        buf.put_str(body.x, body.y + n as u16, &text, base, body.w);
+    // The viewer's own colours and the same drawing as `F3`: the theme, the syntax, a
+    // rendered page's runs — the quick view is the viewer in a smaller frame.
+    if !drew {
+        let ink = app.theme.viewer();
+        buf.fill(body, ' ', ink);
+        draw_viewer_rows(app, &mut viewer, buf, body, ink);
     }
     if let Some(at) = pane {
         draw_structure(app, &mut viewer, buf, at);
@@ -2779,6 +2777,145 @@ fn wrap_lines(text: &str, width: usize) -> Vec<String> {
     out
 }
 
+/// The rows of a viewer in `body`, with everything F3 colours them with: the syntax, the
+/// runs of a rendered page, the bytes of a dump, a table's cursor and marks, the search hits.
+/// The viewer and the quick view both draw through it, so the two look the same.
+fn draw_viewer_rows(
+    app: &App,
+    viewer: &mut fcmd_view::Viewer,
+    buf: &mut Buffer,
+    body: Rect,
+    base: Style,
+) {
+    // Content. `Viewer.Text.Selected` marks a search hit — its own role in FAR's palette,
+    // which the panel's background had no business being half of.
+    let hit = app
+        .theme
+        .fg_on("viewer.selected.fg", "viewer.selected.bg")
+        .bold();
+    let rows = viewer.rows(body.w, body.h);
+    // The syntax, where the file is one we recognise and the mode is the one that shows it
+    // as text. What the first row starts inside is read from the lines above it, a bounded
+    // stretch of them, so a block comment opened above the window — a form's binary data —
+    // keeps its colour when its first line scrolls off.
+    let syntax = (app.cfg.ui.syntax && viewer.mode == fcmd_view::Mode::Text)
+        .then(|| fcmd_syntax::of_name(&viewer.path.display_name()))
+        .flatten();
+    let mut state = match syntax {
+        Some(syntax) => viewer.syntax_state_at_top(syntax),
+        None => fcmd_syntax::State::default(),
+    };
+    // The lines down the blocks of a Pascal unit or a form, as the Delphi IDE draws them.
+    let guides = syntax.and_then(|syntax| viewer.block_guides(syntax, body.h));
+    let guide = app.theme.fg_on("syntax.guide", "viewer.bg");
+    // In a table the row under the cursor is drawn as a panel draws its cursor, and a marked
+    // row in the colour a panel marks a file with: the same two things, said the same way.
+    let table = viewer.mode == fcmd_view::Mode::Table;
+    let cursor_bg = app.theme.color("panel.cursor.bg");
+    let cursor_fg = app.theme.color("panel.cursor.fg");
+    let marked_fg = app.theme.color("selected.fg");
+    for (i, row) in rows.iter().enumerate() {
+        let y = body.y + i as u16;
+        let (on_cursor, marked) = if table {
+            viewer.table_row_state(i)
+        } else {
+            (false, false)
+        };
+        let mut style = base;
+        if on_cursor {
+            style = Style::new(cursor_fg, cursor_bg);
+        }
+        if marked {
+            style = style.with_fg(marked_fg);
+        }
+        if on_cursor || marked {
+            buf.put_str(body.x, y, &" ".repeat(body.w as usize), style, body.w);
+        }
+        buf.put_str(body.x, y, &row.text, style, body.w);
+        // A rendered row carries its own runs: the Markdown view decided what a heading, a
+        // bullet and a table's frame are when it laid the line out, and re-scanning the text
+        // it produced would only guess at it again.
+        for span in &row.spans {
+            let Some(text) = row.text.get(span.start..span.end) else {
+                continue;
+            };
+            if text.is_empty() {
+                continue;
+            }
+            let x = row.text[..span.start]
+                .chars()
+                .filter_map(unicode_width::UnicodeWidthChar::width)
+                .sum::<usize>() as u16;
+            if x >= body.w {
+                continue;
+            }
+            let mut style = app.theme.styled(span.class.theme_key(), base);
+            style.bold |= span.bold;
+            buf.put_str(body.x + x, y, text, style, body.w - x);
+        }
+        // The bytes and the instructions get colours of their own, from the same theme keys
+        // the source colouring uses, so every theme already has them: a page of hex in one
+        // colour is a page nobody can find a zero, a string or a jump in.
+        if app.cfg.ui.syntax && row.spans.is_empty() {
+            for (start, end, key) in binary_runs(row.kind, &row.text) {
+                let text = &row.text[start..end];
+                let x = row.text[..start]
+                    .chars()
+                    .filter_map(unicode_width::UnicodeWidthChar::width)
+                    .sum::<usize>() as u16;
+                if x < body.w && !text.is_empty() {
+                    let mut style = base.with_fg(app.theme.color(key));
+                    style.bold = key == "syntax.function" && row.kind == fcmd_view::RowKind::Label;
+                    buf.put_str(body.x + x, y, text, style, body.w - x);
+                }
+            }
+        }
+        if let Some(syntax) = syntax {
+            let (spans, next) = syntax.line(&row.text, state);
+            state = next;
+            for span in spans {
+                let text = &row.text[span.start..span.end];
+                let x = row.text[..span.start]
+                    .chars()
+                    .filter_map(unicode_width::UnicodeWidthChar::width)
+                    .sum::<usize>() as u16;
+                if x < body.w && !text.is_empty() {
+                    let style = app.theme.styled(span.class.theme_key(), base);
+                    buf.put_str(body.x + x, y, text, style, body.w - x);
+                }
+            }
+        }
+        if let Some(g) = guides.as_ref().and_then(|g| g.get(i)) {
+            for (cols, glyph) in [(&g.through, "│"), (&g.ends, "└")] {
+                for &c in cols {
+                    let blank = row.text.chars().nth(c).is_none_or(char::is_whitespace);
+                    if blank && (c as u16) < body.w {
+                        buf.put_str(body.x + c as u16, y, glyph, guide, 1);
+                    }
+                }
+            }
+        }
+        for (start, len) in &row.hits {
+            let text: String = row.text.chars().skip(*start).take(*len).collect();
+            if text.is_empty() {
+                continue;
+            }
+            let x = row
+                .text
+                .chars()
+                .take(*start)
+                .filter_map(unicode_width::UnicodeWidthChar::width)
+                .sum::<usize>() as u16;
+            if x < body.w {
+                buf.put_str(body.x + x, y, &text, hit, body.w - x);
+            }
+        }
+    }
+    if rows.is_empty() && viewer.mode != fcmd_view::Mode::Image {
+        buf.put_str(body.x, body.y, &app.i18n.t("viewer-empty"), base, body.w);
+    }
+}
+
 fn draw_viewer(app: &mut App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer) {
     let (w, h) = (buf.width(), buf.height());
     // The chrome the reader is allowed to take away, a row at a time (`Ctrl+B`,
@@ -2869,133 +3006,7 @@ fn draw_viewer(app: &mut App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer) 
     // pane have taken their columns, so a notch over the pane is not a notch over the text.
     app.layout.text = Some(body);
 
-    // Content. `Viewer.Text.Selected` marks a search hit — its own role in FAR's palette,
-    // which the panel's background had no business being half of.
-    let hit = app
-        .theme
-        .fg_on("viewer.selected.fg", "viewer.selected.bg")
-        .bold();
-    let rows = viewer.rows(body.w, body.h);
-    // The syntax, where the file is one we recognise and the mode is the one that shows it
-    // as text. What the first row starts inside is read from the lines above it, a bounded
-    // stretch of them, so a block comment opened above the window — a form's binary data —
-    // keeps its colour when its first line scrolls off.
-    let syntax = (app.cfg.ui.syntax && viewer.mode == fcmd_view::Mode::Text)
-        .then(|| fcmd_syntax::of_name(&viewer.path.display_name()))
-        .flatten();
-    let mut state = match syntax {
-        Some(syntax) => viewer.syntax_state_at_top(syntax),
-        None => fcmd_syntax::State::default(),
-    };
-    // The lines down the blocks of a Pascal unit or a form, as the Delphi IDE draws them.
-    let guides = syntax.and_then(|syntax| viewer.block_guides(syntax, body.h));
-    let guide = app.theme.fg_on("syntax.guide", "viewer.bg");
-    // In a table the row under the cursor is drawn as a panel draws its cursor, and a marked
-    // row in the colour a panel marks a file with: the same two things, said the same way.
-    let table = viewer.mode == fcmd_view::Mode::Table;
-    let cursor_bg = app.theme.color("panel.cursor.bg");
-    let cursor_fg = app.theme.color("panel.cursor.fg");
-    let marked_fg = app.theme.color("selected.fg");
-    for (i, row) in rows.iter().enumerate() {
-        let y = body.y + i as u16;
-        let (on_cursor, marked) = if table {
-            viewer.table_row_state(i)
-        } else {
-            (false, false)
-        };
-        let mut style = base;
-        if on_cursor {
-            style = Style::new(cursor_fg, cursor_bg);
-        }
-        if marked {
-            style = style.with_fg(marked_fg);
-        }
-        if on_cursor || marked {
-            buf.put_str(0, y, &" ".repeat(body.w as usize), style, body.w);
-        }
-        buf.put_str(0, y, &row.text, style, body.w);
-        // A rendered row carries its own runs: the Markdown view decided what a heading, a
-        // bullet and a table's frame are when it laid the line out, and re-scanning the text
-        // it produced would only guess at it again.
-        for span in &row.spans {
-            let Some(text) = row.text.get(span.start..span.end) else {
-                continue;
-            };
-            if text.is_empty() {
-                continue;
-            }
-            let x = row.text[..span.start]
-                .chars()
-                .filter_map(unicode_width::UnicodeWidthChar::width)
-                .sum::<usize>() as u16;
-            if x >= body.w {
-                continue;
-            }
-            let mut style = app.theme.styled(span.class.theme_key(), base);
-            style.bold |= span.bold;
-            buf.put_str(x, y, text, style, body.w - x);
-        }
-        // The bytes and the instructions get colours of their own, from the same theme keys
-        // the source colouring uses, so every theme already has them: a page of hex in one
-        // colour is a page nobody can find a zero, a string or a jump in.
-        if app.cfg.ui.syntax && row.spans.is_empty() {
-            for (start, end, key) in binary_runs(row.kind, &row.text) {
-                let text = &row.text[start..end];
-                let x = row.text[..start]
-                    .chars()
-                    .filter_map(unicode_width::UnicodeWidthChar::width)
-                    .sum::<usize>() as u16;
-                if x < body.w && !text.is_empty() {
-                    let mut style = base.with_fg(app.theme.color(key));
-                    style.bold = key == "syntax.function" && row.kind == fcmd_view::RowKind::Label;
-                    buf.put_str(x, y, text, style, body.w - x);
-                }
-            }
-        }
-        if let Some(syntax) = syntax {
-            let (spans, next) = syntax.line(&row.text, state);
-            state = next;
-            for span in spans {
-                let text = &row.text[span.start..span.end];
-                let x = row.text[..span.start]
-                    .chars()
-                    .filter_map(unicode_width::UnicodeWidthChar::width)
-                    .sum::<usize>() as u16;
-                if x < body.w && !text.is_empty() {
-                    let style = app.theme.styled(span.class.theme_key(), base);
-                    buf.put_str(x, y, text, style, body.w - x);
-                }
-            }
-        }
-        if let Some(g) = guides.as_ref().and_then(|g| g.get(i)) {
-            for (cols, glyph) in [(&g.through, "│"), (&g.ends, "└")] {
-                for &c in cols {
-                    let blank = row.text.chars().nth(c).is_none_or(char::is_whitespace);
-                    if blank && (c as u16) < body.w {
-                        buf.put_str(c as u16, y, glyph, guide, 1);
-                    }
-                }
-            }
-        }
-        for (start, len) in &row.hits {
-            let text: String = row.text.chars().skip(*start).take(*len).collect();
-            if text.is_empty() {
-                continue;
-            }
-            let x = row
-                .text
-                .chars()
-                .take(*start)
-                .filter_map(unicode_width::UnicodeWidthChar::width)
-                .sum::<usize>() as u16;
-            if x < body.w {
-                buf.put_str(x, y, &text, hit, body.w - x);
-            }
-        }
-    }
-    if rows.is_empty() && viewer.mode != fcmd_view::Mode::Image {
-        buf.put_str(0, body.y, &app.i18n.t("viewer-empty"), base, body.w);
-    }
+    draw_viewer_rows(app, viewer, buf, body, base);
     paint_picture(
         &mut app.pixels,
         crate::pixels::Slot::Viewer,
@@ -9805,6 +9816,40 @@ third line
         app.hidden = Some(0);
         let areas = panel_areas(&app, space);
         assert_eq!(areas[1], space);
+    }
+
+    /// The quick view draws a file as `F3` does: in the viewer's colours, not the panel's,
+    /// and with the source coloured by its syntax.
+    #[test]
+    fn the_quick_view_has_the_viewers_colours_and_syntax() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("main.rs"), b"fn main() { let x = 1; }\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        // The colours of each character of the line, where it is drawn.
+        let colours = |app: &mut App| -> Vec<(fcmd_ui::Color, fcmd_ui::Color)> {
+            let mut buf = Buffer::new(100, 24);
+            draw(app, &mut buf);
+            let text = buf.to_text();
+            let (y, line) = text
+                .lines()
+                .enumerate()
+                .find(|(_, l)| l.contains("fn main"))
+                .expect("the file is shown");
+            let x = line[..line.find("fn main").unwrap()].chars().count() as u16;
+            (0..20)
+                .map(|i| {
+                    let cell = buf.get(x + i, y as u16).unwrap();
+                    (cell.style.fg, cell.style.bg)
+                })
+                .collect()
+        };
+        press(&mut app, "Ctrl+Q");
+        let quick = colours(&mut app);
+        press(&mut app, "Ctrl+Q");
+        press(&mut app, "F3");
+        let viewer = colours(&mut app);
+        assert_eq!(quick, viewer, "the quick view looks as F3 does");
     }
 
     /// The quick view's structure pane (`Shift+F11`) is drawn beside the bytes, as the

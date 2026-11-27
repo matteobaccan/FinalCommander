@@ -119,6 +119,10 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- The quick view (`Ctrl+Q`) drew a file in the panel's colours and as plain text, so it did
+  not look like `F3` on the same file. It now draws it as the viewer does: the viewer's
+  colours, the syntax colouring, a rendered page's runs and a dump's colours.
+
 - `F3` or `F4` on a file of a server left the panel free while the file came down, so the
   cursor could wander off with no sign that anything was about to open. The cursor now
   waits for it, `Esc` stops it, and after three seconds the copy's progress box shows how
