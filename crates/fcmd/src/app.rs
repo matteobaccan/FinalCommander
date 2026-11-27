@@ -632,6 +632,21 @@ pub enum Request {
     LinkHangUp,
 }
 
+/// A connection being made from a list of sessions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SiteAttempt {
+    /// What the box names: the session as the list shows it.
+    pub label: String,
+    /// The row of the *Connections* dialog it was started from, to go back to; `None` when
+    /// it was the netbox panel, which stays where it is anyway.
+    pub dialog: Option<usize>,
+    /// `Esc` while waiting: the box goes and the answer, when it comes, only says so.
+    pub cancelled: bool,
+    /// A connection request is out. Not while a password or a host key is being asked
+    /// for — that question has the screen, and if it is cancelled nothing is coming.
+    pub waiting: bool,
+}
+
 /// A Link call waiting for the person here to answer it (SPEC 04 §9.5).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinkCall {
@@ -3644,6 +3659,12 @@ pub struct App {
     /// Calls waiting for the dialog: one at a time, and only over the panels, so a call does
     /// not land in the middle of an edit.
     link_calls: std::collections::VecDeque<LinkCall>,
+    /// A connection opened from a list of sessions (the netbox panel or the *Connections*
+    /// dialog), while it is being made: a box says so over the list, and the list stays
+    /// where it is until the connection is there — or says why it is not.
+    pub site_attempt: Option<SiteAttempt>,
+    /// Why the last connection from a list failed, in a box over that list until a key.
+    pub site_error: Option<(String, String)>,
     compare: Option<(u64, CancelToken)>,
     /// The checksum run that is going, and the token that stops it. `Esc` on a panel with an
     /// empty command line stops it, the way it stops a comparison.
@@ -4119,6 +4140,8 @@ impl App {
             link_on: false,
             link_sessions: 0,
             link_calls: std::collections::VecDeque::new(),
+            site_attempt: None,
+            site_error: None,
             compare: None,
             grab_wanted: false,
             sum: None,
@@ -4358,7 +4381,18 @@ impl App {
     }
 
     pub fn take_requests(&mut self) -> Vec<Request> {
-        std::mem::take(&mut self.requests)
+        let requests = std::mem::take(&mut self.requests);
+        // A connection sent again after its password or its host key was answered: the box
+        // over the list is waiting for it once more.
+        if requests
+            .iter()
+            .any(|r| matches!(r, Request::Connect { .. }))
+        {
+            if let Some(attempt) = self.site_attempt.as_mut() {
+                attempt.waiting = true;
+            }
+        }
+        requests
     }
 
     pub fn set_status(&mut self, text: impl Into<String>) {
@@ -6342,6 +6376,25 @@ impl App {
         if self.recording.is_some() {
             self.record_key = Some(key);
         }
+        // A connection being made from a list holds the screen until it is there: `Esc`
+        // stops waiting for it, and nothing else is a key meant for the list behind. A
+        // failure's box goes on any key, back to the list as it was.
+        if self.site_error.is_some() {
+            self.site_error = None;
+            return;
+        }
+        if self
+            .site_attempt
+            .as_ref()
+            .is_some_and(|a| !a.cancelled && self.waiting_on_site())
+        {
+            if key.code == KeyCode::Esc {
+                if let Some(attempt) = self.site_attempt.as_mut() {
+                    attempt.cancelled = true;
+                }
+            }
+            return;
+        }
         // What the viewer is showing, before the key: a key that closes it is the moment to
         // remember where the file was left, and there are a dozen keys that close it.
         let was = self
@@ -6531,8 +6584,7 @@ impl App {
             }
             KeyCode::Enter => {
                 if let Some(site) = rows.get(cursor).cloned() {
-                    self.mode = Mode::Normal;
-                    self.connect_to(site, None, false);
+                    self.try_site(site, Some(cursor));
                 } else {
                     self.mode = Mode::Normal;
                     self.run(Command::NetConnect);
@@ -12990,6 +13042,12 @@ impl App {
                     self.git_ask(GitAsk::Show(c.hash));
                 }
             }
+            // A row of the stored connections is a session to open, and opening one is a wait
+            // that may fail: the list stays, with a box saying what is happening, until the
+            // connection is there. An empty list makes the first session instead.
+            Command::NavEnter if self.panel().temp_origin() == Some(":netbox") => {
+                self.netbox_enter()
+            }
             Command::NavEnter if self.panel().temp_origin() == Some(":gitbranches") => {
                 self.git_switch_at_cursor()
             }
@@ -14454,6 +14512,54 @@ impl App {
     // ── netbox ─────────────────────────────────────────────────────────────────────────────
 
     /// Start (or reuse) a connection and show it in the active panel.
+    /// Open `site` from a list: at once when it is already connected, otherwise with a box
+    /// over the list while the connection is made (`dialog`: the row of the *Connections*
+    /// dialog it came from).
+    fn try_site(&mut self, site: Site, dialog: Option<usize>) {
+        self.site_error = None;
+        if self.connected.contains(&site.key()) {
+            self.mode = Mode::Normal;
+            self.site_attempt = None;
+            let panel = self.active;
+            if self.panel_go(panel, site.start(), true) {
+                self.read_panel(panel);
+            }
+            return;
+        }
+        self.site_attempt = Some(SiteAttempt {
+            label: site.label(),
+            dialog,
+            cancelled: false,
+            waiting: true,
+        });
+        self.connect_to(site, None, false);
+    }
+
+    /// `Enter` on the netbox panel.
+    fn netbox_enter(&mut self) {
+        let Some(name) = self.panel().current().map(|e| e.name_str().into_owned()) else {
+            // Nothing to open: the first session is made here, as `Shift+F4` does.
+            self.open_site_form(None);
+            return;
+        };
+        match self.sites.iter().find(|s| s.key() == name).cloned() {
+            Some(site) => self.try_site(site, None),
+            // An object storage service, or a host connected by hand: nothing to wait for.
+            None => {
+                if let Some(path) = self.panel().enter_target() {
+                    self.goto(path);
+                }
+            }
+        }
+    }
+
+    /// Whether the box over the list still has a connection to wait for: not while a
+    /// question about it (a password, a host key) has the screen.
+    pub fn waiting_on_site(&self) -> bool {
+        self.site_attempt.as_ref().is_some_and(|a| a.waiting)
+            && matches!(self.mode, Mode::Normal | Mode::Sites { .. })
+    }
+
     fn connect_to(&mut self, site: Site, secret: Option<String>, accept_host_key: bool) {
         let panel = self.active;
         let msg = self
@@ -14475,6 +14581,60 @@ impl App {
 
     /// What came back from a connection attempt.
     fn connection_result(&mut self, panel: usize, site: Box<Site>, outcome: ConnectOutcome) {
+        // From a list: a failure leaves the list as it was and says why in a box over it; a
+        // success closes the *Connections* dialog and the panel goes there, as before — or,
+        // if the wait was given up with `Esc`, stays where it is.
+        let attempt = match &outcome {
+            ConnectOutcome::Open { .. }
+            | ConnectOutcome::Failed(_)
+            | ConnectOutcome::ChangedHostKey { .. } => self.site_attempt.take(),
+            _ => None,
+        };
+        // A question about this connection has the screen now; the box waits for an answer
+        // to be sent again (`take_requests`), or for none.
+        if matches!(
+            outcome,
+            ConnectOutcome::NeedsSecret(_) | ConnectOutcome::UnknownHostKey { .. }
+        ) {
+            if let Some(attempt) = self.site_attempt.as_mut() {
+                attempt.waiting = false;
+            }
+        }
+        if let (Some(attempt), ConnectOutcome::Failed(detail)) = (&attempt, &outcome) {
+            self.pending_connect = None;
+            if let Some(cursor) = attempt.dialog {
+                if matches!(self.mode, Mode::Normal | Mode::Sites { .. }) {
+                    self.mode = Mode::Sites { cursor };
+                }
+            }
+            if attempt.cancelled {
+                self.set_error(detail.clone());
+            } else {
+                let title = self.i18n.t_args(
+                    "net-attempt-failed",
+                    &[("host", attempt.label.clone().into())],
+                );
+                self.site_error = Some((title, detail.clone()));
+            }
+            return;
+        }
+        if let Some(attempt) = &attempt {
+            if matches!(outcome, ConnectOutcome::Open { .. }) {
+                if attempt.cancelled {
+                    if let ConnectOutcome::Open { connected, .. } = outcome {
+                        self.connected = connected;
+                    }
+                    let msg = self
+                        .i18n
+                        .t_args("net-connected", &[("host", site.authority().into())]);
+                    self.set_status(msg);
+                    return;
+                }
+                if matches!(self.mode, Mode::Sites { .. }) {
+                    self.mode = Mode::Normal;
+                }
+            }
+        }
         match outcome {
             ConnectOutcome::Open { start, connected } => {
                 self.connected = connected;
@@ -24722,18 +24882,31 @@ impl App {
             return;
         }
         let at = self.sites.iter().position(|s| s.id == name).unwrap_or(0);
-        // The middle button is "store it and go there", which is what one wants nine times
-        // out of ten after typing a host in: the session list is not the destination.
+        let msg = self.i18n.t_args("site-stored", &[("name", name.into())]);
+        // Back to the list the form was opened from, on the session just stored: the netbox
+        // panel, read again so the row is there, or the *Connections* dialog.
+        if self.panel().temp_origin() == Some(":netbox") {
+            let side = self.active;
+            self.mode = Mode::Normal;
+            self.open_sessions_panel(side);
+            if let Some(key) = self.sites.get(at).map(|s| s.key()) {
+                let row = self.panels[side].listing.row_of_name(&key);
+                if let Some(row) = row {
+                    self.panels[side].cursor_to(row);
+                }
+            }
+        } else {
+            self.mode = Mode::Sites { cursor: at };
+        }
+        self.set_status(msg);
+        // The middle button is "store it and go there": the list stays, with the box saying
+        // what is happening, until the connection is there or says why it is not.
         if form.button == Some(1) {
             if let Some(site) = self.sites.get(at).cloned() {
-                self.mode = Mode::Normal;
-                self.connect_to(site, None, false);
-                return;
+                let dialog = matches!(self.mode, Mode::Sites { .. }).then_some(at);
+                self.try_site(site, dialog);
             }
         }
-        self.mode = Mode::Sites { cursor: at };
-        let msg = self.i18n.t_args("site-stored", &[("name", name.into())]);
-        self.set_status(msg);
     }
 
     /// `F12` in the hex editor: what to do with the bytes that are marked (SPEC 05 §2.6).
@@ -52778,6 +52951,180 @@ abcdefghij
     }
 
     // ── netbox ─────────────────────────────────────────────────────────────────────────────
+
+    fn screen_text(app: &mut App, w: u16, h: u16) -> String {
+        let mut buf = fcmd_ui::Buffer::new(w, h);
+        crate::render::draw(app, &mut buf);
+        buf.to_text()
+    }
+
+    /// One stored session and the netbox panel open on it, cursor on its row.
+    fn netbox_with_one_site() -> (App, Site) {
+        let mut app = app();
+        let site = Site::parse_url("sftp://mb@box.example:22/srv").unwrap();
+        app.cfg.sites = vec![fcmd_config::SiteCfg {
+            id: "box".into(),
+            scheme: "sftp".into(),
+            host: "box.example".into(),
+            user: Some("mb".into()),
+            ..Default::default()
+        }];
+        let (sites, _) = Site::list_from_config(&app.cfg);
+        app.sites = sites;
+        app.open_sessions_panel(0);
+        let key = app.sites[0].key();
+        let row = app.panels[0].listing.row_of_name(&key).unwrap();
+        app.panels[0].cursor_to(row);
+        (app, site)
+    }
+
+    fn connected(app: &mut App, outcome: ConnectOutcome) {
+        let site = app.sites[0].clone();
+        app.handle_event(Event::Connected {
+            panel: 0,
+            site: Box::new(site),
+            outcome,
+        });
+    }
+
+    /// `Enter` on a session of the netbox panel connects with a box over the list, and the
+    /// list stays: a failure says why in the box and leaves the panel where it was, so
+    /// nobody thinks they are on the server; a success goes there.
+    #[test]
+    fn a_session_opened_from_the_list_waits_in_a_box_and_a_failure_stays_on_the_list() {
+        let (mut app, _) = netbox_with_one_site();
+        press(&mut app, "Enter");
+        assert!(app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::Connect { .. })));
+        assert_eq!(
+            app.panels[0].temp_origin(),
+            Some(":netbox"),
+            "still the list"
+        );
+        assert!(app.waiting_on_site());
+        let shown = screen_text(&mut app, 100, 30);
+        assert!(shown.contains("Connecting to"), "{shown}");
+
+        // Keys meant for the list wait; the connection is what is happening.
+        press(&mut app, "Down");
+        assert!(app.waiting_on_site());
+
+        connected(
+            &mut app,
+            ConnectOutcome::Failed("connection refused".into()),
+        );
+        assert_eq!(
+            app.panels[0].temp_origin(),
+            Some(":netbox"),
+            "still the list"
+        );
+        let shown = screen_text(&mut app, 100, 30);
+        assert!(shown.contains("connection refused"), "{shown}");
+        assert!(shown.contains("Could not connect"), "{shown}");
+        press(&mut app, "x");
+        assert!(app.site_error.is_none(), "any key closes the box");
+        assert_eq!(app.panels[0].temp_origin(), Some(":netbox"));
+
+        // And when it works, the panel goes there.
+        press(&mut app, "Enter");
+        let start = app.sites[0].start();
+        let key = app.sites[0].key();
+        connected(
+            &mut app,
+            ConnectOutcome::Open {
+                start: start.clone(),
+                connected: vec![key],
+            },
+        );
+        assert!(app.site_attempt.is_none());
+        assert_ne!(
+            app.panels[0].temp_origin(),
+            Some(":netbox"),
+            "the panel went there"
+        );
+    }
+
+    /// `Esc` while waiting gives the list back at once; the answer, when it comes, is a line
+    /// on the status bar rather than a box or a jump.
+    #[test]
+    fn esc_stops_waiting_for_a_session_without_leaving_the_list() {
+        let (mut app, _) = netbox_with_one_site();
+        press(&mut app, "Enter");
+        press(&mut app, "Esc");
+        assert!(
+            !app.site_attempt.as_ref().unwrap().waiting
+                || app.site_attempt.as_ref().unwrap().cancelled
+        );
+        let shown = screen_text(&mut app, 100, 30);
+        assert!(!shown.contains("Connecting to"), "{shown}");
+        connected(&mut app, ConnectOutcome::Failed("timed out".into()));
+        assert!(app.site_error.is_none(), "no box for a wait given up");
+        assert!(
+            app.status_error && app.status.contains("timed out"),
+            "{}",
+            app.status
+        );
+        assert_eq!(app.panels[0].temp_origin(), Some(":netbox"));
+    }
+
+    /// A password asked for and then not given does not leave the box holding the keys.
+    #[test]
+    fn a_password_not_given_lets_go_of_the_list() {
+        let (mut app, _) = netbox_with_one_site();
+        press(&mut app, "Enter");
+        app.take_requests();
+        connected(
+            &mut app,
+            ConnectOutcome::NeedsSecret(fcmd_net::SecretKind::Password),
+        );
+        assert!(matches!(app.mode, Mode::Prompt(_)));
+        press(&mut app, "Esc");
+        assert!(!app.waiting_on_site(), "nothing is coming");
+        press(&mut app, "Down");
+        assert!(app.mode.is_normal());
+    }
+
+    /// The *Connections* dialog does the same: it stays open on its row while the session
+    /// connects, and on a failure it is still there, with the reason over it.
+    #[test]
+    fn the_connections_dialog_stays_open_on_a_failure() {
+        let (mut app, _) = netbox_with_one_site();
+        app.mode = Mode::Sites { cursor: 0 };
+        press(&mut app, "Enter");
+        assert!(matches!(app.mode, Mode::Sites { cursor: 0 }));
+        connected(&mut app, ConnectOutcome::Failed("no route to host".into()));
+        assert!(matches!(app.mode, Mode::Sites { cursor: 0 }));
+        assert!(app.site_error.is_some());
+    }
+
+    /// A session stored from the netbox panel lands back on the panel, on its own row; and
+    /// an empty list says how to make the first one, which `Enter` does.
+    #[test]
+    fn a_stored_session_is_the_row_under_the_cursor_and_an_empty_list_makes_one() {
+        let mut app = app();
+        app.cfg.sites.clear();
+        app.sites.clear();
+        app.open_sessions_panel(0);
+        let shown = screen_text(&mut app, 100, 30);
+        assert!(shown.contains("no sessions"), "{shown}");
+        press(&mut app, "Enter");
+        let Mode::Form(form) = &mut app.mode else {
+            panic!("Enter on an empty list makes a session: {:?}", app.mode)
+        };
+        form.set_text("site.host", "new.example".into());
+        form.set_text("site.user", "mb".into());
+        press(&mut app, "F10");
+        assert!(
+            app.mode.is_normal(),
+            "back to the panel, not a dialog: {:?}",
+            app.mode
+        );
+        assert_eq!(app.panels[0].temp_origin(), Some(":netbox"));
+        let current = app.panels[0].current().map(|e| e.name_str().into_owned());
+        assert_eq!(current.as_deref(), Some("sftp://mb@new.example:22"));
+    }
 
     /// An empty list of sessions is still a list: it opens, it says where one is, and its
     /// key bar says how to make the first one — which a message and a closed panel did not.

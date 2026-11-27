@@ -652,6 +652,12 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
 
     let screen = Rect::new(0, menu_h, w, panels_h);
     if app.mode.is_normal() {
+        // A session being opened from the netbox panel, or one that just failed: over the
+        // list, and the cursor of the command line has nowhere to be while it is.
+        if app.site_error.is_some() || app.waiting_on_site() {
+            draw_site_attempt(app, buf, screen);
+            return None;
+        }
         return cursor;
     }
     if let Some(view) = app.mode.job() {
@@ -687,7 +693,7 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     if let Mode::Grab(grab) = &app.mode {
         return draw_grab(app, grab, buf);
     }
-    match &app.mode {
+    let cursor = match &app.mode {
         Mode::Normal => None,
         Mode::Find(view) => {
             draw_find(app, view, buf, screen);
@@ -852,7 +858,33 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             draw_help(app, buf, *chapter, *scroll, *at, screen);
             None
         }
+    };
+    draw_site_attempt(app, buf, screen);
+    cursor
+}
+
+/// A connection opened from a list of sessions, over that list: what is being opened while
+/// it is, and why it was not when it fails (SPEC 04 §6, the netbox).
+fn draw_site_attempt(app: &App, buf: &mut Buffer, screen: Rect) {
+    if let Some((title, detail)) = &app.site_error {
+        let lines: Vec<String> = detail.lines().map(str::to_string).collect();
+        let hint = app.i18n.t("net-attempt-back");
+        widgets::draw_dialog(buf, &app.theme, screen, title, &lines, Some(&hint));
+        return;
     }
+    let Some(attempt) = &app.site_attempt else {
+        return;
+    };
+    if attempt.cancelled || !app.waiting_on_site() {
+        return;
+    }
+    let title = app.i18n.t("net-attempt-title");
+    let lines = vec![app.i18n.t_args(
+        "net-attempt-body",
+        &[("host", attempt.label.clone().into())],
+    )];
+    let hint = app.i18n.t("net-attempt-hint");
+    widgets::draw_dialog(buf, &app.theme, screen, &title, &lines, Some(&hint));
 }
 
 /// `Ctrl+Alt+E`: a real terminal, with a program drawing in it.
@@ -2971,6 +3003,8 @@ fn cursor_line(app: &App, panel: &crate::panel::Panel) -> String {
             format!("{name}{size}{time}{opens}{descr}")
         }
         None if panel.loading => app.i18n.t("panel-loading"),
+        // The stored connections with none in them: what to press to make the first.
+        None if panel.temp_origin() == Some(":netbox") => app.i18n.t("net-sessions-empty"),
         None => app.i18n.t("panel-empty"),
     }
 }

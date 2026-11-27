@@ -14,6 +14,13 @@ and writing it back on save. The port follows the protocol when the URL does not
 SFTP, 21 for both spellings of FTP — and one server offering `ftp` and `ftps` on port 21 is two
 connections, not one.
 
+`Enter` on a stored session — in the NetBox panel or in the *Connections* list — keeps the list
+on the screen with a box saying what is being opened, and the panel goes to the server only
+once the connection is there. If it fails, the box says why and any key leaves you on the
+list, on the same row: you are never left on a panel that only looks connected. `Esc` stops
+waiting. A session you store from the NetBox panel puts you back on the panel, on its row, and
+on an empty list `Enter` (or `Shift+F4`) makes the first one.
+
 A password typed for a server is kept, once the connection has worked, in `fcmd-secrets.vault`
 — fcmd's own encrypted file beside the settings — and the next connection takes it from there;
 the first time, you choose the file's password (empty: not kept). That password is asked for

@@ -106,6 +106,14 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- Opening a stored session from the NetBox panel or the *Connections* list left the list at
+  once, so a connection that failed left a panel that looked connected, with the error under
+  the command line. The list now stays, with a box saying what is being opened; a failure is
+  said in that box and any key goes back to the list, on the same row; `Esc` stops waiting.
+- A session stored from the NetBox panel went to the *Connections* dialog instead of back to
+  the panel: it now returns to the panel, on the new row. An empty NetBox panel showed an
+  `(empty)` row that did nothing; it says how to make the first session, and `Enter` makes it.
+
 - A Visual FoxPro currency between minus one and zero lost its sign in table mode: `-0.5000`
   was shown as `0.5000`.
 - A Visual FoxPro table with a binary field (`C` or `M` marked *binary*) was taken for one

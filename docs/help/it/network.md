@@ -14,6 +14,13 @@ portandolo qui e riscrivendolo quando salvi. La porta segue il protocollo quando
 dice — 22 per SFTP, 21 per entrambe le grafie di FTP — e un server che offre `ftp` e `ftps`
 sulla porta 21 è due connessioni, non una.
 
+`Invio` su una sessione salvata — nel pannello NetBox o nell'elenco *Connessioni* — lascia la
+lista sullo schermo con un riquadro che dice cosa si sta aprendo, e il pannello va sul server
+solo quando la connessione c'è. Se non riesce, il riquadro dice perché e un tasto qualsiasi ti
+lascia sulla lista, sulla stessa riga: non resti mai su un pannello che sembra connesso e non lo
+è. `Esc` smette di aspettare. Una sessione salvata dal pannello NetBox ti riporta sul pannello,
+sulla sua riga, e su una lista vuota `Invio` (o `Shift+F4`) crea la prima.
+
 Una password digitata per un server viene conservata, quando la connessione è riuscita, in
 `fcmd-secrets.vault` — il file cifrato di fcmd accanto alle impostazioni — e la connessione
 successiva la prende da lì; la prima volta scegli la password del file (vuota: non si
