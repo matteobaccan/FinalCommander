@@ -996,15 +996,18 @@ impl Viewer {
                 self.show_derived("WAT", text);
                 return Ok(Started::Derived("WAT"));
             }
-            Format::Pe => {
-                let bytes = self.whole_file()?;
-                if il::is_managed(&bytes) {
+            // An executable over the parse limit is not read whole to ask whether it is .NET:
+            // it is swept as native code, as any other binary that size is.
+            Format::Pe => match self.whole_file() {
+                Ok(bytes) if il::is_managed(&bytes) => {
                     let text =
                         il::listing(&bytes).map_err(|e| DisasmError::Parse(e.to_string()))?;
                     self.show_derived("IL", text);
                     return Ok(Started::Derived("IL"));
                 }
-            }
+                Ok(_) | Err(DisasmError::TooLarge { .. }) => {}
+                Err(other) => return Err(other),
+            },
             _ => {}
         }
         self.start_native_disasm().map(|()| Started::Instructions)
@@ -4758,6 +4761,33 @@ mod tests {
         assert!(v.is_empty());
         assert!(v.rows(20, 5).is_empty());
         assert_eq!(v.status().percent, 100);
+    }
+
+    /// A Windows executable over the parse limit is swept as native code, as an ELF that size
+    /// is, rather than refused because it could not be read whole to look for .NET in it.
+    #[test]
+    fn a_windows_executable_over_the_parse_limit_is_swept_raw() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("big.exe");
+        let file = std::fs::File::create(&path).unwrap();
+        use std::io::Write as _;
+        (&file).write_all(b"MZ").unwrap();
+        // Sparse: the size is what matters, not the bytes.
+        file.set_len(disasm::MAX_PARSE as u64 + 1).unwrap();
+        drop(file);
+        let mut v = Viewer::new(
+            Box::new(crate::source::FileSource::open(&path).unwrap()),
+            VPath::local(&path),
+        );
+        match v.start_disasm() {
+            Ok(Started::Instructions) => {
+                assert_eq!(v.mode, Mode::Disasm);
+                assert!(v.status().binary.unwrap_or_default().contains("raw"));
+            }
+            Ok(Started::Derived(producer)) => panic!("not {producer}"),
+            // A host with no decoder of its own: the message says what is needed.
+            Err(e) => assert!(e.to_string().contains("external tool"), "{e}"),
+        }
     }
 
     #[test]

@@ -45128,8 +45128,17 @@ run = ["echo one", "echo two", "echo three"]
             .iter()
             .position(|r| r.value == ":netbox")
             .expect("NetBox is offered");
-        let key = pick.rows[at].hotkey.expect("it is numbered");
-        press(&mut app, &key.to_string());
+        // Its digit, where it has one; on Windows the registry's row comes first and the
+        // digits can run out, and then it is the cursor and `Enter`.
+        match pick.rows[at].hotkey {
+            Some(key) => press(&mut app, &key.to_string()),
+            None => {
+                if let Mode::Pick(pick) = &mut app.mode {
+                    pick.cursor = at;
+                }
+                press(&mut app, "Enter");
+            }
+        }
         assert!(app.panels[0].temp.is_some(), "it is a panel of its own");
         assert!(
             (0..app.panels[0].listing.len())
@@ -45148,8 +45157,15 @@ run = ["echo one", "echo two", "echo three"]
             .iter()
             .position(|r| r.value == ":temp")
             .expect("the temporary panel is offered");
-        let key = pick.rows[at].hotkey.expect("it is numbered");
-        press(&mut app, &key.to_string());
+        match pick.rows[at].hotkey {
+            Some(key) => press(&mut app, &key.to_string()),
+            None => {
+                if let Mode::Pick(pick) = &mut app.mode {
+                    pick.cursor = at;
+                }
+                press(&mut app, "Enter");
+            }
+        }
         assert!(app.panels[1].temp.is_some());
         assert_eq!(app.panels[1].listing.len(), 0, "it opens empty");
     }
