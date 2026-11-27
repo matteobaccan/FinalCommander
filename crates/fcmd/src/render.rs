@@ -556,11 +556,21 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             mark.push_str(&format!("[{}]", app.background.len()));
         }
         // Accepting Link calls, and how many machines are reading this one now.
-        if app.link_on {
-            match app.link_sessions {
-                0 => mark.push_str("LINK "),
-                n => mark.push_str(&format!("LINK {n} ")),
+        // With this machine's ID and address beside it, which is what a caller needs to know
+        // and what the message that said so took away with the next key.
+        let link_mark = app.link_on.then(|| {
+            let mut text = match app.link_sessions {
+                0 => "LINK".to_string(),
+                n => format!("LINK {n}"),
+            };
+            if let Some(address) = &app.link_address {
+                text.push_str(&format!(" ({address})"));
             }
+            text
+        });
+        if let Some(text) = &link_mark {
+            mark.push_str(text);
+            mark.push(' ');
         }
         // A question out to an AI: which service, and the seconds it has been thinking, with
         // a wheel that turns, until the answer or the error comes back.
@@ -587,6 +597,16 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                     style.bold = true;
                 }
                 buf.put_str(w - width, row.y, &mark, style, width);
+                // While something goes over the Link the word blinks, four times a second,
+                // in the colours of the cursor: a light, as on a network card.
+                if let (Some(text), true) = (&link_mark, app.link_blink_on()) {
+                    if let Some(at) = mark.find(text.as_str()) {
+                        let x =
+                            w - width + unicode_width::UnicodeWidthStr::width(&mark[..at]) as u16;
+                        let lit = app.theme.fg_on("cursor.fg", "cursor.bg");
+                        buf.put_str(x, row.y, "LINK", lit, 4);
+                    }
+                }
             }
         }
     }

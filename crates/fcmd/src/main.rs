@@ -2677,6 +2677,11 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
             wait = Some(wait.map_or(step, |w: std::time::Duration| w.min(step)));
         }
         // The secrets file's password is forgotten on time, not only at the next key.
+        // The Link light blinks while there is traffic, and goes out after: both are frames
+        // nobody asked for with a key.
+        if let Some(blink) = app.link_wait() {
+            wait = Some(wait.map_or(blink, |w: std::time::Duration| w.min(blink)));
+        }
         if let Some(left) = app.vault_wait() {
             let left = left.max(std::time::Duration::from_secs(1));
             wait = Some(wait.map_or(left, |w: std::time::Duration| w.min(left)));

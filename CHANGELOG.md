@@ -35,6 +35,10 @@ Notable changes, newest first. The format follows
   private addresses only, a changed key refused; `LINK` in the corner of the status line
   while calls are accepted, with the number of callers, and `Ctrl+Alt+L` hangs them all up.
   Settings `link.accept`, `link.name`, `link.share`.
+  The corner keeps this machine's ID and address while the Link is on, `LINK 2 (568 765 292
+  · 192.168.1.10)` with the number of callers, and the word blinks while something goes over
+  the Link. A file is read across in reads of nearly a megabyte rather than 256 KB, a quarter
+  of the round trips.
   A machine on another network (a second router, a Wi-Fi apart from the wired network) is
   called by its IP address as the host, since no broadcast crosses between networks; the
   called side shows its address beside its ID and listens on TCP 47831 by default. The
@@ -110,6 +114,11 @@ Notable changes, newest first. The format follows
   repository, an unknown ref and a missing `git` each say so. In the compact build too.
 
 ### Fixed
+
+- A copy from or to a server (SFTP, FTP, WebDAV, Link, S3) counted its bytes wrongly: each
+  step reported the running total and the job added them up, so a 25 MB file showed as more
+  than a gigabyte copied and the speed and time left were nonsense. The bytes themselves were
+  always right.
 
 - `fcmd.exe` had no icon of its own: Explorer, the taskbar and shortcuts showed Windows'
   generic one. The program's icon is now linked into the Windows builds.

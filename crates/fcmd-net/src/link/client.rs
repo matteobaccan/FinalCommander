@@ -6,7 +6,7 @@
 //! answer; a yes is a [`LinkFs`], which the panel reads like an SFTP connection.
 //!
 //! One request at a time on the connection: a file is read in chunks the reader asks for
-//! ([`CHUNK`] each), so a long copy never holds the connection while the panel lists a
+//! ([`READ_CHUNK`](wire::READ_CHUNK) each), so a long copy never holds the connection while the panel lists a
 //! folder.
 
 use std::net::SocketAddr;
@@ -29,7 +29,6 @@ use super::wire::{
 use super::{net, tls, ANSWER_SECONDS, VERSION};
 use crate::error::{NetError, Result};
 use crate::ops::{Reader, RemoteEntry, RemoteFs, Writer};
-use crate::remote::CHUNK;
 
 /// The machine on the other end.
 #[derive(Debug, Clone)]
@@ -407,7 +406,7 @@ impl RemoteFs for LinkFs {
                     .request(Op::Read {
                         handle,
                         offset,
-                        len: CHUNK as u32,
+                        len: wire::READ_CHUNK as u32,
                     })
                     .await;
                 drop(c);
@@ -507,7 +506,9 @@ mod tests {
         std::fs::create_dir_all(root.join("sub")).unwrap();
         std::fs::write(root.join("small.txt"), b"hello").unwrap();
         // Three chunks and a bit, so the reader asks more than once.
-        let big: Vec<u8> = (0..(CHUNK * 3 + 1234)).map(|i| (i % 251) as u8).collect();
+        let big: Vec<u8> = (0..(wire::READ_CHUNK * 3 + 1234))
+            .map(|i| (i % 251) as u8)
+            .collect();
         std::fs::write(root.join("sub/big.bin"), big).unwrap();
         std::fs::write(dir.path().join("secret.txt"), b"secret").unwrap();
         dir
@@ -597,7 +598,8 @@ mod tests {
 
     struct HangingGate {
         shares: Vec<Share>,
-        hang: tokio::sync::watch::Sender<u64>,
+        hang: tokio::sync::watch::Sender<super::super::server::HangUp>,
+        sessions: StdMutex<Vec<u64>>,
     }
 
     #[async_trait]
@@ -605,10 +607,11 @@ mod tests {
         fn shares(&self) -> Vec<Share> {
             self.shares.clone()
         }
-        async fn admit(&self, _caller: &Caller) -> Admission {
+        async fn admit(&self, caller: &Caller) -> Admission {
+            self.sessions.lock().unwrap().push(caller.session);
             Admission::ReadOnly
         }
-        fn hang_up(&self) -> Option<tokio::sync::watch::Receiver<u64>> {
+        fn hang_up(&self) -> Option<tokio::sync::watch::Receiver<super::super::server::HangUp>> {
             Some(self.hang.subscribe())
         }
     }
@@ -616,10 +619,11 @@ mod tests {
     #[tokio::test]
     async fn the_called_side_can_hang_up() {
         let dir = tree();
-        let (hang, _) = tokio::sync::watch::channel(0u64);
+        let (hang, _) = tokio::sync::watch::channel(super::super::server::HangUp::default());
         let gate = Arc::new(HangingGate {
             shares: vec![Share::new("docs", &dir.path().join("shared"), false).unwrap()],
             hang,
+            sessions: StdMutex::new(Vec::new()),
         });
         let them = Arc::new(Identity::generate("there").unwrap());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -628,11 +632,33 @@ mod tests {
         tokio::spawn(serve(listener, them, g));
         let me = Identity::generate("here").unwrap();
         let fs = call(addr, &me).await.unwrap().ask("", false).await.unwrap();
+        let other = call(addr, &me).await.unwrap().ask("", false).await.unwrap();
         assert!(fs.stat("/small.txt", true).await.is_ok());
-        gate.hang.send_modify(|n| *n += 1);
+        assert!(other.stat("/small.txt", true).await.is_ok());
+        // One call ended by its number: the other goes on. Sessions are numbered in the
+        // order they were let in, the first being the lower.
+        let first = gate.sessions.lock().unwrap()[0];
+        gate.hang.send_modify(|h| {
+            h.generation += 1;
+            h.only = Some(first);
+        });
         tokio::time::sleep(Duration::from_millis(200)).await;
         assert!(
             fs.stat("/small.txt", true).await.is_err(),
+            "that one is over"
+        );
+        assert!(
+            other.stat("/small.txt", true).await.is_ok(),
+            "the other is not"
+        );
+        // And all of them at once.
+        gate.hang.send_modify(|h| {
+            h.generation += 1;
+            h.only = None;
+        });
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert!(
+            other.stat("/small.txt", true).await.is_err(),
             "the session is over"
         );
     }

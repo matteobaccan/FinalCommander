@@ -30,7 +30,6 @@ use super::wire::{
 };
 use super::{net, tls, ANSWER_SECONDS, VERSION};
 use crate::ops::RemoteEntry;
-use crate::remote::CHUNK;
 
 /// Files a caller may hold open at once; the oldest is closed to make room.
 const OPEN_FILES: usize = 64;
@@ -50,7 +49,21 @@ pub struct Caller {
     pub write: bool,
     /// Let in by its PIN rather than by the person here.
     pub by_pin: bool,
+    /// This call's own number, for ending it alone ([`HangUp::only`]).
+    pub session: u64,
 }
+
+/// What the hang-up signal says: each new value ends the open sessions, or only the one it
+/// names.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct HangUp {
+    /// Changes with every hang-up, so that the same one twice is still two.
+    pub generation: u64,
+    pub only: Option<u64>,
+}
+
+/// The number the next call gets.
+static NEXT_SESSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 /// The person's answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,6 +84,10 @@ pub trait Gate: Send + Sync {
     fn opened(&self, _caller: &Caller, _write: bool) {}
     /// It ended.
     fn closed(&self, _caller: &Caller) {}
+    /// A request of an open session was served: something went over the Link (for a light
+    /// that blinks while it does). Called for every request, so cheap and throttled by the
+    /// gate itself.
+    fn traffic(&self) {}
     /// The PIN that lets a caller in without asking (SPEC 04 §9.5), if one is set.
     fn pin(&self) -> Option<Pin> {
         None
@@ -84,7 +101,7 @@ pub trait Gate: Send + Sync {
     fn refused(&self, _caller: &Caller, _why: &str) {}
     /// A signal that ends every open session at once (`Ctrl+Alt+L` on this side): each
     /// change of the value hangs up.
-    fn hang_up(&self) -> Option<tokio::sync::watch::Receiver<u64>> {
+    fn hang_up(&self) -> Option<tokio::sync::watch::Receiver<HangUp>> {
         None
     }
 }
@@ -177,6 +194,7 @@ async fn connection(
         share: share.name.clone(),
         write: ask.write,
         by_pin: false,
+        session: NEXT_SESSION.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
     };
     let mut caller = caller;
     let by_pin = match ask.pin {
@@ -224,12 +242,25 @@ async fn connection(
     let result = match gate.hang_up() {
         Some(mut hang_up) => {
             hang_up.borrow_and_update();
-            tokio::select! {
-                result = session(&mut tls, &share, write) => result,
-                _ = hang_up.changed() => Ok(()),
+            let work = session(&mut tls, &share, write, gate.as_ref());
+            tokio::pin!(work);
+            loop {
+                tokio::select! {
+                    result = &mut work => break result,
+                    changed = hang_up.changed() => {
+                        // The program around it gone is a hang-up too.
+                        if changed.is_err() {
+                            break Ok(());
+                        }
+                        let signal = *hang_up.borrow_and_update();
+                        if signal.only.is_none_or(|one| one == caller.session) {
+                            break Ok(());
+                        }
+                    }
+                }
             }
         }
-        None => session(&mut tls, &share, write).await,
+        None => session(&mut tls, &share, write, gate.as_ref()).await,
     };
     gate.closed(&caller);
     result
@@ -339,7 +370,7 @@ async fn refuse<S: tokio::io::AsyncWrite + Unpin>(s: &mut S, reason: String) -> 
 }
 
 /// The requests of one session, one at a time, until the caller hangs up.
-async fn session<S>(s: &mut S, share: &Share, write: bool) -> io::Result<()>
+async fn session<S>(s: &mut S, share: &Share, write: bool, gate: &dyn Gate) -> io::Result<()>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
@@ -352,6 +383,7 @@ where
             Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(()),
             Err(e) => return Err(e),
         };
+        gate.traffic();
         if req.op.writes() {
             let why = if write {
                 "writing over the Link comes in a later version"
@@ -371,7 +403,7 @@ where
                     reply(s, req.n, Err("no such open file".into())).await?;
                     continue;
                 };
-                let len = (len as usize).min(CHUNK);
+                let len = (len as usize).min(wire::READ_CHUNK);
                 match read_at(file, offset, len).await {
                     Ok(bytes) => wire::send_data(s, &bytes).await?,
                     Err(e) => reply(s, req.n, Err(e.to_string())).await?,

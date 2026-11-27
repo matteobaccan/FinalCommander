@@ -1243,6 +1243,8 @@ pub enum Event {
     LinkAccepting {
         result: Result<Option<(String, String)>, String>,
     },
+    /// Something went over the Link (at most a few times a second).
+    LinkTraffic,
     /// A caller began reading here (`open`) or stopped.
     LinkSession {
         name: String,
@@ -3656,6 +3658,10 @@ pub struct App {
     /// files is not something to find out by accident.
     pub link_on: bool,
     pub link_sessions: usize,
+    /// This machine's ID and address while it accepts calls, for the corner.
+    pub link_address: Option<String>,
+    /// When something last went over the Link, for the light that blinks in the corner.
+    pub link_traffic: Option<std::time::Instant>,
     /// Calls waiting for the dialog: one at a time, and only over the panels, so a call does
     /// not land in the middle of an edit.
     link_calls: std::collections::VecDeque<LinkCall>,
@@ -4139,6 +4145,8 @@ impl App {
             tunnels: Vec::new(),
             link_on: false,
             link_sessions: 0,
+            link_address: None,
+            link_traffic: None,
             link_calls: std::collections::VecDeque::new(),
             site_attempt: None,
             site_error: None,
@@ -4498,9 +4506,11 @@ impl App {
                 self.offer_link_call();
             }
             Event::LinkCallGone { call } => self.link_call_gone(call),
+            Event::LinkTraffic => self.link_traffic = Some(std::time::Instant::now()),
             Event::LinkAccepting { result } => match result {
                 Ok(Some((id, share))) => {
                     self.link_on = true;
+                    self.link_address = Some(id.clone());
                     let msg = self
                         .i18n
                         .t_args("link-on", &[("id", id.into()), ("share", share.into())]);
@@ -4509,6 +4519,7 @@ impl App {
                 Ok(None) => {
                     self.link_on = false;
                     self.link_sessions = 0;
+                    self.link_address = None;
                     self.set_status(self.i18n.t("link-off"));
                 }
                 Err(e) => {
@@ -25439,6 +25450,27 @@ impl App {
     }
 
     /// Ask where the tunnel goes.
+    /// How long the Link light keeps blinking after the last traffic.
+    const LINK_BLINK: std::time::Duration = std::time::Duration::from_millis(1200);
+
+    /// Whether the Link light is lit in this frame: blinking a few times a second while
+    /// something goes over it, and for a moment after.
+    pub fn link_blink_on(&self) -> bool {
+        match self.link_traffic {
+            Some(at) if self.link_on && at.elapsed() < Self::LINK_BLINK => {
+                (at.elapsed().as_millis() / 250) % 2 == 0
+            }
+            _ => false,
+        }
+    }
+
+    /// How soon the loop has to draw again for the light to blink and then go out.
+    pub fn link_wait(&self) -> Option<std::time::Duration> {
+        let at = self.link_traffic?;
+        (self.link_on && at.elapsed() < Self::LINK_BLINK + std::time::Duration::from_millis(250))
+            .then(|| std::time::Duration::from_millis(250))
+    }
+
     /// Turn accepting Link calls on, sharing the active panel's folder, or off.
     fn toggle_link(&mut self) {
         if self.link_on {
@@ -36405,12 +36437,25 @@ mod tests {
             result: Ok(Some(("123 456 789".into(), "/srv/photos".into()))),
         });
         assert!(app.link_on);
+        let shown = screen_text(&mut app, 120, 30);
+        assert!(
+            shown.contains("LINK (123 456 789)"),
+            "the ID stays in the corner:\n{shown}"
+        );
+        // Traffic lights it, and it goes out on its own a moment later.
+        app.handle_event(Event::LinkTraffic);
+        assert!(app.link_blink_on());
+        assert!(app.link_wait().is_some(), "the loop has frames to draw");
+        app.link_traffic = Some(std::time::Instant::now() - std::time::Duration::from_secs(5));
+        assert!(!app.link_blink_on());
+        assert!(app.link_wait().is_none());
         app.handle_event(Event::LinkSession {
             name: "laptop".into(),
             share: "photos".into(),
             open: true,
         });
         assert_eq!(app.link_sessions, 1);
+        assert!(screen_text(&mut app, 120, 30).contains("LINK 1 (123 456 789)"));
         app.handle_event(Event::LinkSession {
             name: "laptop".into(),
             share: "photos".into(),

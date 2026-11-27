@@ -328,20 +328,29 @@ impl JobFs for RoutedFs {
         how: CopyHow,
         on_bytes: &mut dyn FnMut(u64) -> bool,
     ) -> io::Result<u64> {
+        // The copies below report how far they have got; the job adds up what each call
+        // reports, so it is told the bytes since the last call. Handing it the running
+        // total made a 25 MB file count as a gigabyte.
+        let mut so_far = 0u64;
+        let mut by_step = |total: u64| {
+            let step = total.saturating_sub(so_far);
+            so_far = so_far.max(total);
+            on_bytes(step)
+        };
         match (src.is_local(), dst.is_local()) {
             (true, true) => self.local.copy_file(src, dst, how, on_bytes),
             // Upload.
             (true, false) => {
                 let remote = self.remote(dst)?;
                 self.handle
-                    .block_on(remote.upload(src.as_path(), dst, on_bytes))
+                    .block_on(remote.upload(src.as_path(), dst, &mut by_step))
                     .map_err(NetError::into_io)
             }
             // Download.
             (false, true) => {
                 let remote = self.remote(src)?;
                 self.handle
-                    .block_on(remote.download(src, dst.as_path(), on_bytes))
+                    .block_on(remote.download(src, dst.as_path(), &mut by_step))
                     .map_err(NetError::into_io)
             }
             // Server to server: one connection, or two.
@@ -350,12 +359,12 @@ impl JobFs for RoutedFs {
                 if src.same_provider(dst) {
                     return self
                         .handle
-                        .block_on(from.copy_within(src, dst, on_bytes))
+                        .block_on(from.copy_within(src, dst, &mut by_step))
                         .map_err(NetError::into_io);
                 }
                 let to = self.remote(dst)?;
                 self.handle
-                    .block_on(copy_between(&from, src, &to, dst, on_bytes))
+                    .block_on(copy_between(&from, src, &to, dst, &mut by_step))
                     .map_err(NetError::into_io)
             }
         }
@@ -434,6 +443,45 @@ mod tests {
         let refused = routed.trash(&remote).unwrap_err();
         assert_eq!(refused.kind(), io::ErrorKind::Unsupported);
         assert!(refused.to_string().contains("server"), "{refused}");
+    }
+
+    /// The job adds up the bytes each step reports, so a copy to or from a server must
+    /// report steps: the sum is the file's size, not the sum of every running total — which
+    /// made a 25 MB copy show a gigabyte.
+    #[test]
+    fn a_remote_copy_reports_its_bytes_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_rt, _pool, server, routed, site) = setup();
+        let size = crate::remote::CHUNK * 3 + 1234;
+        server.with_file("/srv/big.bin", &vec![5u8; size]);
+        let local = dir.path().join("big.bin");
+        let how = fcmd_jobs::CopyHow::buffered(64 * 1024);
+        let mut sum = 0u64;
+        routed
+            .copy_file(
+                &site.start().join("big.bin"),
+                &VPath::local(&local),
+                how,
+                &mut |n| {
+                    sum += n;
+                    true
+                },
+            )
+            .unwrap();
+        assert_eq!(sum, size as u64, "down");
+        let mut sum = 0u64;
+        routed
+            .copy_file(
+                &VPath::local(&local),
+                &site.start().join("again.bin"),
+                how,
+                &mut |n| {
+                    sum += n;
+                    true
+                },
+            )
+            .unwrap();
+        assert_eq!(sum, size as u64, "up");
     }
 
     #[test]

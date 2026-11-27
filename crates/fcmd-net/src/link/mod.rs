@@ -32,7 +32,7 @@ pub mod wire;
 pub use client::{call, LinkFs, Pending};
 pub use dial::Dialer;
 pub use identity::{format_id, parse_id, Identity};
-pub use server::{serve, Admission, Caller, Gate};
+pub use server::{serve, Admission, Caller, Gate, HangUp};
 pub use share::Share;
 
 /// The protocol this build speaks, sent first by each side.

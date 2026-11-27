@@ -14,7 +14,7 @@ use std::sync::{mpsc, Arc, Mutex};
 
 use async_trait::async_trait;
 use fcmd_net::link::pin::Pin;
-use fcmd_net::link::{self, discovery, Admission, Caller, Gate, Identity, Share};
+use fcmd_net::link::{self, discovery, Admission, Caller, Gate, HangUp, Identity, Share};
 use tokio::sync::{oneshot, watch};
 
 use crate::app::{Event, LinkCall};
@@ -66,7 +66,7 @@ pub struct Hub {
     tx: mpsc::Sender<Event>,
     pending: Pending,
     next: Arc<AtomicU64>,
-    hang_up: watch::Sender<u64>,
+    hang_up: watch::Sender<HangUp>,
     running: Option<tokio::task::JoinHandle<()>>,
     /// `link.port`: 0 for one the system chooses.
     pub port: u16,
@@ -82,7 +82,7 @@ impl Hub {
             tx,
             pending: Arc::default(),
             next: Arc::new(AtomicU64::new(1)),
-            hang_up: watch::channel(0).0,
+            hang_up: watch::channel(HangUp::default()).0,
             running: None,
             port: 0,
         }
@@ -137,6 +137,8 @@ impl Hub {
             share: Some(offered),
             hang_up: self.hang_up.subscribe(),
             dir: self.dir.clone(),
+            told: AtomicU64::new(0),
+            began: std::time::Instant::now(),
         });
         let (dir, name, tx, port) = (
             self.dir.clone(),
@@ -162,7 +164,10 @@ impl Hub {
 
     /// End every session open here.
     pub fn hang_up(&self) {
-        self.hang_up.send_modify(|n| *n += 1);
+        self.hang_up.send_modify(|h| {
+            h.generation += 1;
+            h.only = None;
+        });
     }
 }
 
@@ -206,9 +211,13 @@ struct Bridge {
     pending: Pending,
     next: Arc<AtomicU64>,
     share: Option<Share>,
-    hang_up: watch::Receiver<u64>,
+    hang_up: watch::Receiver<HangUp>,
     /// Where the PIN is kept, read at each call so that `fcmd --link-pin` counts at once.
     dir: PathBuf,
+    /// When the loop was last told of traffic, in milliseconds since the bridge began: told
+    /// at most every 150 ms, which is plenty for a light and nothing for the loop.
+    told: AtomicU64,
+    began: std::time::Instant,
 }
 
 /// Takes the dialog down when the server stops waiting for it.
@@ -275,7 +284,20 @@ impl Gate for Bridge {
         });
     }
 
-    fn hang_up(&self) -> Option<watch::Receiver<u64>> {
+    fn traffic(&self) {
+        let now = self.began.elapsed().as_millis() as u64 + 1;
+        let last = self.told.load(Ordering::Relaxed);
+        if now.saturating_sub(last) >= 150
+            && self
+                .told
+                .compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+        {
+            let _ = self.tx.send(Event::LinkTraffic);
+        }
+    }
+
+    fn hang_up(&self) -> Option<watch::Receiver<HangUp>> {
         Some(self.hang_up.clone())
     }
 
@@ -432,6 +454,8 @@ mod tests {
             share: Some(Share::new("shared", shared.path(), false).unwrap()),
             hang_up: hub.hang_up.subscribe(),
             dir: here.path().to_path_buf(),
+            told: AtomicU64::new(0),
+            began: std::time::Instant::now(),
         });
         let identity = Arc::new(Identity::load_or_create(here.path(), "here").unwrap());
         let listener = runtime
@@ -456,14 +480,20 @@ mod tests {
             .block_on(fcmd_net::RemoteFs::read_dir(&fs, "/"))
             .unwrap();
         assert!(rows.iter().any(|r| r.name == "note.txt"));
-        match rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap() {
-            Event::LinkSession { open: true, .. } => {}
-            other => panic!("the session was expected to open, not {other:?}"),
+        loop {
+            match rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap() {
+                Event::LinkSession { open: true, .. } => break,
+                Event::LinkTraffic => continue,
+                other => panic!("the session was expected to open, not {other:?}"),
+            }
         }
         hub.hang_up();
-        match rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap() {
-            Event::LinkSession { open: false, .. } => {}
-            other => panic!("the session was expected to close, not {other:?}"),
+        loop {
+            match rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap() {
+                Event::LinkSession { open: false, .. } => break,
+                Event::LinkTraffic => continue,
+                other => panic!("the session was expected to close, not {other:?}"),
+            }
         }
     }
 
@@ -488,6 +518,8 @@ mod tests {
             share: Some(Share::new("shared", shared.path(), false).unwrap()),
             hang_up: hub.hang_up.subscribe(),
             dir: here.path().to_path_buf(),
+            told: AtomicU64::new(0),
+            began: std::time::Instant::now(),
         });
         let identity = Arc::new(Identity::load_or_create(here.path(), "here").unwrap());
         let listener = runtime

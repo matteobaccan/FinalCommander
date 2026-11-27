@@ -14,6 +14,10 @@ use fcmd_core::EntryKind;
 /// The largest frame either side accepts: a chunk of a file plus room.
 pub const MAX_FRAME: usize = 1024 * 1024;
 
+/// How much of a file one read asks for: as much as a frame holds, less some room. Each read
+/// is a round trip, so on a Wi-Fi a bigger one is what makes a file come across quickly.
+pub const READ_CHUNK: usize = MAX_FRAME - 64 * 1024;
+
 /// What a side sends first.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Hello {

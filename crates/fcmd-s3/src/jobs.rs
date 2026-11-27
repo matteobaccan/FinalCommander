@@ -339,10 +339,17 @@ impl<F: JobFs> JobFs for ObjectFs<F> {
             (true, false) if dst.is_local() => {
                 let objects = self.objects.clone();
                 let (from, target) = (src.clone(), dst.as_path().to_path_buf());
+                // `fetch_object` reports how far it has got, the job adds up steps.
+                let mut so_far = 0u64;
+                let mut by_step = |total: u64| {
+                    let step = total.saturating_sub(so_far);
+                    so_far = so_far.max(total);
+                    on_bytes(step)
+                };
                 self.handle
                     .block_on(async move {
                         objects
-                            .fetch_object(&from, &target, on_bytes, &CancelToken::new())
+                            .fetch_object(&from, &target, &mut by_step, &CancelToken::new())
                             .await
                     })
                     .map_err(into_io)
