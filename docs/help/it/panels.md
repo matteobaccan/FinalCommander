@@ -533,6 +533,13 @@ Quello che è selezionato è quello su cui agisce l'operazione successiva. Senza
 selezionato è la riga sotto il cursore — così `F5` su un file copia quel file, e nessuno deve
 selezionarlo prima.
 
+# Quando i tasti funzione sono occupati
+
+macOS tiene `F9` e `F10` per le sue finestre, e alcune tastiere non hanno tasti funzione.
+Premi `Esc` e poi una cifra entro un secondo: `Esc 1` … `Esc 9` sono `F1` … `F9`, e `Esc 0` è
+`F10`. Sul Mac funziona anche `fn` insieme al tasto, oppure *Impostazioni di Sistema → Tastiera →
+Usa i tasti F1, F2 ecc. come tasti funzione standard*.
+
 # Il mouse
 
 Spento fino a che non lo chiedi, in `F9 → Opzioni → Impostazioni dell'interfaccia`, e la ragione

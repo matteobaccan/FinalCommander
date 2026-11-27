@@ -27,6 +27,10 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | F11 | plugin commands | — | — | — | plugin commands; also **Ctrl+Shift+F11** |
 | F12 | — | screen list | custom filter? | — | panel/tab list |
 
+Where the system or the keyboard keeps the function keys — macOS takes `F9` and `F10` for its
+windows — `Esc` and then a digit within a second is that function key, as in MC: `Esc 1` …
+`Esc 9` are `F1` … `F9`, `Esc 0` is `F10`. The `Esc` still does what it does on its own.
+
 ## 2. Shift + F-keys
 
 | Key | FAR | MC | TC `?` | Krusader | FC |

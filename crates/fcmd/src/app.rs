@@ -3513,6 +3513,9 @@ pub struct App {
     /// keyboard protocol ever report this, so on the others it stays empty and the bar does
     /// not change — which is what it did before.
     pub held: Mods,
+    /// When a bare `Esc` was last pressed: a digit right after it is the function key of
+    /// that number, for keyboards and systems that keep `F9` and `F10` to themselves.
+    esc_at: Option<std::time::Instant>,
     /// What the attributes dialog is about. The dialog is open while the selection could
     /// change under it, so what it will touch is settled when it opens.
     attr_targets: Vec<VPath>,
@@ -4140,6 +4143,7 @@ impl App {
             status: String::new(),
             status_error: false,
             held: Mods::NONE,
+            esc_at: None,
             attr_targets: Vec::new(),
             attr_owner: None,
             read_started: [None, None],
@@ -6485,6 +6489,7 @@ impl App {
         // The bar showed what this modifier does; the key has now been pressed, so it goes
         // back to the plain one until the terminal says the modifier is down again.
         self.held = Mods::NONE;
+        let key = self.esc_digit(key);
         // A macro answers the key before anything else does, which is what lets one put a
         // macro on `F5` — FAR allows that, and a macro one cannot put on a useful key is a
         // macro one does not record. Not while recording, or a macro would record itself.
@@ -6547,6 +6552,28 @@ impl App {
         }
         if let (Some(key), Some(steps)) = (self.record_key.take(), self.recording.as_mut()) {
             steps.push(fcmd_cmd::Step::Press(key));
+        }
+    }
+
+    /// `Esc` and then a digit within a second is a function key: `Esc 1` … `Esc 9` are `F1`
+    /// … `F9` and `Esc 0` is `F10`, as in Midnight Commander. It is for where the system
+    /// takes the function keys — macOS keeps `F9` and `F10` for its windows — or the
+    /// keyboard has none. The `Esc` itself still does what it does.
+    fn esc_digit(&mut self, key: Key) -> Key {
+        let armed = self
+            .esc_at
+            .take()
+            .is_some_and(|at| at.elapsed() <= std::time::Duration::from_secs(1));
+        match key.code {
+            KeyCode::Esc if key.mods == Mods::NONE => {
+                self.esc_at = Some(std::time::Instant::now());
+                key
+            }
+            KeyCode::Char(c) if armed && key.mods == Mods::NONE && c.is_ascii_digit() => {
+                let n = c.to_digit(10).unwrap_or(0) as u8;
+                Key::new(KeyCode::F(if n == 0 { 10 } else { n }), Mods::NONE)
+            }
+            _ => key,
         }
     }
 
@@ -36616,6 +36643,23 @@ mod tests {
         press(&mut app, "Ctrl+Shift+5");
         assert_eq!(app.bookmarks.len(), 1);
         assert_eq!(app.bookmarks[0].digit, Some(5));
+    }
+
+    /// `Esc` then a digit is the function key of that number; a digit long after an `Esc`
+    /// is the digit.
+    #[test]
+    fn esc_and_a_digit_is_a_function_key() {
+        let mut app = app();
+        press(&mut app, "Esc");
+        press(&mut app, "9");
+        assert!(matches!(app.mode, Mode::Menu { .. }), "{:?}", app.mode);
+        press(&mut app, "Esc");
+        app.mode = Mode::Normal;
+        press(&mut app, "Esc");
+        app.esc_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(5));
+        press(&mut app, "9");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert!(app.cmd.text.ends_with('9'), "the digit is typed");
     }
 
     #[test]

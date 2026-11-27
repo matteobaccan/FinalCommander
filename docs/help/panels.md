@@ -500,6 +500,13 @@ without a name is used once and not kept, and the first row takes the filter off
 What is selected is what the next operation acts on. With nothing selected it is the row under
 the cursor — so `F5` on one file copies that file, and nobody has to select it first.
 
+# When the function keys are taken
+
+macOS keeps `F9` and `F10` for its windows, and some keyboards have no function keys at all.
+Press `Esc` and then a digit within a second: `Esc 1` … `Esc 9` are `F1` … `F9`, and `Esc 0`
+is `F10`. On a Mac `fn` with the key works too, or *System Settings → Keyboard → Use F1, F2,
+etc. keys as standard function keys*.
+
 # The mouse
 
 Off until you ask for it, in `F9 → Options → Interface settings`, and the reason is worth

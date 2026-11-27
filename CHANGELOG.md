@@ -8,6 +8,9 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- `Esc` and then a digit within a second is a function key, as in Midnight Commander:
+  `Esc 1` … `Esc 9` are `F1` … `F9`, `Esc 0` is `F10` — for macOS, which keeps `F9` and `F10`
+  for its windows, and for keyboards without function keys.
 - Sessions imported from FAR's FTP plugin, WinSCP and NetBox (SPEC 04 §6.7): *Commands →
   Import sessions…* on a `.reg` export or a `WinSCP.ini` adds them to the stored ones, groups
   from FAR's folders and labels, nothing stored twice. A password FAR kept with its XOR cipher
