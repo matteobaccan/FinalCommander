@@ -3397,6 +3397,9 @@ pub struct FormView<'a> {
     /// Where the dialog is centred. `None` is the middle of the screen, which is where a
     /// dialog about the program goes; a dialog about one panel is centred on that panel.
     pub over: Option<Rect>,
+    /// The least width of the rows and the least number of them: for a dialog with pages,
+    /// the largest page's, so that every page is drawn at the same size.
+    pub min: (u16, u16),
 }
 
 /// One page along the top of a dialog.
@@ -3419,6 +3422,7 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
         tabs,
         tab,
         over,
+        min,
     } = *view;
     // The row of pages is as wide as the labels plus a space either side of each.
     let tabs_w: usize = tabs.iter().map(|t| t.label.width() + 2).sum();
@@ -3430,12 +3434,14 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
         .chain(std::iter::once(title.width() + 4))
         .chain(std::iter::once(buttons_w))
         .chain(std::iter::once(tabs_w))
+        .chain(std::iter::once(min.0 as usize))
         .max()
         .unwrap_or(20)
         .min(screen.w.saturating_sub(4) as usize) as u16;
     // The rows, the page row above them, and the rule and the buttons below.
     let tail = if buttons.is_empty() { 0 } else { 2 };
-    let size = box_size(screen, content_w + 2, rows.len() as u16 + tabs_h + tail);
+    let row_count = (rows.len() as u16).max(min.1);
+    let size = box_size(screen, content_w + 2, row_count + tabs_h + tail);
     let (w, h) = (size.w, size.h);
     // Centred on what the dialog is *about*: the screen for a dialog about the program, the
     // panel for one about a panel — a drive list that opens over the other panel is a drive

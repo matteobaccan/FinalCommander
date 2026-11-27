@@ -36421,6 +36421,45 @@ mod tests {
         assert!(!app.link_on);
     }
 
+    /// Every page of the session dialog is drawn at one size, and a long note goes on over
+    /// several lines instead of making the dialog as wide as the screen.
+    #[test]
+    fn the_session_dialog_keeps_its_size_and_wraps_its_notes() {
+        let mut app = app();
+        app.open_site_form(None);
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog")
+        };
+        let (w, h) = form.page_box();
+        assert!(w <= 76, "the notes wrap: {w}");
+        let rows = form.rows();
+        assert!(
+            rows.iter().all(|r| r.text.chars().count() <= w as usize),
+            "{rows:?}"
+        );
+        assert!(rows.len() <= h as usize);
+        let first = screen_text(&mut app, 160, 40);
+        let frame_of = |shown: &str| -> Vec<usize> {
+            shown
+                .lines()
+                .filter(|l| l.contains('╔') || l.contains('╚'))
+                .map(|l| l.chars().count())
+                .collect()
+        };
+        let lines_of = |shown: &str| shown.lines().filter(|l| l.contains('║')).count();
+        let (top, height) = (frame_of(&first), lines_of(&first));
+        for _ in 0..3 {
+            press(&mut app, "Ctrl+PageDown");
+            let shown = screen_text(&mut app, 160, 40);
+            assert_eq!(
+                lines_of(&shown),
+                height,
+                "the same height on every page:\n{shown}"
+            );
+            assert_eq!(frame_of(&shown), top);
+        }
+    }
+
     #[test]
     fn the_session_dialog_has_pages_and_the_protocol_one_follows_the_protocol() {
         let mut app = app();

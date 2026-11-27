@@ -2682,7 +2682,13 @@ impl Form {
     /// Where the cursor is among the rows that are drawn, which is not where it is among the
     /// fields once a dialog has pages.
     pub fn cursor_row(&self) -> usize {
-        self.cursor.saturating_sub(self.visible().start)
+        // A note that went on over several lines pushes the rows under it down.
+        let width = self.note_width();
+        let start = self.visible().start;
+        self.fields[start..self.cursor.max(start)]
+            .iter()
+            .map(|f| self.field_rows(f, width).len())
+            .sum()
     }
 
     /// Turn to the next page that has anything on it, or the one before. The cursor goes to
@@ -2714,67 +2720,132 @@ impl Form {
     }
 
     pub fn rows(&self) -> Vec<FormRow> {
-        let range = self.visible();
-        self.fields[range]
+        let width = self.note_width();
+        self.fields[self.visible()]
             .iter()
-            .map(|f| match f {
-                Field::Separator => FormRow::separator(),
-                Field::Dim(label) => FormRow {
-                    text: format!("[ ] {label}"),
-                    dim: true,
-                    ..FormRow::default()
-                },
-                Field::Note(text) => FormRow {
-                    text: text.clone(),
-                    dim: true,
-                    ..FormRow::default()
-                },
-                Field::Toggle { label, on, .. } => {
-                    FormRow::new(format!("[{}] {label}", if *on { 'x' } else { ' ' }))
-                }
-                // FAR's own spelling of a box with no one answer: `[?]`.
-                Field::Tri { label, state, .. } => FormRow::new(format!(
-                    "[{}] {label}",
-                    match state {
-                        Some(true) => 'x',
-                        Some(false) => ' ',
-                        None => '?',
-                    }
-                )),
-                Field::Text {
-                    label,
-                    value,
-                    secret,
-                    all,
-                    ..
-                } => FormRow {
-                    marked: all.then(|| label.chars().count() + 2),
-                    ..FormRow::new(format!(
-                        "{label}: {}",
-                        if *secret {
-                            "*".repeat(value.chars().count())
-                        } else {
-                            value.clone()
-                        }
-                    ))
-                },
-                Field::Choice {
-                    label,
-                    options,
-                    chosen,
-                    ..
-                } => FormRow::new(format!(
-                    "{label}: {} ↓",
-                    options.get(*chosen).map(|(_, l)| l.as_str()).unwrap_or("")
-                )),
-                // Round boxes for a group where one answer excludes the others, square ones
-                // for a box that stands on its own: the shape says which it is before the
-                // label is read, as it does in every dialog since the first one.
-                Field::Radio { label, on, .. } => {
-                    FormRow::new(format!("({}) {label}", if *on { '•' } else { ' ' }))
-                }
-            })
+            .flat_map(|f| self.field_rows(f, width))
             .collect()
+    }
+
+    /// How wide a note may be before it goes on to the next line: as wide as the widest of
+    /// the other rows, on any page — so a long explanation makes the dialog taller, not as
+    /// wide as the screen — and never narrower than a readable line.
+    fn note_width(&self) -> usize {
+        let widest = self
+            .fields
+            .iter()
+            .filter(|f| !matches!(f, Field::Note(_)))
+            .flat_map(|f| self.field_rows(f, usize::MAX))
+            .map(|r| UnicodeWidthStr::width(r.text.as_str()))
+            .chain(std::iter::once(
+                UnicodeWidthStr::width(self.title.as_str()) + 4,
+            ))
+            .max()
+            .unwrap_or(0);
+        widest.clamp(48, 76)
+    }
+
+    /// The size every page of the dialog is drawn at: the widest row and the most rows of
+    /// any page, so turning a page does not make the dialog jump.
+    pub fn page_box(&self) -> (u16, u16) {
+        let width = self.note_width();
+        let ranges: Vec<std::ops::Range<usize>> = if self.pages.is_empty() {
+            std::iter::once(0..self.fields.len()).collect()
+        } else {
+            self.pages
+                .iter()
+                .map(|p| p.from..p.to.min(self.fields.len()))
+                .collect()
+        };
+        let mut w = 0usize;
+        let mut h = 0usize;
+        for range in ranges {
+            let rows: Vec<FormRow> = self.fields[range]
+                .iter()
+                .flat_map(|f| self.field_rows(f, width))
+                .collect();
+            h = h.max(rows.len());
+            for r in &rows {
+                w = w.max(UnicodeWidthStr::width(r.text.as_str()));
+            }
+        }
+        (w as u16, h as u16)
+    }
+
+    /// The rows one field is drawn as: one, except a note longer than `width`, which goes
+    /// on over as many as it needs, broken between words.
+    fn field_rows(&self, f: &Field, width: usize) -> Vec<FormRow> {
+        if let Field::Note(text) = f {
+            return wrap_words(text, width)
+                .into_iter()
+                .map(|line| FormRow {
+                    text: line,
+                    dim: true,
+                    ..FormRow::default()
+                })
+                .collect();
+        }
+        vec![self.field_row(f)]
+    }
+
+    fn field_row(&self, f: &Field) -> FormRow {
+        match f {
+            Field::Separator => FormRow::separator(),
+            Field::Dim(label) => FormRow {
+                text: format!("[ ] {label}"),
+                dim: true,
+                ..FormRow::default()
+            },
+            Field::Note(text) => FormRow {
+                text: text.clone(),
+                dim: true,
+                ..FormRow::default()
+            },
+            Field::Toggle { label, on, .. } => {
+                FormRow::new(format!("[{}] {label}", if *on { 'x' } else { ' ' }))
+            }
+            // FAR's own spelling of a box with no one answer: `[?]`.
+            Field::Tri { label, state, .. } => FormRow::new(format!(
+                "[{}] {label}",
+                match state {
+                    Some(true) => 'x',
+                    Some(false) => ' ',
+                    None => '?',
+                }
+            )),
+            Field::Text {
+                label,
+                value,
+                secret,
+                all,
+                ..
+            } => FormRow {
+                marked: all.then(|| label.chars().count() + 2),
+                ..FormRow::new(format!(
+                    "{label}: {}",
+                    if *secret {
+                        "*".repeat(value.chars().count())
+                    } else {
+                        value.clone()
+                    }
+                ))
+            },
+            Field::Choice {
+                label,
+                options,
+                chosen,
+                ..
+            } => FormRow::new(format!(
+                "{label}: {} ↓",
+                options.get(*chosen).map(|(_, l)| l.as_str()).unwrap_or("")
+            )),
+            // Round boxes for a group where one answer excludes the others, square ones
+            // for a box that stands on its own: the shape says which it is before the
+            // label is read, as it does in every dialog since the first one.
+            Field::Radio { label, on, .. } => {
+                FormRow::new(format!("({}) {label}", if *on { '•' } else { ' ' }))
+            }
+        }
     }
 
     /// The cursor walks the page it is on and wraps inside it: a dialog with pages is read
@@ -3240,6 +3311,27 @@ pub fn ai_with_scheme(url: &str) -> String {
     }
     let host = url.split('/').next().unwrap_or(url);
     format!("{}://{url}", ai_scheme_for(host))
+}
+
+/// `text` broken between words into lines of at most `width` columns (a word longer than
+/// that has a line to itself).
+fn wrap_words(text: &str, width: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for word in text.split_whitespace() {
+        let wide = UnicodeWidthStr::width(line.as_str());
+        if !line.is_empty() && wide + 1 + UnicodeWidthStr::width(word) > width {
+            lines.push(std::mem::take(&mut line));
+        }
+        if !line.is_empty() {
+            line.push(' ');
+        }
+        line.push_str(word);
+    }
+    if !line.is_empty() || lines.is_empty() {
+        lines.push(line);
+    }
+    lines
 }
 
 #[cfg(test)]

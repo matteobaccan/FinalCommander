@@ -106,6 +106,10 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- A dialog with pages (the session editor, `Ctrl+PgUp`/`Ctrl+PgDn`) changed size from one
+  page to the next, and a long note made it as wide as the screen. Every page is now drawn
+  at the size of the largest, and notes go on to the next line.
+
 - Opening a stored session from the NetBox panel or the *Connections* list left the list at
   once, so a connection that failed left a panel that looked connected, with the error under
   the command line. The list now stays, with a box saying what is being opened; a failure is

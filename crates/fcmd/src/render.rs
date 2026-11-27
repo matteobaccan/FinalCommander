@@ -155,6 +155,7 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                             tabs: &tabs,
                             tab: form.page,
                             over: None,
+                            min: form.page_box(),
                         },
                     );
                     return form.caret().map(|(row, col)| {
@@ -811,6 +812,7 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                     // *about*, so moving it is moving that rectangle; `draw_form` clamps the
                     // result to the screen, which is why the offset needs no limit of its own.
                     over: moved,
+                    min: form.page_box(),
                 },
             );
             // A text row shows a real caret; everything else leaves the cursor hidden.
@@ -1715,6 +1717,7 @@ fn draw_dialog_over_screen(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)
                     tabs: &tabs,
                     tab: form.page,
                     over: None,
+                    min: form.page_box(),
                 },
             );
             form.caret().map(|(row, col)| {
