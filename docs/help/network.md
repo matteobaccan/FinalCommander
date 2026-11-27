@@ -153,6 +153,12 @@ caller at once, and turning the Link off does too. Everything is encrypted (TLS 
 private addresses are accepted, and a machine whose key changes is refused the next time with
 the name of the file to edit — `link-known`, beside the settings — if it was reinstalled.
 
+**Who is connected.** The corner of the status line keeps `LINK (ID · address)` while the
+Link is on, with the number of callers (`LINK 2 (…)`), and the word blinks while something
+goes over it. *Commands → Link: connections*, or a click on that corner, opens the Link window:
+who is reading this machine, from which address and since when. `F8` hangs up the one under
+the cursor, `Ctrl+Alt+L` all of them. Several machines can be connected at the same time.
+
 **A PIN, for your own machines.** `fcmd --link-pin` on the machine that shares sets a PIN (at
 least six characters; an empty one removes it). A caller that knows it is let in without the
 question: in its netbox session choose *ask* as the authentication, and give the PIN when the

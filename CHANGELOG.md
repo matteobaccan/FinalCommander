@@ -39,6 +39,10 @@ Notable changes, newest first. The format follows
   · 192.168.1.10)` with the number of callers, and the word blinks while something goes over
   the Link. A file is read across in reads of nearly a megabyte rather than 256 KB, a quarter
   of the round trips.
+  *Commands → Link: connections* — or a click on that corner — opens the Link window: this
+  machine's ID and address, the folder it shares, and who is reading it, with since when;
+  `F8` hangs up the caller under the cursor alone, `Ctrl+Alt+L` all of them. Several
+  machines can read one at the same time.
   A machine on another network (a second router, a Wi-Fi apart from the wired network) is
   called by its IP address as the host, since no broadcast crosses between networks; the
   called side shows its address beside its ID and listens on TCP 47831 by default. The

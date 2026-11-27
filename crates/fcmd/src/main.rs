@@ -1639,6 +1639,7 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                 Request::LinkAccept { share } => link_hub.accept(runtime.handle(), share),
                 Request::LinkAnswer { call, accept } => link_hub.answer(call, accept),
                 Request::LinkHangUp => link_hub.hang_up(),
+                Request::LinkHangUpOne { session } => link_hub.hang_up_one(session),
                 Request::Disconnect { key } => {
                     let tx = tx.clone();
                     let pool = pool.clone();
@@ -8168,6 +8169,7 @@ dir_attr = "D"
                 | Request::LinkAccept { .. }
                 | Request::LinkAnswer { .. }
                 | Request::LinkHangUp
+                | Request::LinkHangUpOne { .. }
                 | Request::Disconnect { .. }
                 | Request::ArcPassword { .. }
                 | Request::Upload { .. } => {}

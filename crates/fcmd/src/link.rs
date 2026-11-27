@@ -17,7 +17,7 @@ use fcmd_net::link::pin::Pin;
 use fcmd_net::link::{self, discovery, Admission, Caller, Gate, HangUp, Identity, Share};
 use tokio::sync::{oneshot, watch};
 
-use crate::app::{Event, LinkCall};
+use crate::app::{Event, LinkCall, LinkPeer};
 
 type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<bool>>>>;
 
@@ -42,6 +42,18 @@ fn reachable_as(id: u32, port: u16) -> String {
         Some(ip) if port == discovery::PORT => format!("{id} · {ip}"),
         Some(ip) => format!("{id} · {ip}:{port}"),
         None => id,
+    }
+}
+
+/// A caller as the *Link* window lists it.
+fn peer_of(caller: &Caller) -> LinkPeer {
+    LinkPeer {
+        session: caller.session,
+        name: caller.name.clone(),
+        id: link::format_id(caller.id),
+        addr: caller.addr.ip().to_string(),
+        share: caller.share.clone(),
+        since: String::new(),
     }
 }
 
@@ -169,6 +181,14 @@ impl Hub {
             h.only = None;
         });
     }
+
+    /// End one session, by the number its `LinkSession` event gave.
+    pub fn hang_up_one(&self, session: u64) {
+        self.hang_up.send_modify(|h| {
+            h.generation += 1;
+            h.only = Some(session);
+        });
+    }
 }
 
 async fn run(
@@ -270,16 +290,14 @@ impl Gate for Bridge {
 
     fn opened(&self, caller: &Caller, _write: bool) {
         let _ = self.tx.send(Event::LinkSession {
-            name: caller.name.clone(),
-            share: caller.share.clone(),
+            peer: peer_of(caller),
             open: true,
         });
     }
 
     fn closed(&self, caller: &Caller) {
         let _ = self.tx.send(Event::LinkSession {
-            name: caller.name.clone(),
-            share: caller.share.clone(),
+            peer: peer_of(caller),
             open: false,
         });
     }

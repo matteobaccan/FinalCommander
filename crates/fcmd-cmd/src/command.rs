@@ -386,6 +386,8 @@ pub enum Command {
     NetLinkAccept,
     /// End every Link session another machine has open on this one.
     NetLinkHangUp,
+    /// The *Link* window: this machine's ID and address, what it shares, who is reading it.
+    NetLinkPeers,
     /// Choose the AWS profile an object storage service signs with, from the profiles of
     /// `~/.aws/credentials` and `~/.aws/config`.
     NetS3Profile,
@@ -891,6 +893,7 @@ impl Command {
             Command::NetTunnels,
             Command::NetLinkAccept,
             Command::NetLinkHangUp,
+            Command::NetLinkPeers,
             Command::NetS3Profile,
             Command::NetS3Link,
             Command::ToolUserMenu,
@@ -1256,6 +1259,7 @@ impl Command {
             Command::NetTunnels => "net.tunnels".into(),
             Command::NetLinkAccept => "net.link.accept".into(),
             Command::NetLinkHangUp => "net.link.hangup".into(),
+            Command::NetLinkPeers => "net.link.peers".into(),
             Command::NetS3Profile => "net.s3.profile".into(),
             Command::NetS3Link => "net.s3.link".into(),
             Command::ToolUserMenu => "tool.usermenu".into(),
@@ -1622,6 +1626,7 @@ impl Command {
             ("net.tunnels", _) => Command::NetTunnels,
             ("net.link.accept", _) => Command::NetLinkAccept,
             ("net.link.hangup", _) => Command::NetLinkHangUp,
+            ("net.link.peers", _) => Command::NetLinkPeers,
             ("net.s3.profile", _) => Command::NetS3Profile,
             ("net.s3.link", _) => Command::NetS3Link,
             ("tool.usermenu", _) => Command::ToolUserMenu,

@@ -159,6 +159,12 @@ indirizzi privati, e una macchina la cui chiave cambia viene rifiutata la volta 
 nome del file da correggere — `link-known`, accanto alle impostazioni — se è stata
 reinstallata.
 
+**Chi è connesso.** Nell'angolo della riga di stato resta `LINK (ID · indirizzo)` finché il
+Link è acceso, con il numero di chi è connesso (`LINK 2 (…)`), e la scritta lampeggia mentre
+passano dati. *Comandi → Link: connessioni*, o un clic su quell'angolo, apre la finestra del
+Link: chi sta leggendo questo computer, da quale indirizzo e da quando. `F8` chiude quella sotto
+il cursore, `Ctrl+Alt+L` tutte. Più computer possono essere connessi nello stesso momento.
+
 **Un PIN, per le proprie macchine.** `fcmd --link-pin` sulla macchina che condivide imposta
 un PIN (almeno sei caratteri; vuoto lo toglie). Chi lo conosce entra senza la domanda: nella
 sua sessione del NetBox scegli *ask* come autenticazione e dai il PIN quando viene chiesta la

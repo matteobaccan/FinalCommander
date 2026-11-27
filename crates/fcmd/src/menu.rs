@@ -624,6 +624,7 @@ pub fn menus() -> Vec<Menu> {
                 item("menu-tunnel", "", Action::Run(Command::NetTunnel)),
                 item("menu-tunnels", "", Action::Run(Command::NetTunnels)),
                 item("menu-link-accept", "", Action::Run(Command::NetLinkAccept)),
+                item("menu-link-peers", "", Action::Run(Command::NetLinkPeers)),
                 item(
                     "menu-link-hangup",
                     "Ctrl+Alt+L",

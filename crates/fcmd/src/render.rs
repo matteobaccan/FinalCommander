@@ -597,6 +597,15 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                     style.bold = true;
                 }
                 buf.put_str(w - width, row.y, &mark, style, width);
+                // Where the Link's part is, for a click to open its window.
+                if let Some(text) = &link_mark {
+                    if let Some(at) = mark.find(text.as_str()) {
+                        let x =
+                            w - width + unicode_width::UnicodeWidthStr::width(&mark[..at]) as u16;
+                        let wide = unicode_width::UnicodeWidthStr::width(text.as_str()) as u16;
+                        app.layout.link_corner = Some(Rect::new(x, row.y, wide, 1));
+                    }
+                }
                 // While something goes over the Link the word blinks, four times a second,
                 // in the colours of the cursor: a light, as on a network card.
                 if let (Some(text), true) = (&link_mark, app.link_blink_on()) {
@@ -788,6 +797,10 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         }
         Mode::Sites { cursor } => {
             draw_sites(app, buf, screen, *cursor);
+            None
+        }
+        Mode::LinkPeers { cursor } => {
+            draw_link_window(app, buf, screen, *cursor);
             None
         }
         Mode::Menu { menu, item, open } => {
@@ -4115,6 +4128,36 @@ fn draw_sites(app: &App, buf: &mut Buffer, screen: Rect, cursor: usize) {
             break;
         }
         row += 1;
+    }
+}
+
+/// The *Link* window: who this machine is, what it shares, and who is reading it, the
+/// caller under the cursor lit (SPEC 04 §9.4).
+fn draw_link_window(app: &App, buf: &mut Buffer, screen: Rect, cursor: usize) {
+    let lines = app.link_window_lines();
+    let title = app.i18n.t("link-window-title");
+    let hint = app.i18n.t("link-window-hint");
+    let area = widgets::draw_dialog(buf, &app.theme, screen, &title, &lines, Some(&hint));
+    if app.link_peers.is_empty() {
+        return;
+    }
+    let first = lines.len() - app.link_peers.len();
+    let index = first + cursor.min(app.link_peers.len() - 1);
+    let y = area.y + 1 + index as u16;
+    if y < area.y + area.h {
+        let width = area.w.saturating_sub(2);
+        let text = format!(
+            " {:<w$}",
+            lines[index],
+            w = width.saturating_sub(1) as usize
+        );
+        buf.put_str(
+            area.x + 1,
+            y,
+            &text,
+            app.theme.fg_on("cursor.fg", "cursor.bg"),
+            width,
+        );
     }
 }
 

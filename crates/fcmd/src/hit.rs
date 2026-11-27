@@ -27,6 +27,8 @@ pub enum Hit {
     ListRow(usize),
     /// Inside the text of the viewer, the editor or the terminal, at this cell of its area.
     Text { col: u16, row: u16 },
+    /// The `LINK` in the corner of the status line.
+    LinkCorner,
 }
 
 /// Where the clickable parts of the screen were on the last frame.
@@ -50,6 +52,8 @@ pub struct Layout {
     pub list: Option<ListArea>,
     /// The text area of the viewer, the editor, the hex editor or the terminal.
     pub text: Option<Rect>,
+    /// Where the `LINK` of the status line's corner is, while the Link is on.
+    pub link_corner: Option<Rect>,
 }
 
 /// One panel's list, as it was drawn.
@@ -79,6 +83,11 @@ impl Layout {
     /// The order is the order things are drawn in: a list that is open is over the panels, and
     /// the bars at the edges of the screen are not under either.
     pub fn hit(&self, col: u16, row: u16) -> Option<Hit> {
+        if let Some(corner) = self.link_corner {
+            if corner.contains(col, row) {
+                return Some(Hit::LinkCorner);
+            }
+        }
         if let Some((bar, keys)) = &self.key_bar {
             if row == *bar {
                 return key_cell(col, keys, self.width_hint()).map(Hit::Key);

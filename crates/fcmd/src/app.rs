@@ -630,6 +630,10 @@ pub enum Request {
     },
     /// End every session another machine has open here.
     LinkHangUp,
+    /// End this one.
+    LinkHangUpOne {
+        session: u64,
+    },
 }
 
 /// A connection being made from a list of sessions.
@@ -645,6 +649,20 @@ pub struct SiteAttempt {
     /// A connection request is out. Not while a password or a host key is being asked
     /// for — that question has the screen, and if it is cancelled nothing is coming.
     pub waiting: bool,
+}
+
+/// A machine reading this one over the Link, as the *Link* window lists it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkPeer {
+    /// The call's number, which ends it alone.
+    pub session: u64,
+    pub name: String,
+    /// Its nine digits, spaced.
+    pub id: String,
+    pub addr: String,
+    pub share: String,
+    /// When it came in, `HH:MM`, filled in here.
+    pub since: String,
 }
 
 /// A Link call waiting for the person here to answer it (SPEC 04 §9.5).
@@ -1247,8 +1265,7 @@ pub enum Event {
     LinkTraffic,
     /// A caller began reading here (`open`) or stopped.
     LinkSession {
-        name: String,
-        share: String,
+        peer: LinkPeer,
         open: bool,
     },
     /// Something that is not a key has changed what the screen should show: a terminal's
@@ -3078,6 +3095,11 @@ pub enum Mode {
     Sites {
         cursor: usize,
     },
+    /// The *Link* window: this machine's ID and address, what it shares, and who is
+    /// reading it, each of whom `F8` hangs up.
+    LinkPeers {
+        cursor: usize,
+    },
     /// The menu bar (`F9`): which title is picked, which entry is under the cursor, and
     /// whether the menu under that title is pulled down. `F9` lights the bar without pulling
     /// anything down, as FAR does: there the letters drawn on the bar are the keys that open
@@ -3660,6 +3682,10 @@ pub struct App {
     pub link_sessions: usize,
     /// This machine's ID and address while it accepts calls, for the corner.
     pub link_address: Option<String>,
+    /// The folder offered while the Link is on, as the *Link* window names it.
+    pub link_share: Option<String>,
+    /// Who is reading this machine now.
+    pub link_peers: Vec<LinkPeer>,
     /// When something last went over the Link, for the light that blinks in the corner.
     pub link_traffic: Option<std::time::Instant>,
     /// Calls waiting for the dialog: one at a time, and only over the panels, so a call does
@@ -4146,6 +4172,8 @@ impl App {
             link_on: false,
             link_sessions: 0,
             link_address: None,
+            link_share: None,
+            link_peers: Vec::new(),
             link_traffic: None,
             link_calls: std::collections::VecDeque::new(),
             site_attempt: None,
@@ -4511,6 +4539,7 @@ impl App {
                 Ok(Some((id, share))) => {
                     self.link_on = true;
                     self.link_address = Some(id.clone());
+                    self.link_share = Some(share.clone());
                     let msg = self
                         .i18n
                         .t_args("link-on", &[("id", id.into()), ("share", share.into())]);
@@ -4520,6 +4549,8 @@ impl App {
                     self.link_on = false;
                     self.link_sessions = 0;
                     self.link_address = None;
+                    self.link_share = None;
+                    self.link_peers.clear();
                     self.set_status(self.i18n.t("link-off"));
                 }
                 Err(e) => {
@@ -4528,17 +4559,28 @@ impl App {
                     self.set_error(msg);
                 }
             },
-            Event::LinkSession { name, share, open } => {
+            Event::LinkSession { mut peer, open } => {
                 let msg = if open {
-                    self.link_sessions += 1;
-                    self.i18n.t_args(
+                    let now = fcmd_ui::format_stamp(std::time::SystemTime::now());
+                    peer.since = now
+                        .split_once(' ')
+                        .map(|(_, time)| time.chars().take(5).collect())
+                        .unwrap_or_default();
+                    let msg = self.i18n.t_args(
                         "link-opened",
-                        &[("name", name.into()), ("share", share.into())],
-                    )
+                        &[
+                            ("name", peer.name.clone().into()),
+                            ("share", peer.share.clone().into()),
+                        ],
+                    );
+                    self.link_peers.push(peer);
+                    msg
                 } else {
-                    self.link_sessions = self.link_sessions.saturating_sub(1);
-                    self.i18n.t_args("link-closed", &[("name", name.into())])
+                    self.link_peers.retain(|p| p.session != peer.session);
+                    self.i18n
+                        .t_args("link-closed", &[("name", peer.name.into())])
                 };
+                self.link_sessions = self.link_peers.len();
                 self.set_status(msg);
             }
             Event::UpdateChecked { manual, result } => self.on_update_checked(manual, result),
@@ -6108,6 +6150,8 @@ impl App {
                 }
             }
             crate::hit::Hit::Panel { side } => self.focus_side(side),
+            // The corner that says the Link is on opens the window of who is on it.
+            crate::hit::Hit::LinkCorner => self.run(Command::NetLinkPeers),
             crate::hit::Hit::Key(n) => {
                 // The modifiers that are held decide which key bar is on the screen, so a
                 // click on the bar presses the key that is written on it.
@@ -6526,6 +6570,10 @@ impl App {
             Mode::Sites { cursor } => {
                 self.mode = Mode::Sites { cursor };
                 self.sites_key(key, cursor);
+            }
+            Mode::LinkPeers { cursor } => {
+                self.mode = Mode::LinkPeers { cursor };
+                self.link_peers_key(key, cursor);
             }
             Mode::Menu { menu, item, open } => {
                 self.mode = Mode::Menu { menu, item, open };
@@ -13296,6 +13344,7 @@ impl App {
             Command::FileUnpack => self.open_unpack_form(),
             Command::NetTunnel => self.ask_tunnel(),
             Command::NetLinkAccept => self.toggle_link(),
+            Command::NetLinkPeers => self.mode = Mode::LinkPeers { cursor: 0 },
             Command::NetLinkHangUp => {
                 self.requests.push(Request::LinkHangUp);
                 self.set_status(self.i18n.t("link-hung-up"));
@@ -25471,6 +25520,75 @@ impl App {
             .then(|| std::time::Duration::from_millis(250))
     }
 
+    /// The keys of the *Link* window.
+    fn link_peers_key(&mut self, key: Key, cursor: usize) {
+        let count = self.link_peers.len();
+        match key.code {
+            KeyCode::Esc | KeyCode::F(10) | KeyCode::Enter => self.mode = Mode::Normal,
+            KeyCode::Up => {
+                self.mode = Mode::LinkPeers {
+                    cursor: cursor.saturating_sub(1),
+                }
+            }
+            KeyCode::Down => {
+                self.mode = Mode::LinkPeers {
+                    cursor: (cursor + 1).min(count.saturating_sub(1)),
+                }
+            }
+            // The one under the cursor, as `F8` deletes the file under it.
+            KeyCode::F(8) | KeyCode::Delete => {
+                if let Some(peer) = self.link_peers.get(cursor).cloned() {
+                    self.requests.push(Request::LinkHangUpOne {
+                        session: peer.session,
+                    });
+                    let msg = self
+                        .i18n
+                        .t_args("link-hung-up-one", &[("name", peer.name.into())]);
+                    self.set_status(msg);
+                }
+            }
+            KeyCode::Char('l' | 'L') if key.mods == Mods::CTRL | Mods::ALT => {
+                self.requests.push(Request::LinkHangUp);
+                self.set_status(self.i18n.t("link-hung-up"));
+            }
+            _ => {}
+        }
+    }
+
+    /// The lines of the *Link* window, the callers last, one row each.
+    pub fn link_window_lines(&self) -> Vec<String> {
+        let mut lines = Vec::new();
+        match (&self.link_address, &self.link_share) {
+            (Some(address), Some(share)) if self.link_on => {
+                lines.push(
+                    self.i18n
+                        .t_args("link-window-here", &[("address", address.clone().into())]),
+                );
+                lines.push(
+                    self.i18n
+                        .t_args("link-window-share", &[("share", share.clone().into())]),
+                );
+            }
+            _ => lines.push(self.i18n.t("link-window-off")),
+        }
+        lines.push(String::new());
+        if self.link_peers.is_empty() {
+            lines.push(self.i18n.t("link-window-nobody"));
+        }
+        for peer in &self.link_peers {
+            lines.push(self.i18n.t_args(
+                "link-window-peer",
+                &[
+                    ("name", peer.name.clone().into()),
+                    ("id", peer.id.clone().into()),
+                    ("addr", peer.addr.clone().into()),
+                    ("since", peer.since.clone().into()),
+                ],
+            ));
+        }
+        lines
+    }
+
     /// Turn accepting Link calls on, sharing the active panel's folder, or off.
     fn toggle_link(&mut self) {
         if self.link_on {
@@ -36430,6 +36548,66 @@ mod tests {
         assert!(!app.status.is_empty());
     }
 
+    fn a_peer(session: u64, name: &str) -> LinkPeer {
+        LinkPeer {
+            session,
+            name: name.into(),
+            id: "987 654 321".into(),
+            addr: "192.168.1.20".into(),
+            share: "photos".into(),
+            since: String::new(),
+        }
+    }
+
+    /// The *Link* window lists who is reading this machine, and `F8` hangs up the one under
+    /// the cursor alone.
+    #[test]
+    fn the_link_window_lists_the_callers_and_hangs_up_one() {
+        let mut app = app();
+        app.handle_event(Event::LinkAccepting {
+            result: Ok(Some((
+                "123 456 789 · 192.168.1.10".into(),
+                "/srv/photos".into(),
+            ))),
+        });
+        for (n, name) in [(4, "laptop"), (9, "tablet")] {
+            app.handle_event(Event::LinkSession {
+                peer: a_peer(n, name),
+                open: true,
+            });
+        }
+        // A click on the corner opens it, as the menu does.
+        screen_text(&mut app, 120, 30);
+        let corner = app.layout.link_corner.expect("the corner is drawn");
+        app.click(corner.x + 1, corner.y, false);
+        assert!(matches!(app.mode, Mode::LinkPeers { .. }), "{:?}", app.mode);
+        let shown = screen_text(&mut app, 120, 30);
+        assert!(shown.contains("192.168.1.10"), "{shown}");
+        assert!(shown.contains("/srv/photos"), "{shown}");
+        assert!(
+            shown.contains("laptop") && shown.contains("tablet"),
+            "{shown}"
+        );
+        app.take_requests();
+        press(&mut app, "Down");
+        press(&mut app, "F8");
+        assert!(app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::LinkHangUpOne { session: 9 })));
+        app.handle_event(Event::LinkSession {
+            peer: a_peer(9, "tablet"),
+            open: false,
+        });
+        assert_eq!(app.link_sessions, 1);
+        assert!(
+            !app.link_window_lines().iter().any(|l| l.contains("tablet")),
+            "gone from the window"
+        );
+        press(&mut app, "Esc");
+        assert!(app.mode.is_normal());
+    }
+
     #[test]
     fn the_status_corner_counts_who_is_reading_this_machine() {
         let mut app = app();
@@ -36450,15 +36628,13 @@ mod tests {
         assert!(!app.link_blink_on());
         assert!(app.link_wait().is_none());
         app.handle_event(Event::LinkSession {
-            name: "laptop".into(),
-            share: "photos".into(),
+            peer: a_peer(1, "laptop"),
             open: true,
         });
         assert_eq!(app.link_sessions, 1);
         assert!(screen_text(&mut app, 120, 30).contains("LINK 1 (123 456 789)"));
         app.handle_event(Event::LinkSession {
-            name: "laptop".into(),
-            share: "photos".into(),
+            peer: a_peer(1, "laptop"),
             open: false,
         });
         assert_eq!(app.link_sessions, 0);

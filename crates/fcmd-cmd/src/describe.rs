@@ -250,6 +250,7 @@ impl Command {
                 "accept Link calls from the local network, sharing this panel's folder read only"
             }
             Command::NetLinkHangUp => "end every Link session open on this machine",
+            Command::NetLinkPeers => "who is reading this machine over the Link, and its ID and address",
             Command::NetS3Profile => {
                 "choose the AWS profile an object storage service signs its requests with"
             }
