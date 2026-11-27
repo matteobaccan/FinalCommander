@@ -88,7 +88,7 @@ pub fn mount_of(path: &Path) -> Option<Mount> {
             root
         })?;
         let volume = super::volume(&root)?;
-        return Some(Mount {
+        Some(Mount {
             source: volume.share.clone().unwrap_or_else(|| {
                 volume
                     .label
@@ -100,7 +100,7 @@ pub fn mount_of(path: &Path) -> Option<Mount> {
             // Windows keeps no mount options. The volume's flags are a different question,
             // and the drives dialog is where they belong.
             options: Vec::new(),
-        });
+        })
     }
     #[cfg(not(any(
         any(target_os = "linux", target_os = "android"),

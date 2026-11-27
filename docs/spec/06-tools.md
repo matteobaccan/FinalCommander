@@ -1223,3 +1223,97 @@ on Linux, `log show --last 1h` on macOS, `wevtutil qe System /c:2000` on Windows
 worker, into a file of the session's temporary folder. Without the rights to the system
 journal, what the tool says about that is what is shown. The viewer's search, filter and
 `Ctrl+F10` work on it as on any text; it is not a live tail.
+
+## 17. The Windows registry
+
+`Alt+F1`/`Alt+F2` → *Registry*, on Windows only — the row is not in the list anywhere else —
+after FAR's Registry plugin: the registry in a panel, so that a value can be looked at and
+changed without leaving for `regedit`.
+
+**What the panel shows.** The five roots (`HKEY_CLASSES_ROOT`, `HKEY_CURRENT_USER`,
+`HKEY_LOCAL_MACHINE`, `HKEY_USERS`, `HKEY_CURRENT_CONFIG`) are folders, a key is a folder,
+and a value is a row: its name — `(Default)` for the one that has none —, its type
+(`REG_SZ`, `REG_EXPAND_SZ`, `REG_MULTI_SZ`, `REG_DWORD`, `REG_QWORD`, `REG_BINARY`,
+`REG_NONE`, and a type nobody named by its number) and its data on one line, in columns as
+wide as their widest; the panel's *size* column is the length of the data. A string is shown
+as text, a list with ` | ` between its strings, a number in hex and decimal, bytes as the
+first twenty-four in hex. The frame's title is the key. `Enter` goes into a key, `..`,
+`Backspace` and `Ctrl+PgUp` go up with the cursor on the key come out of, `Ctrl+\` is the
+list of roots, `Ctrl+R` reads the key again. The sort keys, the quick search and the
+selection are the panel's own, and the panel opens on the key it was last on.
+
+**A list panel, read again at every step, and not a provider.** A `reg:` provider would put
+the registry behind the job engine, and `F5`, `F6` and `F8` would then copy, move and delete
+keys the way they do files — with none of what this panel exists for, the question that names
+the key and the backup made first. As a list (§9a of SPEC 02) it keeps the sorting, the quick
+search and the selection it already has, and it costs nothing in the path grammar. The price
+is that the registry is not in the folder history and a tab does not come back to it after a
+restart. Nothing about a panel is kept outside it: the key is the panel's title and each
+row carries its own name (in hex, since a value may be called `a/b\c` or nothing at
+all), so the other side, a second tab and a swap of the two panels need no bookkeeping.
+
+**The keys.**
+
+| Key | What it does |
+| --- | --- |
+| `F3` | the value whole, in a box: its key, its type and length, then the text; a `REG_MULTI_SZ` a string a line; a number in decimal and in hex; anything else as a dump, sixteen bytes a line with their offsets and characters. On a key: how many keys and values it holds. The quick view (`Ctrl+Q`) shows the same |
+| `F4`, `Enter` on a value | the dialog its type wants: the text for `REG_SZ` and `REG_EXPAND_SZ`; decimal, or hex after `0x`, for `REG_DWORD` and `REG_QWORD`, refused when it does not fit; a row a string for `REG_MULTI_SZ`, with four empty rows to add to (an emptied row is a string removed); pairs of hex digits (`01 0a ff`, however spaced) for `REG_BINARY` and every other type. What does not parse leaves the dialog open with what was typed |
+| `Shift+F4` | a new value: its name (empty is the default value) and its type; it is made empty and the editor opens on it |
+| `F5` | export: the selected keys, or the key under the cursor, or — on a value — the key the panel is on, with everything under them, to a `.reg` file the dialog names (the other panel's folder is proposed, `.reg` is added to a name without an extension) |
+| `F6`, `Shift+F6` | rename the value or the key under the cursor. A value is written under the new name and then removed under the old; a key is renamed by `RegRenameKey`. A name that is taken is refused |
+| `F7` | a new key under the one the panel is on |
+| `F8` | delete the value or the key under the cursor, after a question that names it and, for a key, says how many keys it holds, with *Cancel* lit |
+
+Among the roots nothing can be made, renamed or deleted, and the keys say so. `F5` and `F6`
+never copy or move anything as a file.
+
+**Nothing is changed without a backup** (the author's rule, binding). Before a value is
+written, made, renamed or deleted, the key it is in — its own values, which is all such a
+change can touch — is exported to a `.reg` file; before a key is made, the key it is made
+in; before a key is deleted or renamed, that key with the whole subtree under it. The file
+goes in `registry-backups/` beside `fcmd.toml` and is named after the key and the moment,
+`HKEY_CURRENT_USER_Software_Vendor-20261127-101500.reg` (a second change within the same
+second gets `-2`), and the status line says where it went. The backup is written first and
+the change made only once it is on disk: **if the backup cannot be made — the folder cannot
+be created, the disk is full, a key under the one to delete cannot be read — nothing is
+changed**, and the line says so. Importing a backup with `Enter` puts the values back.
+
+**A key this user may not write** — `HKEY_LOCAL_MACHINE` without elevation, typically —
+answers *Access denied* with the key's name, as an error on the status line. Nothing is ever
+dropped silently, and nothing here asks for elevation: as with the services, the program
+does not run as anybody else.
+
+**The `.reg` file** is the one regedit writes and reads: `Windows Registry Editor Version
+5.00`, UTF-16 little endian with its byte order mark, `\r\n`, a key in square brackets, `@`
+for the default value, a `REG_SZ` in quotes with `\` and `"` escaped, `dword:` and eight
+digits, and `hex:`, `hex(2):`, `hex(7):`, `hex(b):`, `hex(0):`, `hex(<type>):` for the rest,
+wrapped with a `\` before the eightieth column and continued two spaces in, twenty-five
+bytes a line. What a type promises and the bytes do not keep — a `REG_SZ` with no
+terminator, a `REG_DWORD` of three bytes — goes out as `hex(<type>):`, so that a file read
+back gives the bytes that went in. Reading takes the same, plus `[-key]` and `"name"=-`
+(a key and a value to delete), comments, and the older `REGEDIT4` file with its strings a
+byte a character. It is strict: a line that is none of these is an error with its line
+number, because half a file is not what anybody meant to import.
+
+**Import.** `Enter` on a `.reg` file in an ordinary panel on this machine, where there is a
+registry (a `[[assoc]]` for `.reg` still wins): the file is read, and a question says what it
+holds — how many keys, how many values it writes, how many keys and values it deletes — with
+*Cancel* lit. On *OK* every key the file touches is backed up first, into one file named
+`import-<file>-<moment>.reg` — its values for a key written into, the whole subtree for a key
+deleted, nothing for a key that is not there yet — and then the file is applied in its own
+order, stopping at the first refusal, which is reported.
+
+**How it is built.** The Win32 calls are in `fcmd_platform::registry` (`RegOpenKeyExW`,
+`RegEnumKeyExW`, `RegEnumValueW`, `RegSetValueExW`, `RegCreateKeyExW`, `RegDeleteValueW`,
+`RegDeleteTreeW` then `RegDeleteKeyW`, `RegRenameKey`), behind a `Registry` trait that an
+in-memory registry implements as well; the `.reg` format (`fcmd_platform::regfile`) is plain
+Rust. Listing a key reads the registry on the spot, as the process list reads the process
+table; every write — the backup, the change, an export, an import — is a `Request::Registry`
+done on a worker. So the panel, the dialogs, the order of backup and change and the refusal
+without a backup are tested on every platform against the in-memory registry; what only a
+Windows machine can test is the eight calls themselves.
+
+**Not there**: finding a name in a subtree (`Alt+F7` does not look in the registry), the hex
+editor on a long binary value (the dialog's one line takes it as hex text), another machine's
+registry, a key's permissions, and the 32-bit view as a view of its own (it is reachable as
+the `WOW6432Node` keys).

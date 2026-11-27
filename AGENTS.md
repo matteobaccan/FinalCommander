@@ -91,7 +91,7 @@ that target — but the crates that carry the `#[cfg]`s will.)
 | `fcmd-view` / `fcmd-edit` | the viewer (text, dump, hex) and the editor |
 | `fcmd-arc` / `fcmd-net` / `fcmd-s3` | archives, SFTP/FTP/WebDAV, object storage |
 | `fcmd-find` / `fcmd-syntax` / `fcmd-term` / `fcmd-plug` | find files, syntax, the PTY, plugins |
-| `fcmd-platform` | the only crate allowed `unsafe`: free space, cluster size, memory, owners, hard links, processes, sockets, installed programs, volumes — one module per subject, each dispatching to `windows.rs` on Windows |
+| `fcmd-platform` | the only crate allowed `unsafe`: free space, cluster size, memory, owners, hard links, processes, sockets, installed programs, volumes, the registry and its `.reg` files — one module per subject, each dispatching to `windows.rs` on Windows |
 | `fcmd-site` | the static site generator — not part of the program, `fcmd` does not link it |
 | `fcmd` | the binary: the app, the panels, the rendering, the event loop |
 

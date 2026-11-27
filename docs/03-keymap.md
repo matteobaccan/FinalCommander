@@ -274,6 +274,23 @@ Alt+Shift+arrows (column block) are handled by the editor itself and are not bin
 | inside the list | — | — | Enter connects · `n` a new URL · `Ins`/`F7` stores a session · `F4` edits one · `d` disconnects · Esc closes |
 | session editor | NetBox session dialog | — | **`Ctrl+Shift+N` → `Ins`/`F7`/`F4`**: name, host, port, user, authentication, key file, remote folder, group, keep-alive, compression (SPEC 10 §3.5) |
 
+## 8b-2. The registry panel (Windows, SPEC 06 §17)
+
+No key of its own: the panel is `Alt+F1`/`Alt+F2` → *Registry*, and the file keys mean there
+what they mean in FAR's Registry plugin.
+
+| Action | FAR (Registry plugin) | FC |
+| --- | --- | --- |
+| into a key, up | Enter, `..` | **Enter**, `..`, Backspace, Ctrl+PgUp; **Ctrl+\\** the roots; **Ctrl+R** read again |
+| a value whole | F3 | **F3** |
+| edit a value | F4 | **F4**, Enter on the value |
+| new value | Shift+F4 | **Shift+F4** |
+| export to a `.reg` file | F5 | **F5** |
+| rename | F6 | **F6**, **Shift+F6** |
+| new key | F7 | **F7** |
+| delete | F8 | **F8**, Del |
+| import a `.reg` file | Enter on it | **Enter** on it in an ordinary panel |
+
 ## 7b. Viewer: the structure pane (shipped, SPEC 05 §1.8)
 
 | Action | FC |

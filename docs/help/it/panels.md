@@ -66,6 +66,26 @@ Sotto una riga di separazione, su `Ctrl+1`…`Ctrl+9`, stanno le cose che non so
   `systemctl --user disable`, `launchctl disable`), così mostrano lo stesso stato. Ciò che
   appartiene alla macchina può richiedere amministratore o root per essere cambiato, e viene
   riferito come tale invece di chiederlo;
+* il **registro di sistema**, solo su Windows: le cinque radici e le chiavi sono cartelle, i
+  valori sono righe con nome (`(Predefinito)` per quello senza nome), tipo e dati, e la
+  colonna della dimensione è la lunghezza dei dati. `Enter` entra in una chiave, `..` e
+  `Backspace` risalgono, `Ctrl+\` è l'elenco delle radici e il titolo della cornice è la
+  chiave. `F3` mostra un valore per intero — testo, una lista con una stringa per riga, un
+  numero in decimale ed esadecimale, i byte come dump. `F4` (o `Enter` su un valore) lo
+  modifica in un dialogo adatto al tipo: testo per una stringa, decimale o esadecimale con
+  `0x` per un `REG_DWORD` o `REG_QWORD` (un numero che non ci sta viene rifiutato), una riga
+  per stringa per un `REG_MULTI_SZ`, coppie di cifre esadecimali per i byte. `Shift+F4` crea
+  un valore (nome e tipo), `F7` una chiave, `F6` rinomina e `F8` elimina il valore o la
+  chiave sotto il cursore — la domanda lo nomina, dice quante chiavi contiene una chiave, e
+  parte su *Annulla*. `F5` scrive le chiavi selezionate, o quella sotto il cursore, in un
+  file `.reg` che regedit sa rileggere. **Prima di ogni modifica la chiave viene esportata
+  in `registry-backups/` accanto alle impostazioni** — tutto il sottoalbero per
+  l'eliminazione o la rinomina di una chiave — in un file che porta il nome della chiave e
+  il momento, e la riga di stato dice dove; se la copia non si può scrivere la modifica non
+  viene fatta. Una chiave che non puoi scrivere (`HKEY_LOCAL_MACHINE` senza elevazione) dice
+  *Accesso negato*. `Enter` su un file `.reg` in un pannello normale chiede, dicendo che
+  cosa il file scriverebbe ed eliminerebbe, e lo importa dopo aver fatto la copia di ogni
+  chiave che tocca;
 * i **socket**, in ascolto o connessi, con l'indirizzo a ciascun capo e il processo che li
   tiene, dove `F3` è la scheda di quel processo;
 * i **programmi installati** sulla macchina, con versione ed editore: `F3` è la scheda, e

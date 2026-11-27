@@ -63,6 +63,8 @@ pub enum FormKind {
     Link,
     /// `F7`: the folder to make, and whether the panel goes into it (SPEC 03 §3e).
     Mkdir,
+    /// One of the registry panel's dialogs: a value's data, a name, a file (SPEC 06 §17).
+    Registry,
     /// Find text in what the viewer or the editor has open (SPEC 05 §1.4).
     Search,
     /// Replace in the file the editor has open (SPEC 05 §2.4).

@@ -63,6 +63,23 @@ Under a rule, on `Ctrl+1` to `Ctrl+9`, are the things that are not filesystems:
   `autostart` folder, `systemctl --user disable`, `launchctl disable`), so they show the same
   state. What belongs to the machine may need administrator or root to change, and is
   reported as such rather than asked for;
+* the **registry**, on Windows only: the five roots and the keys are folders, the values are
+  rows with their name (`(Default)` for the unnamed one), type and data, and the size column
+  is the length of the data. `Enter` goes into a key, `..` and `Backspace` come out, `Ctrl+\`
+  is the list of roots and the frame's title is the key. `F3` shows a value whole — text, a
+  list one string a line, a number in decimal and hex, bytes as a dump. `F4` (or `Enter` on a
+  value) edits it in a dialog fit for its type: text for a string, decimal or `0x` hex for a
+  `REG_DWORD` or `REG_QWORD` (a number that does not fit is refused), a row a string for a
+  `REG_MULTI_SZ`, pairs of hex digits for bytes. `Shift+F4` makes a value (name and type),
+  `F7` a key, `F6` renames and `F8` deletes the value or key under the cursor — the question
+  names it, says how many keys a key holds, and starts on *Cancel*. `F5` writes the selected
+  keys, or the one under the cursor, to a `.reg` file regedit can read back. **Before any
+  change the key is exported to `registry-backups/` beside the settings** — the whole
+  subtree for a delete or a rename of a key — in a file named after the key and the moment,
+  and the status line says where; if that backup cannot be written the change is not made.
+  A key you may not write (`HKEY_LOCAL_MACHINE` without elevation) says *Access denied*.
+  `Enter` on a `.reg` file in an ordinary panel asks, saying what the file would write and
+  delete, and imports it after backing up every key it touches;
 * the **sockets**, listening or connected, with the address at each end and the process
   holding it, where `F3` is that process's card;
 * the **programs installed** on the machine, with their version and publisher: `F3` is the

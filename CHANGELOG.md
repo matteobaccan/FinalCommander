@@ -8,6 +8,16 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- The Windows registry in a panel (SPEC 06 §17): `Alt+F1` → *Registry*, on Windows. The roots
+  and the keys are folders and the values rows with their name, type and data; `F3` shows a
+  value whole, `F4` edits it in a dialog fit for its type (text, a number in decimal or `0x`
+  hex checked against the type's range, a row a string for a `REG_MULTI_SZ`, hex for bytes),
+  `Shift+F4` makes a value, `F7` a key, `F6` renames and `F8` deletes after a question that
+  names the key and says how many it holds. Before any change the key — the whole subtree for
+  a delete — is exported to `registry-backups/` beside the settings, and without that backup
+  nothing is changed; a key this user may not write says *Access denied*. `F5` exports keys
+  to a `.reg` file regedit reads back, and `Enter` on a `.reg` file imports it after saying
+  what it holds and backing up every key it touches.
 - One panel on a narrow screen: below 60 columns — a phone held upright, a terminal split
   in two — the screen shows the active panel alone and `Tab` brings the other; a quick view,
   an information panel or a tree goes under the panel it is about. `panel.single_below` sets

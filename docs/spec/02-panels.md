@@ -1110,6 +1110,10 @@ the card, `F4` the file that defines the entry (a registry value has none, and t
 where it lives). What belongs to the machine is changed only where this user may: a refusal
 is reported as needing administrator or root, as for the services.
 
+**Registry (Windows only).** The registry as a panel — roots and keys as folders, values as
+rows, with a backup written before every change — is specified beside the other tools, in
+SPEC 06 §17.
+
 **Service list (§7d).** What the machine runs in the background, as a panel: the name, the
 state in one word, when it starts — *automatic*, *manual* or *disabled* — and what the service
 says about itself. `F3` is its card, `F4` is a choice of when it starts with the one in force

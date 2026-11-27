@@ -286,6 +286,7 @@ impl Form {
             | FormKind::Sync
             | FormKind::Link
             | FormKind::Mkdir
+            | FormKind::Registry
             | FormKind::Highlight
             | FormKind::FilterSet
             | FormKind::SortGroup
@@ -683,6 +684,7 @@ impl Form {
             FormKind::HexReplace | FormKind::HexReplaceAsk => "hex-replace-title",
             FormKind::Link => "link-title",
             FormKind::Mkdir => "menu-mkdir",
+            FormKind::Registry => "drive-registry",
             FormKind::Highlight => "hl-new",
             FormKind::FilterSet => "filter-new",
             FormKind::SortGroup => "sg-title",

@@ -17,6 +17,8 @@ mod mount;
 pub mod process;
 mod programs;
 pub mod pty;
+pub mod regfile;
+pub mod registry;
 pub mod service;
 mod socket;
 pub mod startup;

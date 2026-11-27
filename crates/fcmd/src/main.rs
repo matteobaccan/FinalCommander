@@ -1582,6 +1582,16 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                     let result = fcmd_platform::kill(pid);
                     let _ = tx.send(Event::ProcessKilled { side, name, result });
                 }
+                Request::Registry(ask) => {
+                    let tx = tx.clone();
+                    // Off the loop: the backup is a file written before anything changes,
+                    // and a subtree can be a long read.
+                    runtime.spawn_blocking(move || {
+                        let registry = fcmd_platform::registry::SystemRegistry;
+                        let result = app::registry_perform(&registry, &ask);
+                        let _ = tx.send(Event::Registry(app::RegDone { ask, result }));
+                    });
+                }
                 Request::StartupChange { side, item, on } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || {
@@ -8197,6 +8207,8 @@ dir_attr = "D"
                 | Request::StripMeta { .. }
                 // A table is written by the tests that are about writing one.
                 | Request::Dbf(_)
+                // And the registry by the tests that hold one in memory.
+                | Request::Registry(_)
                 // The shared AWS files are the user's own: a test hands the profiles in.
                 | Request::S3Profiles { .. }
                 | Request::S3Link { .. }

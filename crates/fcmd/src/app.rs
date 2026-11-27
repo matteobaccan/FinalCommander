@@ -27,6 +27,9 @@ mod dbfedit;
 use dbfedit::memo_file;
 #[cfg(feature = "dbf")]
 pub use dbfedit::{perform as dbf_perform, DbfAsk, DbfDone, DbfFailed, DbfStep};
+#[path = "regpanel.rs"]
+mod regpanel;
+pub use regpanel::{perform as registry_perform, RegAsk, RegDone};
 
 /// How long a kept PowerShell has to reach its first marked prompt before it is given up on
 /// for the session. PowerShell starts slowly — a second or two, more with a profile — so this
@@ -238,6 +241,9 @@ pub enum Request {
         item: Box<fcmd_platform::Startup>,
         on: Option<bool>,
     },
+    /// Change the registry, or write or read a `.reg` file (SPEC 06 §17): the backup and
+    /// the change are a worker's job, as every write to a disk is.
+    Registry(RegAsk),
     /// End a process of the process list, which has been asked about.
     KillProcess {
         side: usize,
@@ -1314,6 +1320,8 @@ pub enum Event {
         action: fcmd_platform::ServiceAction,
         result: Result<(), fcmd_platform::ServiceError>,
     },
+    /// What a piece of work on the registry came to (SPEC 06 §17).
+    Registry(RegDone),
     /// An entry of the startup panel was switched or removed — or the system refused.
     StartupChanged {
         side: usize,
@@ -2487,6 +2495,9 @@ pub enum ConfirmAction {
         id: String,
         action: fcmd_platform::ServiceAction,
     },
+    /// Delete a value or a key of the registry, or write a `.reg` file into it: the work
+    /// as it will be handed to the worker (SPEC 06 §17).
+    Registry(Box<RegAsk>),
     /// Take an entry out of what starts at login (`Shift+F8` in the startup panel).
     RemoveStartup {
         side: usize,
@@ -2553,6 +2564,12 @@ impl ConfirmAction {
             ConfirmAction::ClearHistory { .. } => "btn-delete",
             ConfirmAction::TrashPurge { .. } => "btn-delete",
             ConfirmAction::RemoveStartup { .. } => "btn-delete",
+            ConfirmAction::Registry(ask) => match ask.work {
+                regpanel::RegWork::DeleteValue { .. } | regpanel::RegWork::DeleteKey { .. } => {
+                    "btn-delete"
+                }
+                _ => "btn-ok",
+            },
             ConfirmAction::TrashEmpty { .. } => "btn-empty",
             ConfirmAction::TrashClash { .. } => "btn-overwrite",
             ConfirmAction::DiscardEdits | ConfirmAction::DiscardHex => "btn-discard",
@@ -3620,6 +3637,8 @@ pub struct App {
     /// The dBase tables written in this session: which have had their backup.
     #[cfg(feature = "dbf")]
     dbf: dbfedit::DbfSession,
+    /// The registry the registry panel lists, and the dialog it has open (SPEC 06 §17).
+    reg: regpanel::RegSession,
     /// The editor, parked while one of its prompts or confirmations is open.
     editor_parked: Option<Box<Editor>>,
     /// The menu bar was opened over a screen — `F9` in the editor — which is parked until the
@@ -4162,6 +4181,7 @@ impl App {
             viewer_under_prompt: None,
             #[cfg(feature = "dbf")]
             dbf: Default::default(),
+            reg: Default::default(),
             editor_parked: None,
             screen_under_menu: false,
             replace_naming: None,
@@ -4657,6 +4677,7 @@ impl App {
             } => self.s3_link_made(&name, seconds, result),
             #[cfg(feature = "dbf")]
             Event::Dbf { table, result } => self.dbf_done(table, result),
+            Event::Registry(done) => self.reg_done(done),
             Event::StripDone {
                 done,
                 removed,
@@ -6826,6 +6847,7 @@ impl App {
                     ConfirmAction::PlayMacro(which) => self.run_macro(&which),
                     ConfirmAction::RunPlugin(which) => self.start_plugin_command(which),
                     ConfirmAction::Service { id, action } => self.start_service_action(id, action),
+                    ConfirmAction::Registry(ask) => self.requests.push(Request::Registry(*ask)),
                     ConfirmAction::RemoveStartup { side, item } => {
                         self.requests.push(Request::StartupChange {
                             side,
@@ -10198,6 +10220,11 @@ impl App {
                 return;
             }
         }
+        // A `.reg` file, where there is a registry to write it into: asked about first,
+        // with what it holds, rather than handed to a program that writes it at once.
+        if self.reg_offer_import() {
+            return;
+        }
         // A program is run as itself. `{file}` is the path in quotes, so a name with a
         // space in it is one argument rather than two.
         let is_program = entry.flags.contains(fcmd_core::EntryFlags::EXECUTABLE)
@@ -12211,12 +12238,17 @@ impl App {
                 ("drive-programs", ":programs"),
                 ("drive-services", ":services"),
                 ("drive-startup", ":startup"),
+                ("drive-registry", regpanel::ORIGIN),
                 ("drive-tools", ":tools"),
                 ("drive-ai", ":ai"),
                 ("drive-temp", ":temp"),
                 ("drive-trash", ":trash"),
             ] {
                 if !shown.panels.shows(value) {
+                    continue;
+                }
+                // The registry is Windows' own: the row is there only where it is.
+                if value == regpanel::ORIGIN && !self.reg.available {
                     continue;
                 }
                 // Where the system keeps its wastebasket to itself the row says so, rather
@@ -12891,6 +12923,9 @@ impl App {
                 self.panels.swap(0, 1);
                 self.active = 1 - self.active;
             }
+            Command::PanelReread if self.panel().temp_origin() == Some(regpanel::ORIGIN) => {
+                self.reg_reread(None)
+            }
             Command::PanelReread => {
                 let a = self.active;
                 if !self.reconnect_panel(a) {
@@ -13162,6 +13197,18 @@ impl App {
             }
             Command::NavEnter if self.panel().temp_origin() == Some(":gitbranches") => {
                 self.git_switch_at_cursor()
+            }
+            // In the registry a key is somewhere to go and a value something to edit; the
+            // way up and the way to the top are the registry's own, since the panel's
+            // directory is still the folder it was showing before.
+            Command::NavEnter if self.panel().temp_origin() == Some(regpanel::ORIGIN) => {
+                self.reg_enter()
+            }
+            Command::NavParent if self.panel().temp_origin() == Some(regpanel::ORIGIN) => {
+                self.reg_up()
+            }
+            Command::NavRoot if self.panel().temp_origin() == Some(regpanel::ORIGIN) => {
+                self.reg_roots()
             }
             Command::NavEnter => match self.panel().enter_target() {
                 Some(path) => self.goto(path),
@@ -13546,6 +13593,10 @@ impl App {
             Command::FileEditAlt if self.cfg.editor.use_external => self.open_editor_as(false),
             Command::FileViewAlt => self.open_external(Which::View),
             Command::FileEditAlt => self.open_external(Which::Edit),
+            // In the registry `Shift+F4` makes a value, as it makes a file anywhere else.
+            Command::FileEditNew if self.panel().temp_origin() == Some(regpanel::ORIGIN) => {
+                self.reg_new_value()
+            }
             Command::FileEditNew => self.open_new_editor(),
             Command::AppMenu => self.open_menu(),
             Command::CmdRun => self.run_command_line(),
@@ -13997,6 +14048,15 @@ impl App {
             | Command::FileMove
             | Command::FileCopyCurrent
             | Command::FileMoveCurrent => {
+                // In the registry `F5` writes keys to a `.reg` file and `F6` renames what
+                // is under the cursor: nothing there is copied or moved as a file is.
+                if self.panel().temp_origin() == Some(regpanel::ORIGIN) {
+                    match cmd {
+                        Command::FileCopy | Command::FileCopyCurrent => self.reg_export(),
+                        _ => self.reg_rename(),
+                    }
+                    return;
+                }
                 // On the service list there is nothing to copy or move: `F5` starts the
                 // service under the cursor and `F6` restarts it, which is what the key bar
                 // says there (SPEC 02 §14).
@@ -14145,6 +14205,10 @@ impl App {
             Command::FileMkdir if self.panel().temp_origin() == Some(":ai") => {
                 self.open_ai_form(None)
             }
+            // In the registry `F7` makes a key, which is its folder.
+            Command::FileMkdir if self.panel().temp_origin() == Some(regpanel::ORIGIN) => {
+                self.reg_new_key()
+            }
             // In an AI conversation `F7` is the conversations kept so far, to go on with one.
             Command::FileMkdir if self.panel().temp_origin() == Some(":aichat") => {
                 self.open_ai_threads()
@@ -14178,6 +14242,12 @@ impl App {
             Command::FileEncode => self.open_encode_form(),
             Command::FileDecode => self.start_decode(),
             Command::FileDelete | Command::FileDeleteCurrent | Command::FileDeleteForce => {
+                // In the registry `F8` deletes the value or the key under the cursor, after
+                // a question that names it and a backup of what goes.
+                if self.panel().temp_origin() == Some(regpanel::ORIGIN) {
+                    self.reg_delete();
+                    return;
+                }
                 // On the stored connections there is no file to delete: `F8` forgets the
                 // session under the cursor, which is what the row is.
                 if self.panel().temp_origin() == Some(":netbox") {
@@ -14286,6 +14356,11 @@ impl App {
         // And on the list of what is installed it is that program's card.
         if self.panel().temp_origin() == Some(":programs") {
             self.open_program_card();
+            return;
+        }
+        // In the registry it is the value under the cursor, whole.
+        if self.panel().temp_origin() == Some(regpanel::ORIGIN) {
+            self.reg_view();
             return;
         }
         // In the git panel it is git's own view of the row: what changed in a file, what a
@@ -24852,6 +24927,10 @@ impl App {
             self.apply_mkdir_form(&form);
             return;
         }
+        if form.kind == FormKind::Registry {
+            self.apply_registry_form(&form);
+            return;
+        }
         let problems = form.apply(&mut self.cfg);
         if !problems.is_empty() {
             self.set_error(problems.join("; "));
@@ -28219,6 +28298,7 @@ impl App {
                     ":programs" => self.open_programs_panel(pick.side),
                     ":services" => self.open_services_panel(pick.side),
                     ":startup" => self.open_startup_panel(pick.side),
+                    regpanel::ORIGIN => self.open_registry_panel(pick.side),
                     ":trash" => self.open_trash_panel(pick.side),
                     ":tools" => self.open_tools_panel(pick.side),
                     ":ai" => self.open_ai_panel(pick.side),
@@ -28741,6 +28821,11 @@ impl App {
         // On the service list it is when the service starts: automatic, manual or disabled.
         if self.panel().temp_origin() == Some(":services") {
             self.open_service_start();
+            return;
+        }
+        // In the registry it is the value under the cursor, in the dialog its type wants.
+        if self.panel().temp_origin() == Some(regpanel::ORIGIN) {
+            self.reg_edit();
             return;
         }
         // On what starts at login it is the file that defines the entry under the cursor;
@@ -32347,6 +32432,11 @@ impl App {
                 let item = self.startups.get(at.parse::<usize>().ok()?)?.clone();
                 Some(self.startup_card(&item).join("\n"))
             }
+            regpanel::ORIGIN => {
+                let row = regpanel::row_of(&self.panels[panel].path_of(entry))?;
+                let (name, lines) = self.reg_card(panel, &row)?;
+                Some(format!("{name}\n{}", lines.join("\n")))
+            }
             ":services" => {
                 let service = self.services.iter().find(|s| s.id == at)?;
                 let mut lines = vec![
@@ -34148,6 +34238,21 @@ impl App {
                 (6, "key-service-restart"),
                 (7, ""),
                 (8, "key-service-stop"),
+                (9, "key-pulldown"),
+                (10, "key-quit"),
+                (11, ""),
+                (12, "key-screens"),
+            ]),
+            // The registry: `F5` writes keys to a file, `F6` renames, `F7` makes a key.
+            Some(regpanel::ORIGIN) => Some([
+                (1u8, "key-help"),
+                (2, "key-menu"),
+                (3, "key-view"),
+                (4, "key-edit"),
+                (5, "key-reg-export"),
+                (6, "key-rename"),
+                (7, "key-reg-new-key"),
+                (8, "key-delete"),
                 (9, "key-pulldown"),
                 (10, "key-quit"),
                 (11, ""),
@@ -58408,5 +58513,11 @@ abcdefghij
     #[cfg(feature = "dbf")]
     mod dbase_tables {
         include!("dbfedit_tests.rs");
+    }
+
+    /// The registry panel against a registry kept in memory, in a file of its own for the
+    /// same reason.
+    mod the_registry {
+        include!("regpanel_tests.rs");
     }
 }

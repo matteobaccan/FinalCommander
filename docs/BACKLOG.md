@@ -206,7 +206,7 @@ Three findings that are not gaps against anybody:
 | Passwords in the system's keyring | Krusader, Commander One, ForkLift, muCommander | S–M | as programs (`secret-tool`, `security`); a crate is a dependency | Feature 4.6. The vault holds them today |
 | Mounting, unmounting, ejecting | Krusader, vifm, yazi, nnn, Total Commander, Double Commander | M | as programs (`udisksctl`, `diskutil`) | *Mounting from the drive list* below; *Settled* leaves USB removal and CD eject to the platform's tool |
 | NFS without a mount | far2l, muCommander | L | a dependency | Low: the system mounts it |
-| The Windows registry | FAR, muCommander | M | yes, Windows only | Feature 4.9 |
+| The registry: finding a name in a subtree, the hex editor on a long binary value, another machine's registry | FAR | S–M | yes, Windows only | Feature 4.9. The panel, the editing, the backups, export and import are in (SPEC 06 §17) |
 | Torrent files, patches, installed packages as folders | Midnight Commander, Double Commander | S, M, S | torrent in process (a small parser); packages through `dpkg`/`rpm` | One program's corner each |
 | Servers found on the local network | muCommander, FAR, Total Commander | M | mDNS is a dependency | |
 | Containers as panels; virtual-machine disks | far2l (a plugin), muCommander | M | `docker` as a program | Plugin material |
