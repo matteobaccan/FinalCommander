@@ -9,6 +9,7 @@ pub mod dav;
 pub mod error;
 pub mod ftp;
 pub mod imap;
+pub mod import;
 pub mod jobs;
 pub mod link;
 pub mod memory;

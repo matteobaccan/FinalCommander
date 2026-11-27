@@ -604,6 +604,7 @@ s3-link-not-here = link prowadzi do obiektu: ustaw kursor na pliku w buckecie
 s3-link-copied = link do { $name } skopiowany do schowka, ważny przez { $time }
 s3-link-failed = brak linku do { $name }: { $why }
 menu-connections = Połączenia
+menu-sites-import = Importuj sesje…
 menu-disconnect = Rozłącz
 menu-s3-profile = Profil AWS magazynu obiektów…
 menu-s3-link = Udostępniany link do obiektu…
@@ -2264,3 +2265,7 @@ reg-imported = { $file } zapisany do rejestru — kopia zapasowa w { $backup }
 reg-backup-failed = Nie udało się zapisać kopii zapasowej w { $dir } ({ $error }): niczego nie zmieniono
 reg-file-failed = { $file }: { $error }
 reg-not-a-reg-file = { $file } nie jest czytelnym plikiem .reg ({ $error })
+
+sites-import-where = Ustaw kursor na eksporcie .reg lub pliku WinSCP.ini w panelu lokalnym
+sites-import-failed = Nie można zaimportować { $file }: { $why }
+sites-imported = { $from }: dodano { $added }, już zapisane { $already }, pominięto { $skipped }; zapisano haseł { $kept }, niezapisanych { $lost } (plik sekretów nie jest otwarty)

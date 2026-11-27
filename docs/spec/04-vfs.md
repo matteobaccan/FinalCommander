@@ -463,6 +463,32 @@ message is fetched with `BODY.PEEK[]`, which leaves `\Seen` alone, and is refuse
 ask for writes to the server. TLS is rustls with the machine's roots, the same as FTPS'.
 Tested against an in-process fake server (`imap/fake.rs`).
 
+### 6.7 Sessions brought in from other programs (`fcmd-net/src/import.rs`)
+
+`net.sites.import` (*Commands → Import sessions…*) reads the file under the cursor in a local
+panel and adds what it holds to the stored sessions. The file is recognised by its content,
+not its name:
+
+* a `.reg` export (UTF-16 with BOM, UTF-8, or `REGEDIT4` text) with FAR's
+  `…\Plugins\FTP\Hosts\…` keys (FAR 1.x and 2.x), or with WinSCP's or NetBox's
+  `…\Sessions\<name>` keys;
+* a `WinSCP.ini`, with its `[Sessions\<name>]` sections.
+
+A FAR host may be `host`, `host:port`, `ftp://host/path` or `LABEL:host`; the label and the
+plugin's folders become the session's group, `Description` its name. WinSCP's `FSProtocol`
+gives SFTP (0–2), FTP or FTPS (5, with `Ftps`) and WebDAV (6); S3 sessions (7) are left out
+and said to be, as is a session with no host. A `/` in a WinSCP name is a group.
+
+A session already stored with the same scheme, host, port and user is left as it is; a name
+already taken gets ` (2)`. The list of sessions opens on the first one added, and the status
+line counts what was added, what was already there and what was left out.
+
+Passwords: a value FAR's FTP plugin kept with its one-byte XOR cipher (key = first byte XOR
+second, with `0x50` set) is decoded and, when the secrets file is open, kept there under the
+connection's key, never in `fcmd.toml`. A value that does not decode to printable text — other
+FAR builds keep it another way — is dropped, and that session asks for its password when it is
+opened, as every imported session without one does. WinSCP's stored passwords are not read.
+
 ## 7. Performance rules
 
 - `list` must yield the first chunk in under 100 ms on a warm local directory; providers that

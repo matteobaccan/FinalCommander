@@ -13756,6 +13756,7 @@ impl App {
                 self.open_pick(PickKind::Drives, side)
             }
             Command::NetSites => self.mode = Mode::Sites { cursor: 0 },
+            Command::NetSitesImport => self.import_sites(),
             Command::NetConnect => {
                 let title = self.i18n.t("net-prompt-url");
                 self.mode = Mode::Prompt(Prompt::new(
@@ -25157,6 +25158,91 @@ impl App {
                 self.try_site(site, dialog);
             }
         }
+    }
+
+    /// The sessions in the file under the cursor — a `.reg` export of FAR's FTP plugin, of
+    /// WinSCP or of NetBox, or a `WinSCP.ini` — added to the stored ones (SPEC 04 §6.7). What
+    /// is already stored is left as it is; a password that came along goes into the secrets
+    /// file when it is open, and nowhere else.
+    fn import_sites(&mut self) {
+        let file = self
+            .panel()
+            .current_path()
+            .filter(|p| p.is_local() && !p.in_container() && self.panel().temp.is_none());
+        let Some(file) = file else {
+            let m = self.i18n.t("sites-import-where");
+            self.set_error(m);
+            return;
+        };
+        let shown = file.as_path().display().to_string();
+        let found = std::fs::read(file.as_path())
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| fcmd_net::import::sessions(&bytes));
+        let found = match found {
+            Ok(found) => found,
+            Err(why) => {
+                let m = self.i18n.t_args(
+                    "sites-import-failed",
+                    &[("file", shown.into()), ("why", why.into())],
+                );
+                self.set_error(m);
+                return;
+            }
+        };
+        // The secrets file names a password by the connection it opens, which does not
+        // depend on the name the session is stored under.
+        let passwords: Vec<(String, String)> = found
+            .passwords
+            .iter()
+            .filter_map(|(at, password)| {
+                let site = Site::from_config(found.sites.get(*at)?).ok()?;
+                Some((vault_entry(&site, SecretKind::Password), password.clone()))
+            })
+            .collect();
+        let first = found.sites.first().map(|s| s.id.clone());
+        let skipped = found.skipped.len();
+        let from = found.from.join(", ");
+        let before = self.cfg.sites.len();
+        let (added, already) = fcmd_net::import::merge(&mut self.cfg.sites, found.sites);
+        let (mut kept, mut lost) = (0, 0);
+        match self.vault.as_mut() {
+            Some(v) => {
+                for (entry, password) in &passwords {
+                    v.set(entry, password);
+                }
+                kept = passwords.len();
+            }
+            None => lost = passwords.len(),
+        }
+        if kept > 0 {
+            self.save_vault();
+        }
+        if added > 0 {
+            self.save_setup();
+        }
+        let (sites, _) = Site::list_from_config(&self.cfg);
+        self.sites = sites;
+        let at = self
+            .cfg
+            .sites
+            .get(before)
+            .map(|s| s.id.clone())
+            .or(first)
+            .and_then(|id| self.sites.iter().position(|s| s.id == id))
+            .unwrap_or(0);
+        self.mode = Mode::Sites { cursor: at };
+        let m = self.i18n.t_args(
+            "sites-imported",
+            &[
+                ("from", from.into()),
+                ("added", (added as i64).into()),
+                ("already", (already as i64).into()),
+                ("skipped", (skipped as i64).into()),
+                ("kept", (kept as i64).into()),
+                ("lost", (lost as i64).into()),
+            ],
+        );
+        self.set_status(m);
     }
 
     /// `F12` in the hex editor: what to do with the bytes that are marked (SPEC 05 §2.6).
@@ -36614,6 +36700,34 @@ mod tests {
         // The list the dialog came from shows it straight away.
         assert!(app.sites.iter().any(|s| s.id == "jump"));
         assert!(matches!(app.mode, Mode::Sites { .. }));
+    }
+
+    /// Sessions from a `WinSCP.ini` under the cursor join the stored ones, and the same
+    /// file a second time adds nothing.
+    #[test]
+    fn importing_sessions_adds_them_once_and_opens_the_list_on_them() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        std::fs::write(
+            dir.path().join("WinSCP.ini"),
+            "[Sessions\\work/build]\r\nHostName=build.example.com\r\nUserName=ci\r\n\
+             [Sessions\\files]\r\nHostName=files.example.com\r\nFSProtocol=5\r\n",
+        )
+        .unwrap();
+        let mut app = app_on_disk(dir.path());
+        let row = app.panels[0].listing.row_of_name("WinSCP.ini").unwrap();
+        app.panels[0].cursor_to(row);
+        app.run(Command::NetSitesImport);
+        assert_eq!(app.cfg.sites.len(), 2, "{:?}", app.status);
+        assert!(matches!(app.mode, Mode::Sites { .. }));
+        assert!(app.status.contains("2 added"), "{}", app.status);
+        assert!(
+            dir.path().join("fcmd.toml").exists(),
+            "kept in the file at once"
+        );
+        app.mode = Mode::Normal;
+        app.run(Command::NetSitesImport);
+        assert_eq!(app.cfg.sites.len(), 2);
+        assert!(app.status.contains("0 added, 2 already"), "{}", app.status);
     }
 
     #[test]

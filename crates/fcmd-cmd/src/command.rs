@@ -467,6 +467,8 @@ pub enum Command {
     // netbox (SPEC 04 §6)
     /// The site list: connect, disconnect, add.
     NetSites,
+    /// Sessions from FAR's FTP plugin, WinSCP or NetBox, from the file under the cursor.
+    NetSitesImport,
     /// Connect to a URL typed by hand.
     NetConnect,
     /// Close the connection the active panel is on.
@@ -928,6 +930,7 @@ impl Command {
             Command::ToolReplace,
             Command::ShellOutputShow,
             Command::NetSites,
+            Command::NetSitesImport,
             Command::NetConnect,
             Command::NetDisconnect,
             Command::ViewerQuit,
@@ -1294,6 +1297,7 @@ impl Command {
             Command::ToolReplace => "tool.replace".into(),
             Command::ShellOutputShow => "shell.output.show".into(),
             Command::NetSites => "net.sites".into(),
+            Command::NetSitesImport => "net.sites.import".into(),
             Command::NetConnect => "net.connect".into(),
             Command::NetDisconnect => "net.disconnect".into(),
             Command::ViewerQuit => "viewer.quit".into(),
@@ -1637,6 +1641,7 @@ impl Command {
             ("tool.replace", _) => Command::ToolReplace,
             ("shell.output.show", _) => Command::ShellOutputShow,
             ("net.sites", _) => Command::NetSites,
+            ("net.sites.import", _) => Command::NetSitesImport,
             ("net.connect", _) => Command::NetConnect,
             ("net.disconnect", _) => Command::NetDisconnect,
             ("viewer.quit", _) => Command::ViewerQuit,

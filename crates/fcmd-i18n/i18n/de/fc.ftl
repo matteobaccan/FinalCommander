@@ -593,6 +593,7 @@ s3-link-not-here = ein Link führt zu einem Objekt: den Cursor auf eine Datei in
 s3-link-copied = Link zu { $name } in die Zwischenablage kopiert, gültig für { $time }
 s3-link-failed = kein Link zu { $name }: { $why }
 menu-connections = Verbindungen
+menu-sites-import = Sitzungen importieren…
 menu-disconnect = Verbindung trennen
 menu-s3-profile = AWS-Profil eines Objektspeichers…
 menu-s3-link = Freigabelink zu einem Objekt…
@@ -2233,3 +2234,7 @@ reg-imported = { $file } in die Registrierung geschrieben — Sicherung in { $ba
 reg-backup-failed = Nach { $dir } ließ sich keine Sicherung schreiben ({ $error }): nichts wurde geändert
 reg-file-failed = { $file }: { $error }
 reg-not-a-reg-file = { $file } ist keine lesbare .reg-Datei ({ $error })
+
+sites-import-where = Cursor auf einen .reg-Export oder eine WinSCP.ini in einem lokalen Feld setzen
+sites-import-failed = { $file } kann nicht importiert werden: { $why }
+sites-imported = { $from }: { $added } hinzugefügt, { $already } schon vorhanden, { $skipped } ausgelassen; { $kept } Passwörter gespeichert, { $lost } nicht (die Geheimnisdatei ist nicht offen)

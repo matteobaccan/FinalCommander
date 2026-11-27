@@ -299,6 +299,19 @@ A few things are the nature of object storage rather than gaps:
 * **A service configured without credentials reads and nothing more.** Its rows are marked
   read-only, and the keys that would write are not offered.
 
+## Sessions from FAR, WinSCP or NetBox
+
+Export the sessions from the other program — `regedit` → *Export* on FAR's
+`Software\Far\Plugins\FTP\Hosts` key, or on WinSCP's `Software\Martin Prikryl\WinSCP 2\Sessions`
+(NetBox keeps its sessions in the same shape, under FAR's plugin key), or WinSCP's own
+`WinSCP.ini` — put the cursor on the file in a local panel, and choose *Commands → Import
+sessions…*. The sessions join the stored ones; one already there is left alone, and the list
+opens on what was added.
+
+FAR folders and `LABEL:` prefixes become groups. A password FAR saved is kept in the secrets
+file if that file is open, and only there; otherwise, and for WinSCP, the password is asked for
+the first time the session is opened.
+
 # A session's address
 
 `Ctrl+Ins` on a stored session in the NetBox list copies its address — `sftp://user@host:22/folder`

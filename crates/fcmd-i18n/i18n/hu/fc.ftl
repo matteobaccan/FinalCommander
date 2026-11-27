@@ -601,6 +601,7 @@ s3-link-not-here = a hivatkozás egy objektumra mutat: álljon a kurzorral egy b
 s3-link-copied = a(z) { $name } hivatkozása a vágólapra került, érvényes { $time }
 s3-link-failed = nincs hivatkozás erre: { $name }: { $why }
 menu-connections = Kapcsolatok
+menu-sites-import = Munkamenetek importálása…
 menu-disconnect = Kapcsolat bontása
 menu-s3-profile = Egy objektumtár AWS-profilja…
 menu-s3-link = Megosztott hivatkozás egy objektumra…
@@ -2243,3 +2244,7 @@ reg-imported = { $file } beírva a rendszerleíró adatbázisba — biztonsági 
 reg-backup-failed = Nem sikerült biztonsági másolatot írni ide: { $dir } ({ $error }): semmi sem változott
 reg-file-failed = { $file }: { $error }
 reg-not-a-reg-file = { $file } nem olvasható .reg fájl ({ $error })
+
+sites-import-where = Állítsa a kurzort egy .reg exportra vagy WinSCP.ini fájlra egy helyi panelen
+sites-import-failed = { $file } nem importálható: { $why }
+sites-imported = { $from }: { $added } hozzáadva, { $already } már tárolva, { $skipped } kihagyva; { $kept } jelszó mentve, { $lost } nem (a titkok fájlja nincs megnyitva)

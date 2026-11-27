@@ -660,6 +660,11 @@ pub fn menus() -> Vec<Menu> {
                     Action::Run(Command::NetSites),
                 ),
                 item(
+                    "menu-sites-import",
+                    "",
+                    Action::Run(Command::NetSitesImport),
+                ),
+                item(
                     "menu-disconnect",
                     "Alt+Shift+N",
                     Action::Run(Command::NetDisconnect),

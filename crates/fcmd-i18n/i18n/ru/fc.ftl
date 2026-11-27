@@ -593,6 +593,7 @@ s3-link-not-here = ссылка ведёт на объект: поставьте
 s3-link-copied = ссылка на { $name } скопирована в буфер обмена, действует { $time }
 s3-link-failed = ссылка на { $name } не создана: { $why }
 menu-connections = Соединения
+menu-sites-import = Импорт сеансов…
 menu-disconnect = Откл&ючиться
 menu-s3-profile = Профиль AWS объектного хранилища…
 menu-s3-link = Общая ссылка на объект…
@@ -2207,3 +2208,7 @@ reg-imported = { $file } записан в реестр — резервная �
 reg-backup-failed = Не удалось записать резервную копию в { $dir } ({ $error }): ничего не изменено
 reg-file-failed = { $file }: { $error }
 reg-not-a-reg-file = { $file } — не читаемый файл .reg ({ $error })
+
+sites-import-where = Поставьте курсор на экспорт .reg или WinSCP.ini в локальной панели
+sites-import-failed = Не удалось импортировать { $file }: { $why }
+sites-imported = { $from }: добавлено { $added }, уже есть { $already }, пропущено { $skipped }; паролей сохранено { $kept }, не сохранено { $lost } (файл секретов не открыт)

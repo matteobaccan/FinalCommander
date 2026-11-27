@@ -607,6 +607,7 @@ s3-link-not-here = nuoroda veda į objektą: pastatykite žymeklį ant failo kib
 s3-link-copied = nuoroda į { $name } nukopijuota į iškarpinę, galioja { $time }
 s3-link-failed = nuorodos į { $name } nėra: { $why }
 menu-connections = Prisijungimai
+menu-sites-import = Importuoti seansus…
 menu-disconnect = Atsijungti
 menu-s3-profile = Objektų saugyklos AWS profilis…
 menu-s3-link = Bendrinama nuoroda į objektą…
@@ -2269,3 +2270,7 @@ reg-imported = { $file } įrašytas į registrą — atsarginė kopija { $backup
 reg-backup-failed = Nepavyko įrašyti atsarginės kopijos į { $dir } ({ $error }): niekas nepakeista
 reg-file-failed = { $file }: { $error }
 reg-not-a-reg-file = { $file } nėra perskaitomas .reg failas ({ $error })
+
+sites-import-where = Užveskite žymeklį ant .reg eksporto arba WinSCP.ini vietiniame skydelyje
+sites-import-failed = Nepavyko importuoti { $file }: { $why }
+sites-imported = { $from }: pridėta { $added }, jau išsaugota { $already }, praleista { $skipped }; slaptažodžių išsaugota { $kept }, neišsaugota { $lost } (paslapčių failas neatidarytas)

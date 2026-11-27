@@ -593,6 +593,7 @@ s3-link-not-here = un lien mène à un objet : placez le curseur sur un fichier 
 s3-link-copied = lien vers { $name } copié dans le presse-papiers, valable { $time }
 s3-link-failed = pas de lien vers { $name } : { $why }
 menu-connections = Conne&xions
+menu-sites-import = Importer des sessions…
 menu-disconnect = Déconnecter
 menu-s3-profile = Profil AWS d’un stockage objet…
 menu-s3-link = Lien de partage vers un objet…
@@ -2233,3 +2234,7 @@ reg-imported = { $file } écrit dans le registre — sauvegarde dans { $backup }
 reg-backup-failed = Aucune sauvegarde n'a pu être écrite dans { $dir } ({ $error }) : rien n'a été modifié
 reg-file-failed = { $file }: { $error }
 reg-not-a-reg-file = { $file } n'est pas un fichier .reg lisible ({ $error })
+
+sites-import-where = Placez le curseur sur un export .reg ou un WinSCP.ini dans un panneau local
+sites-import-failed = Impossible d'importer { $file } : { $why }
+sites-imported = { $from } : { $added } ajoutées, { $already } déjà présentes, { $skipped } écartées ; { $kept } mots de passe gardés, { $lost } non gardés (le fichier des secrets n'est pas ouvert)

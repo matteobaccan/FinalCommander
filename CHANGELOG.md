@@ -8,6 +8,10 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- Sessions imported from FAR's FTP plugin, WinSCP and NetBox (SPEC 04 §6.7): *Commands →
+  Import sessions…* on a `.reg` export or a `WinSCP.ini` adds them to the stored ones, groups
+  from FAR's folders and labels, nothing stored twice. A password FAR kept with its XOR cipher
+  goes into the secrets file when it is open, and nowhere else.
 - The Windows registry in a panel (SPEC 06 §17): `Alt+F1` → *Registry*, on Windows. The roots
   and the keys are folders and the values rows with their name, type and data; `F3` shows a
   value whole, `F4` edits it in a dialog fit for its type (text, a number in decimal or `0x`

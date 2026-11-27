@@ -601,6 +601,7 @@ s3-link-not-here = a link is to an object: put the cursor on a file in a bucket
 s3-link-copied = link to { $name } copied to the clipboard, good for { $time }
 s3-link-failed = no link to { $name }: { $why }
 menu-connections = Connections
+menu-sites-import = Import sessions…
 menu-disconnect = Disconnect
 menu-s3-profile = AWS profile of an object store…
 menu-s3-link = Shared link to an object…
@@ -2243,3 +2244,7 @@ reg-imported = { $file } written into the registry — backup in { $backup }
 reg-backup-failed = No backup could be written to { $dir } ({ $error }): nothing was changed
 reg-file-failed = { $file }: { $error }
 reg-not-a-reg-file = { $file } is not a .reg file that can be read ({ $error })
+
+sites-import-where = Put the cursor on a .reg export or a WinSCP.ini in a local panel
+sites-import-failed = Cannot import { $file }: { $why }
+sites-imported = { $from }: { $added } added, { $already } already stored, { $skipped } left out; { $kept } passwords kept, { $lost } not kept (the secrets file is not open)

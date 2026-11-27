@@ -604,6 +604,7 @@ s3-link-not-here = odkaz vedie na objekt: dajte kurzor na súbor v buckete
 s3-link-copied = odkaz na { $name } skopírovaný do schránky, platný { $time }
 s3-link-failed = žiadny odkaz na { $name }: { $why }
 menu-connections = Pripojenia
+menu-sites-import = Importovať relácie…
 menu-disconnect = Odpojiť
 menu-s3-profile = Profil AWS objektového úložiska…
 menu-s3-link = Zdieľaný odkaz na objekt…
@@ -2265,3 +2266,7 @@ reg-imported = { $file } zapísaný do registra — záloha v { $backup }
 reg-backup-failed = Zálohu sa do { $dir } nepodarilo zapísať ({ $error }): nič sa nezmenilo
 reg-file-failed = { $file }: { $error }
 reg-not-a-reg-file = { $file } nie je čitateľný súbor .reg ({ $error })
+
+sites-import-where = Umiestnite kurzor na export .reg alebo WinSCP.ini v miestnom paneli
+sites-import-failed = Nedá sa importovať { $file }: { $why }
+sites-imported = { $from }: pridané { $added }, už uložené { $already }, vynechané { $skipped }; uložených hesiel { $kept }, neuložených { $lost } (súbor tajomstiev nie je otvorený)

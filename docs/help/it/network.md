@@ -316,6 +316,19 @@ Alcune cose sono la natura dell'object storage, non lacune:
 * **Un servizio configurato senza credenziali legge e nient'altro.** Le sue righe sono marcate
   in sola lettura, e i tasti che scriverebbero non vengono offerti.
 
+## Le sessioni di FAR, WinSCP o NetBox
+
+Esporta le sessioni dall'altro programma — `regedit` → *Esporta* sulla chiave
+`Software\Far\Plugins\FTP\Hosts` di FAR, o su `Software\Martin Prikryl\WinSCP 2\Sessions` di
+WinSCP (NetBox tiene le sue sessioni nella stessa forma, sotto la chiave del plugin di FAR), oppure
+il `WinSCP.ini` di WinSCP — metti il cursore sul file in un pannello locale e scegli *Comandi →
+Importa sessioni…*. Le sessioni si aggiungono a quelle salvate; una già presente resta com'è, e
+la lista si apre su quelle aggiunte.
+
+Le cartelle di FAR e i prefissi `ETICHETTA:` diventano gruppi. Una password salvata da FAR finisce
+nel file dei segreti se quel file è aperto, e solo lì; altrimenti, e per WinSCP, la password viene
+chiesta la prima volta che si apre la sessione.
+
 # L'indirizzo di una sessione
 
 `Ctrl+Ins` su una sessione salvata nella lista NetBox copia il suo indirizzo —

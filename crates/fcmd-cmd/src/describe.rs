@@ -295,6 +295,7 @@ impl Command {
             Command::ToolReplace => "replace across the selected files",
             Command::ShellOutputShow => "the panels off, and the screen the commands printed on",
             Command::NetSites => "the stored connections",
+            Command::NetSitesImport => "import the sessions in the file under the cursor",
             Command::NetConnect => "connect to a server",
             Command::NetDisconnect => "close this connection",
 

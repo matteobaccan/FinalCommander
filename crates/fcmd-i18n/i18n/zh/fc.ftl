@@ -593,6 +593,7 @@ s3-link-not-here = 链接指向一个对象：请把光标放在存储桶中的�
 s3-link-copied = { $name } 的链接已复制到剪贴板，有效期 { $time }
 s3-link-failed = 无法生成 { $name } 的链接：{ $why }
 menu-connections = 连接
+menu-sites-import = 导入会话…
 menu-disconnect = 断开连接
 menu-s3-profile = 对象存储的 AWS 配置文件…
 menu-s3-link = 对象的共享链接…
@@ -2155,3 +2156,7 @@ reg-imported = { $file } 已写入注册表 — 备份在 { $backup }
 reg-backup-failed = 无法在 { $dir } 写入备份（{ $error }）：未作任何更改
 reg-file-failed = { $file }：{ $error }
 reg-not-a-reg-file = { $file } 不是可读取的 .reg 文件（{ $error }）
+
+sites-import-where = 请在本地面板中将光标放在 .reg 导出文件或 WinSCP.ini 上
+sites-import-failed = 无法导入 { $file }：{ $why }
+sites-imported = { $from }：新增 { $added } 个，已存在 { $already } 个，跳过 { $skipped } 个；已保存密码 { $kept } 个，未保存 { $lost } 个（密钥文件未打开）
