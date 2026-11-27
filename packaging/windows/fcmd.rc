@@ -1,0 +1,6 @@
+// The icon of fcmd.exe: the one Explorer, the taskbar and a shortcut show.
+// Compiled once into fcmd.res (for the MSVC linker) and fcmd-res.o (for MinGW), which
+// crates/fcmd/build.rs links into the Windows builds. Remake both after changing the icon:
+//   x86_64-w64-mingw32-windres -O res  packaging/windows/fcmd.rc packaging/windows/fcmd.res
+//   x86_64-w64-mingw32-windres -O coff packaging/windows/fcmd.rc packaging/windows/fcmd-res.o
+1 ICON "../../assets/fcmd.ico"

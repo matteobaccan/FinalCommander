@@ -1653,7 +1653,7 @@ site-max-kbps = Ограничение скорости, КБ/с (пусто: н
 site-protocol-imap = IMAP (почта, только чтение)
 site-protocol-imaps = IMAPS (почта через TLS, только чтение)
 site-protocol-link = Link (другой FinalCommander, локальная сеть)
-site-link-note = Link: хост — ID другой машины, пользователь — открытая ею папка (пусто: первая); при «ask» пароль — его PIN
+site-link-note = Link: хост — ID другой машины, пользователь — открытая ею папка (пусто: первая); при «ask» пароль — его PIN; в другой сети — его IP-адрес как хост
 
 # The AI services as a list, like the sessions
 ai-services-title = Сервисы ИИ

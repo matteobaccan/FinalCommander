@@ -788,9 +788,18 @@ see (empty: the machine's own). Calling another machine needs nothing turned on.
 - A Link machine is a **netbox site** like an SFTP or FTP one: protocol *Link*, the host is
   the other machine's ID (spaced or not), the user is the name of the folder it shares —
   empty for the one it offers first.
-- Opening it sends a UDP broadcast `FCMD-LINK/1 who <id>`; a machine that accepts calls and
-  has that ID answers to the sender alone with `FCMD-LINK/1 here <id> <tcp port> <name>`. No
-  answer in two seconds is said so, with the reason most likely: the Link is not on there.
+- Opening it sends a UDP broadcast `FCMD-LINK/1 who <id>` — to the all-ones address and to
+  the /24 broadcast of the network the default route leaves by, because Windows sends the
+  all-ones one out of a single network when there are several (WSL, VirtualBox, a VPN); a
+  machine that accepts calls and has that ID answers to the sender alone with
+  `FCMD-LINK/1 here <id> <tcp port> <name>`. No answer in two seconds is said so, with the
+  reasons most likely: the Link is not on there, or the machine is on another network.
+- **By address.** No broadcast crosses from one network to another — a second router, a
+  Wi-Fi kept apart from the wired network — so the host may be the other machine's IP address
+  instead of its ID, and the call goes straight to its TCP port (the site's port, 47831 by
+  default). The called side listens on 47831 unless `link.port` says otherwise or another
+  program holds it, and its status line shows its address beside its ID. The fingerprint is
+  then kept under the ID the machine gives in its hello.
 - **Private addresses only**, at both ends: RFC 1918, link-local, IPv6 unique-local and
   link-local, and loopback (the tests). A packet or a connection from anything else is dropped
   unread.
@@ -902,9 +911,9 @@ own name.
 - **What it prints**: the ID, the name and the TCP port first, then one line per call with
   the time, the caller's name, ID and address — refused (no PIN, wrong PIN, locked out), in,
   left. On a router that is the system log (`logread`), under systemd the journal.
-- `link.port` fixes the TCP port (0, the default, lets the system choose; callers learn it from
-  the broadcast), so that a firewall can be opened for it and for UDP 47831. It applies to the
-  panels' Link too.
+- `link.port` fixes the TCP port (0, the default, is 47831 when free and any port otherwise;
+  callers on the same network learn it from the broadcast), so that a firewall can be opened
+  for it and for UDP 47831. It applies to the panels' Link too.
 - `packaging/openwrt/fcmd-link` is a procd service for `/etc/init.d/`, and
   `packaging/systemd/fcmd-link.service` a systemd user service; both run `--link-serve` and
   start it again if it stops. The compact build has the Link, so a router's small archive

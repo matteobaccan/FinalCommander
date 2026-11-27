@@ -62,9 +62,19 @@ impl Dialer {
     ///
     /// A site whose authentication is a password gives the other machine's PIN (SPEC 04
     /// §9.5): asked for like any password, and proved without being sent.
+    ///
+    /// The host is the other machine's ID, found by a broadcast on this network — or its IP
+    /// address, called directly: the way across from one network to another (a second
+    /// router, a Wi-Fi apart from the wired one), which no broadcast crosses.
     pub async fn connect(&self, site: &Site, secret: Option<&str>) -> Result<Remote> {
-        let id = parse_id(&site.host)
-            .ok_or_else(|| failed(site, "not a FinalCommander ID: nine digits"))?;
+        let direct: Option<std::net::IpAddr> = site.host.trim_matches(['[', ']']).parse().ok();
+        let id = match direct {
+            Some(_) => None,
+            None => Some(
+                parse_id(&site.host)
+                    .ok_or_else(|| failed(site, "not a FinalCommander ID: nine digits"))?,
+            ),
+        };
         let pin = match (&site.auth, secret) {
             (Auth::Password, None) => {
                 return Err(NetError::NeedsSecret {
@@ -76,20 +86,41 @@ impl Dialer {
             (Auth::Password, Some(pin)) => Some(pin),
             _ => None,
         };
-        let found = discovery::find(discovery::broadcast(), Some(id), FIND_WAIT)
-            .await
-            .map_err(|e| failed(site, e))?;
-        let Some(there) = found.into_iter().next() else {
-            return Err(failed(
-                site,
-                "no FinalCommander with this ID answered on the local network — is Link \
-                 turned on there?",
-            ));
+        let addr = match (direct, id) {
+            (Some(ip), _) => std::net::SocketAddr::new(ip, site.port),
+            (None, Some(id)) => {
+                let found = discovery::find_everywhere(Some(id), FIND_WAIT)
+                    .await
+                    .map_err(|e| failed(site, e))?;
+                let Some(there) = found.into_iter().next() else {
+                    return Err(failed(
+                        site,
+                        "no FinalCommander with this ID answered on this network — is Link \
+                         turned on there? A machine on another network (another router, \
+                         a Wi-Fi apart from the wired one) is called by its IP address \
+                         as the host instead",
+                    ));
+                };
+                there.addr
+            }
+            (None, None) => unreachable!("an ID or an address"),
         };
         let identity =
             Identity::load_or_create(&self.dir, &self.name).map_err(|e| failed(site, e))?;
-        let pending = call(there.addr, &identity).await?;
+        let pending = call(addr, &identity).await.map_err(|e| match direct {
+            Some(_) => failed(
+                site,
+                format!(
+                    "{e} — is Link turned on there, on port {}, and does its firewall let \
+                     it in?",
+                    site.port
+                ),
+            ),
+            None => e,
+        })?;
         let theirs = pending.peer.fingerprint;
+        // Known by the ID the machine gave, however it was reached.
+        let id = id.unwrap_or(pending.peer.id);
         if let Some(known) = self.known_fingerprint(id) {
             if known != theirs {
                 return Err(failed(

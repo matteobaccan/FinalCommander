@@ -141,6 +141,12 @@ cartella in `link.share`.
 Aprendola, la macchina viene cercata con un broadcast sulla rete locale e chiamata; la riga di
 stato mostra un codice di sei cifre.
 
+**Su un'altra rete** — un secondo router, un Wi-Fi tenuto separato dalla rete via cavo — la
+ricerca non arriva, perché nessun broadcast passa da una rete all'altra. Come host metti
+l'indirizzo IP dell'altra macchina al posto dell'ID: la sua riga di stato lo mostra accanto
+all'ID quando il Link è acceso (`568 765 292 · 192.168.1.10`). La chiamata va allora diretta
+alla porta TCP 47831, che è quella che il suo firewall deve lasciar passare.
+
 **La chiamata**: la macchina chiamata mostra chi chiama, la cartella chiesta e le stesse sei
 cifre. Confrontale — al telefono, o da una scrivania all'altra — e accetta solo se sono
 uguali: un codice diverso vuol dire qualcuno in mezzo. Il pulsante acceso è *Annulla*, così

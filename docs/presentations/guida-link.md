@@ -146,15 +146,29 @@ FinalCommander Link: ID 228 869 742 (nas), TCP port 41123, sharing /mnt/usb read
 3. `systemctl --user enable --now fcmd-link`.
 4. Il registro si legge con `journalctl --user -u fcmd-link`.
 
-## 7. Firewall
+## 7. Reti diverse e firewall
 
 Il Link usa due porte:
 
-- **UDP 47831**, per farsi trovare;
-- **una porta TCP** per le chiamate, scelta dal sistema e comunicata a chi cerca.
+- **UDP 47831**, per farsi trovare con l'ID;
+- **TCP 47831** per le chiamate (se è occupata da un altro programma, una scelta dal sistema,
+  che la ricerca comunica a chi chiama).
 
-Se un firewall blocca le connessioni in entrata, fissa la porta TCP nelle impostazioni e apri
-le due porte, solo verso la rete locale:
+**Se i due computer sono su reti diverse** — per esempio uno via cavo su `10.11.4.x` e uno
+in Wi-Fi su `192.168.1.x`, anche dietro lo stesso router — la ricerca con l'ID non arriva:
+nessun broadcast passa da una rete all'altra. In questo caso nella sessione si scrive come
+**host l'indirizzo IP** dell'altro computer al posto dell'ID. L'indirizzo compare nella riga
+di stato del computer che condivide, accanto all'ID: `568 765 292 · 192.168.1.10`.
+
+Se un firewall blocca le connessioni in entrata, va aperta la porta TCP 47831 (e la UDP
+47831, per la ricerca con l'ID), solo verso la rete locale. Su Windows, da un PowerShell come
+amministratore:
+
+```
+netsh advfirewall firewall add rule name="FinalCommander Link" dir=in action=allow program="C:\percorso\di\fcmd.exe" enable=yes profile=private,domain
+```
+
+e la rete deve essere impostata come **Privata**. La porta si può fissare a un altro numero:
 
 ```toml
 [link]
@@ -169,7 +183,7 @@ essere letta. Per raggiungere un computer lontano si usa SFTP.
 
 | Messaggio | Che cosa vuol dire | Che cosa fare |
 | --- | --- | --- |
-| *no FinalCommander with this ID answered on the local network* | nessuno ha risposto alla ricerca | controlla l'ID, che il Link sia acceso dall'altra parte, che siate sulla stessa rete e che la UDP 47831 non sia bloccata |
+| *no FinalCommander with this ID answered on this network* | nessuno ha risposto alla ricerca | controlla l'ID e che il Link sia acceso dall'altra parte; se i due computer sono su reti diverse (`ipconfig`), usa come host l'indirizzo IP |
 | *the call was not accepted* | dall'altra parte hanno rifiutato o non hanno risposto | richiama e fatti confermare il codice |
 | *the machine's key has CHANGED* | l'altro computer ha una chiave diversa da quella vista l'ultima volta | se è stato reinstallato, togli la sua riga dal file `link-known` indicato nel messaggio; altrimenti non collegarti |
 | *wrong PIN* | il PIN non è quello impostato | riprova; al quinto errore scatta il blocco |
@@ -185,7 +199,7 @@ essere letta. Per raggiungere un computer lontano si usa SFTP.
 | `link.accept` | `false` | accetta chiamate all'avvio |
 | `link.share` | vuoto | la cartella condivisa all'avvio e da `--link-serve` |
 | `link.name` | vuoto | il nome che vede chi chiama; vuoto: il nome del computer |
-| `link.port` | `0` | la porta TCP; 0: scelta dal sistema |
+| `link.port` | `0` | la porta TCP; 0: la 47831, o una scelta dal sistema se è occupata |
 
 Accanto al file delle impostazioni (`fcmd --paths` dice dov'è):
 

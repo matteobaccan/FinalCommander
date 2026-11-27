@@ -340,11 +340,26 @@ impl Site {
         // it was spaced, and the user is the name of the folder it shares — `*`, the one it
         // offers first, when none is given, rather than the login name of this machine.
         if scheme == Scheme::Link {
-            let id = crate::link::parse_id(&cfg.host).ok_or_else(|| NetError::Connect {
-                host: cfg.host.clone(),
-                detail: "a Link site's host is the other machine's ID: nine digits".into(),
-            })?;
-            site.host = id.to_string();
+            let host = cfg.host.trim();
+            site.host = match crate::link::parse_id(host) {
+                Some(id) => id.to_string(),
+                // An address, for a machine on another network than this one.
+                None if host
+                    .trim_matches(['[', ']'])
+                    .parse::<std::net::IpAddr>()
+                    .is_ok() =>
+                {
+                    host.to_string()
+                }
+                None => {
+                    return Err(NetError::Connect {
+                        host: cfg.host.clone(),
+                        detail: "a Link site's host is the other machine's ID (nine digits) \
+                                 or its IP address"
+                            .into(),
+                    })
+                }
+            };
             if cfg.user.as_deref().is_none_or(|u| u.trim().is_empty()) {
                 site.user = crate::link::dial::ANY_SHARE.to_string();
             }
@@ -649,6 +664,12 @@ mod tests {
             "not this machine's login"
         );
         assert_eq!(site.port, 47831);
+        // An address instead, for a machine on another network: kept as it was written.
+        let by_ip = fcmd_config::SiteCfg {
+            host: "192.168.1.10".into(),
+            ..cfg.clone()
+        };
+        assert_eq!(Site::from_config(&by_ip).unwrap().host, "192.168.1.10");
         let bad = fcmd_config::SiteCfg {
             host: "12345".into(),
             ..cfg

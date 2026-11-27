@@ -21,6 +21,30 @@ use crate::app::{Event, LinkCall};
 
 type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<bool>>>>;
 
+/// Where calls come in. `link.port` when it is set; otherwise 47831, the port a caller
+/// that names this machine by its IP address tries — and, when another program holds that
+/// one, any port, which the broadcast tells callers on this network.
+async fn listen(port: u16) -> std::io::Result<tokio::net::TcpListener> {
+    if port != 0 {
+        return tokio::net::TcpListener::bind(("0.0.0.0", port)).await;
+    }
+    match tokio::net::TcpListener::bind(("0.0.0.0", discovery::PORT)).await {
+        Ok(listener) => Ok(listener),
+        Err(_) => tokio::net::TcpListener::bind(("0.0.0.0", 0)).await,
+    }
+}
+
+/// The ID, and the address a caller on another network types instead (`192.168.1.10`, with
+/// `:port` when it is not the usual one).
+fn reachable_as(id: u32, port: u16) -> String {
+    let id = link::format_id(id);
+    match discovery::default_address() {
+        Some(ip) if port == discovery::PORT => format!("{id} · {ip}"),
+        Some(ip) => format!("{id} · {ip}:{port}"),
+        None => id,
+    }
+}
+
 /// The name callers see when the settings give none: the machine's own.
 pub fn machine_name() -> String {
     let from_env = ["COMPUTERNAME", "HOSTNAME"]
@@ -151,7 +175,7 @@ async fn run(
     tx: &mpsc::Sender<Event>,
 ) -> std::io::Result<()> {
     let identity = Arc::new(Identity::load_or_create(dir, name)?);
-    let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await?;
+    let listener = listen(port).await?;
     let port = listener.local_addr()?.port();
     let udp = tokio::net::UdpSocket::bind(("0.0.0.0", discovery::PORT))
         .await
@@ -164,7 +188,7 @@ async fn run(
         })?;
     let _ = tx.send(Event::LinkAccepting {
         result: Ok(Some((
-            link::format_id(identity.id),
+            reachable_as(identity.id, port),
             folder.display().to_string(),
         ))),
     });
@@ -302,7 +326,7 @@ pub fn serve_headless(dir: &Path, name: &str, folder: &Path, port: u16) -> anyho
         .build()?;
     runtime.block_on(async move {
         let identity = Arc::new(Identity::load_or_create(dir, name)?);
-        let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
+        let listener = listen(port)
             .await
             .map_err(|e| anyhow::anyhow!("TCP port {port}: {e}"))?;
         let port = listener.local_addr()?.port();
@@ -318,7 +342,7 @@ pub fn serve_headless(dir: &Path, name: &str, folder: &Path, port: u16) -> anyho
         println!(
             "FinalCommander Link: ID {} ({}), TCP port {port}, sharing {} read only; callers \
              need the PIN.",
-            link::format_id(identity.id),
+            reachable_as(identity.id, port),
             identity.name,
             folder.display()
         );
@@ -441,5 +465,73 @@ mod tests {
             Event::LinkSession { open: false, .. } => {}
             other => panic!("the session was expected to close, not {other:?}"),
         }
+    }
+
+    /// A machine on another network is called by its address: no broadcast, straight to the
+    /// port, the dialog there as usual, and the folder in the panel.
+    #[test]
+    fn a_machine_named_by_its_address_is_called_without_a_broadcast() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        let here = tempfile::tempdir().unwrap();
+        let shared = tempfile::tempdir().unwrap();
+        std::fs::write(shared.path().join("note.txt"), b"hello").unwrap();
+        let (tx, rx) = mpsc::channel();
+        let hub = Hub::new(here.path().to_path_buf(), "here".into(), tx.clone());
+        let gate = Arc::new(Bridge {
+            tx: tx.clone(),
+            pending: hub.pending.clone(),
+            next: hub.next.clone(),
+            share: Some(Share::new("shared", shared.path(), false).unwrap()),
+            hang_up: hub.hang_up.subscribe(),
+            dir: here.path().to_path_buf(),
+        });
+        let identity = Arc::new(Identity::load_or_create(here.path(), "here").unwrap());
+        let listener = runtime
+            .block_on(tokio::net::TcpListener::bind(("127.0.0.1", 0)))
+            .unwrap();
+        let port = listener.local_addr().unwrap().port();
+        runtime.spawn(link::serve(listener, identity, gate));
+
+        let there = tempfile::tempdir().unwrap();
+        let (tx2, rx2) = mpsc::channel();
+        let pool = fcmd_net::Pool::new();
+        pool.set_link(Hub::new(there.path().to_path_buf(), "there".into(), tx2).dialer());
+        let site = fcmd_net::Site::from_config(&fcmd_config::SiteCfg {
+            id: "office".into(),
+            scheme: "link".into(),
+            host: "127.0.0.1".into(),
+            port: Some(port),
+            ..Default::default()
+        })
+        .unwrap();
+        let start = site.start();
+        let opened = runtime.spawn(async move {
+            let remote = pool.connect(&site, None).await.map_err(|e| e.to_string())?;
+            let rows = remote
+                .sftp()
+                .read_dir("/")
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok::<_, String>(rows.into_iter().map(|e| e.name).collect::<Vec<_>>())
+        });
+        let call = match rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap() {
+            Event::LinkCall(call) => call,
+            other => panic!("a call was expected, not {other:?}"),
+        };
+        match rx2
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .unwrap()
+        {
+            Event::LinkCode { code, .. } => assert_eq!(code, call.code),
+            other => panic!("the code was expected, not {other:?}"),
+        }
+        hub.answer(call.call, true);
+        let names = runtime.block_on(opened).unwrap().unwrap();
+        assert_eq!(names, ["note.txt"]);
+        assert!(start.to_string().contains("127.0.0.1"));
     }
 }

@@ -35,6 +35,11 @@ Notable changes, newest first. The format follows
   private addresses only, a changed key refused; `LINK` in the corner of the status line
   while calls are accepted, with the number of callers, and `Ctrl+Alt+L` hangs them all up.
   Settings `link.accept`, `link.name`, `link.share`.
+  A machine on another network (a second router, a Wi-Fi apart from the wired network) is
+  called by its IP address as the host, since no broadcast crosses between networks; the
+  called side shows its address beside its ID and listens on TCP 47831 by default. The
+  search also goes to the broadcast of the network the default route leaves by, so that
+  Windows with WSL, VirtualBox or a VPN does not send it out of the wrong network.
 - The Link's PIN: `fcmd --link-pin` sets one on the machine that shares, and a caller that
   gives it — as the netbox session's password, authentication *ask* — is let in without the
   question. The PIN is checked with SPAKE2 bound to both machines' keys, so it never crosses
@@ -105,6 +110,9 @@ Notable changes, newest first. The format follows
   repository, an unknown ref and a missing `git` each say so. In the compact build too.
 
 ### Fixed
+
+- `fcmd.exe` had no icon of its own: Explorer, the taskbar and shortcuts showed Windows'
+  generic one. The program's icon is now linked into the Windows builds.
 
 - A dialog with pages (the session editor, `Ctrl+PgUp`/`Ctrl+PgDn`) changed size from one
   page to the next, and a long note made it as wide as the screen. Every page is now drawn

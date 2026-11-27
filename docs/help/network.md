@@ -136,6 +136,12 @@ To share at every start instead, set `link.accept = true` and the folder in `lin
 folder). Opening it finds the machine by a broadcast on the local network and calls it; the
 status line shows a six-digit code.
 
+**On another network** — a second router, a Wi-Fi kept apart from the wired network — the
+search does not reach, because no broadcast crosses from one network to another. Put the
+other machine's IP address as the host instead of its ID: its status line shows it beside
+the ID when the Link is on (`568 765 292 · 192.168.1.10`). The call then goes straight to TCP
+port 47831, which is the one its firewall has to let in.
+
 **The call**: the machine called shows who is calling, the folder asked for and the same six
 digits. Compare them — on the phone, or across the room — and accept only if they match: a
 different code means somebody in the middle. The lit button is *Cancel*, so an `Enter` typed

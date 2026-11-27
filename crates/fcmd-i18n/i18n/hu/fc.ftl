@@ -1662,7 +1662,7 @@ site-max-kbps = Sebességkorlát, KB/s (üres: nincs)
 site-protocol-imap = IMAP (levelek, csak olvasás)
 site-protocol-imaps = IMAPS (levelek TLS-en át, csak olvasás)
 site-protocol-link = Link (másik FinalCommander, helyi hálózat)
-site-link-note = Link: a gazdagép a másik gép azonosítója, a felhasználó a megosztott mappa (üres: az első); „ask” esetén a jelszó a PIN-kódja
+site-link-note = Link: a gazdagép a másik gép azonosítója, a felhasználó a megosztott mappa (üres: az első); „ask” esetén a jelszó a PIN-kódja; másik hálózaton a gazdagép az IP-címe
 
 # The AI services as a list, like the sessions
 ai-services-title = AI-szolgáltatások
