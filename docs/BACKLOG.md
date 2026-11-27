@@ -79,10 +79,16 @@ database manager. What it has and we do not, from its README; the Link is the se
 decoder (`emu/decode.h` of ish-app/ish) lacks SSE and SSE2 instructions rustc emits for i686
 anywhere — `movmskps` (in 65 functions of fcmd, the first met in `cli::color`), `movlhps`/
 `movhlps`, `minps`/`maxps`/`minpd`/`maxpd`, `divps`/`divpd`, `cmpps`, `cvtdq2ps`, `cvtdq2pd`,
-`cvtps2pd`. No target flag avoids them (`ring` needs SSE2, so i586 does not build). A patch
-for iSH adding all of them was written on 25 November 2026 and handed to the author to
-propose upstream. **To verify**: when an iSH release carries it, run `install.sh` on iSH and
-turn the README's and the release notes' *does not start there yet* into a plain yes.
+`cvtps2pd`. No target flag avoids them (`ring` needs SSE2, so i586 does not build). The
+patch adding all of them is [ish-app/ish#2840](https://github.com/ish-app/ish/pull/2840),
+opened on 27 November 2026 from the branch `sse-for-rust` of matteobaccan/ish: it also fixes
+iSH's own decoding of `cmpps` as `cmppd`, and adds e2e tests whose expected output comes from
+a real x86 processor. Checked before it was opened: built with clang and gcc, the 0.47.0
+`fcmd` stops with *Illegal instruction* under an unpatched `ish` on Linux and starts under the
+patched one (`--version`, `--list-commands`, the panels in a pseudo-terminal), and the fork's
+CI is green on all six jobs. **To verify**: when an iSH release carries it, run `install.sh`
+on iSH and turn the README's and the release notes' *does not start there yet* into a plain
+yes.
 
 ## Candidates for a later release
 
