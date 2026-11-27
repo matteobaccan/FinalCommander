@@ -10,6 +10,15 @@ use std::env;
 use std::path::PathBuf;
 
 fn main() {
+    // The registry panel goes in where there is a registry and the build asked for it: Windows,
+    // with the `registry` feature (part of `full`). The tests build it everywhere, against a
+    // registry kept in memory, and say so in the `cfg` they test under.
+    println!("cargo:rustc-check-cfg=cfg(fcmd_registry)");
+    if env::var_os("CARGO_FEATURE_REGISTRY").is_some()
+        && env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows")
+    {
+        println!("cargo:rustc-cfg=fcmd_registry");
+    }
     let res = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("cargo sets it"))
         .join("../../packaging/windows");
     println!("cargo:rerun-if-changed={}", res.join("fcmd.res").display());

@@ -73,3 +73,7 @@ windows-sys = { version = "0.61", features = [
 # A directory of its own for every test that tags a file (`xattr.rs`).
 [dev-dependencies]
 tempfile = "3"
+
+[features]
+# The registry (`registry.rs`) and `.reg` files (`regfile.rs`), for the registry panel.
+registry = []

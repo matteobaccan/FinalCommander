@@ -1582,6 +1582,7 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                     let result = fcmd_platform::kill(pid);
                     let _ = tx.send(Event::ProcessKilled { side, name, result });
                 }
+                #[cfg(any(fcmd_registry, all(test, feature = "registry")))]
                 Request::Registry(ask) => {
                     let tx = tx.clone();
                     // Off the loop: the backup is a file written before anything changes,
@@ -8207,8 +8208,6 @@ dir_attr = "D"
                 | Request::StripMeta { .. }
                 // A table is written by the tests that are about writing one.
                 | Request::Dbf(_)
-                // And the registry by the tests that hold one in memory.
-                | Request::Registry(_)
                 // The shared AWS files are the user's own: a test hands the profiles in.
                 | Request::S3Profiles { .. }
                 | Request::S3Link { .. }
@@ -8228,6 +8227,9 @@ dir_attr = "D"
                 | Request::Disconnect { .. }
                 | Request::ArcPassword { .. }
                 | Request::Upload { .. } => {}
+                // And the registry by the tests that hold one in memory.
+                #[cfg(any(fcmd_registry, all(test, feature = "registry")))]
+                Request::Registry(_) => {}
             }
         }
     }

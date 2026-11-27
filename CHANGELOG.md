@@ -21,7 +21,8 @@ Notable changes, newest first. The format follows
   a delete — is exported to `registry-backups/` beside the settings, and without that backup
   nothing is changed; a key this user may not write says *Access denied*. `F5` exports keys
   to a `.reg` file regedit reads back, and `Enter` on a `.reg` file imports it after saying
-  what it holds and backing up every key it touches.
+  what it holds and backing up every key it touches. It is built only for Windows, and not
+  into the compact build (`--no-default-features`).
 - One panel on a narrow screen: below 60 columns — a phone held upright, a terminal split
   in two — the screen shows the active panel alone and `Tab` brings the other; a quick view,
   an information panel or a tree goes under the panel it is about. `panel.single_below` sets

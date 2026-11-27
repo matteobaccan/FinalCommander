@@ -57,7 +57,8 @@ nix = { version = "0.32.0", features = ["fs"] }
 [features]
 # Everything, which is what every build but one has. The compact build for small machines —
 # a router's few megabytes of flash — is `--no-default-features`: English alone, and none of
-# WebAssembly, pictures, the x86 disassembler, SQLite, dBase tables or the web terminal; each of
+# WebAssembly, pictures, the x86 disassembler, SQLite, dBase tables, the Windows registry panel
+# or the web terminal; each of
 # those, left out, says so where it would have been.
 default = ["full"]
 full = [
@@ -68,7 +69,10 @@ full = [
   "fcmd-view/disasm-x86",
   "fcmd-arc/sqlite",
   "dbf",
+  "registry",
 ]
+# The Windows registry in a panel (SPEC 06 §17). Built only for Windows, whatever is asked.
+registry = ["fcmd-platform/registry"]
 # dBase tables: read in table mode and written a record at a time. The viewer's half and the
 # dialogs in front of it go in and out together.
 dbf = ["fcmd-view/dbf"]

@@ -17,7 +17,9 @@ mod mount;
 pub mod process;
 mod programs;
 pub mod pty;
+#[cfg(feature = "registry")]
 pub mod regfile;
+#[cfg(feature = "registry")]
 pub mod registry;
 pub mod service;
 mod socket;

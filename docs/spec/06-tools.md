@@ -1228,7 +1228,9 @@ journal, what the tool says about that is what is shown. The viewer's search, fi
 
 `Alt+F1`/`Alt+F2` → *Registry*, on Windows only — the row is not in the list anywhere else —
 after FAR's Registry plugin: the registry in a panel, so that a value can be looked at and
-changed without leaving for `regedit`.
+changed without leaving for `regedit`. The panel is compiled only for Windows and only with the `registry`
+feature, which `full` includes and the compact build (`--no-default-features`) leaves out;
+the tests build it everywhere, against a registry kept in memory.
 
 **What the panel shows.** The five roots (`HKEY_CLASSES_ROOT`, `HKEY_CURRENT_USER`,
 `HKEY_LOCAL_MACHINE`, `HKEY_USERS`, `HKEY_CURRENT_CONFIG`) are folders, a key is a folder,

@@ -286,7 +286,6 @@ impl Form {
             | FormKind::Sync
             | FormKind::Link
             | FormKind::Mkdir
-            | FormKind::Registry
             | FormKind::Highlight
             | FormKind::FilterSet
             | FormKind::SortGroup
@@ -295,6 +294,8 @@ impl Form {
             | FormKind::HexReplace
             | FormKind::HexReplaceAsk
             | FormKind::Search => Vec::new(),
+            #[cfg(any(fcmd_registry, all(test, feature = "registry")))]
+            FormKind::Registry => Vec::new(),
             FormKind::EditorSettings => vec![
                 choice(
                     "editor.tabs",
@@ -684,6 +685,7 @@ impl Form {
             FormKind::HexReplace | FormKind::HexReplaceAsk => "hex-replace-title",
             FormKind::Link => "link-title",
             FormKind::Mkdir => "menu-mkdir",
+            #[cfg(any(fcmd_registry, all(test, feature = "registry")))]
             FormKind::Registry => "drive-registry",
             FormKind::Highlight => "hl-new",
             FormKind::FilterSet => "filter-new",
