@@ -150,6 +150,7 @@ in **un file solo** e senza niente da installare.
 - **Esadecimale**: si leggono e si correggono i singoli byte
 - **Confronto** fianco a fianco: rosso ciò che è sparito, verde ciò che è arrivato
 - Anche immagini, tabelle CSV e database SQLite
+- **Documenti** Word, OpenDocument e PowerPoint letti come testo, con titoli ed elenchi
 
 ---
 
@@ -195,6 +196,7 @@ Un `.dbf` si apre come **tabella**: righe e colonne, anche da 2 GB, subito.
 
 Copiare tra due server è un normale `F5`.
 Un file remoto si modifica con `F4` e si salva con `F2`.
+Le sessioni di **FAR, WinSCP e NetBox** si importano da un export `.reg` o da `WinSCP.ini`.
 
 ---
 
@@ -212,6 +214,22 @@ Due FinalCommander sulla **stessa rete locale**, e niente altro da installare.
 - Tutto **cifrato**, e solo indirizzi della rete di casa o dell'ufficio
 - **Sola lettura**; `Ctrl+Alt+L` chiude tutte le chiamate
 - Una macchina la cui chiave cambia viene **rifiutata**
+
+---
+
+# Link: chi è collegato
+
+- In basso a destra: `LINK 2 (568 765 292 · 192.168.1.10)`
+  il numero di chi legge, l'**ID** e l'**indirizzo** di questo computer
+- La scritta **lampeggia** mentre passano dati
+- Un clic sull'angolo apre la **finestra delle connessioni**: chi legge e da quando
+- `F8` chiude **una** chiamata, `Ctrl+Alt+L` tutte
+- Più computer possono leggere **insieme**
+
+## Reti diverse
+
+Se i due PC sono su reti separate (cavo e Wi-Fi, un secondo router)
+si chiama con l'**indirizzo IP** al posto dell'ID.
 
 ---
 
@@ -240,9 +258,26 @@ fcmd --link-serve /mnt/usb   # e la cartella resta raggiungibile
 - **Confronta e sincronizza** due cartelle
 - **Checksum**: MD5, SHA-1, SHA-256
 - Trova i **file duplicati**
-- **Git** in un pannello
+- **Git** in un pannello, e **un altro branch** sfogliato senza cambiare quello di lavoro
 - Elenco di **processi**, **socket** e servizi
 - **Pannello AI**: una domanda sui file scelti, e niente parte senza conferma
+
+---
+
+# Il registro di Windows, in un pannello
+
+Su Windows, `Alt+F1` → *Registry*: niente più `regedit` per guardare o cambiare un valore.
+
+- Le chiavi sono **cartelle**, i valori righe con nome, tipo e dato
+- `F3` mostra un valore intero, `F4` lo modifica con il dialogo **adatto al tipo**
+- `F7` nuova chiave, `Shift+F4` nuovo valore, `F6` rinomina, `F8` elimina
+- `F5` esporta in un `.reg` che regedit rilegge; `Invio` su un `.reg` lo importa
+
+## Prudente per scelta
+
+- Prima di **ogni** modifica la chiave viene salvata in `registry-backups/`
+- Senza quel backup **non cambia niente**
+- Una chiave protetta dice *Accesso negato*: nessuna richiesta di privilegi
 
 ---
 
@@ -259,6 +294,8 @@ fcmd --link-serve /mnt/usb   # e la cartella resta raggiungibile
 | **Browser** | la pagina di prova: Linux in una scheda |
 
 È sempre **lo stesso programma**, con le stesse funzioni e gli stessi tasti.
+Su uno schermo stretto, come un telefono, mostra un pannello alla volta.
+Dove il sistema si tiene `F9` e `F10` (macOS), `Esc 9` ed `Esc 0` fanno lo stesso.
 
 ---
 

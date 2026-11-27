@@ -73,10 +73,19 @@ server SFTP: `F3` per leggere, `F5` per copiare qui, la ricerca e il confronto.
 
 Sul computer che condivide:
 
-- l'angolo della riga di stato dice `LINK 1`, con il numero di chi sta leggendo;
+- l'angolo in basso a destra dice `LINK 1 (568 765 292 · 192.168.1.10)`: il numero di chi
+  sta leggendo, poi l'ID e l'indirizzo di questo computer, così restano sempre a vista;
+- la scritta `LINK` lampeggia mentre passano dati;
 - la riga di stato avvisa quando qualcuno entra e quando esce;
+- un clic sull'angolo, o *Comandi → Link: connessioni*, apre la **finestra delle connessioni**:
+  la cartella condivisa e chi la sta leggendo, da quando; `F8` chiude la chiamata sotto il
+  cursore;
+- più computer possono leggere la stessa cartella insieme;
 - `Ctrl+Alt+L` sui pannelli **chiude subito tutte le chiamate**;
 - spegnere il Link dal menu le chiude anche.
+
+Sul computer che chiama, se l'altro chiude la chiamata il pannello lo dice; `Ctrl+R` sul
+pannello rifà la connessione.
 
 ## 5. Il PIN, per i propri computer
 

@@ -84,7 +84,10 @@ inside the file. `scp` it to a server and it works there too.
 | A chat window for your AI | `ai: question` on the command line, with the selected files attached after a dialog says what goes where; the answer opens in the viewer and is kept as Markdown |
 | A database browser | `Enter` on a SQLite file: every table is a CSV beside the schema, `sql: SELECT …` opens the rows as a table |
 | A mail reader | an `.mbox`, `.eml` or Outlook `.msg` is a folder of messages and attachments; `imaps://me@host/` is your mailbox, read only |
-| A git front end | `Ctrl+Alt+G`: what changed as a panel, the log and the blame in the viewer, the branches |
+| A git front end | `Ctrl+Alt+G`: what changed as a panel, the log and the blame in the viewer, the branches, and another branch read in the other panel without checking it out |
+| `regedit` | On Windows `Alt+F1` → *Registry*: keys as folders, values edited in a dialog fit for their type, every change backed up to a `.reg` file first |
+| A dBase browser | `F3` on a `.dbf`: the table, with memos, edited in place after a dated backup, summed, exported to CSV |
+| A remote-desktop tool for files | *Link*: another FinalCommander's folder on the local network as a panel, after a six-digit code both screens show — or a PIN on a router with no screen |
 | A duplicate finder | *Commands → Find duplicate files*: groups by content, every copy but the oldest selected for `F8` |
 
 Each of those is a key, not a plugin to go and find.
@@ -312,7 +315,11 @@ every key on the screen you are looking at does.
   `systemd --user` on Linux, `LaunchAgents` on macOS, switched off with `F8` the system's own
   way, nothing deleted), the **external
   programs** fcmd runs (found or not, with their version, installed with `F4`), and a temporary
-  panel of files gathered by hand from anywhere.
+  panel of files gathered by hand from anywhere. On Windows the **registry** is a panel too:
+  keys are folders and values rows, `F4` edits a value in a dialog fit for its type, `F7` and
+  `Shift+F4` make a key and a value, `F6` renames, `F8` deletes, `F5` exports to a `.reg` file
+  and `Enter` on one imports it — and before any change the key is exported to
+  `registry-backups/`, without which nothing is changed.
 - **Comparison**: the two panels side by side by name, size and time, or by what is actually in
   the files — with "the same but for the line endings", a first-N-kilobyte fragment for big
   files, and the whole thing recursive through the subdirectories, the differences coming back
@@ -324,7 +331,13 @@ every key on the screen you are looking at does.
   no-wrap / character / word wrap; `F4` between text and hex; `F7` opens one search dialog that
   asks the whole question — text, hex or a regular expression, case, whole words, forwards or
   backwards. A structure pane (`Shift+F11`) for binaries, with sections and symbols, and `F5` to read
-  the bytes as instructions.
+  the bytes as instructions. A `.docx`, `.odt`, `.pptx` or `.odp` opens as its text, with its
+  headings, lists, tables and footnotes laid out.
+- **dBase tables**: a `.dbf` opens as a table — dBase, Clipper, FoxPro and Visual FoxPro, with
+  memos and DOS code pages — where a cell is edited, a record added, deleted, recalled or
+  packed, columns summed and rows exported to CSV or a new table. A dated backup is made before
+  the first change, a value that does not fit is refused rather than cut, and the table's
+  indexes, if they are beside it, are named as needing a rebuild.
 - **Editor** (`F4`): undo over the session, column blocks, search and replace, an atomic save,
   and syntax colouring for Rust, C, C++, Java, C#, JavaScript, TypeScript, PHP, Python, Ruby,
   Go, shell, SQL, HTML, XML, CSS, Markdown, JSON, TOML, YAML, INI, Make, Dockerfile, Lua,
@@ -343,6 +356,19 @@ every key on the screen you are looking at does.
   `s3://` panels with the credentials read from the environment or from an AWS profile
   chosen from a list.
   Passwords are kept, if you want, in the encrypted secrets file — never in the configuration.
+  Sessions stored in FAR's FTP plugin, WinSCP or NetBox come across from a `.reg` export or a
+  `WinSCP.ini` (*Commands → Import sessions…*). `Ctrl+R` on a panel whose server went away
+  connects again.
+- **FinalCommander Link**: a folder of another FinalCommander on the local network, in a
+  panel. *Commands → Link: accept calls* shares a folder read only under a nine-digit ID; the
+  caller opens a *Link* session with that ID — or the machine's IP address, across networks —
+  and both screens show the same six-digit code before anything is read. TLS 1.3, private
+  addresses only, a changed key refused. The corner of the status line shows the number of
+  callers, the ID and the address, a click on it lists who is reading, and `Ctrl+Alt+L` hangs
+  them all up. `fcmd --link-serve FOLDER` does the same on a machine with no screen — a router,
+  a Raspberry Pi — for callers who know its PIN, which never crosses the network.
+- **Git, further**: another branch, tag or commit opens read only in the other panel, without
+  checking it out (`Shift+F3` in the branches list).
 - **The program itself**: ten themes, fifteen interface languages switchable while it runs, two
   keymap profiles (FAR and mc) and your own on top, macros, the screens list (`F12`), a terminal
   of its own (`Ctrl+Alt+E`), plugins (`Ctrl+Shift+F11` for their commands, *Options → Plugins
@@ -387,7 +413,8 @@ with fcmd's in the default profile:
 | User menu, main menu | `F2` `F9` | — | `F2` `F9` | `F2` `F9` |
 
 Where they part from FAR it is for a reason the help gives, usually that a terminal delivers the
-key as something else. A keymap of your own is a TOML file of `keys = [...]` / `cmd = "..."`
+key as something else. Where the system keeps a function key — macOS takes `F9` and `F10` —
+`Esc` and then the digit is that key, as in mc: `Esc 9` is `F9`, `Esc 0` is `F10`. A keymap of your own is a TOML file of `keys = [...]` / `cmd = "..."`
 lines on top of either profile, and `fcmd --check-keymap` says whether it resolves before you
 rely on it. Every action in the program is a named command — `fcmd --list-commands` prints all
 of them — so anything a key reaches, a menu, a macro or a plugin can reach too.
