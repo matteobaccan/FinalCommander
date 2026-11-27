@@ -4,7 +4,19 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
-## [Unreleased]
+## [0.48.0] — 2026-11-27
+
+A folder of another computer in a panel, and a release brought forward for it. FinalCommander
+Link shares a folder between two FinalCommanders on the local network: an ID or an IP
+address to call, a six-digit code both screens show, TLS 1.3, and a PIN for a router or a
+server with no screen (`fcmd --link-serve`). dBase tables are edited where they are read,
+with a backup first; Word, OpenDocument and PowerPoint files open as their text; another git
+branch is read in the other panel without checking it out; on Windows the registry is a
+panel, with a backup before every change; and the sessions of FAR's FTP plugin, WinSCP and
+NetBox come across from their exports. On a narrow screen one panel is shown at a time, and
+`Esc` then a digit is a function key for macOS, which keeps `F9` and `F10`. A copy from a
+server now counts its bytes right, `F3` on a server shows its progress and stops on `Esc`,
+and `Ctrl+R` connects again a panel whose server went away.
 
 ### Added
 
@@ -137,6 +149,9 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- `F5` on a Windows executable over 64 MiB said it was disassembling raw bytes and then did
+  not: it was read whole to see whether it was a .NET assembly, which a file that size is not
+  allowed to be. It is now swept as native code, as an ELF or a Mach-O that size is.
 - The quick view (`Ctrl+Q`) drew a file in the panel's colours and as plain text, so it did
   not look like `F3` on the same file. It now draws it as the viewer does: the viewer's
   colours, the syntax colouring, a rendered page's runs and a dump's colours.
