@@ -291,10 +291,22 @@ impl Remote {
         dir: &Path,
         cancel: &CancelToken,
     ) -> Result<std::path::PathBuf> {
+        self.fetch_with(src, dir, cancel, &mut |_| {}).await
+    }
+
+    /// The same, telling `progress` how many bytes have come down so far.
+    pub async fn fetch_with(
+        &self,
+        src: &VPath,
+        dir: &Path,
+        cancel: &CancelToken,
+        progress: &mut (dyn FnMut(u64) + Send),
+    ) -> Result<std::path::PathBuf> {
         let name = src.display_name();
         let local = dir.join(if name.is_empty() { "file".into() } else { name });
         let mut cancelled = false;
-        let mut on_bytes = |_: u64| {
+        let mut on_bytes = |done: u64| {
+            progress(done);
             if cancel.is_cancelled() {
                 cancelled = true;
                 return false;

@@ -599,6 +599,8 @@ pub enum Request {
         id: u64,
         path: VPath,
         purpose: Fetched,
+        /// `Esc` while it comes down.
+        cancel: CancelToken,
     },
     /// Write a temporary file back to the server it came from (SPEC 04 §5).
     /// Change what these paths are: permissions and times (SPEC 10 §3.8).
@@ -628,12 +630,30 @@ pub enum Request {
         call: u64,
         accept: bool,
     },
+    /// Throw a connection away and open it again, the panel going back where it was.
+    Reconnect {
+        panel: usize,
+        site: Box<Site>,
+    },
     /// End every session another machine has open here.
     LinkHangUp,
     /// End this one.
     LinkHangUpOne {
         session: u64,
     },
+}
+
+/// A file being brought down to be viewed or edited.
+#[derive(Debug, Clone)]
+pub struct FetchView {
+    pub id: u64,
+    pub name: String,
+    /// Its size, as the listing gave it.
+    pub size: u64,
+    /// How much has come down.
+    pub done: u64,
+    pub started: std::time::Instant,
+    pub cancel: CancelToken,
 }
 
 /// A connection being made from a list of sessions.
@@ -1793,6 +1813,11 @@ pub enum Event {
         key: String,
         /// Every connection still open, so the site list stays truthful.
         connected: Vec<String>,
+    },
+    /// How much of a file being fetched has come down.
+    FetchProgress {
+        id: u64,
+        done: u64,
     },
     Fetched {
         id: u64,
@@ -3668,6 +3693,9 @@ pub struct App {
     pending_link: Option<VPath>,
     /// The fetch we are waiting for, if any.
     fetch_id: Option<u64>,
+    /// A file coming down from a server for `F3` or `F4`: the keys wait for it, `Esc` stops
+    /// it, and after a few seconds a box shows how far it has got.
+    pub fetching: Option<FetchView>,
     /// The comparison by content that is running, and the token that stops it. `Esc` on a
     /// panel with an empty command line stops it, which is the only way out of a comparison
     /// of ten thousand files that was started by mistake.
@@ -4168,6 +4196,7 @@ impl App {
             pending_connect: None,
             pending_link: None,
             fetch_id: None,
+            fetching: None,
             tunnels: Vec::new(),
             link_on: false,
             link_sessions: 0,
@@ -4422,7 +4451,7 @@ impl App {
         // over the list is waiting for it once more.
         if requests
             .iter()
-            .any(|r| matches!(r, Request::Connect { .. }))
+            .any(|r| matches!(r, Request::Connect { .. } | Request::Reconnect { .. }))
         {
             if let Some(attempt) = self.site_attempt.as_mut() {
                 attempt.waiting = true;
@@ -4948,12 +4977,20 @@ impl App {
                     }
                 }
             }
+            Event::FetchProgress { id, done } => {
+                if let Some(view) = self.fetching.as_mut().filter(|v| v.id == id) {
+                    view.done = done;
+                }
+            }
             Event::Fetched {
                 id,
                 remote,
                 purpose,
                 result,
             } => {
+                if self.fetching.as_ref().is_some_and(|v| v.id == id) {
+                    self.fetching = None;
+                }
                 if self.fetch_id != Some(id) {
                     return; // the user moved on
                 }
@@ -6436,6 +6473,20 @@ impl App {
         // failure's box goes on any key, back to the list as it was.
         if self.site_error.is_some() {
             self.site_error = None;
+            return;
+        }
+        // A file coming down for `F3` or `F4`: the cursor stays on it until it opens, and
+        // `Esc` stops it.
+        if let Some(view) = &self.fetching {
+            if key.code == KeyCode::Esc {
+                view.cancel.cancel();
+                let msg = self
+                    .i18n
+                    .t_args("net-fetch-stopped", &[("name", view.name.clone().into())]);
+                self.fetching = None;
+                self.fetch_id = None;
+                self.set_status(msg);
+            }
             return;
         }
         if self
@@ -12842,7 +12893,9 @@ impl App {
             }
             Command::PanelReread => {
                 let a = self.active;
-                self.read_panel(a);
+                if !self.reconnect_panel(a) {
+                    self.read_panel(a);
+                }
             }
             Command::PanelHiddenToggle => {
                 let show = !self.panel().show_hidden;
@@ -14452,7 +14505,21 @@ impl App {
             .i18n
             .t_args("net-fetching", &[("name", path.display_name().into())]);
         self.set_status(msg);
-        self.requests.push(Request::Fetch { id, path, purpose });
+        let cancel = CancelToken::new();
+        self.fetching = Some(FetchView {
+            id,
+            name: path.display_name(),
+            size,
+            done: 0,
+            started: std::time::Instant::now(),
+            cancel: cancel.clone(),
+        });
+        self.requests.push(Request::Fetch {
+            id,
+            path,
+            purpose,
+            cancel,
+        });
     }
 
     /// Read a file by name — the history list's `Enter`.
@@ -14593,6 +14660,50 @@ impl App {
             waiting: true,
         });
         self.connect_to(site, None, false);
+    }
+
+    /// `Ctrl+R` on a panel whose server went away — hung up at the other end, the network
+    /// gone, or a listing that failed — connects again and comes back to the same folder,
+    /// with the box over the panel while it does. `false` when there is nothing to
+    /// reconnect, and the panel is simply read again.
+    fn reconnect_panel(&mut self, panel: usize) -> bool {
+        let cwd = self.panels[panel].cwd.clone();
+        if !cwd.is_remote() || cwd.scheme() == fcmd_core::Scheme::S3 {
+            return false;
+        }
+        let Some(key) = Site::key_of(&cwd) else {
+            return false;
+        };
+        let broken = self.panels[panel].error.is_some() || !self.connected.contains(&key);
+        if !broken {
+            return false;
+        }
+        // The stored session when there is one — its authentication, its PIN — else what
+        // the path says.
+        let mut site = match self.sites.iter().find(|s| s.key() == key).cloned() {
+            Some(site) => site,
+            None => match Site::from_path(&cwd) {
+                Ok(site) => site,
+                Err(_) => return false,
+            },
+        };
+        site.start_dir = cwd.remote_path();
+        self.site_error = None;
+        self.site_attempt = Some(SiteAttempt {
+            label: site.label(),
+            dialog: None,
+            cancelled: false,
+            waiting: true,
+        });
+        let msg = self
+            .i18n
+            .t_args("net-connecting", &[("host", site.authority().into())]);
+        self.set_status(msg);
+        self.requests.push(Request::Reconnect {
+            panel,
+            site: Box::new(site),
+        });
+        true
     }
 
     /// `Enter` on the netbox panel.
@@ -25499,6 +25610,24 @@ impl App {
     }
 
     /// Ask where the tunnel goes.
+    /// How long a file may take to come down before a box says how far it has got.
+    const FETCH_BOX_AFTER: std::time::Duration = std::time::Duration::from_secs(3);
+
+    /// Whether the box of a file coming down is on the screen.
+    pub fn fetch_box_shown(&self) -> bool {
+        self.fetching
+            .as_ref()
+            .is_some_and(|v| v.started.elapsed() >= Self::FETCH_BOX_AFTER)
+    }
+
+    /// How soon the loop has to draw again while a file comes down: for the box to appear,
+    /// and then for its bar to move.
+    pub fn fetch_wait(&self) -> Option<std::time::Duration> {
+        self.fetching
+            .as_ref()
+            .map(|_| std::time::Duration::from_millis(250))
+    }
+
     /// How long the Link light keeps blinking after the last traffic.
     const LINK_BLINK: std::time::Duration = std::time::Duration::from_millis(1200);
 
@@ -53306,6 +53435,39 @@ abcdefghij
         );
     }
 
+    /// `Ctrl+R` on a panel whose server went away connects again, to the same folder, with
+    /// the stored session's own settings; on a panel that is fine it only reads again.
+    #[test]
+    fn ctrl_r_on_a_dead_connection_connects_again_where_the_panel_was() {
+        let (mut app, _) = netbox_with_one_site();
+        let site = app.sites[0].clone();
+        let here = site.start().join("docs");
+        app.panels[0].cwd = here.clone();
+        app.connected = vec![site.key()];
+        app.take_requests();
+
+        // Connected and read without trouble: an ordinary reread.
+        press(&mut app, "Ctrl+R");
+        assert!(!app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::Reconnect { .. })));
+
+        // The last read failed: the connection is opened again, on the same folder.
+        app.panels[0].error = Some("connection reset".into());
+        press(&mut app, "Ctrl+R");
+        let requests = app.take_requests();
+        let again = requests.iter().find_map(|r| match r {
+            Request::Reconnect { panel, site } => Some((*panel, site.clone())),
+            _ => None,
+        });
+        let (panel, again) = again.expect("a reconnect");
+        assert_eq!(panel, 0);
+        assert_eq!(again.key(), site.key());
+        assert_eq!(again.start(), here, "back to the folder it was on");
+        assert!(app.waiting_on_site(), "the box says what is happening");
+    }
+
     /// `Esc` while waiting gives the list back at once; the answer, when it comes, is a line
     /// on the status bar rather than a box or a jump.
     #[test]
@@ -53940,6 +54102,56 @@ abcdefghij
         }
     }
 
+    /// While a file comes down for `F3` the cursor stays on it; after three seconds a box
+    /// shows how far it has got; `Esc` stops it, and what arrives after is not opened.
+    #[test]
+    fn f3_on_a_remote_file_holds_the_cursor_shows_a_box_and_stops_on_esc() {
+        let mut app = connected_app();
+        app.panels[0].cursor_to(2); // notes.txt
+        press(&mut app, "F3");
+        let (id, cancel) = match app.take_requests().into_iter().next() {
+            Some(Request::Fetch { id, cancel, .. }) => (id, cancel),
+            other => panic!("expected a fetch, got {other:?}"),
+        };
+        press(&mut app, "Up");
+        assert_eq!(app.panels[0].cursor, 2, "the cursor waits for the file");
+        assert!(!app.fetch_box_shown(), "no box for a quick one");
+
+        app.handle_event(Event::FetchProgress { id, done: 60 });
+        if let Some(view) = app.fetching.as_mut() {
+            view.started -= std::time::Duration::from_secs(4);
+        }
+        assert!(app.fetch_box_shown());
+        let shown = screen_text(&mut app, 100, 30);
+        assert!(
+            shown.contains("Reading") && shown.contains("notes.txt"),
+            "{shown}"
+        );
+        assert!(shown.contains("50%"), "half of 120 bytes:\n{shown}");
+
+        press(&mut app, "Esc");
+        assert!(cancel.is_cancelled());
+        assert!(app.fetching.is_none());
+        let dir = tempfile::tempdir().unwrap();
+        let local = dir.path().join("notes.txt");
+        std::fs::write(&local, b"late").unwrap();
+        app.handle_event(Event::Fetched {
+            id,
+            remote: VPath::parse("sftp://mb@host.example:22/srv/notes.txt"),
+            purpose: Fetched::View,
+            result: Ok((
+                local,
+                RemoteStamp {
+                    size: 4,
+                    mtime: None,
+                },
+            )),
+        });
+        assert!(app.mode.is_normal(), "a stopped fetch opens nothing");
+        press(&mut app, "Up");
+        assert_eq!(app.panels[0].cursor, 1, "the keys are back");
+    }
+
     #[test]
     fn f3_on_a_remote_file_fetches_it_then_views_the_copy() {
         let dir = tempfile::tempdir().unwrap();
@@ -53954,7 +54166,9 @@ abcdefghij
         app.panels[0].cursor_to(2); // notes.txt
         press(&mut app, "F3");
         let id = match app.take_requests().into_iter().next() {
-            Some(Request::Fetch { id, path, purpose }) => {
+            Some(Request::Fetch {
+                id, path, purpose, ..
+            }) => {
                 assert_eq!(path.to_string(), "sftp://mb@host.example:22/srv/notes.txt");
                 assert_eq!(purpose, Fetched::View);
                 id
@@ -54050,7 +54264,9 @@ abcdefghij
         press(&mut app, "F4");
 
         let (id, purpose) = match app.take_requests().into_iter().next() {
-            Some(Request::Fetch { id, path, purpose }) => {
+            Some(Request::Fetch {
+                id, path, purpose, ..
+            }) => {
                 assert_eq!(path.to_string(), "sftp://mb@host.example:22/srv/notes.txt");
                 (id, purpose)
             }

@@ -688,6 +688,10 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             draw_site_attempt(app, buf, screen);
             return None;
         }
+        if app.fetch_box_shown() {
+            draw_fetch(app, buf, screen);
+            return None;
+        }
         return cursor;
     }
     if let Some(view) = app.mode.job() {
@@ -896,6 +900,46 @@ fn draw_frame(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     };
     draw_site_attempt(app, buf, screen);
     cursor
+}
+
+/// A file coming down from a server for `F3` or `F4`, once it has taken long enough to be
+/// worth a box: how much, how fast, and that `Esc` stops it — the copy's own box.
+fn draw_fetch(app: &App, buf: &mut Buffer, screen: Rect) {
+    let Some(view) = &app.fetching else {
+        return;
+    };
+    let secs = view.started.elapsed().as_secs_f64().max(0.001);
+    let speed = (view.done as f64 / secs) as u64;
+    let percent = (view.done.min(view.size) * 100)
+        .checked_div(view.size)
+        .unwrap_or(0) as u16;
+    let counters = format!(
+        "{} / {}",
+        fcmd_core::size::format_size(view.done),
+        fcmd_core::size::format_size(view.size)
+    );
+    let rates = format!(
+        "{}/s · {}s",
+        fcmd_core::size::format_size(speed),
+        secs as u64
+    );
+    let title = app.i18n.t("net-fetch-title");
+    let hint = app.i18n.t("net-fetch-hint");
+    widgets::draw_progress(
+        buf,
+        &app.theme,
+        screen,
+        &widgets::ProgressView {
+            title: &title,
+            current: &view.name,
+            counters: &counters,
+            rates: &rates,
+            total_percent: percent,
+            file_percent: percent,
+            show_file_bar: false,
+            hint: &hint,
+        },
+    );
 }
 
 /// A connection opened from a list of sessions, over that list: what is being opened while

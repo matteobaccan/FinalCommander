@@ -119,6 +119,14 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- `F3` or `F4` on a file of a server left the panel free while the file came down, so the
+  cursor could wander off with no sign that anything was about to open. The cursor now
+  waits for it, `Esc` stops it, and after three seconds the copy's progress box shows how
+  much has come down and how fast.
+- `Ctrl+R` on a panel whose server had gone away (hung up at the other end, the network
+  gone) only read the dead connection again. It now connects again, with the stored
+  session's settings, and comes back to the same folder.
+
 - A copy from or to a server (SFTP, FTP, WebDAV, Link, S3) counted its bytes wrongly: each
   step reported the running total and the job added them up, so a 25 MB file showed as more
   than a gigabyte copied and the speed and time left were nonsense. The bytes themselves were

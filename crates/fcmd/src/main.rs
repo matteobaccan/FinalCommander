@@ -1254,6 +1254,35 @@ fn load_plugins(
     out
 }
 
+/// Open a site in the pool and say how it went, as the panels' connection events do.
+async fn open_site(pool: &Pool, site: &fcmd_net::Site, secret: Option<&str>) -> ConnectOutcome {
+    match pool.connect(site, secret).await {
+        Ok(remote) => {
+            // Ask the server where we are: a site may say `.` or a
+            // relative directory, and `~` is the login directory.
+            let start = remote
+                .canonicalize(&site.start())
+                .await
+                .unwrap_or_else(|_| site.start());
+            ConnectOutcome::Open {
+                start,
+                connected: pool.connected(),
+            }
+        }
+        Err(fcmd_net::NetError::NeedsSecret { kind, .. }) => ConnectOutcome::NeedsSecret(kind),
+        Err(fcmd_net::NetError::UnknownHostKey { fingerprint, .. }) => {
+            ConnectOutcome::UnknownHostKey { fingerprint }
+        }
+        Err(fcmd_net::NetError::ChangedHostKey { path, line, .. }) => {
+            ConnectOutcome::ChangedHostKey {
+                path: path.display().to_string(),
+                line,
+            }
+        }
+        Err(e) => ConnectOutcome::Failed(e.to_string()),
+    }
+}
+
 fn command_ids() -> Vec<String> {
     FcCommand::all().into_iter().map(|c| c.id()).collect()
 }
@@ -1602,33 +1631,22 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         if accept_host_key {
                             pool.accept_new_host_key(true);
                         }
-                        let outcome = match pool.connect(&site, secret.as_deref()).await {
-                            Ok(remote) => {
-                                // Ask the server where we are: a site may say `.` or a
-                                // relative directory, and `~` is the login directory.
-                                let start = remote
-                                    .canonicalize(&site.start())
-                                    .await
-                                    .unwrap_or_else(|_| site.start());
-                                ConnectOutcome::Open {
-                                    start,
-                                    connected: pool.connected(),
-                                }
-                            }
-                            Err(fcmd_net::NetError::NeedsSecret { kind, .. }) => {
-                                ConnectOutcome::NeedsSecret(kind)
-                            }
-                            Err(fcmd_net::NetError::UnknownHostKey { fingerprint, .. }) => {
-                                ConnectOutcome::UnknownHostKey { fingerprint }
-                            }
-                            Err(fcmd_net::NetError::ChangedHostKey { path, line, .. }) => {
-                                ConnectOutcome::ChangedHostKey {
-                                    path: path.display().to_string(),
-                                    line,
-                                }
-                            }
-                            Err(e) => ConnectOutcome::Failed(e.to_string()),
-                        };
+                        let outcome = open_site(&pool, &site, secret.as_deref()).await;
+                        let _ = tx.send(Event::Connected {
+                            panel,
+                            site,
+                            outcome,
+                        });
+                    });
+                }
+                // A connection that died — hung up at the other end, the network gone — is
+                // thrown away and opened again where the panel was (`Ctrl+R`).
+                Request::Reconnect { panel, site } => {
+                    let tx = tx.clone();
+                    let pool = pool.clone();
+                    runtime.spawn(async move {
+                        pool.disconnect(&site.key()).await;
+                        let outcome = open_site(&pool, &site, None).await;
                         let _ = tx.send(Event::Connected {
                             panel,
                             site,
@@ -1651,7 +1669,12 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         });
                     });
                 }
-                Request::Fetch { id, path, purpose } => {
+                Request::Fetch {
+                    id,
+                    path,
+                    purpose,
+                    cancel,
+                } => {
                     let tx = tx.clone();
                     let pool = pool.clone();
                     let archives = archives.clone();
@@ -1665,7 +1688,16 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         } else if path.scheme() == fcmd_core::Scheme::S3 {
                             fetch_object(&objects_for_fetch, &path).await
                         } else {
-                            fetch_remote(&pool, &path).await
+                            let progress_tx = tx.clone();
+                            let mut last = std::time::Instant::now();
+                            let mut progress = move |done: u64| {
+                                // A few times a second is plenty for a bar.
+                                if last.elapsed() >= std::time::Duration::from_millis(150) {
+                                    last = std::time::Instant::now();
+                                    let _ = progress_tx.send(Event::FetchProgress { id, done });
+                                }
+                            };
+                            fetch_remote(&pool, &path, &cancel, &mut progress).await
                         };
                         let _ = tx.send(Event::Fetched {
                             id,
@@ -2680,6 +2712,9 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
         // The secrets file's password is forgotten on time, not only at the next key.
         // The Link light blinks while there is traffic, and goes out after: both are frames
         // nobody asked for with a key.
+        if let Some(tick) = app.fetch_wait() {
+            wait = Some(wait.map_or(tick, |w: std::time::Duration| w.min(tick)));
+        }
         if let Some(blink) = app.link_wait() {
             wait = Some(wait.map_or(blink, |w: std::time::Duration| w.min(blink)));
         }
@@ -3737,14 +3772,19 @@ fn dir_size(
 ///
 /// The directory is created under the system temp directory with the session's process id, so
 /// two running copies never collide, and it is removed when the process exits.
-async fn fetch_remote(pool: &Pool, path: &VPath) -> Result<(PathBuf, RemoteStamp), String> {
+async fn fetch_remote(
+    pool: &Pool,
+    path: &VPath,
+    cancel: &CancelToken,
+    progress: &mut (dyn FnMut(u64) + Send),
+) -> Result<(PathBuf, RemoteStamp), String> {
     let remote = pool.require(path).map_err(|e| e.to_string())?;
     let dir = app::App::fetch_dir();
     tokio::fs::create_dir_all(&dir)
         .await
         .map_err(|e| format!("{}: {e}", dir.display()))?;
     let local = remote
-        .fetch_to(path, &dir, &CancelToken::new())
+        .fetch_with(path, &dir, cancel, progress)
         .await
         .map_err(|e| e.to_string())?;
     let stamp = stamp_of(&remote, path).await.unwrap_or(RemoteStamp {
@@ -7912,7 +7952,9 @@ dir_attr = "D"
                         items,
                     });
                 }
-                Request::Fetch { id, path, purpose } => {
+                Request::Fetch {
+                    id, path, purpose, ..
+                } => {
                     let archives = std::sync::Arc::new(fcmd_arc::Cache::new(Default::default()));
                     let result = fetch_entry(&archives, &path);
                     app.handle_event(Event::Fetched {
@@ -8166,6 +8208,7 @@ dir_attr = "D"
                 | Request::Interactive { .. }
                 | Request::Decompile { .. }
                 | Request::Connect { .. }
+                | Request::Reconnect { .. }
                 | Request::LinkAccept { .. }
                 | Request::LinkAnswer { .. }
                 | Request::LinkHangUp
