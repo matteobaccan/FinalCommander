@@ -7,9 +7,10 @@
 //! is answered. A call nobody answers is dropped by the server after a minute; the guard
 //! then tells the loop to take the dialog down.
 
+use portable_atomic::AtomicU64;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{mpsc, Arc, Mutex};
 
 use async_trait::async_trait;

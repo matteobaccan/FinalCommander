@@ -63,7 +63,7 @@ pub struct HangUp {
 }
 
 /// The number the next call gets.
-static NEXT_SESSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+static NEXT_SESSION: portable_atomic::AtomicU64 = portable_atomic::AtomicU64::new(1);
 
 /// The person's answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
