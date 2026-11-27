@@ -200,7 +200,7 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.48.0 is the version in `main`**, tagged and released with eleven archives — four of them
+**0.48.1 is the version in `main`**, tagged and released with eleven archives — four of them
 for MIPS routers —, the Android app and its Termux archive for 64-bit and 32-bit ARM,
 `install.sh` and `SHA256SUMS`. Rust is 1.100.0 exactly, from `rust-toolchain.toml`. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
@@ -208,7 +208,8 @@ says where things stand.
 
 What the last few were about, newest first:
 
-- **0.48.0** — brought forward from the Wednesday (the author, 27 November: too much was
+- **0.48.1** (0.48.0 was tagged, but its MIPS builds failed on a 64-bit atomic in the Link,
+  so it was never published) — brought forward from the Wednesday (the author, 27 November: too much was
   waiting): FinalCommander Link (SPEC 04 §9: ID or IP, the six-digit code, the PIN with
   SPAKE2, `--link-serve`, the corner and the connections window); dBase tables edited in
   place; office documents as text in the viewer; another git branch in the other panel; the

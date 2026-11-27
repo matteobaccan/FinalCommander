@@ -4,9 +4,11 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
-## [0.48.0] — 2026-11-27
+## [0.48.1] — 2026-11-27
 
-A folder of another computer in a panel, and a release brought forward for it. FinalCommander
+A folder of another computer in a panel, and a release brought forward for it. (0.48.0 was
+tagged but never published: its four MIPS builds did not compile, and 0.48.1 is the same
+release with that put right.) FinalCommander
 Link shares a folder between two FinalCommanders on the local network: an ID or an IP
 address to call, a six-digit code both screens show, TLS 1.3, and a PIN for a router or a
 server with no screen (`fcmd --link-serve`). dBase tables are edited where they are read,
@@ -149,6 +151,9 @@ and `Ctrl+R` connects again a panel whose server went away.
 
 ### Fixed
 
+- The four MIPS builds did not compile: the Link counted its sessions and its traffic in
+  64-bit atomics, which 32-bit MIPS does not have. They are `portable-atomic`'s now, as every
+  other 64-bit counter in the program already was.
 - `F5` on a Windows executable over 64 MiB said it was disassembling raw bytes and then did
   not: it was read whole to see whether it was a .NET assembly, which a file that size is not
   allowed to be. It is now swept as native code, as an ELF or a Mach-O that size is.
