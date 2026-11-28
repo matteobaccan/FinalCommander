@@ -2,6 +2,6 @@
 # a floor, so a new compiler arrives as a decision — Renovate opens the pull request, its lints
 # and its binaries are looked at, and this line changes with `rust-version` in Cargo.toml.
 [toolchain]
-channel = "1.100.0"
+channel = "1.100.1"
 components = ["rustfmt", "clippy"]
 profile = "minimal"
